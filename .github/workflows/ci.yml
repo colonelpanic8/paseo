@@ -65,7 +65,7 @@ jobs:
             server:
               - 'packages/app/e2e/fixtures/recording.*'
               - 'packages/client/**'
-              - 'packages/cli/src/commands/hooks.ts'
+              - 'packages/cli/src/**'
               - 'packages/highlight/**'
               - 'packages/protocol/**'
               - 'packages/relay/**'
