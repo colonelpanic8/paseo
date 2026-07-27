@@ -27,7 +27,7 @@ jobs:
       quality: ${{ steps.filter.outputs.shared != 'false' || steps.filter.outputs.quality != 'false' }}
       server: ${{ steps.filter.outputs.shared != 'false' || steps.filter.outputs.server != 'false' }}
       desktop: ${{ steps.filter.outputs.shared != 'false' || steps.filter.outputs.desktop != 'false' }}
-      desktop_package: ${{ steps.filter.outputs.desktop_package }}
+      desktop_package: ${{ steps.filter.outputs.shared != 'false' || steps.filter.outputs.desktop_package != 'false' }}
       app: ${{ steps.filter.outputs.shared != 'false' || steps.filter.outputs.app != 'false' }}
       sdk: ${{ steps.filter.outputs.shared != 'false' || steps.filter.outputs.sdk != 'false' }}
       playwright: ${{ steps.filter.outputs.shared != 'false' || steps.filter.outputs.playwright != 'false' }}
@@ -40,7 +40,7 @@ jobs:
 
       - name: Detect affected CI jobs
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         with:
           filters: |
             shared:
