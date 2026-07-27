@@ -33,7 +33,10 @@ import {
 import {
   createHistoryStartPaginationState,
   evaluateHistoryStartPagination,
-  rearmHistoryStartPagination,
+  isHistoryStartLoadingOperation,
+  settleHistoryStartPagination,
+  type HistoryStartPaginationInput,
+  type HistoryStartPaginationTransition,
 } from "./history-start-pagination";
 
 const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
@@ -52,6 +55,7 @@ const historyStartSlotStyle: ViewStyle = {
   paddingTop: 4,
   paddingBottom: 8,
 };
+const HISTORY_START_SETTLE_FRAMES = 2;
 
 interface HistoryRowDisplayVariants {
   regular?: StreamItem;
@@ -115,7 +119,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const [isNativeViewportSettling, setIsNativeViewportSettling] = useState(false);
   const nativeViewportSettlingFrameIdRef = useRef<number | null>(null);
   const historyStartReadyRef = useRef(false);
-  const historyStartPaginationStateRef = useRef(createHistoryStartPaginationState());
+  const [historyStartPaginationState, setHistoryStartPaginationState] = useState(
+    createHistoryStartPaginationState,
+  );
+  const historyStartPaginationStateRef = useRef(historyStartPaginationState);
+  const historyStartSettleFrameIdRef = useRef<number | null>(null);
 
   const historyItems = useMemo(() => {
     if (segments.historyVirtualized.length === 0) {
@@ -144,22 +152,63 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       ),
     [displayStateHistoryRows, historyRowRevision?.contentById],
   );
-  const evaluateHistoryStart = useStableEvent(() => {
+  const getHistoryStartPaginationInput = useStableEvent((): HistoryStartPaginationInput => {
     const metrics = streamViewportMetricsRef.current;
     const hasMeasuredViewport =
       metrics.viewportMeasuredForKey === metrics.containerKey &&
       metrics.contentMeasuredForKey === metrics.containerKey;
-    const result = evaluateHistoryStartPagination(historyStartPaginationStateRef.current, {
+    return {
       distanceFromHistoryStart: metrics.contentHeight - metrics.viewportHeight - metrics.offsetY,
       hasOlderHistory,
       isLoadingOlderHistory,
       isReady: historyStartReadyRef.current && hasMeasuredViewport,
       progressKey: olderHistoryProgressKey,
-    });
-    historyStartPaginationStateRef.current = result.state;
-    if (result.shouldLoad) {
-      onNearHistoryStart();
+    };
+  });
+  const applyHistoryStartPaginationTransition = useStableEvent(
+    (transition: HistoryStartPaginationTransition) => {
+      const previousState = historyStartPaginationStateRef.current;
+      historyStartPaginationStateRef.current = transition.state;
+      if (transition.state !== previousState) {
+        setHistoryStartPaginationState(transition.state);
+      }
+      if (transition.shouldLoad) {
+        onNearHistoryStart();
+      }
+    },
+  );
+  const evaluateHistoryStart = useStableEvent(() => {
+    const transition = evaluateHistoryStartPagination(
+      historyStartPaginationStateRef.current,
+      getHistoryStartPaginationInput(),
+    );
+    applyHistoryStartPaginationTransition(transition);
+  });
+  const scheduleHistoryStartSettle = useStableEvent(() => {
+    const pendingFrame = historyStartSettleFrameIdRef.current;
+    if (pendingFrame !== null) {
+      cancelAnimationFrame(pendingFrame);
     }
+    let remainingFrames = HISTORY_START_SETTLE_FRAMES;
+    const settle = () => {
+      if (historyStartPaginationStateRef.current.status !== "settling") {
+        historyStartSettleFrameIdRef.current = null;
+        return;
+      }
+      const input = getHistoryStartPaginationInput();
+      if (input.isLoadingOlderHistory || remainingFrames > 0) {
+        remainingFrames -= input.isLoadingOlderHistory ? 0 : 1;
+        historyStartSettleFrameIdRef.current = requestAnimationFrame(settle);
+        return;
+      }
+      historyStartSettleFrameIdRef.current = null;
+      const transition = settleHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+        input,
+      );
+      applyHistoryStartPaginationTransition(transition);
+    };
+    historyStartSettleFrameIdRef.current = requestAnimationFrame(settle);
   });
 
   const clearNativeViewportSettling = useCallback(() => {
@@ -260,7 +309,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     clearNativeViewportSettling();
     setIsNativeViewportSettling(false);
     historyStartReadyRef.current = false;
-    historyStartPaginationStateRef.current = createHistoryStartPaginationState();
+    const initialHistoryStartState = createHistoryStartPaginationState();
+    historyStartPaginationStateRef.current = initialHistoryStartState;
+    setHistoryStartPaginationState(initialHistoryStartState);
     const frame = requestAnimationFrame(() => {
       historyStartReadyRef.current = true;
       evaluateHistoryStart();
@@ -268,6 +319,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     return () => {
       cancelAnimationFrame(frame);
       clearPendingUserScrollEnd();
+      const settleFrame = historyStartSettleFrameIdRef.current;
+      if (settleFrame !== null) {
+        historyStartSettleFrameIdRef.current = null;
+        cancelAnimationFrame(settleFrame);
+      }
     };
   }, [agentId, clearNativeViewportSettling, clearPendingUserScrollEnd, evaluateHistoryStart]);
 
@@ -366,15 +422,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   const handleScrollBeginDrag = useStableEvent(() => {
-    if (!isLoadingOlderHistory) {
-      historyStartPaginationStateRef.current = rearmHistoryStartPagination(
-        historyStartPaginationStateRef.current,
-      );
-    }
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
     bottomAnchorController.beginUserScroll();
-    evaluateHistoryStart();
   });
 
   // Defer drag end so momentum can take ownership, but capture the terminal
@@ -448,11 +498,23 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       contentHeight: nextContentHeight,
     });
     evaluateHistoryStart();
+    if (historyStartPaginationStateRef.current.status === "settling") {
+      scheduleHistoryStartSettle();
+    }
   });
 
   useEffect(() => {
     evaluateHistoryStart();
-  }, [evaluateHistoryStart, hasOlderHistory, isLoadingOlderHistory, olderHistoryProgressKey]);
+    if (historyStartPaginationStateRef.current.status === "settling") {
+      scheduleHistoryStartSettle();
+    }
+  }, [
+    evaluateHistoryStart,
+    hasOlderHistory,
+    isLoadingOlderHistory,
+    olderHistoryProgressKey,
+    scheduleHistoryStartSettle,
+  ]);
 
   const renderItem = useStableEvent(
     ({ item, index }: ListRenderItemInfo<StreamItem>): ReactElement | null => {
@@ -493,20 +555,21 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   ]);
 
   const historyFooterContent = useMemo(() => {
-    if (!hasOlderHistory && !isLoadingOlderHistory) {
+    const isLoadingOperation = isHistoryStartLoadingOperation(historyStartPaginationState);
+    if (!hasOlderHistory && !isLoadingOperation) {
       return null;
     }
     return (
       <View
         style={historyStartSlotStyle}
-        testID={isLoadingOlderHistory ? "load-older-history-spinner" : undefined}
+        testID={isLoadingOperation ? "load-older-history-spinner" : undefined}
       >
-        {isLoadingOlderHistory ? (
+        {isLoadingOperation ? (
           <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
         ) : null}
       </View>
     );
-  }, [hasOlderHistory, isLoadingOlderHistory]);
+  }, [hasOlderHistory, historyStartPaginationState]);
 
   // RN's FlatList strictMode keeps its internal renderItem wrapper stable when
   // data or the live header changes, preserving the row identities above.
