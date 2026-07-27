@@ -34,6 +34,7 @@ import {
   createHistoryStartPaginationState,
   evaluateHistoryStartPagination,
   isHistoryStartLoadingOperation,
+  rearmHistoryStartPagination,
   settleHistoryStartPagination,
   type HistoryStartPaginationInput,
   type HistoryStartPaginationTransition,
@@ -425,6 +426,12 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
     bottomAnchorController.beginUserScroll();
+    const rearmed = rearmHistoryStartPagination(historyStartPaginationStateRef.current);
+    if (rearmed !== historyStartPaginationStateRef.current) {
+      historyStartPaginationStateRef.current = rearmed;
+      setHistoryStartPaginationState(rearmed);
+      evaluateHistoryStart();
+    }
   });
 
   // Defer drag end so momentum can take ownership, but capture the terminal
