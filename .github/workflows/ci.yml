@@ -103,6 +103,7 @@ jobs:
             relay:
               - 'packages/relay/**'
             cli:
+              - 'nix/**'
               - 'packages/cli/**'
               - 'packages/client/**'
               - 'packages/highlight/**'
