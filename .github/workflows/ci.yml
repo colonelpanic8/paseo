@@ -63,7 +63,9 @@ jobs:
               - '*.mjs'
               - '*.ts'
             server:
+              - 'packages/app/e2e/fixtures/recording.*'
               - 'packages/client/**'
+              - 'packages/cli/src/commands/hooks.ts'
               - 'packages/highlight/**'
               - 'packages/protocol/**'
               - 'packages/relay/**'
@@ -104,8 +106,10 @@ jobs:
               - 'packages/relay/**'
             cli:
               - 'nix/**'
+              - 'packages/app/e2e/global-setup.ts'
               - 'packages/cli/**'
               - 'packages/client/**'
+              - 'packages/desktop/src/daemon/runtime-paths.ts'
               - 'packages/highlight/**'
               - 'packages/protocol/**'
               - 'packages/relay/**'
