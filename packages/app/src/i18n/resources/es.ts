@@ -2319,6 +2319,7 @@ export const es: TranslationResources = {
         queueMessage: "mensaje de cola",
         muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",
         switchProject: "Cambiar proyecto",
+        selectHost: "Seleccionar host",
       },
       helpNotes: {
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",
