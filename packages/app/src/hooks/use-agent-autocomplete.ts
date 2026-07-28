@@ -33,6 +33,7 @@ import {
   type FileMentionRange,
 } from "@/utils/file-mention-autocomplete";
 import type { ComposerSigils } from "@/composer/tokens/sigils";
+import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
 
 interface UseAgentAutocompleteInput {
   userInput: string;
@@ -78,6 +79,7 @@ interface AgentAutocompleteResult {
   selectedIndex: number;
   /** Shown in place of options; set exactly when `options` is empty. */
   status: AutocompleteStatus | null;
+  tokenCatalog: ComposerTokenCatalog;
   onSelectOption: (option: AutocompleteOption, input?: AgentAutocompleteInputSnapshot) => void;
   onKeyPress: (event: AgentAutocompleteKeyPressEvent) => boolean;
 }
@@ -522,6 +524,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     [cursorIndex, userInput, sigils],
   );
   const showCommandAutocomplete = activeSlashCommand !== null;
+  const hasTokenCandidate = userInput.includes(sigils.command) || userInput.includes(sigils.skill);
   const commandFilterQuery = activeSlashCommand?.query ?? "";
 
   const activeFileMention = useMemo(
@@ -571,7 +574,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const commandsQuery = useAutocompleteCommands({
     serverId,
     agentId,
-    enabled: mode === "command" && canLoadCommands && canListCommands,
+    enabled: hasTokenCandidate && canLoadCommands && canListCommands,
     draftConfig: queryDraftConfig,
   });
   const commandsState = resolveCommandsState({
@@ -593,6 +596,18 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     commandsState,
     pluginCommandCount: pluginClientSlashCommands.length,
   });
+  const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
+    const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
+    const skillNames = new Set<string>();
+    for (const command of commandsQuery.commands) {
+      commandNames.add(command.name);
+      if (command.kind === "skill") {
+        skillNames.add(command.name);
+      }
+    }
+    return { commandNames, skillNames };
+  }, [commandsQuery.commands]);
+
 
   const fileSuggestionsQuery = useQuery({
     queryKey: [
@@ -780,6 +795,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     options,
     selectedIndex,
     status,
+    tokenCatalog,
     onSelectOption,
     onKeyPress,
   };

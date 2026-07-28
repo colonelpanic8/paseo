@@ -52,6 +52,14 @@ function getPositiveFeatureInteger(value: unknown): number {
 }
 const ONE_PIXEL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl4Kj8AAAAASUVORK5CYII=";
+const MOCK_LOAD_TEST_COMMANDS: readonly AgentSlashCommand[] = [
+  {
+    name: "release-beta",
+    description: "Simulate a provider skill in development.",
+    argumentHint: "",
+    kind: "skill",
+  },
+];
 
 const CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -754,6 +762,10 @@ export class MockLoadTestAgentClient implements AgentClient {
     };
   }
 
+  async listCommands(_config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
+    return [MOCK_LOAD_TEST_COMMAND, ...MOCK_LOAD_TEST_COMMANDS];
+  }
+
   async listImportableSessions(): Promise<ImportableProviderSession[]> {
     return [];
   }
@@ -993,7 +1005,7 @@ export class MockLoadTestAgentSession implements AgentSession {
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    return [MOCK_LOAD_TEST_COMMAND];
+    return [MOCK_LOAD_TEST_COMMAND, ...MOCK_LOAD_TEST_COMMANDS];
   }
 
   tryHandleOutOfBand(

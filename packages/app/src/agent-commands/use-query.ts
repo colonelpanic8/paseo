@@ -13,6 +13,8 @@ import {
   type AgentCommandsDraftConfig,
 } from "./cache";
 
+const EMPTY_AGENT_SLASH_COMMANDS: AgentSlashCommand[] = [];
+
 export interface AgentSlashCommand {
   name: string;
   description: string;
@@ -114,7 +116,7 @@ export function useAgentCommandsQuery({
   }, [agentId, draftConfig, queryClient, serverId]);
 
   return {
-    commands: query.data ?? [],
+    commands: query.data ?? EMPTY_AGENT_SLASH_COMMANDS,
     isLoading,
     isError: query.isError && query.data === undefined,
     error: query.error,
