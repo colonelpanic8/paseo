@@ -53,6 +53,7 @@ import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sec
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProjectIcons } from "@/projects/icons";
+import type { HostColorKey } from "@/types/host-connection";
 import {
   buildNewWorkspaceRoute,
   buildProjectSettingsRoute,
@@ -1734,7 +1735,6 @@ export function SidebarWorkspaceList({
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByViewKey,
   collapsedProjectKeys,
   onToggleProjectCollapsed,
   shortcutIndexByWorkspaceKey,
@@ -1761,6 +1761,15 @@ export function SidebarWorkspaceList({
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
   const onToggleWorkspacePin = useSidebarWorkspacePinController();
+  const hostColorByServerId = useMemo(() => {
+    const colors = new Map<string, HostColorKey>();
+    for (const host of hosts) {
+      if (host.color) {
+        colors.set(host.serverId, host.color);
+      }
+    }
+    return colors;
+  }, [hosts]);
   const showHostLabels = useMemo(() => shouldShowSidebarHostLabels(projects), [projects]);
   // Status mode drops the project grouping, so its rows carry their own project
   // icon. Project mode fetches the same icons inside ProjectModeList for its
@@ -1779,12 +1788,11 @@ export function SidebarWorkspaceList({
         statusGroups={statusGroups}
         pinnedGroups={pinnedGroups}
         workspaceEntriesByKey={workspaceEntriesByKey}
-        projectNamesByViewKey={projectNamesByViewKey}
         projectIconByProjectViewKey={statusProjectIconByProjectViewKey}
         shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
         onWorkspacePress={onWorkspacePress}
         hostLabelByServerId={hostLabelByServerId}
-        showHostLabels={showHostLabels}
+        hostColorByServerId={hostColorByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
         listHeaderComponent={listHeaderComponent}
@@ -1819,12 +1827,11 @@ function SidebarStatusModeWrapper({
   statusGroups,
   pinnedGroups,
   workspaceEntriesByKey,
-  projectNamesByViewKey,
   projectIconByProjectViewKey,
   shortcutIndexByWorkspaceKey: _projectShortcutIndex,
   onWorkspacePress,
   hostLabelByServerId,
-  showHostLabels,
+  hostColorByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   listHeaderComponent,
@@ -1832,18 +1839,16 @@ function SidebarStatusModeWrapper({
   statusGroups: StatusGroup[];
   pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
-  projectNamesByViewKey: Map<string, string>;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
   onWorkspacePress?: () => void;
   hostLabelByServerId: ReadonlyMap<string, string>;
-  showHostLabels: boolean;
+  hostColorByServerId: ReadonlyMap<string, HostColorKey>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   listHeaderComponent?: ReactElement | null;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
-
   return (
     <SidebarStatusWorkspaceList
       groups={statusGroups}
@@ -1851,13 +1856,12 @@ function SidebarStatusModeWrapper({
         const entry = workspaceEntriesByKey.get(workspace.workspaceKey);
         return entry ? [entry] : [];
       })}
-      projectNamesByViewKey={projectNamesByViewKey}
       projectIconByProjectViewKey={projectIconByProjectViewKey}
       shortcutIndexByWorkspaceKey={_projectShortcutIndex}
       showShortcutBadges={showShortcutBadges}
       onWorkspacePress={onWorkspacePress}
       hostLabelByServerId={hostLabelByServerId}
-      showHostLabels={showHostLabels}
+      hostColorByServerId={hostColorByServerId}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
       listHeaderComponent={listHeaderComponent}
