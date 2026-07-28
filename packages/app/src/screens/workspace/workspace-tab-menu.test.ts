@@ -15,64 +15,6 @@ function createAgentTab(): WorkspaceTabDescriptor {
 }
 
 describe("buildWorkspaceTabMenuEntries", () => {
-  it("adds snooze presets to agent tab menus", () => {
-    const onSnooze = vi.fn();
-    const onCustom = vi.fn();
-    const entries = buildWorkspaceTabMenuEntries({
-      surface: "mobile",
-      tab: createAgentTab(),
-      index: 0,
-      tabCount: 1,
-      menuTestIDBase: "workspace-tab-menu-agent_123",
-      onCopyResumeCommand: vi.fn(),
-      onCopyAgentId: vi.fn(),
-      onCopyTerminalId: vi.fn(),
-      onCopyFilePath: vi.fn(),
-      onReloadAgent: vi.fn(),
-      onRenameTab: vi.fn(),
-      onCloseTab: vi.fn(),
-      onCloseTabsBefore: vi.fn(),
-      onCloseTabsAfter: vi.fn(),
-      onCloseOtherTabs: vi.fn(),
-      snooze: {
-        isSnoozed: false,
-        disabled: false,
-        presets: [
-          {
-            id: "hour",
-            label: "Snooze for 1 hour",
-            snoozedUntil: "2026-07-28T19:00:00.000Z",
-          },
-        ],
-        customLabel: "Custom snooze…",
-        wakeLabel: "Wake now",
-        onSnooze,
-        onCustom,
-        onWake: vi.fn(),
-      },
-    });
-    const snoozeEntry = entries.find(
-      (entry) => entry.kind === "item" && entry.key === "snooze-hour",
-    );
-    if (!snoozeEntry || snoozeEntry.kind !== "item") {
-      throw new Error("Snooze entry missing");
-    }
-
-    expect(snoozeEntry.label).toBe("Snooze for 1 hour");
-    snoozeEntry.onSelect();
-    expect(onSnooze).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "hour", snoozedUntil: "2026-07-28T19:00:00.000Z" }),
-    );
-    const customEntry = entries.find(
-      (entry) => entry.kind === "item" && entry.key === "snooze-custom",
-    );
-    if (!customEntry || customEntry.kind !== "item") {
-      throw new Error("Custom snooze entry missing");
-    }
-    customEntry.onSelect();
-    expect(onCustom).toHaveBeenCalledOnce();
-  });
-
   it("uses desktop tab ordering labels for desktop menus", () => {
     const onCopyResumeCommand = vi.fn();
     const onCopyAgentId = vi.fn();

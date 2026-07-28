@@ -2,20 +2,8 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import { i18n } from "@/i18n/i18next";
 import { encodeFilePathForPathSegment, encodeWorkspaceIdForPathSegment } from "@/utils/host-routes";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
-import type { AgentSnoozePreset } from "@/agent-snooze/model";
 
 export type WorkspaceTabMenuSurface = "desktop" | "mobile";
-
-export interface WorkspaceTabSnoozeActions {
-  isSnoozed: boolean;
-  disabled: boolean;
-  presets: readonly (AgentSnoozePreset & { label: string })[];
-  customLabel: string;
-  wakeLabel: string;
-  onSnooze: (preset: AgentSnoozePreset) => Promise<void> | void;
-  onCustom: () => void;
-  onWake: () => Promise<void> | void;
-}
 
 export interface WorkspaceTabMenuLabels {
   copyResumeCommand: string;
@@ -60,7 +48,6 @@ export type WorkspaceTabMenuEntry =
         | "arrow-left-to-line"
         | "arrow-right-to-line"
         | "copy-x"
-        | "clock"
         | "pencil"
         | "x";
       hint?: string;
@@ -91,7 +78,6 @@ interface BuildWorkspaceTabMenuEntriesInput {
   onCloseTabsBefore: (tabId: string) => Promise<void> | void;
   onCloseTabsAfter: (tabId: string) => Promise<void> | void;
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
-  snooze?: WorkspaceTabSnoozeActions;
   labels?: WorkspaceTabMenuLabels;
 }
 
@@ -109,7 +95,6 @@ interface BuildWorkspaceDesktopTabActionsInput {
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
   onCloseTabsToRight: (tabId: string) => Promise<void> | void;
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
-  snooze?: WorkspaceTabSnoozeActions;
   labels?: WorkspaceTabMenuLabels;
 }
 
@@ -266,47 +251,6 @@ export function buildWorkspaceTabMenuEntries(
     });
   }
 
-  if (tab.target.kind === "agent" && input.snooze) {
-    const snooze = input.snooze;
-    if (snooze.isSnoozed) {
-      entries.push({
-        kind: "item",
-        key: "wake-agent",
-        label: snooze.wakeLabel,
-        icon: "clock",
-        disabled: snooze.disabled,
-        testID: `${menuTestIDBase}-wake-agent`,
-        onSelect: () => {
-          void snooze.onWake();
-        },
-      });
-    } else {
-      for (const preset of snooze.presets) {
-        entries.push({
-          kind: "item",
-          key: `snooze-${preset.id}`,
-          label: preset.label,
-          icon: "clock",
-          disabled: snooze.disabled,
-          testID: `${menuTestIDBase}-snooze-${preset.id}`,
-          onSelect: () => {
-            void snooze.onSnooze(preset);
-          },
-        });
-      }
-      entries.push({
-        kind: "item",
-        key: "snooze-custom",
-        label: snooze.customLabel,
-        icon: "clock",
-        disabled: snooze.disabled,
-        testID: `${menuTestIDBase}-snooze-custom`,
-        onSelect: snooze.onCustom,
-      });
-    }
-    entries.push({ kind: "separator", key: "snooze-separator" });
-  }
-
   entries.push({
     kind: "item",
     key: "close-before",
@@ -390,7 +334,6 @@ export function buildWorkspaceDesktopTabActions(
       onCloseTabsBefore: input.onCloseTabsToLeft,
       onCloseTabsAfter: input.onCloseTabsToRight,
       onCloseOtherTabs: input.onCloseOtherTabs,
-      snooze: input.snooze,
       labels: input.labels,
     }),
     closeButtonTestId: getCloseButtonTestId(input.tab),

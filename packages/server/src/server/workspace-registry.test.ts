@@ -457,4 +457,49 @@ describe("workspace registries", () => {
       pinnedAt: "2026-03-03T00:00:00.000Z",
     });
   });
+
+  test("persists workspace snooze status across registry reloads and clears on wake", async () => {
+    await workspaceRegistry.initialize();
+    await workspaceRegistry.upsert(
+      createPersistedWorkspaceRecord({
+        workspaceId: "ws-1",
+        projectId: "proj-1",
+        cwd: "/tmp/repo",
+        kind: "local_checkout",
+        displayName: "main",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+      }),
+    );
+    expect(await workspaceRegistry.get("ws-1")).toMatchObject({ snoozeStatus: null });
+
+    const snoozeStatus = {
+      snoozedAt: "2026-03-02T00:00:00.000Z",
+      snoozedUntil: "2026-03-02T12:00:00.000Z",
+    };
+    await workspaceRegistry.update("ws-1", (record) => ({
+      ...record,
+      snoozeStatus,
+      updatedAt: "2026-03-02T00:00:00.000Z",
+    }));
+
+    const reloadedRegistry = new FileBackedWorkspaceRegistry(
+      path.join(tmpDir, "projects", "workspaces.json"),
+      logger,
+    );
+    await reloadedRegistry.initialize();
+    expect(await reloadedRegistry.get("ws-1")).toMatchObject({ snoozeStatus });
+
+    await reloadedRegistry.update("ws-1", (record) => ({
+      ...record,
+      snoozeStatus: null,
+      updatedAt: "2026-03-03T00:00:00.000Z",
+    }));
+    const rereadRegistry = new FileBackedWorkspaceRegistry(
+      path.join(tmpDir, "projects", "workspaces.json"),
+      logger,
+    );
+    await rereadRegistry.initialize();
+    expect(await rereadRegistry.get("ws-1")).toMatchObject({ snoozeStatus: null });
+  });
 });

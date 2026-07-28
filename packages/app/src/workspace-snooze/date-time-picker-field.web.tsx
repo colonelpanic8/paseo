@@ -53,7 +53,7 @@ function WebDateTimeInput({
     disabled,
     onChange,
     style: inputStyle,
-    "data-testid": "agent-custom-snooze-datetime-input",
+    "data-testid": "workspace-custom-snooze-datetime-input",
     "aria-label": accessibilityLabel,
   });
 }

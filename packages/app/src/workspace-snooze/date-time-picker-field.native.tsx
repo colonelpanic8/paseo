@@ -108,7 +108,7 @@ export function CustomSnoozeDateTimePicker({
             disabled={disabled}
             onChange={handleDateChange}
             accessibilityLabel={`${dateLabel}: ${formattedDate}`}
-            testID="agent-custom-snooze-date-picker"
+            testID="workspace-custom-snooze-date-picker"
           />
         </View>
         <View style={styles.iosControl}>
@@ -120,7 +120,7 @@ export function CustomSnoozeDateTimePicker({
             disabled={disabled}
             onChange={handleTimeChange}
             accessibilityLabel={`${timeLabel}: ${formattedTime}`}
-            testID="agent-custom-snooze-time-picker"
+            testID="workspace-custom-snooze-time-picker"
           />
         </View>
       </View>
@@ -136,7 +136,7 @@ export function CustomSnoozeDateTimePicker({
         disabled={disabled}
         onPress={openDatePicker}
         accessibilityLabel={`${dateLabel}: ${formattedDate}`}
-        testID="agent-custom-snooze-date-picker"
+        testID="workspace-custom-snooze-date-picker"
       >
         {formattedDate}
       </Button>
@@ -147,7 +147,7 @@ export function CustomSnoozeDateTimePicker({
         disabled={disabled}
         onPress={openTimePicker}
         accessibilityLabel={`${timeLabel}: ${formattedTime}`}
-        testID="agent-custom-snooze-time-picker"
+        testID="workspace-custom-snooze-time-picker"
       >
         {formattedTime}
       </Button>

@@ -92,6 +92,7 @@ import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
+import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
@@ -667,6 +668,11 @@ function WorkspaceRowRightGroup({
 }) {
   const workspacePath = workspace.workspaceDirectory ?? workspace.projectRootPath;
   const { t } = useTranslation();
+  const snooze = useWorkspaceSnoozeMenu({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+    isSnoozed: workspace.statusBucket === "snoozed",
+  });
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
   const showKebabInSlot = showKebab && !showShortcut;
@@ -704,6 +710,7 @@ function WorkspaceRowRightGroup({
                 archiveShortcutKeys={archiveShortcutKeys}
                 isPinned={isPinned}
                 onTogglePin={onTogglePin}
+                snooze={snooze}
                 openInFileManagerPath={workspacePath}
               />
             ) : null}
@@ -2783,6 +2790,7 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket): ViewStyle | null {
     case "attention":
       return styles.statusDotAttention;
     case "done":
+    case "snoozed":
       return null;
   }
 }

@@ -8,6 +8,7 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
+import { isStatusGroupCollapsed } from "@/stores/sidebar-collapsed-sections-store/state";
 import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
 import {
   buildSidebarShortcutSections,
@@ -54,7 +55,7 @@ export function buildSidebarProjection(input: {
     sections.push(
       ...statusGroups.map((group) => ({
         workspaces: group.rows,
-        collapsed: input.collapsedStatusGroupKeys.has(group.bucket),
+        collapsed: isStatusGroupCollapsed(input.collapsedStatusGroupKeys, group.bucket),
       })),
     );
   } else {

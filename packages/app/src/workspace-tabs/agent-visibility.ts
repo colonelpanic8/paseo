@@ -2,7 +2,6 @@ import type { Agent } from "@/stores/session-store";
 import type { WorkspaceTabSnapshot } from "@/stores/workspace-layout-actions";
 import { isWorkspaceRootAgent } from "@/subagents/policies";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
-import { isAgentEffectivelySnoozed } from "@/agent-snooze/model";
 
 export interface WorkspaceAgentVisibility {
   activeAgentIds: Set<string>;
@@ -14,15 +13,10 @@ function agentBelongsToWorkspace(agent: Agent, workspaceId: string): boolean {
   return normalizeWorkspaceOpaqueId(agent.workspaceId) === workspaceId;
 }
 
-function isActiveWorkspaceAgent(agent: Agent, nowMs: number): boolean {
-  return !agent.archivedAt && !isAgentEffectivelySnoozed(agent, nowMs);
-}
-
 export function deriveWorkspaceAgentVisibility(input: {
   sessionAgents: Map<string, Agent> | undefined;
   agentDetails?: Map<string, Agent> | undefined;
   workspaceId: string | null | undefined;
-  nowMs?: number;
 }): WorkspaceAgentVisibility {
   const { sessionAgents, agentDetails } = input;
   const workspaceId = normalizeWorkspaceOpaqueId(input.workspaceId);
@@ -37,7 +31,6 @@ export function deriveWorkspaceAgentVisibility(input: {
   const activeAgentIds = new Set<string>();
   const autoOpenAgentIds = new Set<string>();
   const knownAgentIds = new Set<string>();
-  const nowMs = input.nowMs ?? Date.now();
   const agentsById = new Map<string, Agent>([
     ...(agentDetails?.entries() ?? []),
     ...(sessionAgents?.entries() ?? []),
@@ -47,7 +40,7 @@ export function deriveWorkspaceAgentVisibility(input: {
       continue;
     }
     knownAgentIds.add(agent.id);
-    if (isActiveWorkspaceAgent(agent, nowMs)) {
+    if (!agent.archivedAt) {
       activeAgentIds.add(agent.id);
       const parentAgent = agent.parentAgentId ? agentsById.get(agent.parentAgentId) : undefined;
       if (isWorkspaceRootAgent(agent, parentAgent)) {
