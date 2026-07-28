@@ -6,6 +6,7 @@ import {
   beginArchivedWorkspaceTransition,
   settleArchivedWorkspaceTransition,
 } from "@/hooks/use-archived-workspaces";
+import { ARCHIVE_DISMISS_MS } from "@/components/sidebar/sidebar-motion";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -68,6 +69,10 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
       return;
     }
     onSetHiding?.(true);
+    // Let the row's dismissal fade finish while it still owns its slot (see
+    // sidebar-motion.ts) before anything is removed or inserted; the gap-close
+    // and the tail arrival are separate animations that start after this.
+    await new Promise((resolve) => setTimeout(resolve, ARCHIVE_DISMISS_MS));
     const workspaceKey = `${serverId}:${workspaceId}`;
     await beginArchivedWorkspaceTransition({
       queryClient,
