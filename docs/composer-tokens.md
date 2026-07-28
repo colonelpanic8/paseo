@@ -1,7 +1,7 @@
 # Composer Tokens
 
-Command and skill names typed into the web composer render as pills. This note covers
-the model, the web renderer, and why native deliberately stays plain text.
+Commands and skills selected from composer autocomplete render as pills on web. This
+note covers the model, the web renderer, and why native deliberately stays plain text.
 
 ## The model: tokens are a view, never state
 
@@ -9,31 +9,32 @@ A token is re-derived from the composer's plain text on every render. Nothing ab
 token is stored anywhere.
 
 ```
-"please run $release-beta"  →  collectComposerTokens()  →  [{ type: "skill", name: "release-beta", start: 11, end: 24 }]
+"please run /release-beta"  →  collectComposerTokens()  →  [{ type: "skill", name: "release-beta", start: 11, end: 24 }]
 ```
 
 `packages/app/src/composer/tokens/tokens.ts` owns this. `collectComposerTokens` finds
-token-shaped text and keeps only names present in the current command/skill catalog;
-`segmentComposerText` splits the draft into alternating plain/token segments covering
-the whole string, each carrying its source offset.
+canonical slash-shaped text and keeps only names present in the current command/skill
+catalog; `segmentComposerText` splits the draft into alternating plain/token segments
+covering the whole string, each carrying its source offset.
 
 Because text is still the only source of truth, drafts, dictation and undo need no
-parallel token state. Deleting the sigil deletes the pill. Submission runs that string
-through `normalizeComposerTokensForSubmission()` once so configurable UI triggers use
-the canonical `/name` syntax understood by the daemon and providers. Queueing stores
-the normalized string. **Do not add a parallel token array to composer state.**
+parallel token state. Choosing an autocomplete option replaces the configured trigger
+with canonical `/name` syntax immediately. Submission and queueing send that exact
+string without another interpretation pass. **Do not add a parallel token array to
+composer state.**
 
 Detection rules:
 
-- The command trigger means a command only at the start of the prompt.
-- Either trigger means a skill after whitespace. This preserves inline `/skill`
-  completion while adding a dedicated skills trigger.
-- A trigger glued to a preceding word is prose, and slash-delimited paths are not
-  tokens. `40$usd` and `/tmp/project` therefore stay plain text.
+- Configured triggers open autocomplete but are not tokens by themselves. A selection
+  explicitly commits the chosen command or skill to canonical slash syntax.
+- A leading canonical slash means a command; a canonical slash after whitespace means a
+  skill. Slash-delimited paths are not tokens.
+- A slash glued to a preceding word is prose. `and/or` and `/tmp/project` therefore stay
+  plain text.
 - A name is `[A-Za-z][A-Za-z0-9:_-]*`. A bare sigil with no name is not a token.
 - A syntactically valid name that is absent from the current command catalog is prose.
-  This is the safety boundary that keeps shell variables such as `$HOME` and `$project`
-  from being rendered as skills or rewritten on submission.
+- Unselected text is never rewritten. `$HOME` remains `$HOME` even if the provider
+  exposes a skill named `HOME`; only choosing that autocomplete option commits `/HOME`.
 
 ## Sigils are configurable
 
@@ -52,11 +53,12 @@ more load-bearing of the two.
 In the settings UI, picking the character the _other_ menu already uses swaps the two
 rather than rejecting the choice.
 
-The sigils configure editing, not the provider protocol. Before a prompt is sent,
-recognized catalog entries are normalized to `/name`. If the catalog has not loaded,
-submission preserves the user's exact text. Without those boundaries, choosing `!` for
-commands would silently turn executable provider and client commands into ordinary
-prompt text, while `$` could silently rewrite shell variables.
+The sigils configure autocomplete and presentation, not the provider protocol. Choosing
+an option writes provider-compatible `/name` into the draft; the web mirror displays the
+active configured sigil over that one-character canonical prefix. If the catalog has not
+loaded, there is nothing to choose and submission preserves the user's exact text. This
+explicit selection boundary prevents a configured `$` from silently rewriting shell
+variables.
 
 ## Web: a mirror layer
 
@@ -76,12 +78,11 @@ textarea.** Two consequences, both load-bearing:
    padding is cancelled by an equal negative margin, so the pill grows visually around
    the glyphs without moving them. Never change one without the other.
 
-Consequence (2) is why the pill shows the literal draft text (`$release-beta`) rather
-than an icon plus a prettified display name — either would add width and desynchronise
-the wrap, putting the caret off the glyphs. Submission may canonicalize the leading
-sigil, but it never changes the token name. Getting icons and display names on web
-means replacing the textarea with a contenteditable editor; it cannot be done with a
-mirror.
+Consequence (2) is why the pill replaces only the canonical slash with the configured
+one-character display sigil (`$release-beta`) rather than adding an icon or prettified
+display name — either would add width and desynchronise the wrap, putting the caret off
+the glyphs. Getting icons and display names on web means replacing the textarea with a
+contenteditable editor; it cannot be done with a mirror.
 
 ### Colors
 
@@ -121,7 +122,8 @@ selection, dictation and external draft updates unreliable.
 A native mirror would also have to reproduce the input's font metrics, wrapping and
 scroll exactly to keep the caret on the glyphs. Native pills therefore require a real
 attributed-input implementation or custom text view. Until then, native keeps the
-existing controlled plain-text path.
+existing controlled plain-text path and shows the canonical slash after an autocomplete
+selection.
 
 ## The web renderer opts out when there is no token
 
