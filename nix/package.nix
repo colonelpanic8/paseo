@@ -17,7 +17,19 @@
   # The default is read from a sidecar file so the CI auto-updater can replace
   # the hash with a single file write instead of a sed against this source.
   npmDepsHash ? lib.fileContents ./npm-deps.hash,
+  # Build provenance, stamped into the daemon's wrapper so it can report which
+  # commit it came from. See nix/build-info.nix; the flake supplies these from
+  # its own source revision.
+  buildCommit ? null,
+  buildCommitDate ? null,
+  buildRepoUrl ? null,
 }:
+
+let
+  buildInfo = import ./build-info.nix { inherit lib; } {
+    inherit buildCommit buildCommitDate buildRepoUrl;
+  };
+in
 
 buildNpmPackage rec {
   pname = "paseo";
@@ -132,7 +144,7 @@ buildNpmPackage rec {
     # Keep Paseo's runtime mode separate from NODE_ENV, which belongs to spawned agents.
     makeWrapper ${nodejs}/bin/node $out/bin/paseo-server \
       --add-flags "$out/lib/paseo/packages/server/dist/scripts/supervisor-entrypoint.js" \
-      --set PASEO_NODE_ENV production
+      --set PASEO_NODE_ENV production ${lib.escapeShellArgs buildInfo.wrapperArgs}
 
     # Create wrapper for the CLI
     makeWrapper ${nodejs}/bin/node $out/bin/paseo \

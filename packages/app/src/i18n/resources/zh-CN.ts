@@ -1719,6 +1719,7 @@ export const zhCN: TranslationResources = {
       connectedHosts: "已连接的 Host",
       offline: "离线",
       versionDiffers: "版本与此设备不同",
+      viewCommit: "在 GitHub 上查看提交",
       releaseChannel: {
         label: "发布通道",
         description: "切换到 Beta 可更早获取更新并参与改进",

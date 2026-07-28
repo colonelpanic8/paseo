@@ -1755,6 +1755,7 @@ export const ja: TranslationResources = {
       connectedHosts: "接続されているホスト",
       offline: "オフライン",
       versionDiffers: "このデバイスとバージョンが異なります",
+      viewCommit: "GitHub でコミットを表示",
       releaseChannel: {
         label: "リリースチャンネル",
         description: "ベータに切り替えると早期に更新を取得してフィードバックを提供できます",

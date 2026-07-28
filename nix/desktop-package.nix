@@ -15,7 +15,20 @@
   # (`paseo-desktop-<v>-npm-deps`) and refetches the entire registry. Override
   # the upstream hash via `paseo.override { npmDepsHash = "..."; }`.
   paseo,
+  # Build provenance. Unlike the daemon, the client bundle cannot read this at
+  # runtime — `expo export` inlines EXPO_PUBLIC_* into the bundle, so it has to
+  # be known here at build time. See nix/build-info.nix.
+  buildCommit ? null,
+  buildCommitDate ? null,
+  buildRepoUrl ? null,
 }:
+
+let
+  buildInfo = import ./build-info.nix { inherit lib; } {
+    inherit buildCommit buildCommitDate buildRepoUrl;
+  };
+in
+
 buildNpmPackage {
   pname = "paseo-desktop";
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
@@ -85,7 +98,9 @@ buildNpmPackage {
     # Expo's web build pulls in some pre-bundled assets; ensure it doesn't try
     # to phone home during the build.
     CI = "1";
-  };
+  }
+  # Inlined into the renderer bundle by `expo export` below.
+  // buildInfo.expoPublicEnv;
 
   buildPhase = ''
     runHook preBuild
@@ -189,7 +204,7 @@ buildNpmPackage {
       makeWrapper ${electron}/bin/electron $out/bin/paseo-desktop \
         --add-flags "$out/share/paseo-desktop/packages/desktop/dist/main.js" \
         --add-flags "--no-sandbox" \
-        --set EXPO_DEV_URL "paseo://app/"
+        --set EXPO_DEV_URL "paseo://app/" ${lib.escapeShellArgs buildInfo.wrapperArgs}
 
       copyDesktopItems
     ''}

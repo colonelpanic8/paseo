@@ -1750,6 +1750,7 @@ export const en = {
       connectedHosts: "Connected hosts",
       offline: "Offline",
       versionDiffers: "Version differs from this device",
+      viewCommit: "View commit on GitHub",
       releaseChannel: {
         label: "Release channel",
         description: "Switch to Beta to get updates sooner and help shape them",
