@@ -10,6 +10,7 @@ import {
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  shouldSubmitUncommittedTrigger,
 } from "./agent-command-autocomplete";
 
 describe("filterAndRankCommandAutocompleteEntries", () => {
@@ -270,6 +271,31 @@ describe("applySlashCommandReplacement", () => {
         commandName: "release-beta",
       }),
     ).toBe("run /release-beta ");
+  });
+});
+
+describe("shouldSubmitUncommittedTrigger", () => {
+  const configuredSkill = {
+    start: 6,
+    end: 11,
+    query: "HOME",
+    position: "inline",
+    menu: "skill",
+    sigil: "$",
+  } as const;
+
+  it("reserves Enter for submission when a configured trigger is still plain text", () => {
+    expect(shouldSubmitUncommittedTrigger({ key: "Enter", command: configuredSkill })).toBe(true);
+  });
+
+  it("allows Tab to commit configured triggers and Enter to select canonical slash", () => {
+    expect(shouldSubmitUncommittedTrigger({ key: "Tab", command: configuredSkill })).toBe(false);
+    expect(
+      shouldSubmitUncommittedTrigger({
+        key: "Enter",
+        command: { ...configuredSkill, sigil: "/" },
+      }),
+    ).toBe(false);
   });
 });
 

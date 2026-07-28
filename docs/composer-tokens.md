@@ -27,6 +27,9 @@ Detection rules:
 
 - Configured triggers open autocomplete but are not tokens by themselves. A selection
   explicitly commits the chosen command or skill to canonical slash syntax.
+- Enter submits text that still contains a non-canonical configured trigger. Committing
+  that autocomplete option requires Tab or a click, so a shell variable cannot be
+  rewritten by the composer's submit key.
 - A leading canonical slash means a command; a canonical slash after whitespace means a
   skill. Slash-delimited paths are not tokens.
 - A slash glued to a preceding word is prose. `and/or` and `/tmp/project` therefore stay

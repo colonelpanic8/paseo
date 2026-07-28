@@ -78,6 +78,12 @@ describe("MockLoadTestAgentClient", () => {
         kind: "command",
       },
       {
+        name: "HOME",
+        description: "Exercise shell-variable collisions in development.",
+        argumentHint: "",
+        kind: "skill",
+      },
+      {
         name: "release-beta",
         description: "Simulate a provider skill in development.",
         argumentHint: "",
