@@ -39,6 +39,12 @@ const MOCK_LOAD_TEST_DURATION_MS = 5 * 60 * 1000;
 const MOCK_LOAD_TEST_INTERVAL_MS = 40;
 const MOCK_LOAD_TEST_COMMANDS: readonly AgentSlashCommand[] = [
   {
+    name: "HOME",
+    description: "Exercise shell-variable collisions in development.",
+    argumentHint: "",
+    kind: "skill",
+  },
+  {
     name: "release-beta",
     description: "Simulate a provider skill in development.",
     argumentHint: "",
