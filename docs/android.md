@@ -104,6 +104,24 @@ Run `nix run .#android-release -- --help` for the full interface. Set
 invoking the app outside the repository root, or pass additional Gradle
 arguments after `--`.
 
+The output directory is pruned of `*.apk` files before the new artifacts land,
+so switching `--architecture` or `--fdroid` between runs cannot leave a stale
+APK sitting beside the current one. Pruning is limited to `*.apk` files
+directly in that directory — anything else you keep there survives — and is
+skipped entirely if you point `--output` at Gradle's own output directory.
+
+### Why CI does not build the runner
+
+`.#android-release-runner` has a ~7.5 GB closure (the composed Android SDK
+alone is ~6.8 GB), so the `Nix` workflow never realizes it. It runs
+`nix build --dry-run .#android-release-runner` instead, which still catches the
+regression that actually bites: `androidenv.composeAndroidPackages` validates
+build-tools, platform, NDK, and CMake versions at **evaluation** time and fails
+with `The version X is missing in package build-tools`. The workflow separately
+shellchecks `scripts/build-android-apk.sh`, because `writeShellApplication`
+only lints it as part of the build we are skipping. Real APK builds happen in
+`android-apk-release.yml` on tags.
+
 ## Local build + install
 
 From repo root:
