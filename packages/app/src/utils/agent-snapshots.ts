@@ -26,6 +26,13 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     ? new Date(snapshot.attentionTimestamp)
     : null;
   const archivedAt = snapshot.archivedAt ? new Date(snapshot.archivedAt) : null;
+  const snoozeStatus = snapshot.snoozeStatus
+    ? {
+        status: snapshot.snoozeStatus.status,
+        snoozedAt: new Date(snapshot.snoozeStatus.snoozedAt),
+        snoozedUntil: new Date(snapshot.snoozeStatus.snoozedUntil),
+      }
+    : null;
   const parentAgentId = getParentAgentIdFromLabels(snapshot.labels);
 
   return {
@@ -33,6 +40,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     id: snapshot.id,
     provider: snapshot.provider,
     status: snapshot.status,
+    snoozeStatus,
     createdAt,
     updatedAt,
     lastUserMessageAt,

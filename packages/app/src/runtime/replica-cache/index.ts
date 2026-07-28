@@ -159,6 +159,13 @@ function serializeAgent(agent: Agent): StoredAgent {
     updatedAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt?.toISOString() ?? null,
     status: agent.status,
+    snoozeStatus: agent.snoozeStatus
+      ? {
+          status: agent.snoozeStatus.status,
+          snoozedAt: agent.snoozeStatus.snoozedAt.toISOString(),
+          snoozedUntil: agent.snoozeStatus.snoozedUntil.toISOString(),
+        }
+      : null,
     capabilities: agent.capabilities,
     currentModeId: agent.currentModeId,
     availableModes: agent.availableModes,

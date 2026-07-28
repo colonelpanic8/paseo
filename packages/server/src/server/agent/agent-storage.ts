@@ -9,6 +9,7 @@ import { toStoredAgentRecord } from "./agent-projections.js";
 import type { ManagedAgent } from "./agent-manager.js";
 import type { AgentSessionConfig } from "./agent-sdk-types.js";
 import { AgentOwnerSchema, daemonExecutionKey, type DaemonAgentOwner } from "./agent-owner.js";
+import { AgentSnoozeStatusSchema } from "@getpaseo/protocol/agent-snooze";
 
 const SERIALIZABLE_CONFIG_SCHEMA = z
   .object({
@@ -44,6 +45,7 @@ const STORED_AGENT_SCHEMA = z.object({
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),
+  snoozeStatus: AgentSnoozeStatusSchema.nullable().optional(),
   lastStatus: AgentStatusSchema.default("closed"),
   lastModeId: z.string().nullable().optional(),
   config: SERIALIZABLE_CONFIG_SCHEMA,

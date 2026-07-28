@@ -21,6 +21,7 @@ import {
   ArrowLeftToLine,
   ArrowRightToLine,
   ChevronDown,
+  Clock,
   Columns2,
   Copy,
   Pencil,
@@ -89,6 +90,7 @@ import { runPinnedTabTarget, type TabTargetHandlers } from "@/workspace-pins/run
 import type { PinnedTabTarget } from "@/workspace-pins/target";
 import { PinnedTargetsRow } from "@/workspace-pins/pinned-targets-row";
 import { PinnableMenuItem } from "@/workspace-pins/pinnable-menu-item";
+import { useAgentSnoozeMenu } from "@/agent-snooze/use-agent-snooze-menu";
 
 const DROPDOWN_WIDTH = 220;
 const LOADING_TAB_LABEL_SKELETON_WIDTH = 80;
@@ -97,6 +99,7 @@ const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedX = withUnistyles(X);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedClock = withUnistyles(Clock);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
@@ -336,6 +339,8 @@ function TabContextMenuItem({
         return <ThemedArrowRightToLine size={16} uniProps={mutedColorMapping} />;
       case "copy-x":
         return <ThemedCopyX size={16} uniProps={mutedColorMapping} />;
+      case "clock":
+        return <ThemedClock size={16} uniProps={mutedColorMapping} />;
       case "pencil":
         return <ThemedPencil size={16} uniProps={mutedColorMapping} />;
       case "x":
@@ -1148,6 +1153,10 @@ function ResolvedDesktopTabChip({
   showDropIndicatorAfter: boolean;
 }) {
   const { t } = useTranslation();
+  const snooze = useAgentSnoozeMenu(
+    normalizedServerId,
+    item.tab.target.kind === "agent" ? item.tab.target.agentId : null,
+  );
   const resolvedTab = useMemo(
     () =>
       buildWorkspaceDesktopTabActions({
@@ -1164,6 +1173,7 @@ function ResolvedDesktopTabChip({
         onCloseTabsToLeft,
         onCloseTabsToRight,
         onCloseOtherTabs,
+        snooze,
         labels,
       }),
     [
@@ -1180,6 +1190,7 @@ function ResolvedDesktopTabChip({
       labels,
       onReloadAgent,
       onRenameTab,
+      snooze,
       tabCount,
     ],
   );

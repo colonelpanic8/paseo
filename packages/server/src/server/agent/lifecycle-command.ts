@@ -31,6 +31,7 @@ export interface LifecycleAgentManager {
     updates: {
       title?: string;
       labels?: Record<string, string>;
+      snoozeUntil?: string | null;
     },
   ): Promise<void>;
 }
@@ -162,21 +163,24 @@ export async function updateAgentCommand(
     agentId: string;
     name?: string;
     labels?: Record<string, string>;
+    snoozeUntil?: string | null;
   },
 ): Promise<UpdateAgentResult> {
   const title = input.name?.trim();
   const labels = input.labels && Object.keys(input.labels).length > 0 ? input.labels : undefined;
+  const hasSnoozeUpdate = input.snoozeUntil !== undefined;
 
-  if (!title && !labels) {
+  if (!title && !labels && !hasSnoozeUpdate) {
     return {
       accepted: false,
-      error: "Nothing to update (provide name and/or labels)",
+      error: "Nothing to update (provide name, labels, and/or snoozeUntil)",
     };
   }
 
   await dependencies.agentManager.updateAgentMetadata(input.agentId, {
     ...(title ? { title } : {}),
     ...(labels ? { labels } : {}),
+    ...(hasSnoozeUpdate ? { snoozeUntil: input.snoozeUntil } : {}),
   });
 
   return {

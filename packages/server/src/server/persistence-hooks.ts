@@ -109,6 +109,7 @@ export function extractTimestamps(record: StoredAgentRecord): {
   updatedAt: Date;
   lastUserMessageAt: Date | null;
   labels?: Record<string, string>;
+  snoozeStatus?: StoredAgentRecord["snoozeStatus"];
   workspaceId?: string;
   owner?: StoredAgentRecord["owner"];
 } {
@@ -117,6 +118,7 @@ export function extractTimestamps(record: StoredAgentRecord): {
     updatedAt: new Date(record.lastActivityAt ?? record.updatedAt),
     lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
     labels: record.labels,
+    snoozeStatus: record.snoozeStatus,
     workspaceId: record.workspaceId,
     owner: record.owner,
   };

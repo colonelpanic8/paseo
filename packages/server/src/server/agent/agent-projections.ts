@@ -80,6 +80,7 @@ export function toStoredAgentRecord(
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
     labels: agent.labels,
+    snoozeStatus: agent.snoozeStatus ?? null,
     lastStatus: agent.lifecycle,
     lastModeId: agent.currentModeId ?? config?.modeId ?? null,
     config: config ?? null,
@@ -129,6 +130,7 @@ export function toAgentPayload(
     persistence: sanitizePersistenceHandle(agent.persistence),
     title: options?.title ?? null,
     labels: agent.labels,
+    snoozeStatus: agent.snoozeStatus ?? null,
   };
 
   const usage = sanitizeUsage(agent.lastUsage);
@@ -236,6 +238,7 @@ export function buildStoredAgentPayload(
     attentionTimestamp: record.attentionTimestamp ?? null,
     archivedAt: record.archivedAt ?? null,
     labels: normalizeLabels(record.labels),
+    snoozeStatus: record.snoozeStatus ?? null,
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }
@@ -250,6 +253,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     thinkingOptionId: agent.thinkingOptionId,
     effectiveThinkingOptionId: agent.effectiveThinkingOptionId,
     status: agent.status,
+    snoozeStatus: agent.snoozeStatus ?? null,
     cwd: agent.cwd,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,

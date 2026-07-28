@@ -104,6 +104,11 @@ export interface SeedDaemonClient {
         model: string | null;
         currentModeId: string | null;
         status: string;
+        snoozeStatus?: {
+          status: "snoozed";
+          snoozedAt: string;
+          snoozedUntil: string;
+        } | null;
         title?: string | null;
       };
     }>;

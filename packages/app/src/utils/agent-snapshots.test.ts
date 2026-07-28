@@ -17,6 +17,7 @@ function createSnapshot(
     updatedAt: input.updatedAt ?? "2026-04-20T00:01:00.000Z",
     lastUserMessageAt: input.lastUserMessageAt ?? null,
     status: input.status ?? "idle",
+    snoozeStatus: input.snoozeStatus ?? null,
     capabilities: input.capabilities ?? {
       supportsStreaming: true,
       supportsSessionPersistence: true,
@@ -35,6 +36,25 @@ function createSnapshot(
 }
 
 describe("normalizeAgentSnapshot", () => {
+  it("normalizes first-class snooze status timestamps", () => {
+    const agent = normalizeAgentSnapshot(
+      createSnapshot({
+        snoozeStatus: {
+          status: "snoozed",
+          snoozedAt: "2026-07-28T18:00:00.000Z",
+          snoozedUntil: "2026-07-28T19:00:00.000Z",
+        },
+      }),
+      "server-1",
+    );
+
+    expect(agent.snoozeStatus).toEqual({
+      status: "snoozed",
+      snoozedAt: new Date("2026-07-28T18:00:00.000Z"),
+      snoozedUntil: new Date("2026-07-28T19:00:00.000Z"),
+    });
+  });
+
   it("derives parentAgentId from the parent label while preserving labels", () => {
     const labels = {
       [PARENT_AGENT_ID_LABEL]: "parent-1",

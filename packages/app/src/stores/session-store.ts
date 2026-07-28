@@ -108,6 +108,11 @@ export interface Agent {
   id: string;
   provider: AgentProvider;
   status: AgentLifecycleStatus;
+  snoozeStatus?: {
+    status: "snoozed";
+    snoozedAt: Date;
+    snoozedUntil: Date;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
   lastUserMessageAt: Date | null;
@@ -1915,6 +1920,7 @@ export const useSessionStore = create<SessionStore>()(
             serverId,
             title: agent.title ?? null,
             status: agent.status,
+            snoozeStatus: agent.snoozeStatus ?? null,
             lastActivityAt,
             cwd: agent.cwd,
             provider: agent.provider,
