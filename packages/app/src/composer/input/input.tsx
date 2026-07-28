@@ -39,7 +39,7 @@ import type { ComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
 import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import type { ComposerSigils } from "@/composer/tokens/sigils";
-import { collectComposerTokens } from "@/composer/tokens/tokens";
+import { collectComposerTokens, type ComposerTokenCatalog } from "@/composer/tokens/tokens";
 import { ComposerTokenHighlightLayer } from "./token-highlight";
 import { focusWithRetries } from "@/utils/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -116,6 +116,7 @@ export interface ComposerKeyPressEvent {
 
 export interface MessageInputProps {
   value: string;
+  tokenCatalog: ComposerTokenCatalog;
   onChangeText: (text: string) => void;
   onSubmit: (payload: MessagePayload) => void;
   /** When true, the submit button is enabled even without text or images (e.g. external attachment selected). */
@@ -641,6 +642,7 @@ interface ComposerTextSurfaceProps {
   textInputStyle: EditingTextInputProps["style"];
   readOnlyTextStyle: React.ComponentProps<typeof Text>["style"];
   tokenRendering: ReturnType<typeof useComposerTokenRendering>;
+  tokenCatalog: ComposerTokenCatalog;
   tokenTextareaRef: React.RefObject<HTMLElement | null>;
   placeholder: string;
   accessibilityLabel: string;
@@ -681,6 +683,7 @@ function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElemen
         enabled={props.tokenRendering.showTokenMirror}
         value={props.value}
         sigils={props.tokenRendering.sigils}
+        tokenCatalog={props.tokenCatalog}
         textareaRef={props.tokenTextareaRef}
       />
       <ComposerTextInput
@@ -1031,7 +1034,10 @@ function computeTextInputHeightStyle(inputHeight: number, maxInputHeight: number
  * textarea instead of the mirror. Native always keeps its controlled plain-text
  * path because React Native TextInput cannot safely render styled spans.
  */
-function useComposerTokenRendering(value: string): {
+function useComposerTokenRendering(
+  value: string,
+  tokenCatalog: ComposerTokenCatalog,
+): {
   sigils: ComposerSigils;
   showTokenMirror: boolean;
   /** Marks the input for the tokenized-selection stylesheet while a token exists. */
@@ -1040,7 +1046,10 @@ function useComposerTokenRendering(value: string): {
   inputTextStyle: StyleProp<TextStyle>;
 } {
   const sigils = useComposerSigils();
-  const hasTokens = useMemo(() => collectComposerTokens(value, sigils).length > 0, [value, sigils]);
+  const hasTokens = useMemo(
+    () => collectComposerTokens(value, sigils, tokenCatalog).length > 0,
+    [value, sigils, tokenCatalog],
+  );
   const showTokenMirror = isWeb && hasTokens;
 
   return {
@@ -1104,6 +1113,7 @@ function computeSendButtonState(input: SendButtonStateInput): SendButtonStateOut
 
 interface ResolvedMessageInputProps {
   value: string;
+  tokenCatalog: ComposerTokenCatalog;
   onChangeText: (text: string) => void;
   onSubmit: (payload: MessagePayload) => void;
   hasExternalContent: boolean;
@@ -1151,6 +1161,7 @@ interface ResolvedMessageInputProps {
 function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInputProps {
   return {
     value: props.value,
+    tokenCatalog: props.tokenCatalog,
     onChangeText: props.onChangeText,
     onSubmit: props.onSubmit,
     hasExternalContent: props.hasExternalContent ?? false,
@@ -1206,6 +1217,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
   function MessageInput(props, ref) {
     const {
       value,
+      tokenCatalog,
       onChangeText,
       onSubmit,
       hasExternalContent,
@@ -1807,7 +1819,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     // `.css-textinput-*` class and loses on source order — so a themed
     // `fontFamily` here is silently dropped while every other property lands.
     // An inline style outranks both classes. See docs/unistyles.md.
-    const tokenRendering = useComposerTokenRendering(value);
+    const tokenRendering = useComposerTokenRendering(value, tokenCatalog);
 
     const textInputStyle = useMemo(
       () => [
@@ -1883,6 +1895,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               textInputStyle={textInputStyle}
               readOnlyTextStyle={readOnlyTextStyle}
               tokenRendering={tokenRendering}
+              tokenCatalog={tokenCatalog}
               tokenTextareaRef={webTextareaRef}
               placeholder={placeholder ?? t("composer.placeholders.fallback")}
               accessibilityLabel={t(mode.accessibilityLabelKey)}
