@@ -85,7 +85,12 @@ export function listProviderAccountProfiles(config: MutableDaemonConfig): Provid
     if (!parsed.success || !parsed.data.extends) {
       continue;
     }
-    const configDir = getProviderAccountConfigDir(parsed.data);
+    // The in-memory config only carries raw `env` while the daemon that
+    // accepted the account patch is still running; after a restart the boot
+    // config carries the derived `accountConfigDir` instead. Accept both.
+    const accountConfigDir =
+      typeof provider.accountConfigDir === "string" ? provider.accountConfigDir.trim() : "";
+    const configDir = accountConfigDir || getProviderAccountConfigDir(parsed.data);
     if (!configDir) {
       continue;
     }

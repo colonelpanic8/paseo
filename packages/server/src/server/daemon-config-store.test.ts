@@ -725,4 +725,34 @@ describe("provider account directories", () => {
       },
     ]);
   });
+
+  test("lists accounts from the restart-shaped config that carries accountConfigDir, not env", () => {
+    // createInitialMutableDaemonConfig deliberately drops env at boot, keeping
+    // only the derived accountConfigDir. Profiles must survive that shape or
+    // every account's usage row disappears on daemon restart.
+    expect(
+      listProviderAccountProfiles({
+        mcp: { injectIntoAgents: false },
+        browserTools: { enabled: false },
+        providers: {
+          "claude-work": {
+            extends: "claude",
+            label: "Claude · Work",
+            accountConfigDir: "/accounts/claude-work",
+          },
+        },
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      }),
+    ).toEqual([
+      {
+        providerId: "claude-work",
+        baseProviderId: "claude",
+        displayName: "Claude · Work",
+        configDir: "/accounts/claude-work",
+      },
+    ]);
+  });
 });
