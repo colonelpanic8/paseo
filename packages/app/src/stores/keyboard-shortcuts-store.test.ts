@@ -1,18 +1,27 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useKeyboardShortcutsStore } from "./keyboard-shortcuts-store";
 
-beforeEach(() => {
-  useKeyboardShortcutsStore.setState({
-    commandCenterOpen: false,
-    shortcutsDialogOpen: false,
-    capturingShortcut: false,
-    altDown: false,
-    cmdOrCtrlDown: false,
-    sidebarShortcutWorkspaceTargets: [],
+describe("keyboard shortcut badge state", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useKeyboardShortcutsStore.setState({
+      commandCenterOpen: false,
+      shortcutsDialogOpen: false,
+      capturingShortcut: false,
+      altDown: false,
+      cmdOrCtrlDown: false,
+      controlShortcutModifierDown: false,
+      showShortcutBadges: false,
+      showControlShortcutBadges: false,
+      sidebarShortcutWorkspaceTargets: [],
+    });
   });
-});
 
-describe("keyboard-shortcuts-store", () => {
+  afterEach(() => {
+    useKeyboardShortcutsStore.getState().resetModifiers();
+    vi.useRealTimers();
+  });
+
   it("toggles command center open state", () => {
     expect(useKeyboardShortcutsStore.getState().commandCenterOpen).toBe(false);
     useKeyboardShortcutsStore.getState().setCommandCenterOpen(true);
@@ -23,5 +32,24 @@ describe("keyboard-shortcuts-store", () => {
     expect(useKeyboardShortcutsStore.getState().capturingShortcut).toBe(false);
     useKeyboardShortcutsStore.getState().setCapturingShortcut(true);
     expect(useKeyboardShortcutsStore.getState().capturingShortcut).toBe(true);
+  });
+
+  it("reveals control hints after holding the control shortcut modifier", () => {
+    useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
+
+    expect(useKeyboardShortcutsStore.getState().showControlShortcutBadges).toBe(false);
+    vi.advanceTimersByTime(150);
+    expect(useKeyboardShortcutsStore.getState().showControlShortcutBadges).toBe(true);
+
+    useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(false);
+    expect(useKeyboardShortcutsStore.getState().showControlShortcutBadges).toBe(false);
+  });
+
+  it("does not reveal sidebar number hints for the browser control shortcut modifier", () => {
+    useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
+    vi.advanceTimersByTime(150);
+
+    expect(useKeyboardShortcutsStore.getState().showControlShortcutBadges).toBe(true);
+    expect(useKeyboardShortcutsStore.getState().showShortcutBadges).toBe(false);
   });
 });

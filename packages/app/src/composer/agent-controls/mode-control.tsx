@@ -58,6 +58,7 @@ const MODE_ICONS: Record<string, ComponentType<ModeIconProps>> = {
   ShieldPlus,
   ShieldQuestionMark,
 };
+const MODE_KEYBOARD_ACTIONS = ["message-input.mode-cycle", "message-input.mode.pick"] as const;
 
 interface ModeComboboxOptionProps {
   option: ComboboxOption;
@@ -175,19 +176,23 @@ export function AgentModeControl({
 
   const handleKeyboardAction = useCallback(
     (action: KeyboardActionDefinition): boolean => {
-      if (action.id !== "message-input.mode-cycle") return false;
       if (disabled || !isActiveComposer) return false;
+      if (action.id === "message-input.mode.pick") {
+        handleOpenChange(true);
+        return true;
+      }
+      if (action.id !== "message-input.mode-cycle") return false;
       const nextModeId = resolveNextAgentModeId({ modeOptions, selectedMode: selectedModeId });
       if (!nextModeId) return false;
       onSelectMode(nextModeId);
       return true;
     },
-    [disabled, isActiveComposer, modeOptions, onSelectMode, selectedModeId],
+    [disabled, handleOpenChange, isActiveComposer, modeOptions, onSelectMode, selectedModeId],
   );
 
   useKeyboardActionHandler({
     handlerId: keyboardHandlerIdRef.current,
-    actions: ["message-input.mode-cycle"],
+    actions: MODE_KEYBOARD_ACTIONS,
     enabled: isActiveComposer && !disabled && modeOptions.length > 1,
     priority: 200,
     handle: handleKeyboardAction,
@@ -247,6 +252,8 @@ export function AgentModeControl({
               value: selectedModeLabel,
             })}
             testID="mode-control"
+            shortcutActionId="select-agent-mode"
+            showShortcutHint={isActiveComposer}
           />
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>

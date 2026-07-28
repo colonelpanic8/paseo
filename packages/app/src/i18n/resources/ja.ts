@@ -1852,6 +1852,7 @@ export const ja: TranslationResources = {
         queueMessage: "メッセージをキューに追加",
         muteUnmuteVoiceMode: "音声モードのミュートを切り替え",
         switchProject: "プロジェクトを切り替え",
+        selectHost: "ホストを選択",
       },
       helpNotes: {
         showKeyboardShortcuts:

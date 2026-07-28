@@ -58,6 +58,8 @@ interface CombinedModelSelectorProps {
     glyphSize: number;
     showCaret: boolean;
   };
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function CombinedModelSelector({
@@ -79,10 +81,13 @@ export function CombinedModelSelector({
   desktopMinWidth,
   triggerFill = false,
   toolbar,
+  open: controlledOpen,
+  onOpenChange,
 }: CombinedModelSelectorProps) {
   const { t } = useTranslation();
   const anchorRef = useRef<View>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = controlledOpen ?? uncontrolledOpen;
   const [isContentReady, setIsContentReady] = useState(isWeb);
   const browser = useModelBrowser({
     providers,
@@ -93,20 +98,27 @@ export function CombinedModelSelector({
     serverId,
   });
   const { prepareToOpen, reset } = browser;
+  const previousOpenRef = useRef(isOpen);
 
   const handleOpenChange = useCallback(
-    (open: boolean) => {
-      setIsOpen(open);
-      if (open) {
-        prepareToOpen();
-        onOpen?.();
-        return;
-      }
-      reset();
-      onClose?.();
+    (nextOpen: boolean) => {
+      setUncontrolledOpen(nextOpen);
+      onOpenChange?.(nextOpen);
     },
-    [onClose, onOpen, prepareToOpen, reset],
+    [onOpenChange],
   );
+
+  useEffect(() => {
+    if (previousOpenRef.current === isOpen) return;
+    previousOpenRef.current = isOpen;
+    if (isOpen) {
+      prepareToOpen();
+      onOpen?.();
+      return;
+    }
+    reset();
+    onClose?.();
+  }, [isOpen, onClose, onOpen, prepareToOpen, reset]);
 
   const handleSelect = useCallback(
     (provider: string, modelId: string) => {

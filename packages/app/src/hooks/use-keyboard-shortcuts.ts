@@ -106,6 +106,7 @@ export function useKeyboardShortcuts({
     // desktop Mac, Ctrl on desktop non-Mac). The store ORs altDown/cmdOrCtrlDown
     // to drive badge visibility, so we set the flag matching this runtime.
     const badgeModifierKey = getWorkspaceIndexJumpModifierKey({ isMac, isDesktop: isDesktopApp });
+    const controlShortcutModifierKey = isMac ? "Meta" : "Control";
     const setBadgeModifierDown = (down: boolean) => {
       const state = useKeyboardShortcutsStore.getState();
       if (isDesktopApp) {
@@ -300,6 +301,9 @@ export function useKeyboardShortcuts({
       if (key === badgeModifierKey && !event.shiftKey) {
         setBadgeModifierDown(true);
       }
+      if (key === controlShortcutModifierKey && !event.shiftKey) {
+        useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
+      }
       if (key === "Shift") {
         const state = useKeyboardShortcutsStore.getState();
         if (state.altDown || state.cmdOrCtrlDown) {
@@ -322,6 +326,9 @@ export function useKeyboardShortcuts({
       const key = event.key ?? "";
       if (key === badgeModifierKey) {
         setBadgeModifierDown(false);
+      }
+      if (key === controlShortcutModifierKey) {
+        useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(false);
       }
     };
 
