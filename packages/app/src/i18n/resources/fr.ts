@@ -2764,6 +2764,8 @@ export const fr: TranslationResources = {
         muteUnmuteVoiceMode: "Couper/réactiver le micro en mode vocal",
         switchProject: "Changer de projet",
         selectHost: "Sélectionner l'hôte",
+        toggleFastMode: "Activer/désactiver le mode rapide",
+        togglePlanMode: "Activer/désactiver le mode planification",
       },
       helpNotes: {
         showKeyboardShortcuts:

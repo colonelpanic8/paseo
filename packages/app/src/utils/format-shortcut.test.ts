@@ -22,6 +22,7 @@ describe("formatShortcut", () => {
   it("uses compact modifier symbols for control hints", () => {
     expect(formatCompactShortcut(["mod", "shift", "M"], "non-mac")).toBe("⌃⇧M");
     expect(formatCompactShortcut(["mod", "alt", "F"], "non-mac")).toBe("⌃⌥F");
+    expect(formatCompactShortcut(["meta", "M"], "non-mac")).toBe("⊞M");
     expect(formatCompactShortcut(["mod", "shift", "M"], "mac")).toBe("⌘⇧M");
   });
 });

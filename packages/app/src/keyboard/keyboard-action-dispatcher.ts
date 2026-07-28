@@ -56,11 +56,11 @@ export type KeyboardActionId =
   | "workspace.archive"
   | "workspace.archive.undo"
   | "workspace.pin"
-  | "message-input.provider.pick"
   | "message-input.model.pick"
   | "message-input.thinking.pick"
   | "message-input.mode.pick"
   | "message-input.fast-mode.toggle"
+  | "message-input.plan-mode.toggle"
   // Command-center only: no keybind, so these are absent from route-shortcut.ts.
   | "workspace.rename"
   | "workspace.setup.show";
@@ -123,11 +123,11 @@ export type KeyboardActionDefinition =
   | { id: "workspace.archive"; scope: KeyboardActionScope }
   | { id: "workspace.archive.undo"; scope: KeyboardActionScope }
   | { id: "workspace.pin"; scope: KeyboardActionScope }
-  | { id: "message-input.provider.pick"; scope: KeyboardActionScope }
   | { id: "message-input.model.pick"; scope: KeyboardActionScope }
   | { id: "message-input.thinking.pick"; scope: KeyboardActionScope }
   | { id: "message-input.mode.pick"; scope: KeyboardActionScope }
   | { id: "message-input.fast-mode.toggle"; scope: KeyboardActionScope }
+  | { id: "message-input.plan-mode.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.rename"; scope: KeyboardActionScope }
   | { id: "workspace.setup.show"; scope: KeyboardActionScope };
 
