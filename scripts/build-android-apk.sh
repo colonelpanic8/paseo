@@ -10,7 +10,9 @@ Usage:
 Options:
   --architecture ABI  Build one of: armeabi-v7a, arm64-v8a, x86, x86_64
   --fdroid            Enable Paseo's source-only F-Droid build profile
-  --output DIR        Copy APKs to DIR (default: result/android)
+  --output DIR        Copy APKs to DIR (default: result/android). Existing
+                      *.apk files directly in DIR are removed first so the
+                      directory only describes the build that just ran.
   -h, --help          Show this help
 
 The command expects JavaScript dependencies to have been installed with
@@ -132,8 +134,27 @@ if ((${#apks[@]} == 0)); then
 fi
 
 mkdir -p "$output_dir"
+
+artifact_dir_path="$(cd "$artifact_dir" && pwd -P)"
+output_dir_path="$(cd "$output_dir" && pwd -P)"
+
+if [[ "$output_dir_path" == "$artifact_dir_path" ]]; then
+  # The caller pointed --output at Gradle's own output directory, so the APKs
+  # are already in place. Never prune here: these are the files we just built.
+  for apk in "${apks[@]}"; do
+    echo "$apk"
+  done
+  exit 0
+fi
+
+# Reusing an output directory across builds that differ in architecture or
+# variant otherwise leaves the previous run's APKs sitting next to the current
+# ones, making the artifact set ambiguous. Prune only *.apk files directly in
+# the directory so unrelated files a caller keeps there are left alone.
+find "$output_dir_path" -maxdepth 1 -type f -name '*.apk' -delete
+
 for apk in "${apks[@]}"; do
-  destination="$output_dir/$(basename "$apk")"
+  destination="$output_dir_path/$(basename "$apk")"
   cp "$apk" "$destination"
   echo "$destination"
 done
