@@ -32,6 +32,8 @@ function workspace(input: {
     name: input.name,
     title: null,
     currentBranch: null,
+    remoteUrl: null,
+    providers: [],
     statusBucket: input.statusBucket ?? "done",
     archivingAt: null,
     statusEnteredAt: input.statusEnteredAt ?? null,

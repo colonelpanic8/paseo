@@ -8,7 +8,10 @@ import type {
   WorkspaceStructureProject,
 } from "@/projects/workspace-structure";
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
-import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
+import {
+  EMPTY_WORKSPACE_PROVIDERS,
+  type WorkspaceAgentActivity,
+} from "@/utils/workspace-agent-activity";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
@@ -40,6 +43,10 @@ export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
   pinnedAt?: string | null;
   // Checkout branch (null when not a git checkout or detached HEAD).
   currentBranch: string | null;
+  // Git remote of the workspace's checkout (null when there is none).
+  remoteUrl: string | null;
+  // Distinct providers with a live root agent, most recently active first.
+  providers: readonly string[];
   archivingAt: string | null;
   diffStat: { additions: number; deletions: number } | null;
   prHint: PrHint | null;
@@ -161,6 +168,10 @@ export function createSidebarWorkspaceEntry(input: {
     title: input.workspace.title ?? null,
     pinnedAt: input.workspace.pinnedAt,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
+    remoteUrl:
+      input.workspace.gitRuntime?.remoteUrl ?? input.workspace.project?.checkout.remoteUrl ?? null,
+    providers:
+      input.workspaceAgentActivity?.get(input.workspace.id)?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
     archivingAt: input.workspace.archivingAt,
