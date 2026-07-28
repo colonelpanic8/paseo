@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/shallow";
 import { useFetchQueries } from "@/data/query";
 import { getHostRuntimeStore, useHostRuntimeConnectionStatuses } from "@/runtime/host-runtime";
@@ -14,23 +15,14 @@ export interface ArchivedWorkspaceEntry {
   workspaceKey: string;
   serverId: string;
   workspaceId: string;
-  projectId: string;
   projectName: string;
   name: string;
-  workspaceDirectory: string;
   archivedAt: Date;
 }
 
 export function archivedWorkspacesQueryKey(serverId: string): [string, string] {
   return ["archivedWorkspaces", serverId];
 }
-
-interface ArchivedWorkspacesCache {
-  signature: string;
-  value: ArchivedWorkspaceEntry[];
-}
-
-const EMPTY_ARCHIVED_WORKSPACES_CACHE: ArchivedWorkspacesCache = { signature: "", value: [] };
 
 /**
  * Archived workspaces are deliberately kept out of the session store's workspace
@@ -43,6 +35,7 @@ export function useArchivedWorkspaces({
 }: {
   serverIds: readonly string[];
 }): ArchivedWorkspaceEntry[] {
+  const queryClient = useQueryClient();
   // COMPAT(archivedWorkspacesList): added in v0.2.0, drop the gate when floor >= v0.2.0.
   // Single capability-detection site; hosts without the RPC simply contribute nothing.
   const supportedServerIds = useSessionStore(
@@ -65,17 +58,13 @@ export function useArchivedWorkspaces({
         if (!client) {
           throw new Error("Host disconnected");
         }
-        const entries = await client.listArchivedWorkspaces({
-          limit: ARCHIVED_WORKSPACE_LIMIT,
-        });
+        const entries = await client.listArchivedWorkspaces();
         return entries.map((entry) => ({
           workspaceKey: `${serverId}:${entry.id}`,
           serverId,
           workspaceId: entry.id,
-          projectId: entry.projectId,
           projectName: entry.projectDisplayName,
           name: entry.name,
-          workspaceDirectory: entry.workspaceDirectory,
           archivedAt: new Date(entry.archivedAt),
         }));
       },
@@ -85,24 +74,46 @@ export function useArchivedWorkspaces({
     })),
   );
 
-  // useQueries hands back a fresh wrapper array every render, so the merged result
-  // must be cached on the data itself or every consumer re-renders forever. A
-  // useMemo can't express this (its dependency is derived from the same array it
-  // consumes), so cache explicitly: recompute only when the signature moves.
-  const dataSlices = queries.map((query) => query.data);
-  const signature = dataSlices
-    .map(
-      (slice) =>
-        slice?.map((entry) => `${entry.workspaceKey}@${entry.archivedAt.getTime()}`).join(",") ??
-        "",
-    )
-    .join("|");
+  useEffect(() => {
+    const unsubscribes = supportedServerIds.flatMap((serverId) => {
+      if (connectionStatuses.get(serverId) !== "online") {
+        return [];
+      }
+      const client = getHostRuntimeStore().getClient(serverId);
+      if (!client) {
+        return [];
+      }
+      return [
+        client.on("workspace_update", (message) => {
+          const queryKey = archivedWorkspacesQueryKey(serverId);
+          const cached = queryClient.getQueryData<ArchivedWorkspaceEntry[]>(queryKey);
+          const workspaceId =
+            message.payload.kind === "remove" ? message.payload.id : message.payload.workspace.id;
+          if (shouldRefreshArchivedWorkspaces(message.payload.kind, workspaceId, cached)) {
+            void queryClient.invalidateQueries({ queryKey });
+          }
+        }),
+      ];
+    });
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe();
+      }
+    };
+  }, [connectionStatuses, queryClient, supportedServerIds]);
 
-  const cache = useRef<ArchivedWorkspacesCache>(EMPTY_ARCHIVED_WORKSPACES_CACHE);
-  if (cache.current.signature !== signature) {
-    cache.current = { signature, value: mergeArchivedWorkspaces(dataSlices) };
+  return mergeArchivedWorkspaces(queries.map((query) => query.data));
+}
+
+export function shouldRefreshArchivedWorkspaces(
+  kind: "remove" | "upsert",
+  workspaceId: string,
+  cached: readonly ArchivedWorkspaceEntry[] | undefined,
+): boolean {
+  if (kind === "remove") {
+    return true;
   }
-  return cache.current.value;
+  return Boolean(cached?.some((entry) => entry.workspaceId === workspaceId));
 }
 
 export function mergeArchivedWorkspaces(

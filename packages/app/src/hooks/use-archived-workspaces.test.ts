@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mergeArchivedWorkspaces, type ArchivedWorkspaceEntry } from "./use-archived-workspaces";
+import {
+  mergeArchivedWorkspaces,
+  shouldRefreshArchivedWorkspaces,
+  type ArchivedWorkspaceEntry,
+} from "./use-archived-workspaces";
 
 function entry(input: {
   serverId: string;
@@ -10,10 +14,8 @@ function entry(input: {
     workspaceKey: `${input.serverId}:${input.workspaceId}`,
     serverId: input.serverId,
     workspaceId: input.workspaceId,
-    projectId: "prj",
     projectName: "repo",
     name: input.workspaceId,
-    workspaceDirectory: `/repo/${input.workspaceId}`,
     archivedAt: new Date(input.archivedAt),
   };
 }
@@ -82,5 +84,27 @@ describe("mergeArchivedWorkspaces", () => {
     expect(merged).toHaveLength(25);
     // Still the newest ones, not just the first host's slice.
     expect(new Set(merged.map((item) => item.serverId))).toEqual(new Set(["a", "b", "c"]));
+  });
+});
+
+describe("shouldRefreshArchivedWorkspaces", () => {
+  const cached = [
+    entry({
+      serverId: "a",
+      workspaceId: "archived",
+      archivedAt: "2026-03-03T00:00:00.000Z",
+    }),
+  ];
+
+  it("refreshes when a workspace disappears from the live directory", () => {
+    expect(shouldRefreshArchivedWorkspaces("remove", "newly-archived", cached)).toBe(true);
+  });
+
+  it("refreshes when a cached archived workspace returns to the live directory", () => {
+    expect(shouldRefreshArchivedWorkspaces("upsert", "archived", cached)).toBe(true);
+  });
+
+  it("ignores ordinary updates to live workspaces", () => {
+    expect(shouldRefreshArchivedWorkspaces("upsert", "live", cached)).toBe(false);
   });
 });
