@@ -2087,6 +2087,7 @@ export const ru: TranslationResources = {
       connectedHosts: "Подключенные хосты",
       offline: "Оффлайн",
       versionDiffers: "Версия отличается от версии на этом устройстве",
+      viewCommit: "Открыть коммит на GitHub",
       releaseChannel: {
         label: "Канал выпуска",
         description:
