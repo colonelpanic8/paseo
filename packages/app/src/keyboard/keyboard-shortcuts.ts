@@ -140,6 +140,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "workspace-tab-jump-index": "settings.shortcuts.help.jumpToTab",
   "workspace-prev": "settings.shortcuts.help.previousWorkspace",
   "workspace-next": "settings.shortcuts.help.nextWorkspace",
+  "workspace-next-ready-waiting": "settings.shortcuts.help.nextReadyWaitingWorkspace",
   "workspace-tab-prev": "settings.shortcuts.help.previousTab",
   "workspace-tab-next": "settings.shortcuts.help.nextTab",
   "workspace-pane-split-right": "settings.shortcuts.help.splitPaneRight",
@@ -536,6 +537,20 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "navigation",
       label: "Next workspace",
       keys: ["alt", "]"],
+    },
+  },
+
+  // --- Next ready/waiting workspace ---
+  {
+    id: "workspace-navigate-ready-waiting-next-alt-r",
+    action: "workspace.navigate.ready-waiting.next",
+    combo: "Alt+R",
+    when: { commandCenter: false },
+    help: {
+      id: "workspace-next-ready-waiting",
+      section: "navigation",
+      label: "Next ready/waiting workspace",
+      keys: ["alt", "R"],
     },
   },
 

@@ -168,6 +168,11 @@ describe("keyboard-shortcuts", () => {
       payload: { index: 2 },
     },
     {
+      name: "matches Alt+R to navigate to the next ready/waiting workspace",
+      event: { key: "r", code: "KeyR", altKey: true },
+      action: "workspace.navigate.ready-waiting.next",
+    },
+    {
       name: "matches workspace index jump on desktop via Mod+digit",
       event: { key: "2", code: "Digit2", metaKey: true },
       context: { isMac: true, isDesktop: true },
@@ -342,6 +347,12 @@ describe("keyboard-shortcuts", () => {
       event: { key: "\u2020", code: "KeyT", metaKey: true, altKey: true },
       context: { isMac: true },
       action: "theme.cycle",
+    },
+    {
+      name: "matches Option+R on macOS when Option substitutes event.key",
+      event: { key: "\u00ae", code: "KeyR", altKey: true },
+      context: { isMac: true },
+      action: "workspace.navigate.ready-waiting.next",
     },
     {
       name: "matches Alt+Shift+[ to previous tab on macOS when Option substitutes event.key",
@@ -624,6 +635,7 @@ describe("keyboard-shortcut help sections", () => {
         "new-agent": ["mod", "O"],
         "workspace-tab-new": ["mod", "T"],
         "workspace-jump-index": ["alt", "1-9"],
+        "workspace-next-ready-waiting": ["alt", "R"],
         "workspace-tab-jump-index": ["alt", "shift", "1-9"],
         "workspace-tab-close-current": ["alt", "shift", "W"],
         "workspace-pane-split-right": ["mod", "\\"],
@@ -676,6 +688,7 @@ describe("keyboard-shortcut help sections", () => {
     const projects = sections.find((section) => section.id === "projects");
     const panels = sections.find((section) => section.id === "panels");
     const openProject = findRow(sections, "new-agent");
+    const nextReadyWaiting = findRow(sections, "workspace-next-ready-waiting");
     const cycleAgentMode = findRow(sections, "cycle-agent-mode");
     const showShortcuts = findRow(sections, "show-shortcuts");
 
@@ -683,6 +696,7 @@ describe("keyboard-shortcut help sections", () => {
     expect(panels?.titleKey).toBe("settings.shortcuts.sections.panels");
     expect(openProject?.labelKey).toBe("settings.shortcuts.help.openProject");
     expect(openProject?.label).toBe("Open project");
+    expect(nextReadyWaiting?.labelKey).toBe("settings.shortcuts.help.nextReadyWaitingWorkspace");
     expect(cycleAgentMode?.labelKey).toBe("settings.shortcuts.help.cycleAgentMode");
     expect(showShortcuts?.noteKey).toBe("settings.shortcuts.helpNotes.showKeyboardShortcuts");
   });
