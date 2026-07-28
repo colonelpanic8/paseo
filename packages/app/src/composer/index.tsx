@@ -93,7 +93,6 @@ import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
 import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
-import { normalizeComposerTokensForSubmission } from "@/composer/tokens/tokens";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
@@ -1387,13 +1386,8 @@ export function Composer({
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
-      const submissionText = normalizeComposerTokensForSubmission(
-        payload.text,
-        composerSigils,
-        autocomplete.tokenCatalog,
-      );
       const clientSlashCommand = resolveClientSlashCommand({
-        text: submissionText,
+        text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
@@ -1403,14 +1397,12 @@ export function Composer({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(submissionText, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
     },
     [
       attachments,
       blurOnSubmit,
       buildOutgoingAttachments,
-      composerSigils,
-      autocomplete.tokenCatalog,
       runClientSlashCommand,
       sendMessageWithContent,
     ],
@@ -1660,28 +1652,16 @@ export function Composer({
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
-      const submissionText = normalizeComposerTokensForSubmission(
-        payload.text,
-        composerSigils,
-        autocomplete.tokenCatalog,
-      );
       const clientSlashCommand = resolveClientSlashCommand({
-        text: submissionText,
+        text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
-      queueMessage(submissionText, outgoingAttachments);
+      queueMessage(payload.text, outgoingAttachments);
     },
-    [
-      attachments,
-      autocomplete.tokenCatalog,
-      buildOutgoingAttachments,
-      composerSigils,
-      queueMessage,
-      runClientSlashCommand,
-    ],
+    [attachments, buildOutgoingAttachments, queueMessage, runClientSlashCommand],
   );
 
   const hasSendableContent = userInput.trim().length > 0 || selectedAttachments.length > 0;

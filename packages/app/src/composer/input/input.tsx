@@ -1024,8 +1024,8 @@ function useComposerTokenRendering(
 } {
   const sigils = useComposerSigils();
   const hasTokens = useMemo(
-    () => collectComposerTokens(value, sigils, tokenCatalog).length > 0,
-    [value, sigils, tokenCatalog],
+    () => collectComposerTokens(value, tokenCatalog).length > 0,
+    [value, tokenCatalog],
   );
   const showTokenMirror = isWeb && hasTokens;
 
