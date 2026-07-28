@@ -52,7 +52,7 @@ const styles = StyleSheet.create((theme) => ({
     ...theme.shadow.md,
   },
   shortcutText: {
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
     letterSpacing: 0.5,
   },
