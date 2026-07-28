@@ -180,6 +180,81 @@ function noopClearDraft() {}
 
 // Stable reference so the keyboard-action handler doesn't re-register each render.
 const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pick"];
+const ISOLATION_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.isolation.pick"];
+const REF_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.ref.pick"];
+const HOST_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.host.pick"];
+function useNewWorkspaceControlShortcuts(input: {
+  isPending: boolean;
+  projectCount: number;
+  hostCount: number;
+  canCreateWorktree: boolean;
+  showRefPicker: boolean;
+  selectedSourceDirectory: string | null;
+  openProjectPicker: () => void;
+  openIsolationPicker: () => void;
+  openRefPicker: () => void;
+  openHostPicker: () => void;
+}) {
+  const {
+    isPending,
+    projectCount,
+    hostCount,
+    canCreateWorktree,
+    showRefPicker,
+    selectedSourceDirectory,
+    openProjectPicker,
+    openIsolationPicker,
+    openRefPicker,
+    openHostPicker,
+  } = input;
+  const handleProjectPick = useCallback(() => {
+    openProjectPicker();
+    return true;
+  }, [openProjectPicker]);
+  useKeyboardActionHandler({
+    handlerId: "new-workspace-project-pick",
+    actions: PROJECT_PICK_ACTIONS,
+    enabled: projectCount > 0 && !isPending,
+    priority: 0,
+    handle: handleProjectPick,
+  });
+
+  const handleIsolationPick = useCallback(() => {
+    openIsolationPicker();
+    return true;
+  }, [openIsolationPicker]);
+  useKeyboardActionHandler({
+    handlerId: "new-workspace-isolation-pick",
+    actions: ISOLATION_PICK_ACTIONS,
+    enabled: canCreateWorktree && !isPending,
+    priority: 0,
+    handle: handleIsolationPick,
+  });
+
+  const handleRefPick = useCallback(() => {
+    openRefPicker();
+    return true;
+  }, [openRefPicker]);
+  useKeyboardActionHandler({
+    handlerId: "new-workspace-ref-pick",
+    actions: REF_PICK_ACTIONS,
+    enabled: showRefPicker && selectedSourceDirectory !== null && !isPending,
+    priority: 0,
+    handle: handleRefPick,
+  });
+
+  const handleHostPick = useCallback(() => {
+    openHostPicker();
+    return true;
+  }, [openHostPicker]);
+  useKeyboardActionHandler({
+    handlerId: "new-workspace-host-pick",
+    actions: HOST_PICK_ACTIONS,
+    enabled: hostCount > 1 && !isPending,
+    priority: 0,
+    handle: handleHostPick,
+  });
+}
 
 interface WorkspaceIsolationState {
   isolation: "local" | "worktree";
@@ -1175,22 +1250,6 @@ export function NewWorkspaceScreen({
     setProjectPickerOpen(true);
   }, []);
 
-  // Cmd/Ctrl+P opens the project picker with its search focused so the user can
-  // switch projects from the keyboard. Registered only while this screen is
-  // mounted, so the shortcut doesn't swallow the browser's native print
-  // elsewhere; gated on having projects to pick.
-  const handleProjectPick = useCallback(() => {
-    openProjectPicker();
-    return true;
-  }, [openProjectPicker]);
-  useKeyboardActionHandler({
-    handlerId: "new-workspace-project-pick",
-    actions: PROJECT_PICK_ACTIONS,
-    enabled: projectPickerOptions.length > 0,
-    priority: 0,
-    handle: handleProjectPick,
-  });
-
   const openIsolationPicker = useCallback(() => {
     setIsolationPickerOpen(true);
   }, []);
@@ -1198,6 +1257,19 @@ export function NewWorkspaceScreen({
   const handleIsolationPickerOpenChange = useCallback((nextOpen: boolean) => {
     setIsolationPickerOpen(nextOpen);
   }, []);
+
+  useNewWorkspaceControlShortcuts({
+    isPending,
+    projectCount: projectPickerOptions.length,
+    hostCount: allHosts.length,
+    canCreateWorktree,
+    showRefPicker,
+    selectedSourceDirectory,
+    openProjectPicker,
+    openIsolationPicker,
+    openRefPicker: openPicker,
+    openHostPicker,
+  });
 
   const handleClearDraft = useCallback(() => {
     // No-op: screen navigates away on success, text should stay for retry on error

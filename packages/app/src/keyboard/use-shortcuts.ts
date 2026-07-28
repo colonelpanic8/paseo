@@ -88,6 +88,7 @@ export function useKeyboardShortcuts({
     { isMac, usesDesktopBindings: usesDesktopBindings },
     bindings,
   );
+  const controlShortcutModifierKey = isMac ? "Meta" : "Control";
 
   // The keyup listener matches the released key against the current modifier,
   // so a modifier held while the jump binding changes could never be released
@@ -227,6 +228,9 @@ export function useKeyboardShortcuts({
     if (key === badgeModifierKey && !event.shiftKey) {
       setBadgeModifierDown(true);
     }
+    if (key === controlShortcutModifierKey && !event.shiftKey) {
+      useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
+    }
     if (key === "Shift") {
       const state = useKeyboardShortcutsStore.getState();
       if (state.altDown || state.cmdOrCtrlDown) {
@@ -255,6 +259,9 @@ export function useKeyboardShortcuts({
     const key = event.key ?? "";
     if (key === badgeModifierKey) {
       setBadgeModifierDown(false);
+    }
+    if (key === controlShortcutModifierKey) {
+      useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(false);
     }
   });
 
