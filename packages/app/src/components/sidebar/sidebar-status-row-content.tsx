@@ -23,7 +23,7 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
 import { formatTimeAgo } from "@/utils/time";
 import { getHostColorTextStyle } from "@/styles/host-color";
-import type { HostColorKey } from "@/types/host-connection";
+import type { HostColor } from "@/types/host-connection";
 import { isNative, isWeb } from "@/constants/platform";
 
 const PROJECT_ICON_SIZE = 40;
@@ -88,7 +88,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostLabel: string;
-  hostColor: HostColorKey | null;
+  hostColor: HostColor | null;
   scriptIconKind?: SidebarWorkspaceScriptIconKind | null;
   isArchiving: boolean;
   shortcutNumber?: number | null;
@@ -209,7 +209,7 @@ function StatusRowDetailLine({
   diffStat: SidebarWorkspaceEntry["diffStat"];
   prHint: SidebarWorkspaceEntry["prHint"];
   hostLabel: string;
-  hostColor: HostColorKey | null;
+  hostColor: HostColor | null;
   providers: readonly string[];
 }) {
   return (

@@ -1998,6 +1998,12 @@ export const en = {
             red: "Red",
             purple: "Purple",
           },
+          custom: {
+            label: "Custom",
+            title: "Custom color",
+            submit: "Apply",
+            invalid: "Enter a hex color like #4f46e5",
+          },
         },
         restart: {
           title: "Restart daemon",

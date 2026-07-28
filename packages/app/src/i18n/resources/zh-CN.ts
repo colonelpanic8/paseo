@@ -1966,6 +1966,12 @@ export const zhCN: TranslationResources = {
             red: "红色",
             purple: "紫色",
           },
+          custom: {
+            label: "自定义",
+            title: "自定义颜色",
+            submit: "应用",
+            invalid: "请输入十六进制颜色，例如 #4f46e5",
+          },
         },
         restart: {
           title: "重启 Daemon",

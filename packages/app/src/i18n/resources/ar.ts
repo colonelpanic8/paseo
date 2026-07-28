@@ -1987,6 +1987,12 @@ export const ar: TranslationResources = {
             red: "أحمر",
             purple: "بنفسجي",
           },
+          custom: {
+            label: "مخصص",
+            title: "لون مخصص",
+            submit: "تطبيق",
+            invalid: "أدخل لونًا ست عشريًا مثل #4f46e5",
+          },
         },
         restart: {
           title: "إعادة تشغيل البرنامج الخفي",

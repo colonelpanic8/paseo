@@ -45,7 +45,7 @@ import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar
 import { SidebarArchivedGroup } from "@/components/sidebar/sidebar-archived-group";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
-import type { HostColorKey } from "@/types/host-connection";
+import type { HostColor } from "@/types/host-connection";
 import type { GestureType } from "react-native-gesture-handler";
 import { StatusRowSwipeContainer } from "@/components/sidebar/status-row-swipe-container";
 
@@ -76,7 +76,7 @@ interface StatusWorkspaceListProps {
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
   hostLabelByServerId: ReadonlyMap<string, string>;
-  hostColorByServerId: ReadonlyMap<string, HostColorKey>;
+  hostColorByServerId: ReadonlyMap<string, HostColor>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   /** Compact sidebar drawer-close pan; shared with the scroll and row gestures. */
@@ -224,7 +224,7 @@ function StatusGroupList({
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
   hostLabelByServerId: ReadonlyMap<string, string>;
-  hostColorByServerId: ReadonlyMap<string, HostColorKey>;
+  hostColorByServerId: ReadonlyMap<string, HostColor>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
@@ -271,7 +271,7 @@ function StatusGroupRows({
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
   hostLabelByServerId: ReadonlyMap<string, string>;
-  hostColorByServerId: ReadonlyMap<string, HostColorKey>;
+  hostColorByServerId: ReadonlyMap<string, HostColor>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
@@ -431,7 +431,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostLabel: string;
-  hostColor: HostColorKey | null;
+  hostColor: HostColor | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
   canPin: boolean;
@@ -483,7 +483,7 @@ function StatusWorkspaceRowWithMenu({
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostLabel: string;
-  hostColor: HostColorKey | null;
+  hostColor: HostColor | null;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -653,7 +653,7 @@ function StatusWorkspaceRowInner({
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostLabel: string;
-  hostColor: HostColorKey | null;
+  hostColor: HostColor | null;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;

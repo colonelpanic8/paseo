@@ -2039,6 +2039,12 @@ export const fr: TranslationResources = {
             red: "Rouge",
             purple: "Violet",
           },
+          custom: {
+            label: "Personnalisé",
+            title: "Couleur personnalisée",
+            submit: "Appliquer",
+            invalid: "Saisissez une couleur hexadécimale comme #4f46e5",
+          },
         },
         restart: {
           title: "Redémarrer le démon",

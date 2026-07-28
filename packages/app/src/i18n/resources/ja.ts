@@ -2006,6 +2006,12 @@ export const ja: TranslationResources = {
             red: "赤",
             purple: "紫",
           },
+          custom: {
+            label: "カスタム",
+            title: "カスタムカラー",
+            submit: "適用",
+            invalid: "#4f46e5 のような16進数の色を入力してください",
+          },
         },
         restart: {
           title: "デーモンを再起動",
