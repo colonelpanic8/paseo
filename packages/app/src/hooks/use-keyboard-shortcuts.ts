@@ -122,6 +122,7 @@ export function useKeyboardShortcuts({
       { isMac, isDesktop: isDesktopApp },
       bindings,
     );
+    const controlShortcutModifierKey = isMac ? "Meta" : "Control";
     const setBadgeModifierDown = (down: boolean) => {
       const state = useKeyboardShortcutsStore.getState();
       if (isDesktopApp) {
@@ -347,6 +348,9 @@ export function useKeyboardShortcuts({
       if (key === badgeModifierKey && !event.shiftKey) {
         setBadgeModifierDown(true);
       }
+      if (key === controlShortcutModifierKey && !event.shiftKey) {
+        useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
+      }
       if (key === "Shift") {
         const state = useKeyboardShortcutsStore.getState();
         if (state.altDown || state.cmdOrCtrlDown) {
@@ -369,6 +373,9 @@ export function useKeyboardShortcuts({
       const key = event.key ?? "";
       if (key === badgeModifierKey) {
         setBadgeModifierDown(false);
+      }
+      if (key === controlShortcutModifierKey) {
+        useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(false);
       }
     };
 
