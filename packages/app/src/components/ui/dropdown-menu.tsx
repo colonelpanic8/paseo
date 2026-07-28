@@ -35,11 +35,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { isWeb } from "@/constants/platform";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import {
+  getFocusableElements,
   getOverlayRoot,
   OverlayLayerProvider,
   useOverlayLayer,
   useWebOverlayRegistration,
 } from "@/lib/overlay-root";
+import { getNextActiveIndex } from "@/components/ui/combobox-keyboard";
+import { LIST_SEARCH_DATASET, resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 
 // Action status for menu items with loading/success feedback
 export type ActionStatus = "idle" | "pending" | "success";
@@ -221,6 +224,9 @@ function renderDropdownSurface(input: {
     <FloatingSurface
       ref={scopeRef}
       collapsable={false}
+      // While the menu is open it owns the list-navigation keys, so global
+      // Ctrl+N/Ctrl+P stand down for it (see keyboard/list-search-keys.ts).
+      dataSet={LIST_SEARCH_DATASET}
       tabIndex={-1}
       nativeID={surfaceNativeID}
       testID={testID}
@@ -512,21 +518,51 @@ export function DropdownMenuContent({
     setOpen(false);
   }, [setOpen]);
 
+  // Menu items are the focusable elements inside the surface, so the highlight
+  // is plain DOM focus: arrows and Ctrl+N/Ctrl+P move it, Enter clicks it (the
+  // web Pressable runs onPress from the DOM click).
+  const surfaceRef = useRef<HTMLElement | null>(null);
   const handleWebOverlayKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return false;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        handleClose();
+        return true;
+      }
+      const action = resolveListSearchKeyAction(event);
+      if (!action) return false;
+      const items = surfaceRef.current ? getFocusableElements(surfaceRef.current) : [];
+      if (items.length === 0) return false;
       event.preventDefault();
-      event.stopPropagation();
-      handleClose();
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+      if (action === "submit") {
+        (currentIndex === -1 ? items[0] : items[currentIndex]).click();
+        return true;
+      }
+      const nextIndex = getNextActiveIndex({
+        currentIndex,
+        itemCount: items.length,
+        key: action === "next" ? "ArrowDown" : "ArrowUp",
+      });
+      items[nextIndex]?.focus();
       return true;
     },
     [handleClose],
   );
-  const setWebOverlayScope = useWebOverlayRegistration({
+  const registerWebOverlayScope = useWebOverlayRegistration({
     active: isWeb && modalVisible,
     layer: floatingLayer,
     onKeyDown: handleWebOverlayKeyDown,
   });
+  const setWebOverlayScope = useCallback(
+    (node: unknown) => {
+      surfaceRef.current =
+        typeof HTMLElement !== "undefined" && node instanceof HTMLElement ? node : null;
+      registerWebOverlayScope(node);
+    },
+    [registerWebOverlayScope],
+  );
 
   // Measure trigger when opening
   useEffect(() => {
@@ -838,8 +874,16 @@ export function DropdownMenuItem({
     selectItem(onSelect, closeOnSelect);
   }, [isDisabled, selectItem, onSelect, closeOnSelect]);
 
+  // Keyboard navigation moves DOM focus between items, so the focused item has
+  // to read like a hovered one — otherwise Ctrl+N/Ctrl+P move an invisible
+  // highlight.
+  const [isFocused, setIsFocused] = useState(false);
+  const handleFocus = useCallback(() => setIsFocused(true), []);
+  const handleBlur = useCallback(() => setIsFocused(false), []);
+
   const itemPressableStyle = useCallback(
     ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => {
+      const highlighted = hovered || isFocused;
       let selectedStyle: typeof styles.itemSelectedAccent | typeof styles.itemSelected | null =
         null;
       if (selected && selectedVariant === "accent") {
@@ -850,16 +894,16 @@ export function DropdownMenuItem({
       return [
         styles.item,
         selectedStyle,
-        selected && (hovered || pressed) && selectedVariant !== "accent"
+        selected && (highlighted || pressed) && selectedVariant !== "accent"
           ? styles.itemSelectedInteractive
           : null,
         isDisabled ? styles.itemDisabled : null,
         muted && !isDisabled ? styles.itemMuted : null,
-        hovered && !pressed && !isDisabled ? styles.itemHovered : null,
+        highlighted && !pressed && !isDisabled ? styles.itemHovered : null,
         pressed && !isDisabled ? styles.itemPressed : null,
       ];
     },
-    [selected, selectedVariant, isDisabled, muted],
+    [selected, selectedVariant, isDisabled, isFocused, muted],
   );
 
   const itemTextStyle = useMemo(
@@ -887,6 +931,8 @@ export function DropdownMenuItem({
       accessibilityRole="button"
       disabled={isDisabled}
       onPress={handleItemPress}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       style={itemPressableStyle}
     >
       {showSelectedCheck ? (

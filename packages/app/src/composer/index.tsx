@@ -74,6 +74,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { AutocompletePopover } from "@/components/ui/autocomplete-popover";
 import { useAgentAutocomplete } from "@/hooks/use-agent-autocomplete";
+import type { AutocompleteKeyEvent } from "@/hooks/use-autocomplete";
 import {
   useHostRuntimeAgentDirectoryStatus,
   useHostRuntimeClient,
@@ -1674,8 +1675,7 @@ export function Composer({
 
   // Handle keyboard navigation for command autocomplete.
   const handleCommandKeyPress = useCallback(
-    (event: { key: string; preventDefault: () => void }) =>
-      autocompleteOnKeyPressRef.current(event),
+    (event: AutocompleteKeyEvent) => autocompleteOnKeyPressRef.current(event),
     [],
   );
 
@@ -2093,6 +2093,7 @@ export function Composer({
                 onQueue={handleQueue}
                 onSubmitLoadingPress={submitLoadingPressHandler}
                 onKeyPress={handleCommandKeyPress}
+                ownsListNavigation={autocompleteVisible}
                 onSelectionChange={handleSelectionChange}
                 onFocusChange={handleFocusChange}
                 onHeightChange={onComposerHeightChange}
