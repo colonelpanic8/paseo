@@ -32,7 +32,7 @@ import {
   findActiveFileMention,
   type FileMentionRange,
 } from "@/utils/file-mention-autocomplete";
-import type { ComposerSigils } from "@/composer/tokens/sigils";
+import { DEFAULT_COMMAND_SIGIL, type ComposerSigils } from "@/composer/tokens/sigils";
 import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
 
 interface UseAgentAutocompleteInput {
@@ -498,6 +498,15 @@ function resolveCommandsEmptyText(args: {
   return args.t("agentAutocomplete.noCommands");
 }
 
+/** Pills need the command catalog whenever the text could hold a token, menu open or not. */
+function mayContainComposerToken(text: string, sigils: ComposerSigils): boolean {
+  return (
+    text.includes(DEFAULT_COMMAND_SIGIL) ||
+    text.includes(sigils.command) ||
+    text.includes(sigils.skill)
+  );
+}
+
 export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAutocompleteResult {
   const { t } = useTranslation();
   const {
@@ -524,7 +533,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     [cursorIndex, userInput, sigils],
   );
   const showCommandAutocomplete = activeSlashCommand !== null;
-  const hasTokenCandidate = userInput.includes(sigils.command) || userInput.includes(sigils.skill);
+  const hasTokenCandidate = mayContainComposerToken(userInput, sigils);
   const commandFilterQuery = activeSlashCommand?.query ?? "";
 
   const activeFileMention = useMemo(
