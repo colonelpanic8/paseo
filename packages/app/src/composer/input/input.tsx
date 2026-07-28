@@ -42,7 +42,7 @@ import type { ComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
 import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import type { ComposerSigils } from "@/composer/tokens/sigils";
-import { collectComposerTokens } from "@/composer/tokens/tokens";
+import { collectComposerTokens, type ComposerTokenCatalog } from "@/composer/tokens/tokens";
 import { ComposerTokenHighlightLayer } from "./token-highlight";
 import { focusWithRetries } from "@/utils/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -96,6 +96,7 @@ export interface AttachmentMenuItem {
 
 export interface MessageInputProps {
   value: string;
+  tokenCatalog: ComposerTokenCatalog;
   onChangeText: (text: string) => void;
   onSubmit: (payload: MessagePayload) => void;
   /** When true, the submit button is enabled even without text or images (e.g. external attachment selected). */
@@ -1033,7 +1034,10 @@ function computeTextInputHeightStyle(inputHeight: number, maxInputHeight: number
  * textarea instead of the mirror. Native always keeps its controlled plain-text
  * path because React Native TextInput cannot safely render styled spans.
  */
-function useComposerTokenRendering(value: string): {
+function useComposerTokenRendering(
+  value: string,
+  tokenCatalog: ComposerTokenCatalog,
+): {
   sigils: ComposerSigils;
   showTokenMirror: boolean;
   /** Marks the input for the tokenized-selection stylesheet while a token exists. */
@@ -1042,7 +1046,10 @@ function useComposerTokenRendering(value: string): {
   inputTextStyle: StyleProp<TextStyle>;
 } {
   const sigils = useComposerSigils();
-  const hasTokens = useMemo(() => collectComposerTokens(value, sigils).length > 0, [value, sigils]);
+  const hasTokens = useMemo(
+    () => collectComposerTokens(value, sigils, tokenCatalog).length > 0,
+    [value, sigils, tokenCatalog],
+  );
   const showTokenMirror = isWeb && hasTokens;
 
   return {
@@ -1096,6 +1103,7 @@ function computeSendButtonState(input: SendButtonStateInput): SendButtonStateOut
 
 interface ResolvedMessageInputProps {
   value: string;
+  tokenCatalog: ComposerTokenCatalog;
   onChangeText: (text: string) => void;
   onSubmit: (payload: MessagePayload) => void;
   hasExternalContent: boolean;
@@ -1138,6 +1146,7 @@ interface ResolvedMessageInputProps {
 function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInputProps {
   return {
     value: props.value,
+    tokenCatalog: props.tokenCatalog,
     onChangeText: props.onChangeText,
     onSubmit: props.onSubmit,
     hasExternalContent: props.hasExternalContent ?? false,
@@ -1188,6 +1197,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
   function MessageInput(props, ref) {
     const {
       value,
+      tokenCatalog,
       onChangeText,
       onSubmit,
       hasExternalContent,
@@ -1725,7 +1735,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       ],
       [inputWrapperStyle, surfacePresentation.input.opacity],
     );
-    const tokenRendering = useComposerTokenRendering(value);
+    const tokenRendering = useComposerTokenRendering(value, tokenCatalog);
     const { showTokenMirror } = tokenRendering;
 
     const textInputStyle = useMemo(
@@ -1783,6 +1793,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               enabled={showTokenMirror}
               value={value}
               sigils={tokenRendering.sigils}
+              tokenCatalog={tokenCatalog}
               textareaRef={webTextareaRef}
             />
             <ThemedTextInput

@@ -189,6 +189,7 @@ function ComposerTokenHighlight({
   enabled,
   value,
   sigils,
+  tokenCatalog,
   textareaRef,
   accentBrightColor,
   foregroundColor,
@@ -217,8 +218,9 @@ function ComposerTokenHighlight({
   }, [enabled, textareaRef]);
 
   const segments = useMemo(
-    () => (enabled ? segmentComposerText(value, collectComposerTokens(value, sigils)) : []),
-    [enabled, value, sigils],
+    () =>
+      enabled ? segmentComposerText(value, collectComposerTokens(value, sigils, tokenCatalog)) : [],
+    [enabled, value, sigils, tokenCatalog],
   );
 
   const containerStyle = useMemo<CSSProperties>(
