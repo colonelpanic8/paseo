@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState, type MutableRefObject, type React
 import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, ScrollView, type PressableStateCallbackType } from "react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
-import Animated, { FadeOutDown, LinearTransition } from "react-native-reanimated";
+import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
@@ -43,6 +43,11 @@ import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header"
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import { SidebarArchivedGroup } from "@/components/sidebar/sidebar-archived-group";
+import {
+  sidebarListSettle,
+  sidebarRowEnter,
+  useArchiveDismissStyle,
+} from "@/components/sidebar/sidebar-motion";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import type { HostColor } from "@/types/host-connection";
@@ -57,8 +62,8 @@ const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[5
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
 const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
-const STATUS_ROW_EXITING = FadeOutDown.duration(180);
-const STATUS_ROW_LAYOUT = LinearTransition.duration(180);
+const STATUS_ROW_ENTERING = sidebarRowEnter;
+const STATUS_ROW_LAYOUT = sidebarListSettle;
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
@@ -123,8 +128,10 @@ export function SidebarStatusWorkspaceList({
   );
 
   const statusShortcutIndex = showShortcutBadges ? shortcutIndexByWorkspaceKey : new Map();
+  // skipEntering silences row entrances for everything mounting with the list
+  // itself (startup, grouping-mode switch); only rows added later animate in.
   const content = (
-    <>
+    <LayoutAnimationConfig skipEntering>
       {pinnedWorkspaces.length > 0 ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
           <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
@@ -175,7 +182,7 @@ export function SidebarStatusWorkspaceList({
         hostLabelByServerId={hostLabelByServerId}
         showHostLabels
       />
-    </>
+    </LayoutAnimationConfig>
   );
 
   return (
@@ -284,7 +291,7 @@ function StatusGroupRows({
   } = useLimitedSidebarGroup(group.rows);
 
   return (
-    <Animated.View exiting={STATUS_ROW_EXITING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
+    <Animated.View entering={STATUS_ROW_ENTERING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
       <View style={styles.statusGroupBlock}>
         <StatusGroupHeader group={group} collapsed={collapsed} />
         {!collapsed ? (
@@ -673,6 +680,7 @@ function StatusWorkspaceRowInner({
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }) {
   const isTouchPlatform = platformIsNative;
+  const archiveDismissStyle = useArchiveDismissStyle(isArchiving);
 
   const isDesktop = !isTouchPlatform;
   const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
@@ -687,7 +695,12 @@ function StatusWorkspaceRowInner({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <Animated.View exiting={STATUS_ROW_EXITING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
+    <Animated.View
+      entering={STATUS_ROW_ENTERING}
+      layout={STATUS_ROW_LAYOUT}
+      style={archiveDismissStyle}
+      collapsable={false}
+    >
       <SidebarWorkspaceRowFrame workspace={workspace}>
         {({ isHovered, hoverHandlers }) => {
           // Touch platforms have no hover, so the kebab is permanent there and the

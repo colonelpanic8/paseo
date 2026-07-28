@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import Animated, { FadeIn, FadeInUp, FadeOut, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useMutation } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react-native";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -13,15 +13,24 @@ import { ARCHIVED_GROUP_KEY } from "@/hooks/sidebar-status-view-model";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
+import {
+  archivedRowEnter,
+  archivedRowExit,
+  sidebarListSettle,
+} from "@/components/sidebar/sidebar-motion";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { Theme } from "@/styles/theme";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const ARCHIVED_GROUP_ENTERING = FadeIn.duration(140);
-const ARCHIVED_GROUP_EXITING = FadeOut.duration(120);
-const ARCHIVED_ROW_ENTERING = FadeInUp.duration(220);
-const ARCHIVED_ROW_EXITING = FadeOut.duration(120);
-const ARCHIVED_ROW_LAYOUT = LinearTransition.duration(180);
+const ARCHIVED_GROUP_ENTERING = archivedRowEnter;
+const ARCHIVED_GROUP_EXITING = archivedRowExit;
+const ARCHIVED_ROW_ENTERING = archivedRowEnter;
+const ARCHIVED_ROW_EXITING = archivedRowExit;
+const ARCHIVED_ROW_LAYOUT = sidebarListSettle;
+// The unarchive slot swaps between a spinner and the restore button; a short
+// cross-fade keeps the settle from popping.
+const UNARCHIVE_SLOT_SWAP_IN = FadeIn.duration(160);
+const UNARCHIVE_SLOT_SWAP_OUT = FadeOut.duration(100);
 const BUSY_ACCESSIBILITY_STATE = { busy: true } as const;
 
 // Deliberately shorter than the shared sidebar group limit. This is a tail you
@@ -252,29 +261,32 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
             pointerEvents={isArchiving ? "none" : "auto"}
           >
             {isArchiving ? (
-              <View
+              <Animated.View
+                exiting={UNARCHIVE_SLOT_SWAP_OUT}
                 accessible
                 accessibilityLabel={t("sidebar.workspace.actions.archiving")}
                 accessibilityState={BUSY_ACCESSIBILITY_STATE}
                 testID={`sidebar-archived-pending-${entry.workspaceKey}`}
               >
                 <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
-              </View>
+              </Animated.View>
             ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t(
-                  isUnarchiving
-                    ? "sidebar.workspace.archived.unarchiving"
-                    : "sidebar.workspace.archived.unarchive",
-                )}
-                disabled={isUnarchiving}
-                onPress={handleUnarchive}
-                style={styles.unarchiveButton}
-                testID={`sidebar-archived-unarchive-${entry.workspaceKey}`}
-              >
-                <ThemedArchiveRestore size={14} uniProps={foregroundMutedColorMapping} />
-              </Pressable>
+              <Animated.View entering={UNARCHIVE_SLOT_SWAP_IN}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    isUnarchiving
+                      ? "sidebar.workspace.archived.unarchiving"
+                      : "sidebar.workspace.archived.unarchive",
+                  )}
+                  disabled={isUnarchiving}
+                  onPress={handleUnarchive}
+                  style={styles.unarchiveButton}
+                  testID={`sidebar-archived-unarchive-${entry.workspaceKey}`}
+                >
+                  <ThemedArchiveRestore size={14} uniProps={foregroundMutedColorMapping} />
+                </Pressable>
+              </Animated.View>
             )}
           </View>
         </View>

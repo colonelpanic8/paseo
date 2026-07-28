@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useState, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text, Pressable } from "react-native";
+import Animated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useMutation } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
@@ -19,6 +20,7 @@ import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attentio
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { isNative as platformIsNative } from "@/constants/platform";
+import { useArchiveDismissStyle } from "@/components/sidebar/sidebar-motion";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import {
@@ -253,6 +255,7 @@ function WorkspaceRowBody({
   archiveShortcutKeys,
 }: WorkspaceRowBodyProps) {
   const isTouchPlatform = platformIsNative;
+  const archiveDismissStyle = useArchiveDismissStyle(isArchiving);
   const draggable = Boolean(drag);
   const interaction = useLongPressDragInteraction({
     drag: drag ?? noop,
@@ -276,73 +279,77 @@ function WorkspaceRowBody({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
-      {({ isHovered, hoverHandlers }) => {
-        const isDesktop = !isTouchPlatform;
-        const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
-        const hasRunningService = workspace.scripts.some(
-          (s) => s.lifecycle === "running" && (s.type ?? "service") === "service",
-        );
-        let scriptIconKind: "service" | "command" | null = null;
-        if (showScriptsIcon) {
-          scriptIconKind = hasRunningService ? "service" : "command";
-        }
-        const workspaceRowStyle = getWorkspaceRowStyle({ isDragging, selected, isHovered });
-        return (
-          <View
-            {...(draggable ? dragAttributes : {})}
-            {...(draggable ? dragHandleProps?.listeners : {})}
-            ref={
-              draggable ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>) : undefined
-            }
-            style={styles.workspaceRowContainer}
-            {...hoverHandlers}
-          >
-            <Pressable
-              disabled={isArchiving}
-              aria-selected={selected}
-              accessibilityRole="button"
-              accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
-              onPressIn={draggable ? interaction.handlePressIn : undefined}
-              onTouchMove={draggable ? interaction.handleTouchMove : undefined}
-              onPressOut={draggable ? interaction.handlePressOut : undefined}
-              onPress={handlePress}
-              testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
+    <Animated.View style={archiveDismissStyle}>
+      <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
+        {({ isHovered, hoverHandlers }) => {
+          const isDesktop = !isTouchPlatform;
+          const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
+          const hasRunningService = workspace.scripts.some(
+            (s) => s.lifecycle === "running" && (s.type ?? "service") === "service",
+          );
+          let scriptIconKind: "service" | "command" | null = null;
+          if (showScriptsIcon) {
+            scriptIconKind = hasRunningService ? "service" : "command";
+          }
+          const workspaceRowStyle = getWorkspaceRowStyle({ isDragging, selected, isHovered });
+          return (
+            <View
+              {...(draggable ? dragAttributes : {})}
+              {...(draggable ? dragHandleProps?.listeners : {})}
+              ref={
+                draggable
+                  ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>)
+                  : undefined
+              }
+              style={styles.workspaceRowContainer}
+              {...hoverHandlers}
             >
-              <SidebarWorkspaceRowContent
-                workspace={workspace}
-                subtitle={subtitle}
-                scriptIconKind={scriptIconKind}
-                isHovered={isHovered}
-                isLoading={isArchiving || isCreating}
-                isCreating={isCreating}
-                shortcutNumber={shortcutNumber}
-                showShortcutBadge={showShortcutBadge}
+              <Pressable
+                disabled={isArchiving}
+                aria-selected={selected}
+                accessibilityRole="button"
+                accessibilityState={accessibilityState}
+                style={workspaceRowStyle}
+                onPressIn={draggable ? interaction.handlePressIn : undefined}
+                onTouchMove={draggable ? interaction.handleTouchMove : undefined}
+                onPressOut={draggable ? interaction.handlePressOut : undefined}
+                onPress={handlePress}
+                testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
               >
-                <WorkspaceRowTrailingActions
+                <SidebarWorkspaceRowContent
                   workspace={workspace}
+                  subtitle={subtitle}
+                  scriptIconKind={scriptIconKind}
                   isHovered={isHovered}
-                  isTouchPlatform={isTouchPlatform}
+                  isLoading={isArchiving || isCreating}
                   isCreating={isCreating}
-                  showShortcutBadge={showShortcutBadge}
                   shortcutNumber={shortcutNumber}
-                  archiveLabel={archiveLabel}
-                  archiveStatus={archiveStatus}
-                  archivePendingLabel={archivePendingLabel}
-                  archiveShortcutKeys={archiveShortcutKeys}
-                  onArchive={onArchive}
-                  onCopyBranchName={onCopyBranchName}
-                  onCopyPath={onCopyPath}
-                  onRename={onRename}
-                  onMarkAsRead={onMarkAsRead}
-                />
-              </SidebarWorkspaceRowContent>
-            </Pressable>
-          </View>
-        );
-      }}
-    </SidebarWorkspaceRowFrame>
+                  showShortcutBadge={showShortcutBadge}
+                >
+                  <WorkspaceRowTrailingActions
+                    workspace={workspace}
+                    isHovered={isHovered}
+                    isTouchPlatform={isTouchPlatform}
+                    isCreating={isCreating}
+                    showShortcutBadge={showShortcutBadge}
+                    shortcutNumber={shortcutNumber}
+                    archiveLabel={archiveLabel}
+                    archiveStatus={archiveStatus}
+                    archivePendingLabel={archivePendingLabel}
+                    archiveShortcutKeys={archiveShortcutKeys}
+                    onArchive={onArchive}
+                    onCopyBranchName={onCopyBranchName}
+                    onCopyPath={onCopyPath}
+                    onRename={onRename}
+                    onMarkAsRead={onMarkAsRead}
+                  />
+                </SidebarWorkspaceRowContent>
+              </Pressable>
+            </View>
+          );
+        }}
+      </SidebarWorkspaceRowFrame>
+    </Animated.View>
   );
 }
 

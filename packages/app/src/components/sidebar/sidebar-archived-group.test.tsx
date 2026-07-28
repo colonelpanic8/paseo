@@ -45,10 +45,17 @@ vi.mock("react-native-unistyles", () => ({
 }));
 
 vi.mock("react-native-reanimated", () => {
-  const animation = {
+  const animation: {
+    duration: () => typeof animation;
+    delay: () => typeof animation;
+    easing: () => typeof animation;
+  } = {
     duration: () => animation,
+    delay: () => animation,
+    easing: () => animation,
   };
   return {
+    Easing: { bezier: () => ({}) },
     default: {
       View: ({
         children,
@@ -56,9 +63,13 @@ vi.mock("react-native-reanimated", () => {
         exiting: _exiting,
         layout: _layout,
         collapsable: _collapsable,
+        accessible: _accessible,
+        accessibilityLabel: _accessibilityLabel,
+        accessibilityState: _accessibilityState,
+        testID,
         ...props
       }: React.PropsWithChildren<Record<string, unknown>>) =>
-        React.createElement("div", props, children),
+        React.createElement("div", testID ? { ...props, "data-testid": testID } : props, children),
     },
     FadeIn: animation,
     FadeInUp: animation,
