@@ -96,6 +96,8 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
+import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
+import { normalizeComposerTokensForSubmission } from "@/composer/tokens/tokens";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
@@ -1078,6 +1080,7 @@ export function Composer({
   const isDesktopLayout = resolveIsDesktopWebBreakpoint(isCompactLayout);
   const messagePlaceholder = resolveMessagePlaceholder(isDesktopLayout, t);
   const userInput = value;
+  const composerSigils = useComposerSigils();
   const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
   const {
@@ -1170,6 +1173,7 @@ export function Composer({
     agentId,
     draftConfig: commandDraftConfig,
     canExecuteClientSlashCommand: buildOutgoingAttachments(attachments).length === 0,
+    sigils: composerSigils,
     onClientSlashCommand: runClientSlashCommand,
     onAutocompleteApplied: () => {
       messageInputRef.current?.focus();
@@ -1397,8 +1401,9 @@ export function Composer({
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
       const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
@@ -1408,12 +1413,13 @@ export function Composer({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(submissionText, outgoingAttachments, payload.forceSend);
     },
     [
       attachments,
       blurOnSubmit,
       buildOutgoingAttachments,
+      composerSigils,
       runClientSlashCommand,
       sendMessageWithContent,
     ],
@@ -1678,16 +1684,17 @@ export function Composer({
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
       const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
-      queueMessage(payload.text, outgoingAttachments);
+      queueMessage(submissionText, outgoingAttachments);
     },
-    [attachments, buildOutgoingAttachments, queueMessage, runClientSlashCommand],
+    [attachments, buildOutgoingAttachments, composerSigils, queueMessage, runClientSlashCommand],
   );
 
   const hasSendableContent = userInput.trim().length > 0 || selectedAttachments.length > 0;
