@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_COMPOSER_SIGILS } from "@/composer/tokens/sigils";
 import {
   applySlashCommandReplacement,
   filterAndRankCommandAutocompleteEntries,
@@ -34,6 +35,8 @@ describe("filterAndRankCommandAutocompleteEntries", () => {
 });
 
 describe("findActiveSlashCommand", () => {
+  const sigils = DEFAULT_COMPOSER_SIGILS;
+
   it("detects a slash command token in the middle of the prompt", () => {
     const text = "use /tas before implementation";
 
@@ -41,12 +44,15 @@ describe("findActiveSlashCommand", () => {
       findActiveSlashCommand({
         text,
         cursorIndex: "use /tas".length,
+        sigils,
       }),
     ).toEqual({
       start: 4,
       end: "use /tas".length,
       query: "tas",
       position: "inline",
+      menu: "command",
+      sigil: "/",
     });
   });
 
@@ -55,12 +61,15 @@ describe("findActiveSlashCommand", () => {
       findActiveSlashCommand({
         text: "/rew",
         cursorIndex: "/rew".length,
+        sigils,
       }),
     ).toEqual({
       start: 0,
       end: "/rew".length,
       query: "rew",
       position: "start",
+      menu: "command",
+      sigil: "/",
     });
   });
 
@@ -69,6 +78,7 @@ describe("findActiveSlashCommand", () => {
       findActiveSlashCommand({
         text: "use /taste now",
         cursorIndex: "use /taste now".length,
+        sigils,
       }),
     ).toBeNull();
   });
@@ -78,6 +88,57 @@ describe("findActiveSlashCommand", () => {
       findActiveSlashCommand({
         text: "read /tmp/project",
         cursorIndex: "read /tmp/project".length,
+        sigils,
+      }),
+    ).toBeNull();
+  });
+
+  it("opens the skills-only menu for the skill sigil anywhere in the prompt", () => {
+    const text = "please run $rel";
+
+    expect(
+      findActiveSlashCommand({
+        text,
+        cursorIndex: text.length,
+        sigils,
+      }),
+    ).toEqual({
+      start: "please run ".length,
+      end: text.length,
+      query: "rel",
+      position: "inline",
+      menu: "skill",
+      sigil: "$",
+    });
+  });
+
+  it("lets the sigil nearest the cursor win", () => {
+    const text = "/review then $rel";
+
+    expect(findActiveSlashCommand({ text, cursorIndex: text.length, sigils })?.menu).toBe("skill");
+  });
+
+  it("honours remapped sigils", () => {
+    const remapped = { command: "!", skill: "#" } as const;
+    const text = "!dep";
+
+    expect(findActiveSlashCommand({ text, cursorIndex: text.length, sigils: remapped })).toEqual({
+      start: 0,
+      end: text.length,
+      query: "dep",
+      position: "start",
+      menu: "command",
+      sigil: "!",
+    });
+    // `/` is ordinary prose once it is not a configured sigil.
+    expect(findActiveSlashCommand({ text: "/dep", cursorIndex: 4, sigils: remapped })).toBeNull();
+    // It still delimits paths, so remapping `/` must not make path-like queries valid.
+    const pathLike = "#tmp/project";
+    expect(
+      findActiveSlashCommand({
+        text: pathLike,
+        cursorIndex: pathLike.length,
+        sigils: remapped,
       }),
     ).toBeNull();
   });
@@ -90,7 +151,14 @@ describe("applySlashCommandReplacement", () => {
     expect(
       applySlashCommandReplacement({
         text,
-        command: { start: 4, end: "use /tas".length, query: "tas", position: "inline" },
+        command: {
+          start: 4,
+          end: "use /tas".length,
+          query: "tas",
+          position: "inline",
+          menu: "command",
+          sigil: "/",
+        },
         commandName: "taste",
       }),
     ).toBe("use /taste before implementation");
@@ -102,7 +170,14 @@ describe("applySlashCommandReplacement", () => {
     expect(
       applySlashCommandReplacement({
         text,
-        command: { start: 4, end: text.length, query: "tas", position: "inline" },
+        command: {
+          start: 4,
+          end: text.length,
+          query: "tas",
+          position: "inline",
+          menu: "command",
+          sigil: "/",
+        },
         commandName: "taste",
       }),
     ).toBe("use /taste ");
@@ -114,10 +189,36 @@ describe("applySlashCommandReplacement", () => {
     expect(
       applySlashCommandReplacement({
         text,
-        command: { start: 0, end: text.length, query: "tas", position: "start" },
+        command: {
+          start: 0,
+          end: text.length,
+          query: "tas",
+          position: "start",
+          menu: "command",
+          sigil: "/",
+        },
         commandName: "taste",
       }),
     ).toBe("/taste ");
+  });
+
+  it("writes back the sigil that opened the trigger", () => {
+    const text = "run $rel";
+
+    expect(
+      applySlashCommandReplacement({
+        text,
+        command: {
+          start: 4,
+          end: text.length,
+          query: "rel",
+          position: "inline",
+          menu: "skill",
+          sigil: "$",
+        },
+        commandName: "release-beta",
+      }),
+    ).toBe("run $release-beta ");
   });
 });
 
