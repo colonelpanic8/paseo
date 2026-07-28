@@ -1293,6 +1293,8 @@ export const ar: TranslationResources = {
     retrying: "جارٍ إعادة المحاولة...",
     noMatches: "لا توجد نماذج تطابق بحثك",
     searchPlaceholder: "نماذج البحث...",
+    allModels: "جميع النماذج",
+    searchAllModelsPlaceholder: "البحث في جميع المزودين...",
     openProviderSettings: "افتح إعدادات{{provider}}",
   },
   providerCatalog: {
@@ -1684,6 +1686,11 @@ export const ar: TranslationResources = {
       autoExpandReasoning: {
         label: "عرض التفكير دائماً",
         description: "إظهار تفكير الوكيل وخطوات الاستدلال بشكل كامل بشكل افتراضي",
+      },
+      modelPickerAllModels: {
+        label: "فتح منتقي النماذج على جميع النماذج",
+        description:
+          "ابدأ منتقي النماذج بقائمة واحدة قابلة للبحث تضم جميع النماذج من جميع المزودين، بدلاً من قائمة المزودين",
       },
       toolCallDetail: {
         label: "عرض استدعاءات الأدوات",

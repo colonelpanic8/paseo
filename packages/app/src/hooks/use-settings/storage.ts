@@ -18,6 +18,11 @@ const VALID_THEMES = new Set<string>([...Object.keys(THEME_TO_UNISTYLES), "auto"
 const VALID_SERVICE_URL_BEHAVIORS = new Set<ServiceUrlBehavior>(["ask", "in-app", "external"]);
 const VALID_WORKSPACE_TITLE_SOURCES = new Set<WorkspaceTitleSource>(["title", "branch"]);
 const VALID_TOOL_CALL_DETAIL_LEVELS = new Set<ToolCallDetailLevel>(["overview", "detailed"]);
+const BOOLEAN_APP_SETTING_KEYS = [
+  "vimKeybindings",
+  "autoExpandReasoning",
+  "modelPickerStartsWithAllModels",
+] as const satisfies readonly (keyof AppSettings)[];
 export const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
 export const MIN_TERMINAL_SCROLLBACK_LINES = 0;
 export const MAX_TERMINAL_SCROLLBACK_LINES = 1_000_000;
@@ -44,6 +49,7 @@ export interface AppSettings {
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
   vimKeybindings: boolean;
+  modelPickerStartsWithAllModels: boolean;
 }
 
 export interface Settings extends AppSettings {
@@ -68,6 +74,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
   vimKeybindings: false,
+  modelPickerStartsWithAllModels: false,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -235,17 +242,17 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (typeof stored.syntaxTheme === "string" && isSyntaxThemeId(stored.syntaxTheme)) {
     result.syntaxTheme = stored.syntaxTheme;
   }
-  if (typeof stored.vimKeybindings === "boolean") {
-    result.vimKeybindings = stored.vimKeybindings;
-  }
   if (
     typeof stored.workspaceTitleSource === "string" &&
     VALID_WORKSPACE_TITLE_SOURCES.has(stored.workspaceTitleSource)
   ) {
     result.workspaceTitleSource = stored.workspaceTitleSource;
   }
-  if (typeof stored.autoExpandReasoning === "boolean") {
-    result.autoExpandReasoning = stored.autoExpandReasoning;
+  for (const key of BOOLEAN_APP_SETTING_KEYS) {
+    const value = stored[key];
+    if (typeof value === "boolean") {
+      result[key] = value;
+    }
   }
   const toolCallDetailLevel = parseToolCallDetailLevel(stored);
   if (toolCallDetailLevel !== null) {
