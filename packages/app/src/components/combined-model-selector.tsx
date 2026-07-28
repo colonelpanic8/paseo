@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -108,7 +108,9 @@ export function CombinedModelSelector({
     [onOpenChange],
   );
 
-  useEffect(() => {
+  // Layout effect so a controlled open prepares the browser before the first
+  // paint — a plain effect would flash the previous browser view for a frame.
+  useLayoutEffect(() => {
     if (previousOpenRef.current === isOpen) return;
     previousOpenRef.current = isOpen;
     if (isOpen) {

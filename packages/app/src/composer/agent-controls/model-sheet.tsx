@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -101,7 +101,9 @@ export function CompactModelSheet({
     onOpenChange?.(false);
   }, [onOpenChange]);
 
-  useEffect(() => {
+  // Layout effect so a controlled open prepares the browser before the first
+  // paint — a plain effect would flash the previous browser view for a frame.
+  useLayoutEffect(() => {
     if (previousOpenRef.current === isOpen) return;
     previousOpenRef.current = isOpen;
     if (isOpen) {

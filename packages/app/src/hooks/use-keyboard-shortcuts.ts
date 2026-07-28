@@ -313,9 +313,13 @@ export function useKeyboardShortcuts({
         useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
       }
       if (key === "Shift") {
+        // Shift+Mod chords are not workspace jumps, so hide the sidebar
+        // number badges — but leave the control hints alone: their chords
+        // are Mod+Shift+key, so the hints must survive Shift going down.
         const state = useKeyboardShortcutsStore.getState();
         if (state.altDown || state.cmdOrCtrlDown) {
-          state.resetModifiers();
+          state.setAltDown(false);
+          state.setCmdOrCtrlDown(false);
         }
       }
 
