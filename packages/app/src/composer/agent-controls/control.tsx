@@ -20,6 +20,8 @@ type AgentControlTriggerProps = Omit<
   open?: boolean;
   onPress: () => void;
   accessibilityLabel: string;
+  shortcutActionId?: string;
+  showShortcutHint?: boolean;
 };
 
 export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
@@ -37,6 +39,8 @@ export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
       onPress,
       accessibilityLabel,
       testID,
+      shortcutActionId,
+      showShortcutHint = false,
       ...triggerProps
     },
     ref,
@@ -69,6 +73,8 @@ export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
         accessibilityLabel={accessibilityLabel}
         testID={testID}
         chevron={showCaret ? undefined : null}
+        shortcutActionId={shortcutActionId}
+        showShortcutHint={showShortcutHint}
       >
         {isSheet ? (
           <View style={styles.sheetGlyph}>
