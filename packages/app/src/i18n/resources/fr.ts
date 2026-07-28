@@ -1342,6 +1342,8 @@ export const fr: TranslationResources = {
     retrying: "Nouvelle tentative...",
     noMatches: "Aucun modèle ne correspond à votre recherche",
     searchPlaceholder: "Rechercher des modèles...",
+    allModels: "Tous les modèles",
+    searchAllModelsPlaceholder: "Rechercher parmi tous les fournisseurs...",
     openProviderSettings: "Ouvrir les paramètres{{provider}}",
   },
   providerCatalog: {
@@ -1737,6 +1739,11 @@ export const fr: TranslationResources = {
       autoExpandReasoning: {
         label: "Toujours afficher le raisonnement",
         description: "Afficher le raisonnement de l'agent entièrement développé par défaut",
+      },
+      modelPickerAllModels: {
+        label: "Ouvrir le sélecteur de modèle sur tous les modèles",
+        description:
+          "Démarrer le sélecteur de modèle sur une liste unique et consultable de tous les modèles de tous les fournisseurs, au lieu de la liste des fournisseurs",
       },
       toolCallDetail: {
         label: "Affichage des appels d’outils",

@@ -1308,6 +1308,8 @@ export const en = {
     retrying: "Retrying...",
     noMatches: "No models match your search",
     searchPlaceholder: "Search models...",
+    allModels: "All models",
+    searchAllModelsPlaceholder: "Search all providers...",
     openProviderSettings: "Open {{provider}} settings",
   },
   providerCatalog: {
@@ -1698,6 +1700,11 @@ export const en = {
       autoExpandReasoning: {
         label: "Always expand reasoning",
         description: "Show agent thinking and chain-of-thought blocks fully expanded by default",
+      },
+      modelPickerAllModels: {
+        label: "Open model picker on all models",
+        description:
+          "Start the model picker on one searchable list of every model from every provider, instead of the provider list",
       },
       toolCallDetail: {
         label: "Tool call display",
