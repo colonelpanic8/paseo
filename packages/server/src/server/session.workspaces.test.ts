@@ -8938,12 +8938,11 @@ test("workspace.archived.list returns archived workspaces newest first", async (
   expect(payload?.entries[0]).toMatchObject({
     name: "newest",
     projectDisplayName: "repo",
-    workspaceKind: "worktree",
     archivedAt: "2026-03-05T00:00:00.000Z",
   });
 });
 
-test("workspace.archived.list honors the requested limit", async () => {
+test("workspace.archived.list caps its response", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const project = createPersistedProjectRecord({
     projectId: "prj_active",
@@ -8958,7 +8957,7 @@ test("workspace.archived.list honors the requested limit", async () => {
   const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
   session.projectRegistry.list = async () => [project];
   session.workspaceRegistry.list = async () =>
-    ["01", "02", "03", "04"].map((day) =>
+    Array.from({ length: 30 }, (_, index) => String(index + 1).padStart(2, "0")).map((day) =>
       createPersistedWorkspaceRecord({
         workspaceId: `ws-${day}`,
         projectId: project.projectId,
@@ -8974,14 +8973,14 @@ test("workspace.archived.list honors the requested limit", async () => {
   await session.handleMessage({
     type: "workspace.archived.list.request",
     requestId: "req-archived-limit",
-    limit: 2,
   });
 
-  expect(
-    findByType(emitted, "workspace.archived.list.response")?.payload.entries.map(
-      (entry) => entry.id,
-    ),
-  ).toEqual(["ws-04", "ws-03"]);
+  const ids = findByType(emitted, "workspace.archived.list.response")?.payload.entries.map(
+    (entry) => entry.id,
+  );
+  expect(ids).toHaveLength(25);
+  expect(ids?.slice(0, 2)).toEqual(["ws-30", "ws-29"]);
+  expect(ids?.at(-1)).toBe("ws-06");
 });
 
 test("workspace.archived.list omits workspaces whose project is archived", async () => {

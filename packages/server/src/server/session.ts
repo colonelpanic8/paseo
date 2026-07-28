@@ -302,7 +302,7 @@ const FETCH_AGENTS_SORT_KEYS = ["status_priority", "created_at", "updated_at", "
 
 // The archived list backs an undo affordance, not an archive browser. Cap it so a
 // long-lived daemon never streams thousands of stale records to every client.
-const DEFAULT_ARCHIVED_WORKSPACES_LIMIT = 50;
+const ARCHIVED_WORKSPACES_LIMIT = 25;
 
 export function resolveWaitForFinishError(options: {
   status: "permission" | "error" | "idle";
@@ -2904,7 +2904,6 @@ export class Session {
   private async handleWorkspaceArchivedListRequest(
     request: Extract<SessionInboundMessage, { type: "workspace.archived.list.request" }>,
   ): Promise<void> {
-    const limit = request.limit ?? DEFAULT_ARCHIVED_WORKSPACES_LIMIT;
     const [workspaces, projects] = await Promise.all([
       this.workspaceRegistry.list(),
       this.projectRegistry.list(),
@@ -2924,17 +2923,14 @@ export class Session {
         return [
           {
             id: workspace.workspaceId,
-            projectId: workspace.projectId,
             projectDisplayName: resolveProjectDisplayName(project),
             name: resolveWorkspaceDisplayName(workspace),
-            workspaceKind: workspace.kind,
-            workspaceDirectory: workspace.cwd,
             archivedAt,
           },
         ];
       })
       .sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
-      .slice(0, limit);
+      .slice(0, ARCHIVED_WORKSPACES_LIMIT);
 
     this.emit({
       type: "workspace.archived.list.response",

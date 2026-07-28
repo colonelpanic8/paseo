@@ -104,6 +104,11 @@ unarchive and recreating a Paseo-owned worktree.
 The daemon caps its response and drops workspaces whose owning project is archived; unarchiving one
 would surface a workspace under a project the user cannot see.
 
+While status mode is mounted, its archived query listens to the existing `workspace_update`
+broadcast. A live-directory removal can mean a new archive, and an upsert for a row already in the
+archived cache means that row was restored elsewhere, so either transition refreshes the tail across
+clients without polling.
+
 Provider session connection owns every process it spawns until the session is registered with
 `AgentManager`. If initialization, persisted-session resume, or initial history hydration fails,
 `connect()` must dispose that process before rethrowing; the manager cannot clean up a session it never

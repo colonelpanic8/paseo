@@ -859,7 +859,6 @@ export const WorkspaceRecoveryRestoreRequestSchema = z.object({
 // and the client never merges these into the live workspace directory.
 export const WorkspaceArchivedListRequestSchema = z.object({
   type: z.literal("workspace.archived.list.request"),
-  limit: z.number().int().positive().max(200).optional(),
   requestId: z.string(),
 });
 
@@ -1581,12 +1580,8 @@ export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
 
 export const ArchivedWorkspacePayloadSchema = z.object({
   id: z.string(),
-  projectId: z.string(),
   projectDisplayName: z.string(),
   name: z.string(),
-  // COMPAT(workspaces): keep legacy directory workspace kind parseable.
-  workspaceKind: z.enum(["directory", "local_checkout", "checkout", "worktree"]),
-  workspaceDirectory: z.string(),
   archivedAt: z.string(),
 });
 
