@@ -1962,7 +1962,13 @@ export class Session {
       case "close_items_request":
         return this.handleCloseItemsRequest(msg);
       case "update_agent_request":
-        return this.handleUpdateAgentRequest(msg.agentId, msg.name, msg.labels, msg.requestId);
+        return this.handleUpdateAgentRequest(
+          msg.agentId,
+          msg.name,
+          msg.labels,
+          msg.snoozeUntil,
+          msg.requestId,
+        );
       case "project.rename.request":
         return this.handleProjectRenameRequest(msg.projectId, msg.customName, msg.requestId);
       case "project.icon.set.request":
@@ -2552,6 +2558,7 @@ export class Session {
     agentId: string,
     name: string | undefined,
     labels: Record<string, string> | undefined,
+    snoozeUntil: string | null | undefined,
     requestId: string,
   ): Promise<void> {
     this.sessionLogger.info(
@@ -2567,7 +2574,7 @@ export class Session {
     try {
       const result = await updateAgentCommand(
         { agentManager: this.agentManager },
-        { agentId, name, labels },
+        { agentId, name, labels, snoozeUntil },
       );
 
       if (!result.accepted) {

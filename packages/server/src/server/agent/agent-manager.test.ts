@@ -3134,12 +3134,18 @@ test("updateAgentMetadata bumps updatedAt for stored agents", async () => {
   await manager.updateAgentMetadata(snapshot.id, {
     title: "Stored title",
     labels: { role: "worker" },
+    snoozeUntil: "2099-07-29T18:00:00.000Z",
   });
 
   expect(upsertSpy).toHaveBeenCalledTimes(1);
   const after = await storage.get(snapshot.id);
   expect(after?.title).toBe("Stored title");
   expect(after?.labels).toEqual({ surface: "mobile", role: "worker" });
+  expect(after?.snoozeStatus).toEqual({
+    status: "snoozed",
+    snoozedAt: expect.any(String),
+    snoozedUntil: "2099-07-29T18:00:00.000Z",
+  });
   expect(Date.parse(after!.updatedAt)).toBeGreaterThan(Date.parse(before!.updatedAt));
 });
 
