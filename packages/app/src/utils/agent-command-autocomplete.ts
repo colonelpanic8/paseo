@@ -157,3 +157,13 @@ export function applySlashCommandReplacement(input: ApplySlashCommandReplacement
   const replacement = `${before}${DEFAULT_COMMAND_SIGIL}${input.commandName}${after}`;
   return input.command.end === input.text.length ? `${replacement} ` : replacement;
 }
+
+export function shouldSubmitUncommittedTrigger(input: {
+  key: string;
+  command: SlashCommandRange | null;
+}): boolean {
+  const isSubmitKey = input.key === "Enter";
+  const isNonCanonicalTrigger =
+    input.command !== null && input.command.sigil !== DEFAULT_COMMAND_SIGIL;
+  return isSubmitKey && isNonCanonicalTrigger;
+}
