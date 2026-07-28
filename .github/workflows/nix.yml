@@ -18,6 +18,7 @@ on:
       - "packages/relay/**"
       - "packages/cli/**"
       - "scripts/build-daemon-web-ui.mjs"
+      - "scripts/build-android-apk.sh"
       - "scripts/update-nix.sh"
       - "scripts/fix-lockfile.mjs"
       - ".github/workflows/nix.yml"
