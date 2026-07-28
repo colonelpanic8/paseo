@@ -88,7 +88,13 @@ buildNpmPackage {
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
       # Let electron-builder create the native bundle layout (including helper
       # app names and bundle identifiers), but source Electron from nixpkgs
-      # instead of downloading a release at build time.
+      # instead of downloading a release at build time. electron-builder edits
+      # the copied helper plists, so stage a writable distribution rather than
+      # pointing it directly at the read-only Nix store.
+      electron_dist="$NIX_BUILD_TOP/electron-dist"
+      mkdir -p "$electron_dist"
+      cp -R ${electron}/Applications/Electron.app "$electron_dist/"
+      chmod -R u+w "$electron_dist/Electron.app"
       (
         cd packages/desktop
         CSC_IDENTITY_AUTO_DISCOVERY=false \
@@ -97,7 +103,7 @@ buildNpmPackage {
             --dir \
             --mac \
             --publish never \
-            --config.electronDist=${electron}/Applications \
+            --config.electronDist="$electron_dist" \
             --config.mac.notarize=false
       )
     ''}
