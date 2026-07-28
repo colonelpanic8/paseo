@@ -129,7 +129,9 @@ buildNpmPackage rec {
     makeWrapper ${electron}/bin/electron $out/bin/paseo-desktop \
       --add-flags "$out/share/paseo-desktop/packages/desktop/dist/main.js" \
       --add-flags "--no-sandbox" \
-      --set EXPO_DEV_URL "paseo://app/"
+      --add-flags "--class=paseo-desktop" \
+      --set EXPO_DEV_URL "paseo://app/" \
+      --set CHROME_DESKTOP "paseo-desktop.desktop"
 
     copyDesktopItems
 
@@ -145,7 +147,7 @@ buildNpmPackage rec {
       exec = "paseo-desktop";
       icon = "paseo-desktop";
       categories = [ "Development" ];
-      startupWMClass = "Paseo";
+      startupWMClass = "paseo-desktop";
     })
   ];
 
