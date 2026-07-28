@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  HOST_COLOR_KEYS,
+  normalizeHostColor,
   normalizeStoredHostProfile,
   orderHostsLocalFirst,
   resolveActiveHostServerId,
@@ -185,5 +187,41 @@ describe("resolveActiveHostServerId", () => {
         orderedHosts: [makeHost("srv_local"), makeHost("srv_remote")],
       }),
     ).toBe("srv_local");
+  });
+});
+
+describe("host colors", () => {
+  function storedProfile(color: unknown) {
+    return normalizeStoredHostProfile({
+      serverId: "srv_color",
+      label: "Colored Host",
+      color,
+      connections: [
+        {
+          id: "direct:127.0.0.1:6767",
+          type: "directTcp",
+          endpoint: "127.0.0.1:6767",
+        },
+      ],
+      preferredConnectionId: "direct:127.0.0.1:6767",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-02T00:00:00.000Z",
+    });
+  }
+
+  it("keeps a stored palette key", () => {
+    expect(storedProfile("purple")?.color).toBe("purple");
+  });
+
+  it("drops colors that are not palette keys", () => {
+    expect(storedProfile("#ff00ff")?.color).toBeNull();
+    expect(storedProfile(undefined)?.color).toBeNull();
+    expect(storedProfile(42)?.color).toBeNull();
+  });
+
+  it("accepts every advertised color key", () => {
+    for (const color of HOST_COLOR_KEYS) {
+      expect(normalizeHostColor(color)).toBe(color);
+    }
   });
 });

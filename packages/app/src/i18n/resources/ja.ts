@@ -1987,6 +1987,20 @@ export const ja: TranslationResources = {
           placeholder: "マイホスト",
           submit: "名前を変更",
         },
+        color: {
+          section: "外観",
+          title: "色",
+          hint: "サイドバーでこのホストのラベルに色を付けます",
+          options: {
+            none: "なし",
+            blue: "青",
+            green: "緑",
+            amber: "アンバー",
+            orange: "オレンジ",
+            red: "赤",
+            purple: "紫",
+          },
+        },
         restart: {
           title: "デーモンを再起動",
           hint: "デーモンプロセスを再起動します。アプリは自動的に再接続します",

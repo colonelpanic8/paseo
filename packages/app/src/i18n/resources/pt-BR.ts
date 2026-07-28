@@ -2002,6 +2002,20 @@ export const ptBR: TranslationResources = {
           placeholder: "Meu Host",
           submit: "Renomear",
         },
+        color: {
+          section: "Aparência",
+          title: "Cor",
+          hint: "Colore o rótulo deste host na barra lateral",
+          options: {
+            none: "Nenhuma",
+            blue: "Azul",
+            green: "Verde",
+            amber: "Âmbar",
+            orange: "Laranja",
+            red: "Vermelho",
+            purple: "Roxo",
+          },
+        },
         restart: {
           title: "Reiniciar daemon",
           hint: "Reinicia o processo do daemon. O app reconectará automaticamente",

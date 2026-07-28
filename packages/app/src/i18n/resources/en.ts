@@ -1979,6 +1979,20 @@ export const en = {
           placeholder: "My Host",
           submit: "Rename",
         },
+        color: {
+          section: "Appearance",
+          title: "Color",
+          hint: "Tints this host's label in the sidebar",
+          options: {
+            none: "None",
+            blue: "Blue",
+            green: "Green",
+            amber: "Amber",
+            orange: "Orange",
+            red: "Red",
+            purple: "Purple",
+          },
+        },
         restart: {
           title: "Restart daemon",
           hint: "Restarts the daemon process. The app will reconnect automatically",

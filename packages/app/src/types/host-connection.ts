@@ -37,9 +37,19 @@ export type HostConnection =
 
 export type HostLifecycle = Record<string, never>;
 
+/**
+ * Host colors are stored as palette keys, never hex, so the same host resolves
+ * to a scheme-appropriate shade in every theme.
+ */
+export const HOST_COLOR_KEYS = ["blue", "green", "amber", "orange", "red", "purple"] as const;
+
+export type HostColorKey = (typeof HOST_COLOR_KEYS)[number];
+
 export interface HostProfile {
   serverId: string;
   label: string;
+  /** User-chosen accent for this host; null/undefined renders the default color. */
+  color?: HostColorKey | null;
   lifecycle: HostLifecycle;
   connections: HostConnection[];
   preferredConnectionId: string | null;
@@ -49,6 +59,12 @@ export interface HostProfile {
 
 export function defaultLifecycle(): HostLifecycle {
   return {};
+}
+
+export function normalizeHostColor(value: unknown): HostColorKey | null {
+  return typeof value === "string" && (HOST_COLOR_KEYS as readonly string[]).includes(value)
+    ? (value as HostColorKey)
+    : null;
 }
 
 export function normalizeHostLabel(value: string | null | undefined, serverId: string): string {
@@ -172,6 +188,7 @@ export function upsertHostConnectionInProfiles(input: {
     const profile: HostProfile = {
       serverId,
       label: derivedLabel,
+      color: null,
       lifecycle: defaultLifecycle(),
       connections: [input.connection],
       preferredConnectionId: input.connection.id,
@@ -372,6 +389,7 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
   return {
     serverId,
     label,
+    color: normalizeHostColor(record.color),
     lifecycle: defaultLifecycle(),
     connections,
     preferredConnectionId,

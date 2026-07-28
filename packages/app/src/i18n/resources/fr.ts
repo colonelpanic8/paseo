@@ -2020,6 +2020,20 @@ export const fr: TranslationResources = {
           placeholder: "MonHost",
           submit: "Renommer",
         },
+        color: {
+          section: "Apparence",
+          title: "Couleur",
+          hint: "Colore l'étiquette de cet hôte dans la barre latérale",
+          options: {
+            none: "Aucune",
+            blue: "Bleu",
+            green: "Vert",
+            amber: "Ambre",
+            orange: "Orange",
+            red: "Rouge",
+            purple: "Violet",
+          },
+        },
         restart: {
           title: "Redémarrer le démon",
           hint: "Redémarre le processus démon. L'application se reconnectera automatiquement",
