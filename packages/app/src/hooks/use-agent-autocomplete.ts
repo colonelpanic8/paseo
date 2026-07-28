@@ -18,7 +18,6 @@ import {
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
-  shouldSubmitUncommittedTrigger,
   type SlashCommandRange,
 } from "@/utils/agent-command-autocomplete";
 import {
@@ -579,13 +578,8 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         : undefined,
   });
   const onKeyPress = useCallback(
-    (event: AgentAutocompleteKeyPressEvent) => {
-      if (shouldSubmitUncommittedTrigger({ key: event.key, command: activeSlashCommand })) {
-        return false;
-      }
-      return onAutocompleteKeyPress(event);
-    },
-    [activeSlashCommand, onAutocompleteKeyPress],
+    (event: AgentAutocompleteKeyPressEvent) => onAutocompleteKeyPress(event),
+    [onAutocompleteKeyPress],
   );
 
   const isLoading = resolveAutocompleteIsLoading({
