@@ -202,7 +202,7 @@ describe("applySlashCommandReplacement", () => {
     ).toBe("/taste ");
   });
 
-  it("writes back the sigil that opened the trigger", () => {
+  it("commits a configured trigger as canonical slash syntax", () => {
     const text = "run $rel";
 
     expect(
@@ -218,7 +218,7 @@ describe("applySlashCommandReplacement", () => {
         },
         commandName: "release-beta",
       }),
-    ).toBe("run $release-beta ");
+    ).toBe("run /release-beta ");
   });
 });
 
