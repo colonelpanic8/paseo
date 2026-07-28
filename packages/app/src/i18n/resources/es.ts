@@ -1911,6 +1911,8 @@ export const es: TranslationResources = {
         muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",
         switchProject: "Cambiar proyecto",
         selectHost: "Seleccionar host",
+        toggleFastMode: "Alternar modo rápido",
+        togglePlanMode: "Alternar modo de planificación",
       },
       helpNotes: {
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",

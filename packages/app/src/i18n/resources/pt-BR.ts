@@ -1894,6 +1894,8 @@ export const ptBR: TranslationResources = {
         muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
         switchProject: "Trocar projeto",
         selectHost: "Selecionar host",
+        toggleFastMode: "Alternar modo rápido",
+        togglePlanMode: "Alternar modo de planejamento",
       },
       helpNotes: {
         showKeyboardShortcuts:

@@ -37,11 +37,11 @@ export type KeyboardActionId =
   | "worktree.new"
   | "workspace.archive"
   | "workspace.pin"
-  | "message-input.provider.pick"
   | "message-input.model.pick"
   | "message-input.thinking.pick"
   | "message-input.mode.pick"
-  | "message-input.fast-mode.toggle";
+  | "message-input.fast-mode.toggle"
+  | "message-input.plan-mode.toggle";
 
 export type KeyboardActionDefinition =
   | { id: "agent.interrupt"; scope: KeyboardActionScope }
@@ -80,11 +80,11 @@ export type KeyboardActionDefinition =
   | { id: "worktree.new"; scope: KeyboardActionScope }
   | { id: "workspace.archive"; scope: KeyboardActionScope }
   | { id: "workspace.pin"; scope: KeyboardActionScope }
-  | { id: "message-input.provider.pick"; scope: KeyboardActionScope }
   | { id: "message-input.model.pick"; scope: KeyboardActionScope }
   | { id: "message-input.thinking.pick"; scope: KeyboardActionScope }
   | { id: "message-input.mode.pick"; scope: KeyboardActionScope }
-  | { id: "message-input.fast-mode.toggle"; scope: KeyboardActionScope };
+  | { id: "message-input.fast-mode.toggle"; scope: KeyboardActionScope }
+  | { id: "message-input.plan-mode.toggle"; scope: KeyboardActionScope };
 
 export interface KeyboardActionHandler {
   handlerId: string;

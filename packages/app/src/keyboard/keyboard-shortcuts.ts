@@ -136,7 +136,6 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "select-workspace-isolation": "newWorkspace.isolation.label",
   "select-starting-ref": "newWorkspace.refPicker.title",
   "select-host": "settings.shortcuts.help.selectHost",
-  "select-provider": "agentControls.provider.select",
   "archive-workspace": "settings.shortcuts.help.archiveWorkspace",
   "workspace-tab-new": "settings.shortcuts.help.newTab",
   "workspace-tab-close-current": "settings.shortcuts.help.closeCurrentTab",
@@ -171,6 +170,8 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "select-model": "modelSelector.selectModel",
   "select-thinking": "agentControls.thinking.title",
   "select-agent-mode": "agentControls.mode.title",
+  "toggle-fast-mode": "settings.shortcuts.help.toggleFastMode",
+  "toggle-plan-mode": "settings.shortcuts.help.togglePlanMode",
   "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
   "dictation-toggle": "settings.shortcuts.help.startStopDictation",
   "agent-interrupt": "settings.shortcuts.help.interruptAgent",
@@ -342,30 +343,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
   // --- Composer controls ---
   {
-    id: "message-input-provider-pick-cmd-shift-g-mac",
-    action: "message-input.provider.pick",
-    combo: "Cmd+Shift+G",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "select-provider",
-      section: "agent-input",
-      label: "Select agent provider",
-      keys: ["mod", "shift", "G"],
-    },
-  },
-  {
-    id: "message-input-provider-pick-ctrl-shift-g-non-mac",
-    action: "message-input.provider.pick",
-    combo: "Ctrl+Shift+G",
-    when: { mac: false, commandCenter: false, terminal: false },
-    help: {
-      id: "select-provider",
-      section: "agent-input",
-      label: "Select agent provider",
-      keys: ["mod", "shift", "G"],
-    },
-  },
-  {
     id: "message-input-model-pick-cmd-shift-m-mac",
     action: "message-input.model.pick",
     combo: "Cmd+Shift+M",
@@ -461,6 +438,32 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "agent-input",
       label: "Toggle fast mode",
       keys: ["mod", "alt", "F"],
+    },
+  },
+  {
+    id: "message-input-plan-mode-toggle-cmd-alt-p-mac",
+    action: "message-input.plan-mode.toggle",
+    combo: "Cmd+Alt+P",
+    repeat: false,
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "toggle-plan-mode",
+      section: "agent-input",
+      label: "Toggle plan mode",
+      keys: ["mod", "alt", "P"],
+    },
+  },
+  {
+    id: "message-input-plan-mode-toggle-ctrl-alt-p-non-mac",
+    action: "message-input.plan-mode.toggle",
+    combo: "Ctrl+Alt+P",
+    repeat: false,
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "toggle-plan-mode",
+      section: "agent-input",
+      label: "Toggle plan mode",
+      keys: ["mod", "alt", "P"],
     },
   },
 
