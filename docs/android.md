@@ -27,7 +27,23 @@ The formula reserves three digits each for minor and patch. If either reaches `1
 
 ## Prerequisites (local dev)
 
-Local Android builds run on macOS (or Linux) and need the Android toolchain, pinned in `.tool-versions` (`java 21`, `android-sdk 21.0`) and wired up by `.mise.toml` (which derives `ANDROID_HOME` and the command-line tool paths from the `android-sdk` entry). With [mise](https://mise.jdx.dev):
+On x86_64 Linux, Nix provides the complete Android SDK, NDK, CMake, Java 21,
+Node.js 22, and Python toolchain:
+
+```bash
+nix develop .#android
+```
+
+The SDK components match Expo SDK 54 and React Native 0.81: Android platforms
+35 and 36, build-tools 35.0.0 and 36.0.0, NDK 27.1.12297006, the
+react-native-unistyles fallback NDK 27.0.12077973, and CMake 3.22.1. The Nix
+shell sets `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_NDK_HOME`, `JAVA_HOME`,
+and the NixOS-compatible AAPT2 override.
+
+Local Android builds also run on macOS (or Linux without Nix) with the Android
+toolchain pinned in `.tool-versions` (`java 21`, `android-sdk 21.0`) and wired
+up by `.mise.toml` (which derives `ANDROID_HOME` and the command-line tool
+paths from the `android-sdk` entry). With [mise](https://mise.jdx.dev):
 
 ```bash
 mise install        # java 21 + android-sdk 21.0 command-line tools
@@ -56,6 +72,37 @@ emulator @paseo     # start it; leave running
 ```
 
 Gradle auto-fetches the platform/build-tools it needs once licenses are accepted, so adjust `android-35` only if it asks for a different level.
+
+## Nix release build (x86_64 Linux)
+
+Install the JavaScript dependencies once, then build from the repository root:
+
+```bash
+npm ci
+nix run .#android-release
+```
+
+The command performs the workspace prerequisite builds, regenerates the Expo
+Android project, runs Gradle serially, and copies the resulting APKs to
+`result/android/`. Nix pins the host toolchain; npm and Gradle still populate
+their normal dependency caches.
+
+Build a single architecture by passing `--architecture`:
+
+```bash
+nix run .#android-release -- --architecture arm64-v8a
+```
+
+Use the same command for Paseo's source-only F-Droid profile:
+
+```bash
+nix run .#android-release -- --fdroid --architecture arm64-v8a
+```
+
+Run `nix run .#android-release -- --help` for the full interface. Set
+`PASEO_ANDROID_OUTPUT_DIR` to change the artifact directory, `PASEO_ROOT` when
+invoking the app outside the repository root, or pass additional Gradle
+arguments after `--`.
 
 ## Local build + install
 
