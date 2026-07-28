@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useMemo, useState, type MutableRefObject, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, ScrollView, type PressableStateCallbackType } from "react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
@@ -43,6 +43,8 @@ import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import type { HostColorKey } from "@/types/host-connection";
+import type { GestureType } from "react-native-gesture-handler";
+import { StatusRowSwipeContainer } from "@/components/sidebar/status-row-swipe-container";
 
 // Themed icon wrappers
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -71,6 +73,8 @@ interface StatusWorkspaceListProps {
   hostColorByServerId: ReadonlyMap<string, HostColorKey>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  /** Compact sidebar drawer-close pan; shared with the scroll and row gestures. */
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
   listHeaderComponent?: ReactNode;
 }
 
@@ -85,6 +89,7 @@ export function SidebarStatusWorkspaceList({
   hostColorByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
+  parentGestureRef,
   listHeaderComponent,
 }: StatusWorkspaceListProps) {
   const collapsedStatusGroupKeys = useSidebarCollapsedSectionsStore(
@@ -100,6 +105,15 @@ export function SidebarStatusWorkspaceList({
     canToggle: canTogglePinnedWorkspaces,
     toggleExpanded: togglePinnedWorkspacesExpanded,
   } = useLimitedSidebarGroup(pinnedWorkspaces);
+
+  // NestableScrollContainer forwards props to RNGH's ScrollView but does not
+  // type them. Keeping vertical scroll simultaneous with the drawer-close pan
+  // lets a clear vertical drag scroll immediately while a clear horizontal drag
+  // can still close the sidebar. Mirrors project mode.
+  const nativeScrollGestureProps = useMemo(
+    () => (parentGestureRef ? { simultaneousHandlers: parentGestureRef } : undefined),
+    [parentGestureRef],
+  );
 
   const statusShortcutIndex = showShortcutBadges ? shortcutIndexByWorkspaceKey : new Map();
   const content = (
@@ -123,6 +137,7 @@ export function SidebarStatusWorkspaceList({
                   canPin={supportsPinningByServerId.get(workspace.serverId) === true}
                   onToggleWorkspacePin={onToggleWorkspacePin}
                   onWorkspacePress={onWorkspacePress}
+                  parentGestureRef={parentGestureRef}
                 />
               ))}
               {canTogglePinnedWorkspaces ? (
@@ -148,6 +163,7 @@ export function SidebarStatusWorkspaceList({
         hostColorByServerId={hostColorByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
+        parentGestureRef={parentGestureRef}
       />
     </>
   );
@@ -159,6 +175,7 @@ export function SidebarStatusWorkspaceList({
           style={styles.list}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          {...nativeScrollGestureProps}
           testID="sidebar-status-list-scroll"
         >
           {content}
@@ -188,6 +205,7 @@ function StatusGroupList({
   hostColorByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
+  parentGestureRef,
 }: {
   groups: StatusGroup[];
   collapsedStatusGroupKeys: ReadonlySet<string>;
@@ -199,6 +217,7 @@ function StatusGroupList({
   hostColorByServerId: ReadonlyMap<string, HostColorKey>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }) {
   return (
     <>
@@ -215,6 +234,7 @@ function StatusGroupList({
           hostColorByServerId={hostColorByServerId}
           supportsPinningByServerId={supportsPinningByServerId}
           onToggleWorkspacePin={onToggleWorkspacePin}
+          parentGestureRef={parentGestureRef}
         />
       ))}
     </>
@@ -232,6 +252,7 @@ function StatusGroupRows({
   hostColorByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
+  parentGestureRef,
 }: {
   group: StatusGroup;
   collapsed: boolean;
@@ -243,6 +264,7 @@ function StatusGroupRows({
   hostColorByServerId: ReadonlyMap<string, HostColorKey>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }) {
   const {
     visibleItems: visibleWorkspaces,
@@ -271,6 +293,7 @@ function StatusGroupRows({
               canPin={supportsPinningByServerId.get(workspace.serverId) === true}
               onToggleWorkspacePin={onToggleWorkspacePin}
               onWorkspacePress={onWorkspacePress}
+              parentGestureRef={parentGestureRef}
             />
           ))}
           {canToggleWorkspaces ? (
@@ -391,6 +414,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   canPin,
   onToggleWorkspacePin,
   onWorkspacePress,
+  parentGestureRef,
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
@@ -401,6 +425,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   canPin: boolean;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onWorkspacePress?: () => void;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }) {
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const selected =
@@ -424,6 +449,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
       showShortcutBadge={showShortcutBadge}
       canPin={canPin}
       onToggleWorkspacePin={onToggleWorkspacePin}
+      parentGestureRef={parentGestureRef}
       onPress={handlePress}
     />
   );
@@ -439,6 +465,7 @@ function StatusWorkspaceRowWithMenu({
   showShortcutBadge,
   canPin,
   onToggleWorkspacePin,
+  parentGestureRef,
   onPress,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -450,6 +477,7 @@ function StatusWorkspaceRowWithMenu({
   showShortcutBadge: boolean;
   canPin: boolean;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
   onPress: () => void;
 }) {
   const { t } = useTranslation();
@@ -570,6 +598,7 @@ function StatusWorkspaceRowWithMenu({
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
         onTogglePin={onTogglePin}
+        parentGestureRef={parentGestureRef}
       />
       <AdaptiveRenameModal
         visible={isRenameOpen}
@@ -606,6 +635,7 @@ function StatusWorkspaceRowInner({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  parentGestureRef,
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
@@ -627,6 +657,7 @@ function StatusWorkspaceRowInner({
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }) {
   const isTouchPlatform = platformIsNative;
 
@@ -651,44 +682,51 @@ function StatusWorkspaceRowInner({
         const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
         return (
           <View style={styles.workspaceRowContainer} {...hoverHandlers}>
-            <Pressable
-              disabled={isArchiving}
-              accessibilityRole="button"
-              accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
-              onPress={onPress}
-              testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
+            <StatusRowSwipeContainer
+              archiveLabel={archiveLabel}
+              onArchive={onArchive}
+              isArchiving={isArchiving}
+              parentGestureRef={parentGestureRef}
             >
-              <SidebarStatusRowContent
-                workspace={workspace}
-                iconDataUri={iconDataUri}
-                hostLabel={hostLabel}
-                hostColor={hostColor}
-                scriptIconKind={scriptIconKind}
-                isArchiving={isArchiving}
-                shortcutNumber={shortcutNumber}
-                showShortcutBadge={showShortcutBadge}
-                showActions={showActions}
+              <Pressable
+                disabled={isArchiving}
+                accessibilityRole="button"
+                accessibilityState={accessibilityState}
+                style={workspaceRowStyle}
+                onPress={onPress}
+                testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
               >
-                {showActions && onArchive ? (
-                  <StatusWorkspaceQuickActions
-                    workspace={workspace}
-                    showInlineArchive={!isTouchPlatform}
-                    isPinned={isPinned}
-                    onTogglePin={onTogglePin}
-                    onCopyPath={onCopyPath}
-                    onCopyBranchName={onCopyBranchName}
-                    onRename={onRename}
-                    onMarkAsRead={onMarkAsRead}
-                    onArchive={onArchive}
-                    archiveLabel={archiveLabel}
-                    archiveStatus={archiveStatus}
-                    archivePendingLabel={archivePendingLabel}
-                    archiveShortcutKeys={archiveShortcutKeys}
-                  />
-                ) : null}
-              </SidebarStatusRowContent>
-            </Pressable>
+                <SidebarStatusRowContent
+                  workspace={workspace}
+                  iconDataUri={iconDataUri}
+                  hostLabel={hostLabel}
+                  hostColor={hostColor}
+                  scriptIconKind={scriptIconKind}
+                  isArchiving={isArchiving}
+                  shortcutNumber={shortcutNumber}
+                  showShortcutBadge={showShortcutBadge}
+                  showActions={showActions}
+                >
+                  {showActions && onArchive ? (
+                    <StatusWorkspaceQuickActions
+                      workspace={workspace}
+                      showInlineArchive={!isTouchPlatform}
+                      isPinned={isPinned}
+                      onTogglePin={onTogglePin}
+                      onCopyPath={onCopyPath}
+                      onCopyBranchName={onCopyBranchName}
+                      onRename={onRename}
+                      onMarkAsRead={onMarkAsRead}
+                      onArchive={onArchive}
+                      archiveLabel={archiveLabel}
+                      archiveStatus={archiveStatus}
+                      archivePendingLabel={archivePendingLabel}
+                      archiveShortcutKeys={archiveShortcutKeys}
+                    />
+                  ) : null}
+                </SidebarStatusRowContent>
+              </Pressable>
+            </StatusRowSwipeContainer>
           </View>
         );
       }}
@@ -832,6 +870,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceRowContainer: {
     position: "relative",
+    // The gap lives on the hover/swipe container, not the row itself, so the
+    // native swipe underlay stops at the row box instead of filling the gap.
+    marginBottom: theme.spacing[1],
   },
   workspaceQuickActions: {
     flexDirection: "row",
@@ -842,7 +883,6 @@ const styles = StyleSheet.create((theme) => ({
     // The 40px icon block plus the full-width meta line; fixed so the hover swap
     // between the time-ago text and the quick actions never reflows the row.
     minHeight: 72,
-    marginBottom: theme.spacing[1],
     paddingVertical: theme.spacing[2],
     paddingLeft: theme.spacing[2],
     paddingRight: theme.spacing[3],

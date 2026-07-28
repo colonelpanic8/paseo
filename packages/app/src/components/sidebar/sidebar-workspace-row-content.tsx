@@ -168,7 +168,12 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               </Text>
             </View>
           ) : null}
-          {workspace.prHint ? <SidebarWorkspacePrBadgeRow hint={workspace.prHint} /> : null}
+          {workspace.prHint ? (
+            <View style={styles.workspacePrBadgeRow}>
+              <PrBadge hint={workspace.prHint} />
+              <ChecksBadge checks={workspace.prHint.checks} forge={workspace.prHint.forge} />
+            </View>
+          ) : null}
         </View>
       </View>
       {showShortcutBadge && shortcutNumber !== null ? (
@@ -179,16 +184,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     </View>
   );
 });
-
-/** PR number + failing-checks badges. Shared by the project and status rows. */
-export function SidebarWorkspacePrBadgeRow({ hint }: { hint: PrHint }) {
-  return (
-    <View style={styles.workspacePrBadgeRow}>
-      <PrBadge hint={hint} />
-      <ChecksBadge checks={hint.checks} forge={hint.forge} />
-    </View>
-  );
-}
 
 export function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
   return (

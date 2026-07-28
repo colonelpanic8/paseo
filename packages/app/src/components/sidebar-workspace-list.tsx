@@ -1795,6 +1795,7 @@ export function SidebarWorkspaceList({
         hostColorByServerId={hostColorByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
+        parentGestureRef={parentGestureRef}
         listHeaderComponent={listHeaderComponent}
       />
     ) : (
@@ -1834,6 +1835,7 @@ function SidebarStatusModeWrapper({
   hostColorByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
+  parentGestureRef,
   listHeaderComponent,
 }: {
   statusGroups: StatusGroup[];
@@ -1846,6 +1848,7 @@ function SidebarStatusModeWrapper({
   hostColorByServerId: ReadonlyMap<string, HostColorKey>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
   listHeaderComponent?: ReactElement | null;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
@@ -1864,6 +1867,7 @@ function SidebarStatusModeWrapper({
       hostColorByServerId={hostColorByServerId}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
+      parentGestureRef={parentGestureRef}
       listHeaderComponent={listHeaderComponent}
     />
   );

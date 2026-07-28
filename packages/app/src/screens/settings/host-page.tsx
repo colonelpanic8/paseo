@@ -403,26 +403,36 @@ const HOST_COLOR_LABEL_KEYS = {
 function HostColorCard({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
   const { setHostColor } = useHostMutations();
+  const [isSaving, setIsSaving] = useState(false);
   const selectedColor = host.color ?? null;
 
   const handleSelect = useCallback(
     (color: HostColorKey | null) => {
-      void setHostColor(host.serverId, color);
+      if (isSaving || color === selectedColor) {
+        return;
+      }
+      setIsSaving(true);
+      void setHostColor(host.serverId, color).finally(() => setIsSaving(false));
     },
-    [host.serverId, setHostColor],
+    [host.serverId, isSaving, selectedColor, setHostColor],
   );
 
   return (
     <View style={settingsStyles.card} testID="host-page-color-card">
-      <View style={settingsStyles.row}>
-        <View style={settingsStyles.rowContent}>
+      <View style={styles.colorRow}>
+        <View>
           <Text style={settingsStyles.rowTitle}>{t("settings.host.daemon.color.title")}</Text>
           <Text style={settingsStyles.rowHint}>{t("settings.host.daemon.color.hint")}</Text>
         </View>
-        <View style={styles.colorSwatchRow}>
+        <View
+          style={styles.colorSwatchRow}
+          accessibilityRole="radiogroup"
+          accessibilityLabel={t("settings.host.daemon.color.title")}
+        >
           <HostColorSwatch
             color={null}
             selected={selectedColor === null}
+            disabled={isSaving}
             label={t(HOST_COLOR_LABEL_KEYS.none)}
             onSelect={handleSelect}
           />
@@ -431,6 +441,7 @@ function HostColorCard({ host }: { host: HostProfile }) {
               key={color}
               color={color}
               selected={selectedColor === color}
+              disabled={isSaving}
               label={t(HOST_COLOR_LABEL_KEYS[color])}
               onSelect={handleSelect}
             />
@@ -444,28 +455,37 @@ function HostColorCard({ host }: { host: HostProfile }) {
 function HostColorSwatch({
   color,
   selected,
+  disabled,
   label,
   onSelect,
 }: {
   color: HostColorKey | null;
   selected: boolean;
+  disabled: boolean;
   label: string;
   onSelect: (color: HostColorKey | null) => void;
 }) {
   const handlePress = useCallback(() => onSelect(color), [color, onSelect]);
-  const accessibilityState = useMemo(() => ({ selected }), [selected]);
+  const accessibilityState = useMemo(() => ({ checked: selected, disabled }), [disabled, selected]);
   const containerStyle = useMemo(
-    () => [styles.colorSwatch, selected && styles.colorSwatchSelected],
-    [selected],
+    () => [
+      styles.colorSwatch,
+      selected && styles.colorSwatchSelected,
+      disabled && styles.colorSwatchDisabled,
+    ],
+    [disabled, selected],
   );
 
   return (
     <Pressable
       onPress={handlePress}
+      disabled={disabled}
       hitSlop={4}
-      accessibilityRole="button"
+      accessibilityRole="radio"
       accessibilityLabel={label}
       accessibilityState={accessibilityState}
+      aria-checked={selected}
+      aria-disabled={disabled}
       style={containerStyle}
       testID={`host-page-color-${color ?? "none"}`}
     >
@@ -1956,7 +1976,11 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
-    flexShrink: 0,
+    marginTop: theme.spacing[3],
+  },
+  colorRow: {
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
   },
   colorSwatch: {
     width: 26,
@@ -1969,6 +1993,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   colorSwatchSelected: {
     borderColor: theme.colors.foreground,
+  },
+  colorSwatchDisabled: {
+    opacity: 0.5,
   },
   colorSwatchFill: {
     width: 18,
