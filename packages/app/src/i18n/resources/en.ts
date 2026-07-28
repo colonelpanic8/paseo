@@ -1872,6 +1872,7 @@ export const en = {
         queueMessage: "Queue message",
         muteUnmuteVoiceMode: "Mute/unmute voice mode",
         switchProject: "Switch project",
+        selectHost: "Select host",
       },
       helpNotes: {
         showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",

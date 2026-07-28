@@ -271,3 +271,19 @@ The bespoke pills in `packages/app/src/screens/settings/host-page.tsx:97-116`, `
 | Trigger-anchored menu                               | `packages/app/src/components/ui/dropdown-menu.tsx` (used in `sidebar-workspace-list.tsx`, theme picker)                                                                                                                                                                                                  |
 | Right-click / long-press menu                       | `packages/app/src/components/ui/context-menu.tsx` (used in `sidebar-workspace-list.tsx`)                                                                                                                                                                                                                 |
 | Headers (back, screen, menu)                        | `packages/app/src/components/headers/back-header.tsx`, `screen-header.tsx`, `menu-header.tsx`                                                                                                                                                                                                            |
+
+## 15. Keyboard control hints
+
+Desktop control surfaces with registered shortcuts use
+`packages/app/src/components/ui/shortcut-hint.tsx`. Holding the platform Mod key
+briefly reveals compact symbolic chords such as `⌃⇧M` or `⌘⇧M` as absolute
+callouts anchored just below their controls, so labels remain visible and the
+controls do not reflow. The callout uses the tooltip surface tokens (popover
+background, accent border, `shadow.md`). The action still routes through the normal keyboard
+shortcut registry and dispatcher; screens and active composers register scoped
+handlers for the controls they own.
+
+Control hints and sidebar workspace-number hints are separate state. The sidebar
+reveals the modifier that actually jumps to a workspace on that runtime, while
+control hints always reveal for the platform Mod key. Do not make a new control
+subscribe to the sidebar hint state.

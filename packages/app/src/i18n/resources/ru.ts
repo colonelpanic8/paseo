@@ -1900,6 +1900,7 @@ export const ru: TranslationResources = {
         queueMessage: "Сообщение в очереди",
         muteUnmuteVoiceMode: "Отключить голосовой режим /unmute",
         switchProject: "Сменить проект",
+        selectHost: "Выбрать хост",
       },
       helpNotes: {
         showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",
