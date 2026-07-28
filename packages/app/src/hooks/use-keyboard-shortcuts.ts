@@ -349,9 +349,11 @@ export function useKeyboardShortcuts({
       useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
     }
     if (key === "Shift") {
+      // Shift+Mod chords hide workspace badges while keeping control hints visible.
       const state = useKeyboardShortcutsStore.getState();
       if (state.altDown || state.cmdOrCtrlDown) {
-        state.resetModifiers();
+        state.setAltDown(false);
+        state.setCmdOrCtrlDown(false);
       }
     }
 
