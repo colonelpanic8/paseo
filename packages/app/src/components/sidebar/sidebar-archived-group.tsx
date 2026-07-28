@@ -2,15 +2,12 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react-native";
 import { isNative as platformIsNative, isWeb as platformIsWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
-import {
-  archivedWorkspacesQueryKey,
-  type ArchivedWorkspaceEntry,
-} from "@/hooks/use-archived-workspaces";
+import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import { ARCHIVED_GROUP_KEY } from "@/hooks/sidebar-status-view-model";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
@@ -63,7 +60,7 @@ export function SidebarArchivedGroup({
     <View style={styles.groupBlock}>
       <ArchivedGroupHeader collapsed={collapsed} />
       {!collapsed ? (
-        <View style={styles.rowListContainer} testID="sidebar-archived-group-rows">
+        <View testID="sidebar-archived-group-rows">
           {visibleEntries.map((entry) => (
             <ArchivedWorkspaceRow
               key={entry.workspaceKey}
@@ -172,7 +169,6 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const queryClient = useQueryClient();
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
 
@@ -184,11 +180,6 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
       }
       // The daemon picks unarchive vs. worktree restore; the client never decides.
       await client.restoreWorkspace(entry.workspaceId);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: archivedWorkspacesQueryKey(entry.serverId),
-      });
     },
     onError: (error: unknown) => {
       toast.error(
@@ -237,7 +228,11 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t("sidebar.workspace.archived.unarchive")}
+            accessibilityLabel={t(
+              isUnarchiving
+                ? "sidebar.workspace.archived.unarchiving"
+                : "sidebar.workspace.archived.unarchive",
+            )}
             disabled={isUnarchiving}
             onPress={handleUnarchive}
             style={styles.unarchiveButton}
@@ -297,7 +292,6 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
   },
-  rowListContainer: {},
   rowContainer: {
     position: "relative",
   },
