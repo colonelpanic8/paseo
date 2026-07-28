@@ -3,6 +3,7 @@ const path = require("node:path");
 const pkg = require("./package.json");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const appVariant = process.env.APP_VARIANT ?? "production";
+const appVersion = process.env.PASEO_APP_VERSION?.trim() || pkg.version;
 const isFdroidBuild = process.env.PASEO_FDROID_BUILD === "1";
 
 const buildProfile = isFdroidBuild
@@ -48,6 +49,20 @@ const buildProfile = isFdroidBuild
     };
 
 function getNativeBuildVersionCode(version) {
+  const override = process.env.PASEO_NATIVE_BUILD_VERSION_CODE?.trim();
+  if (override) {
+    const versionCode = Number(override);
+    if (
+      !/^\d+$/.test(override) ||
+      !Number.isSafeInteger(versionCode) ||
+      versionCode <= 0 ||
+      versionCode > 2_100_000_000
+    ) {
+      throw new Error(`PASEO_NATIVE_BUILD_VERSION_CODE is out of range: ${override}`);
+    }
+    return versionCode;
+  }
+
   const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version);
   if (!match) {
     throw new Error(`Cannot derive Android versionCode from non-semver version: ${version}`);
@@ -110,16 +125,20 @@ const variants = {
       fallbackRelativePath: "./.secrets/GoogleService-Info.debug.plist",
     }),
   },
+  assembly: {
+    name: "Paseo Assembly",
+    packageId: "sh.paseo.assembly",
+  },
 };
 
 const variant = variants[appVariant] ?? variants.production;
-const nativeBuildVersionCode = getNativeBuildVersionCode(pkg.version);
+const nativeBuildVersionCode = getNativeBuildVersionCode(appVersion);
 
 export default {
   expo: {
     name: variant.name,
     slug: "voice-mobile",
-    version: pkg.version,
+    version: appVersion,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "paseo",

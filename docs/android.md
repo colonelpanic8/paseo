@@ -4,10 +4,11 @@
 
 Controlled by `APP_VARIANT` in `packages/app/app.config.js` (vanilla Expo, no custom Gradle plugin):
 
-| Variant       | App name    | Package ID       |
-| ------------- | ----------- | ---------------- |
-| `production`  | Paseo       | `sh.paseo`       |
-| `development` | Paseo Debug | `sh.paseo.debug` |
+| Variant       | App name       | Package ID          |
+| ------------- | -------------- | ------------------- |
+| `production`  | Paseo          | `sh.paseo`          |
+| `development` | Paseo Debug    | `sh.paseo.debug`    |
+| `assembly`    | Paseo Assembly | `sh.paseo.assembly` |
 
 EAS profiles: `development`, `production`, and `production-apk` in `packages/app/eas.json`.
 
@@ -24,6 +25,13 @@ major * 1_000_000 + minor * 1_000 + patch
 Prerelease metadata is ignored, so `0.1.102-beta.1` and `0.1.102` both produce `1102`. The same value is used as the iOS `buildNumber` because `packages/app/eas.json` uses EAS's local app version source. Do not re-enable EAS remote version counters or Android `autoIncrement`; F-Droid and other source-based builders need the native build number to be visible in the repo.
 
 The formula reserves three digits each for minor and patch. If either reaches `1000`, change the formula before cutting that release.
+
+Source-based downstream distributions can set `PASEO_APP_VERSION` to control
+the displayed version and `PASEO_NATIVE_BUILD_VERSION_CODE` to provide their
+own positive Android/iOS build number. Normal releases leave both unset. A
+single-ABI F-Droid build multiplies the native build number by ten before
+adding its ABI suffix, so downstream overrides must leave enough room below
+Android's `2,100,000,000` limit.
 
 ## Prerequisites (local dev)
 
@@ -117,6 +125,11 @@ PASEO_FDROID_BUILD=1 APP_VARIANT=production npx expo prebuild --platform android
 cd android
 PASEO_FDROID_BUILD=1 ./gradlew assembleRelease --no-daemon --max-workers=1 -Dorg.gradle.parallel=false
 ```
+
+Custom assembly channels should additionally use `APP_VARIANT=assembly` and
+set `PASEO_APP_VERSION` plus `PASEO_NATIVE_BUILD_VERSION_CODE` consistently
+for both commands. The assembly variant has its own package ID, so it can be
+installed alongside the production app.
 
 The flag must be present for both prebuild and Gradle because Gradle starts Metro for the release bundle. Keep the source build serial and daemon-free as shown above: compiling every Expo module can exhaust memory when Gradle workers run in parallel. The profile enables source-built Expo modules, excludes the proprietary camera, Firebase notification, and Expo development-client native modules, disables EAS updates and Gradle dependency metadata, and substitutes JavaScript stubs for camera and notifications. The resulting app supports direct and pasted-link pairing but not QR scanning or push notifications.
 
