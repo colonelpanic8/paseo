@@ -32,6 +32,7 @@ import {
   findActiveFileMention,
   type FileMentionRange,
 } from "@/utils/file-mention-autocomplete";
+import type { ComposerSigils } from "@/composer/tokens/sigils";
 
 interface UseAgentAutocompleteInput {
   userInput: string;
@@ -44,6 +45,7 @@ interface UseAgentAutocompleteInput {
   onClientSlashCommand?: (command: ClientSlashCommand) => void;
   canExecuteClientSlashCommand?: boolean;
   pluginClientSlashCommands?: readonly PluginClientSlashCommand[];
+  sigils: ComposerSigils;
 }
 
 interface AgentAutocompleteKeyPressEvent {
@@ -172,6 +174,7 @@ const CLIENT_COMMAND_ICONS = {
 interface CommandOptionContext {
   query: string;
   pluginNames: ReadonlyMap<string, string>;
+  sigil: string;
   t: TFunction;
 }
 
@@ -182,10 +185,10 @@ function mapCommandToOption(
   const command = entry.command;
   const base = {
     id: command.name,
-    label: `/${command.name}`,
-    // The label carries a leading slash the query does not.
+    label: `${context.sigil}${command.name}`,
+    // The label carries a leading sigil the query does not.
     labelMatches: findHighlightRanges(context.query, command.name).map((range) => ({
-      start: range.start + 1,
+      start: range.start + context.sigil.length,
       length: range.length,
     })),
     argumentHint: command.argumentHint || undefined,
@@ -232,6 +235,7 @@ interface BuildAutocompleteOptionsInput {
   activeSlashCommand: SlashCommandRange | null;
   activeFileMention: FileMentionRange | null;
   fileSuggestions: DirectorySuggestionEntry[];
+  sigils: ComposerSigils;
   t: TFunction;
 }
 
@@ -256,10 +260,13 @@ function buildAutocompleteOptions(input: BuildAutocompleteOptionsInput): AgentAu
         if (entry.source === "built-in") return { source: "client", command: entry.command };
         return entry;
       });
-    const availableCommands: AvailableCommand[] =
-      input.activeSlashCommand?.position === "inline"
-        ? filterInlineSkillCommandEntries(providerCommands)
-        : rootCommands;
+    // The skill sigil always means skills-only. The command sigil keeps its
+    // existing split: full list at the start of the message, skills inline.
+    const skillsOnly =
+      input.activeSlashCommand?.menu === "skill" || input.activeSlashCommand?.position === "inline";
+    const availableCommands: AvailableCommand[] = skillsOnly
+      ? filterInlineSkillCommandEntries(providerCommands)
+      : rootCommands;
     const matches = filterAndRankCommandAutocompleteEntries(
       availableCommands,
       input.commandFilterQuery,
@@ -267,6 +274,7 @@ function buildAutocompleteOptions(input: BuildAutocompleteOptionsInput): AgentAu
     const context = {
       query: input.commandFilterQuery,
       pluginNames: input.pluginNames,
+      sigil: input.activeSlashCommand?.sigil ?? input.sigils.command,
       t: input.t,
     };
     return orderAutocompleteOptions(matches).map((entry) => mapCommandToOption(entry, context));
@@ -501,6 +509,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     onClientSlashCommand,
     canExecuteClientSlashCommand,
     pluginClientSlashCommands = [],
+    sigils,
   } = input;
 
   const activeSlashCommand = useMemo(
@@ -508,8 +517,9 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       findActiveSlashCommand({
         text: userInput,
         cursorIndex,
+        sigils,
       }),
-    [cursorIndex, userInput],
+    [cursorIndex, userInput, sigils],
   );
   const showCommandAutocomplete = activeSlashCommand !== null;
   const commandFilterQuery = activeSlashCommand?.query ?? "";
@@ -640,6 +650,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         fileSuggestions: fileSuggestionsQuery.data ?? [],
         isDraftContext,
         mode,
+        sigils,
         t,
       });
     if (mode === "file") {
@@ -675,6 +686,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     isDraftContext,
     isVisible,
     mode,
+    sigils,
     pluginClientSlashCommands,
     pluginNames,
     providerLabel,
@@ -709,7 +721,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
 
       if (selectedIsCommand) {
         if (!current.slashCommand) {
-          setUserInput(`/${selected.id} `);
+          setUserInput(`${sigils.command}${selected.id} `);
           onAutocompleteApplied?.();
           return;
         }
@@ -742,6 +754,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       cursorIndex,
       activeFileMention,
       activeSlashCommand,
+      sigils,
     ],
   );
 

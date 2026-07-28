@@ -2503,6 +2503,14 @@ export const ru: TranslationResources = {
           "mod-enter": "{{modifier}}+Enter",
         },
       },
+      commandTrigger: {
+        label: "Триггер команд",
+        description: "Открывает полный список команд в начале сообщения.",
+      },
+      skillTrigger: {
+        label: "Триггер навыков",
+        description: "Открывает список навыков в любом месте сообщения.",
+      },
       serviceUrls: {
         options: {
           ask: "Спрашивать",

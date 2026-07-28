@@ -82,6 +82,11 @@ import { FilesSection } from "@/screens/settings/files-section";
 import { Button } from "@/components/ui/button";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  COMPOSER_SIGIL_CHOICES,
+  resolveComposerSigils,
+  type ComposerSigil,
+} from "@/composer/tokens/sigils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
 import { DesktopNotificationsSection } from "@/desktop/components/desktop-notifications-section";
@@ -145,6 +150,11 @@ import {
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { isNative, isWeb } from "@/constants/platform";
 import { useOpenOnboarding } from "@/onboarding";
+
+const COMPOSER_SIGIL_OPTIONS = COMPOSER_SIGIL_CHOICES.map((choice) => ({
+  value: choice,
+  label: choice,
+}));
 
 // ---------------------------------------------------------------------------
 // View model
@@ -330,6 +340,8 @@ function getActiveLocale(language: string | undefined): SupportedLocale {
 interface GeneralSectionProps {
   settings: AppSettings;
   handleLanguageChange: (language: AppLanguage) => void;
+  handleCommandTriggerSigilChange: (sigil: ComposerSigil) => void;
+  handleSkillTriggerSigilChange: (sigil: ComposerSigil) => void;
 }
 
 interface LanguageMenuItemProps {
@@ -356,9 +368,18 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
   );
 }
 
-function GeneralSection({ settings, handleLanguageChange }: GeneralSectionProps) {
+function GeneralSection({
+  settings,
+  handleLanguageChange,
+  handleCommandTriggerSigilChange,
+  handleSkillTriggerSigilChange,
+}: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
+  const activeSigils = resolveComposerSigils({
+    command: settings.commandTriggerSigil,
+    skill: settings.skillTriggerSigil,
+  });
   const selectedLanguageOption = LANGUAGE_OPTIONS.find(
     (option) => option.value === settings.language,
   );
@@ -372,6 +393,38 @@ function GeneralSection({ settings, handleLanguageChange }: GeneralSectionProps)
   return (
     <SettingsSection title={t("settings.general.title")}>
       <View style={settingsStyles.card}>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.general.commandTrigger.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.commandTrigger.description")}
+            </Text>
+          </View>
+          <SegmentedControl
+            size="sm"
+            testID="settings-command-trigger"
+            value={activeSigils.command}
+            onValueChange={handleCommandTriggerSigilChange}
+            options={COMPOSER_SIGIL_OPTIONS}
+          />
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.general.skillTrigger.label")}</Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.skillTrigger.description")}
+            </Text>
+          </View>
+          <SegmentedControl
+            size="sm"
+            testID="settings-skill-trigger"
+            value={activeSigils.skill}
+            onValueChange={handleSkillTriggerSigilChange}
+            options={COMPOSER_SIGIL_OPTIONS}
+          />
+        </View>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
@@ -1151,6 +1204,36 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     [updateSettings],
   );
 
+  const handleCommandTriggerSigilChange = useCallback(
+    (sigil: ComposerSigil) => {
+      const current = resolveComposerSigils({
+        command: settings.commandTriggerSigil,
+        skill: settings.skillTriggerSigil,
+      });
+      void updateSettings(
+        sigil === current.skill
+          ? { commandTriggerSigil: sigil, skillTriggerSigil: current.command }
+          : { commandTriggerSigil: sigil },
+      );
+    },
+    [settings.commandTriggerSigil, settings.skillTriggerSigil, updateSettings],
+  );
+
+  const handleSkillTriggerSigilChange = useCallback(
+    (sigil: ComposerSigil) => {
+      const current = resolveComposerSigils({
+        command: settings.commandTriggerSigil,
+        skill: settings.skillTriggerSigil,
+      });
+      void updateSettings(
+        sigil === current.command
+          ? { skillTriggerSigil: sigil, commandTriggerSigil: current.skill }
+          : { skillTriggerSigil: sigil },
+      );
+    },
+    [settings.commandTriggerSigil, settings.skillTriggerSigil, updateSettings],
+  );
+
   const handlePlaybackTest = useCallback(async () => {
     if (!voiceAudioEngine || isPlaybackTestRunning) {
       return;
@@ -1316,7 +1399,12 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
         case "general":
           return (
             <>
-              <GeneralSection settings={settings} handleLanguageChange={handleLanguageChange} />
+              <GeneralSection
+                settings={settings}
+                handleLanguageChange={handleLanguageChange}
+                handleCommandTriggerSigilChange={handleCommandTriggerSigilChange}
+                handleSkillTriggerSigilChange={handleSkillTriggerSigilChange}
+              />
               <SendingSection />
               {isDesktopApp ? <OpenLocationSection /> : null}
             </>
