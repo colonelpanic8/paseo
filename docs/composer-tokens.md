@@ -27,9 +27,9 @@ Detection rules:
 
 - Configured triggers open autocomplete but are not tokens by themselves. A selection
   explicitly commits the chosen command or skill to canonical slash syntax.
-- Enter submits text that still contains a non-canonical configured trigger. Committing
-  that autocomplete option requires Tab or a click, so a shell variable cannot be
-  rewritten by the composer's submit key.
+- Enter or Tab commits the highlighted autocomplete option, regardless of which
+  configured trigger opened the menu. Plain text is preserved only when no option is
+  available to select.
 - A leading canonical slash means a command; a canonical slash after whitespace means a
   skill. Slash-delimited paths are not tokens.
 - A slash glued to a preceding word is prose. `and/or` and `/tmp/project` therefore stay
@@ -59,9 +59,7 @@ rather than rejecting the choice.
 The sigils configure autocomplete and presentation, not the provider protocol. Choosing
 an option writes provider-compatible `/name` into the draft; the web mirror displays the
 active configured sigil over that one-character canonical prefix. If the catalog has not
-loaded, there is nothing to choose and submission preserves the user's exact text. This
-explicit selection boundary prevents a configured `$` from silently rewriting shell
-variables.
+loaded, there is nothing to choose and submission preserves the user's exact text.
 
 ## Web: a mirror layer
 

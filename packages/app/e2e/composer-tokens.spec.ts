@@ -44,7 +44,7 @@ test("composer token pills and trigger settings stay aligned", async ({
   await expect(shellVariableMessage).not.toContainText("check /HOME");
 
   await composer.fill("please run $release-beta");
-  await composer.press("Tab");
+  await composer.press("Enter");
   await expect(composer).toHaveValue("please run /release-beta ");
   await expect(composer).toHaveAttribute("data-composer-tokenized", "");
 
@@ -88,7 +88,7 @@ test("composer token pills and trigger settings stay aligned", async ({
 
   await clickSettingsBackToWorkspace(page);
   await composer.fill("please run !release-beta");
-  await composer.press("Tab");
+  await composer.press("Enter");
   await expect(composer).toHaveValue("please run /release-beta ");
   await expect(composer).toHaveAttribute("data-composer-tokenized", "");
   await expect(mirror.getByText("!release-beta", { exact: true })).toBeVisible();
