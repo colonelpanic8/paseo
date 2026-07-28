@@ -44,6 +44,8 @@ import { loadDesktopSettings, useDesktopSettings } from "@/desktop/settings/desk
 import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { getHostColorFillStyle } from "@/styles/host-color";
+import { HOST_COLOR_KEYS, type HostColorKey } from "@/types/host-connection";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -355,6 +357,7 @@ export function HostSettingsPage({
   serverId: string;
   onHostRemoved?: () => void;
 }) {
+  const { t } = useTranslation();
   const host = useHostProfile(serverId);
   const isLocalDaemon = useIsLocalDaemon(serverId);
 
@@ -373,12 +376,105 @@ export function HostSettingsPage({
 
       <HostStatusBadges serverId={serverId} />
 
+      <SettingsSection title={t("settings.host.daemon.color.section")}>
+        <HostColorCard host={host} />
+      </SettingsSection>
+
       {isLocalDaemon ? <LocalDaemonSection /> : null}
 
       {!isLocalDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
 
       <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
     </View>
+  );
+}
+
+const HOST_COLOR_LABEL_KEYS = {
+  none: "settings.host.daemon.color.options.none",
+  blue: "settings.host.daemon.color.options.blue",
+  green: "settings.host.daemon.color.options.green",
+  amber: "settings.host.daemon.color.options.amber",
+  orange: "settings.host.daemon.color.options.orange",
+  red: "settings.host.daemon.color.options.red",
+  purple: "settings.host.daemon.color.options.purple",
+} as const;
+
+/** Picks the palette key that tints this host wherever it is labelled. */
+function HostColorCard({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const { setHostColor } = useHostMutations();
+  const selectedColor = host.color ?? null;
+
+  const handleSelect = useCallback(
+    (color: HostColorKey | null) => {
+      void setHostColor(host.serverId, color);
+    },
+    [host.serverId, setHostColor],
+  );
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-color-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("settings.host.daemon.color.title")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.host.daemon.color.hint")}</Text>
+        </View>
+        <View style={styles.colorSwatchRow}>
+          <HostColorSwatch
+            color={null}
+            selected={selectedColor === null}
+            label={t(HOST_COLOR_LABEL_KEYS.none)}
+            onSelect={handleSelect}
+          />
+          {HOST_COLOR_KEYS.map((color) => (
+            <HostColorSwatch
+              key={color}
+              color={color}
+              selected={selectedColor === color}
+              label={t(HOST_COLOR_LABEL_KEYS[color])}
+              onSelect={handleSelect}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function HostColorSwatch({
+  color,
+  selected,
+  label,
+  onSelect,
+}: {
+  color: HostColorKey | null;
+  selected: boolean;
+  label: string;
+  onSelect: (color: HostColorKey | null) => void;
+}) {
+  const handlePress = useCallback(() => onSelect(color), [color, onSelect]);
+  const accessibilityState = useMemo(() => ({ selected }), [selected]);
+  const containerStyle = useMemo(
+    () => [styles.colorSwatch, selected && styles.colorSwatchSelected],
+    [selected],
+  );
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={accessibilityState}
+      style={containerStyle}
+      testID={`host-page-color-${color ?? "none"}`}
+    >
+      {color ? (
+        <View style={[styles.colorSwatchFill, getHostColorFillStyle(color)]} />
+      ) : (
+        <View style={[styles.colorSwatchFill, styles.colorSwatchFillNone]} />
+      )}
+    </Pressable>
   );
 }
 
@@ -1855,6 +1951,33 @@ const styles = StyleSheet.create((theme) => ({
   updateFailure: {
     marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[4],
+  },
+  colorSwatchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+    flexShrink: 0,
+  },
+  colorSwatch: {
+    width: 26,
+    height: 26,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorSwatchSelected: {
+    borderColor: theme.colors.foreground,
+  },
+  colorSwatchFill: {
+    width: 18,
+    height: 18,
+    borderRadius: theme.borderRadius.full,
+  },
+  colorSwatchFillNone: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   identityEditButton: {
     padding: theme.spacing[1],

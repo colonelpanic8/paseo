@@ -2006,6 +2006,20 @@ export const ar: TranslationResources = {
           placeholder: "بلدي Host",
           submit: "إعادة تسمية",
         },
+        color: {
+          section: "المظهر",
+          title: "اللون",
+          hint: "يلوّن تسمية هذا المضيف في الشريط الجانبي",
+          options: {
+            none: "بلا",
+            blue: "أزرق",
+            green: "أخضر",
+            amber: "كهرماني",
+            orange: "برتقالي",
+            red: "أحمر",
+            purple: "بنفسجي",
+          },
+        },
         restart: {
           title: "إعادة تشغيل البرنامج الخفي",
           hint: "إعادة تشغيل عملية البرنامج الخفي. سيتم إعادة الاتصال بالتطبيق تلقائيًا",

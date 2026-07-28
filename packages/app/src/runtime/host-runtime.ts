@@ -11,6 +11,7 @@ import {
   normalizeStoredHostProfile,
   upsertHostConnectionInProfiles,
   registryHasConnection,
+  type HostColorKey,
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
@@ -1790,6 +1791,14 @@ export class HostRuntimeStore {
     await this.persistHosts();
   }
 
+  async setHostColor(serverId: string, color: HostColorKey | null): Promise<void> {
+    const next = this.hosts.map((h) =>
+      h.serverId === serverId ? { ...h, color, updatedAt: new Date().toISOString() } : h,
+    );
+    this.setHostsAndSync(next);
+    await this.persistHosts();
+  }
+
   async removeHost(serverId: string): Promise<void> {
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     this.setHostsAndSync(remaining);
@@ -2421,6 +2430,7 @@ export interface HostMutations {
     label?: string,
   ) => Promise<HostProfile>;
   renameHost: (serverId: string, label: string) => Promise<void>;
+  setHostColor: (serverId: string, color: HostColorKey | null) => Promise<void>;
   removeHost: (serverId: string) => Promise<void>;
   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
 }
@@ -2435,6 +2445,7 @@ export function useHostMutations(): HostMutations {
       upsertConnectionFromOffer: (offer, label) => store.upsertConnectionFromOffer(offer, label),
       upsertConnectionFromOfferUrl: (url, label) => store.upsertConnectionFromOfferUrl(url, label),
       renameHost: (serverId, label) => store.renameHost(serverId, label),
+      setHostColor: (serverId, color) => store.setHostColor(serverId, color),
       removeHost: (serverId) => store.removeHost(serverId),
       removeConnection: (serverId, connectionId) => store.removeConnection(serverId, connectionId),
     }),

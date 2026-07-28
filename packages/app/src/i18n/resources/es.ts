@@ -2056,6 +2056,20 @@ export const es: TranslationResources = {
           placeholder: "MiHost",
           submit: "Cambiar nombre",
         },
+        color: {
+          section: "Apariencia",
+          title: "Color",
+          hint: "Colorea la etiqueta de este host en la barra lateral",
+          options: {
+            none: "Ninguno",
+            blue: "Azul",
+            green: "Verde",
+            amber: "Ámbar",
+            orange: "Naranja",
+            red: "Rojo",
+            purple: "Morado",
+          },
+        },
         restart: {
           title: "Reiniciar demonio",
           hint: "Reinicia el proceso del demonio. La aplicación se volverá a conectar automáticamente",

@@ -1984,6 +1984,20 @@ export const zhCN: TranslationResources = {
           placeholder: "我的 Host",
           submit: "重命名",
         },
+        color: {
+          section: "外观",
+          title: "颜色",
+          hint: "在侧边栏中为该 Host 的标签着色",
+          options: {
+            none: "无",
+            blue: "蓝色",
+            green: "绿色",
+            amber: "琥珀色",
+            orange: "橙色",
+            red: "红色",
+            purple: "紫色",
+          },
+        },
         restart: {
           title: "重启 Daemon",
           hint: "重启 Daemon 进程。应用会自动重新连接",
