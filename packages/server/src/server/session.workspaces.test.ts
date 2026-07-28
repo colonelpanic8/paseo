@@ -8012,6 +8012,143 @@ test("workspace.pin.set.request stores the pin timestamp and emits an updated de
   });
 });
 
+function createSnoozeSessionFixture() {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = asTestSession(
+    createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) }),
+  );
+  const project = createPersistedProjectRecord({
+    projectId: "proj-1",
+    rootPath: REPO_CWD,
+    kind: "git",
+    displayName: "acme/repo",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: "ws-1",
+    projectId: project.projectId,
+    cwd: REPO_CWD,
+    kind: "local_checkout",
+    displayName: "main",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+  const workspaces = new Map([[workspace.workspaceId, workspace]]);
+  session.projectRegistry.get = async (id: string) => (id === project.projectId ? project : null);
+  session.projectRegistry.list = async () => [project];
+  session.workspaceRegistry.list = async () => Array.from(workspaces.values());
+  session.workspaceRegistry.update = async (id, updater) => {
+    const existing = workspaces.get(id);
+    if (!existing) return null;
+    const updated = updater(existing);
+    workspaces.set(id, updated);
+    return updated;
+  };
+  session.workspaceUpdatesSubscription = {
+    subscriptionId: "sub-workspaces",
+    filter: {},
+    isBootstrapping: false,
+    lastEmittedByWorkspaceId: new Map(),
+    pendingUpdatesByWorkspaceId: new Map(),
+  };
+  return { emitted, session, workspace, workspaces };
+}
+
+test("workspace.snooze.set.request stores the snooze pair and emits an updated descriptor", async () => {
+  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+  const snoozedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: workspace.workspaceId,
+    snoozedUntil,
+    requestId: "req-snooze-1",
+  });
+
+  const response = findByType(emitted, "workspace.snooze.set.response");
+  expect(response?.payload).toMatchObject({
+    requestId: "req-snooze-1",
+    workspaceId: "ws-1",
+    accepted: true,
+    error: null,
+  });
+  expect(response?.payload.snoozeStatus).toEqual({
+    snoozedAt: expect.any(String),
+    snoozedUntil,
+  });
+  expect(workspaces.get("ws-1")?.snoozeStatus).toEqual(response?.payload.snoozeStatus);
+  expect(findByType(emitted, "workspace_update")?.payload).toMatchObject({
+    kind: "upsert",
+    workspace: {
+      id: "ws-1",
+      snoozeStatus: response?.payload.snoozeStatus,
+    },
+  });
+});
+
+test("workspace.snooze.set.request with null wakes the workspace", async () => {
+  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+  workspaces.set(workspace.workspaceId, {
+    ...workspace,
+    snoozeStatus: {
+      snoozedAt: "2026-03-01T13:00:00.000Z",
+      snoozedUntil: "2099-03-02T13:00:00.000Z",
+    },
+  });
+
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: workspace.workspaceId,
+    snoozedUntil: null,
+    requestId: "req-snooze-2",
+  });
+
+  const response = findByType(emitted, "workspace.snooze.set.response");
+  expect(response?.payload).toMatchObject({
+    requestId: "req-snooze-2",
+    workspaceId: "ws-1",
+    accepted: true,
+    snoozeStatus: null,
+    error: null,
+  });
+  expect(workspaces.get("ws-1")?.snoozeStatus).toBeNull();
+});
+
+test("workspace.snooze.set.request rejects past wake times and unknown workspaces", async () => {
+  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: workspace.workspaceId,
+    snoozedUntil: "2020-01-01T00:00:00.000Z",
+    requestId: "req-snooze-3",
+  });
+  const pastResponse = findByType(emitted, "workspace.snooze.set.response");
+  expect(pastResponse?.payload).toMatchObject({
+    requestId: "req-snooze-3",
+    accepted: false,
+    snoozeStatus: null,
+  });
+  expect(pastResponse?.payload.error).toMatch(/future/i);
+  expect(workspaces.get("ws-1")?.snoozeStatus).toBeNull();
+
+  emitted.length = 0;
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: "missing-ws",
+    snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    requestId: "req-snooze-4",
+  });
+  expect(findByType(emitted, "workspace.snooze.set.response")?.payload).toMatchObject({
+    requestId: "req-snooze-4",
+    workspaceId: "missing-ws",
+    accepted: false,
+    snoozeStatus: null,
+    error: "Workspace not found",
+  });
+});
+
 test("workspace.title.set.request with whitespace-only title clears the title", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const session = asTestSession(

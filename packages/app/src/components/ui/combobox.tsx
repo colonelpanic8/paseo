@@ -113,8 +113,6 @@ export interface ComboboxProps {
   presentation?: "push" | "replace";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** Called after the mobile bottom sheet finishes its dismiss animation. */
-  onMobileDismiss?: () => void;
   desktopPlacement?: ComboboxDesktopPlacement;
   /**
    * Prevents an initial frame at 0,0 by hiding desktop content until floating
@@ -1290,7 +1288,6 @@ export function Combobox({
   presentation,
   open,
   onOpenChange,
-  onMobileDismiss,
   desktopPlacement = "bottom-start",
   desktopPreventInitialFlash = true,
   desktopMinWidth,
@@ -1420,10 +1417,6 @@ export function Combobox({
     isEnabled: isMobile,
     onClose: handleClose,
   });
-  const handleMobileSheetDismiss = useCallback(() => {
-    handleSheetDismiss();
-    onMobileDismiss?.();
-  }, [handleSheetDismiss, onMobileDismiss]);
 
   const normalizedSearch = searchable ? searchQuery.trim().toLowerCase() : "";
   const sanitizedSearchValue = searchQuery.trim();
@@ -1575,7 +1568,7 @@ export function Combobox({
         bottomSheetRef={bottomSheetRef}
         snapPoints={snapPoints}
         handleSheetChange={handleSheetChange}
-        handleSheetDismiss={handleMobileSheetDismiss}
+        handleSheetDismiss={handleSheetDismiss}
         handleIndicatorStyle={handleIndicatorStyle}
         titleColor={titleColor}
         title={resolvedTitle}

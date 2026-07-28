@@ -10,10 +10,6 @@ import {
   isDelegatedAgent,
   PARENT_AGENT_ID_LABEL,
 } from "@getpaseo/protocol/agent-labels";
-import {
-  clearAgentSnoozeStatusForAttention,
-  type AgentSnoozeStatus,
-} from "@getpaseo/protocol/agent-snooze";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -243,7 +239,6 @@ type ProviderClientMap = Partial<Record<AgentProvider, AgentClient>>;
 
 export interface CreateAgentOptions {
   labels?: Record<string, string>;
-  snoozeStatus?: AgentSnoozeStatus | null;
   initialPrompt?: string;
   env?: Record<string, string>;
   persistSession?: boolean;
@@ -306,12 +301,6 @@ function resolveInitialAttention(input: AttentionState | undefined): AttentionSt
   };
 }
 
-function resolveInitialSnoozeStatus(
-  input: AgentSnoozeStatus | null | undefined,
-): AgentSnoozeStatus | null {
-  return input ?? null;
-}
-
 interface StreamEventFlags {
   shouldDispatchEvent: boolean;
   shouldNotifyWaiters: boolean;
@@ -368,7 +357,6 @@ interface ManagedAgentBase {
    * User-defined labels for categorizing agents (e.g., { surface: "workspace" }).
    */
   labels: Record<string, string>;
-  snoozeStatus?: AgentSnoozeStatus | null;
 }
 
 type ManagedAgentWithSession = ManagedAgentBase & {
@@ -469,7 +457,6 @@ interface WriteLabelsResult {
 interface AgentMetadataPatch {
   title?: string;
   labels?: AgentLabelPatch;
-  snoozeStatus?: AgentSnoozeStatus | null;
 }
 
 const SYSTEM_ERROR_PREFIX = "[System Error]";
@@ -1105,7 +1092,6 @@ export class AgentManager {
     await this.requireExternalMcpSupport(session, storedConfig);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       labels: options.labels,
-      snoozeStatus: options.snoozeStatus ?? null,
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,
@@ -1131,7 +1117,6 @@ export class AgentManager {
       updatedAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
-      snoozeStatus?: AgentSnoozeStatus | null;
       workspaceId?: string;
       owner?: AgentOwner;
     },
@@ -1151,7 +1136,6 @@ export class AgentManager {
       updatedAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
-      snoozeStatus?: AgentSnoozeStatus | null;
       workspaceId?: string;
       owner?: AgentOwner;
     },
@@ -1343,7 +1327,6 @@ export class AgentManager {
       handedToRegistration = true;
       return this.registerSession(session, storedConfig, agentId, {
         labels: existing.labels,
-        snoozeStatus: existing.snoozeStatus ?? null,
         workspaceId: existing.workspaceId,
         owner: existing.owner,
         createdAt: existing.createdAt,
@@ -1613,7 +1596,6 @@ export class AgentManager {
         attention: { requiresAttention: false },
         internal: record.internal,
         labels: record.labels,
-        snoozeStatus: record.snoozeStatus ?? null,
       },
     });
   }
@@ -1732,50 +1714,6 @@ export class AgentManager {
     return { record: nextRecord, live: false };
   }
 
-  private buildSnoozeStatus(snoozeUntil: string | null, now: Date): AgentSnoozeStatus | null {
-    if (snoozeUntil === null) {
-      return null;
-    }
-    const snoozedUntilMs = Date.parse(snoozeUntil);
-    if (!(snoozedUntilMs > now.getTime())) {
-      throw new Error("Agent snooze wake time must be a valid future timestamp");
-    }
-    return {
-      status: "snoozed",
-      snoozedAt: now.toISOString(),
-      snoozedUntil: new Date(snoozedUntilMs).toISOString(),
-    };
-  }
-
-  private async writeSnoozeStatus(agentId: string, snoozeUntil: string | null): Promise<void> {
-    const liveAgent = this.agents.get(agentId);
-    if (liveAgent) {
-      if (
-        snoozeUntil !== null &&
-        (liveAgent.attention.requiresAttention || liveAgent.pendingPermissions.size > 0)
-      ) {
-        throw new Error("Agent needs attention and cannot be snoozed");
-      }
-      liveAgent.snoozeStatus = this.buildSnoozeStatus(snoozeUntil, new Date());
-      this.touchUpdatedAt(liveAgent);
-      await this.persistSnapshot(liveAgent);
-      this.emitState(liveAgent, { persist: false });
-      return;
-    }
-
-    const registry = this.requireRegistry();
-    const record = await registry.get(agentId);
-    if (!record) {
-      throw new Error(`Agent not found: ${agentId}`);
-    }
-    if (snoozeUntil !== null && record.requiresAttention) {
-      throw new Error("Agent needs attention and cannot be snoozed");
-    }
-    await this.writeStoredMetadata(agentId, {
-      snoozeStatus: this.buildSnoozeStatus(snoozeUntil, new Date()),
-    });
-  }
-
   private async writeStoredMetadata(
     agentId: string,
     patch: AgentMetadataPatch,
@@ -1790,7 +1728,6 @@ export class AgentManager {
       ...record,
       ...(patch.title ? { title: patch.title } : {}),
       ...(patch.labels ? { labels: applyLabelPatch(record.labels, patch.labels) } : {}),
-      ...(patch.snoozeStatus !== undefined ? { snoozeStatus: patch.snoozeStatus } : {}),
       updatedAt: this.nextStoredUpdatedAt(record),
     };
     await registry.upsert(nextRecord);
@@ -1936,7 +1873,6 @@ export class AgentManager {
     updates: {
       title?: string;
       labels?: Record<string, string>;
-      snoozeUntil?: string | null;
     },
   ): Promise<void> {
     const liveAgent = this.getAgent(agentId);
@@ -1947,28 +1883,10 @@ export class AgentManager {
       if (updates.labels) {
         await this.writeLabels(agentId, updates.labels);
       }
-      if (updates.snoozeUntil !== undefined) {
-        await this.writeSnoozeStatus(agentId, updates.snoozeUntil);
-      }
       return;
     }
 
-    const storedPatch: AgentMetadataPatch = {
-      ...(updates.title ? { title: updates.title } : {}),
-      ...(updates.labels ? { labels: updates.labels } : {}),
-    };
-    if (updates.snoozeUntil !== undefined) {
-      const registry = this.requireRegistry();
-      const record = await registry.get(agentId);
-      if (!record) {
-        throw new Error(`Agent not found: ${agentId}`);
-      }
-      if (updates.snoozeUntil !== null && record.requiresAttention) {
-        throw new Error("Agent needs attention and cannot be snoozed");
-      }
-      storedPatch.snoozeStatus = this.buildSnoozeStatus(updates.snoozeUntil, new Date());
-    }
-    await this.writeStoredMetadata(agentId, storedPatch);
+    await this.writeStoredMetadata(agentId, updates);
   }
 
   async runAgent(
@@ -2885,7 +2803,6 @@ export class AgentManager {
       updatedAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
-      snoozeStatus?: AgentSnoozeStatus | null;
       timeline?: AgentTimelineItem[];
       timelineRows?: AgentTimelineRow[];
       timelineNextSeq?: number;
@@ -3044,7 +2961,6 @@ export class AgentManager {
           updatedAt?: Date;
           lastUserMessageAt?: Date | null;
           labels?: Record<string, string>;
-          snoozeStatus?: AgentSnoozeStatus | null;
           historyPrimed?: boolean;
           lastUsage?: AgentUsage;
           lastError?: string;
@@ -3092,7 +3008,6 @@ export class AgentManager {
       attention: resolveInitialAttention(options?.attention),
       internal: config.internal ?? false,
       labels: options?.labels ?? {},
-      snoozeStatus: resolveInitialSnoozeStatus(options?.snoozeStatus),
     } as ActiveManagedAgent;
   }
 
@@ -4161,14 +4076,6 @@ export class AgentManager {
   private emitState(agent: ManagedAgent, options?: { persist?: boolean }): void {
     // Keep attention as an edge-triggered unread signal, not a level signal.
     this.checkAndSetAttention(agent);
-    if (agent.pendingPermissions.size > 0) {
-      agent.snoozeStatus = null;
-    } else if (agent.attention.requiresAttention) {
-      agent.snoozeStatus = clearAgentSnoozeStatusForAttention(
-        agent.snoozeStatus,
-        agent.attention.attentionTimestamp,
-      );
-    }
     if (options?.persist !== false) {
       this.enqueueBackgroundPersist(agent);
     }
