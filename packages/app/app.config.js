@@ -5,6 +5,7 @@ const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const { getNativeReleaseVersion } = require("./native-release-version");
 const appVariant = process.env.APP_VARIANT ?? "production";
+const appVersion = process.env.PASEO_APP_VERSION?.trim() || pkg.version;
 const isFdroidBuild = process.env.PASEO_FDROID_BUILD === "1";
 const isProfileBuild = process.env.PASEO_PROFILE_BUILD === "1";
 
@@ -48,6 +49,31 @@ const buildProfile = isFdroidBuild
       ],
     };
 
+function getAssemblyNativeReleaseVersion(version) {
+  const override = process.env.PASEO_NATIVE_BUILD_VERSION_CODE?.trim();
+  if (!override) {
+    return getNativeReleaseVersion(version);
+  }
+
+  const versionCode = Number(override);
+  if (
+    !/^\d+$/.test(override) ||
+    !Number.isSafeInteger(versionCode) ||
+    versionCode <= 0 ||
+    versionCode > 2_100_000_000
+  ) {
+    throw new Error(`PASEO_NATIVE_BUILD_VERSION_CODE is out of range: ${override}`);
+  }
+
+  // An assembly build names its own version and versionCode, so it is not
+  // required to be a release-shaped semver the upstream deriver accepts.
+  return {
+    appVersion: version,
+    androidVersionCode: versionCode,
+    iosBuildNumber: String(versionCode),
+  };
+}
+
 function resolveSecretFile(params) {
   const fromEnv = process.env[params.envKey];
   if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
@@ -87,10 +113,14 @@ const variants = {
       fallbackRelativePath: "./.secrets/GoogleService-Info.debug.plist",
     }),
   },
+  assembly: {
+    name: "Paseo Assembly",
+    packageId: "sh.paseo.assembly",
+  },
 };
 
 const variant = variants[appVariant] ?? variants.production;
-const nativeReleaseVersion = getNativeReleaseVersion(pkg.version);
+const nativeReleaseVersion = getAssemblyNativeReleaseVersion(appVersion);
 
 export default {
   expo: {
