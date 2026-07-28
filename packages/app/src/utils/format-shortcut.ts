@@ -65,7 +65,7 @@ export function formatCompactShortcut(keys: ShortcutKey[], os: ShortcutOs): stri
     shift: "⇧",
     alt: "⌥",
     ctrl: "⌃",
-    meta: "⌘",
+    meta: os === "mac" ? "⌘" : "⊞",
   };
 
   return keys

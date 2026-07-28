@@ -2,6 +2,7 @@ import { forwardRef, useCallback, type ComponentType } from "react";
 import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
+import type { ShortcutHintPlacement } from "@/components/ui/shortcut-hint";
 import { useComposerControlLayout } from "@/composer/agent-controls/layout-context";
 import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
 
@@ -26,6 +27,7 @@ interface AgentControlTriggerProps {
   accessibilityLabel: string;
   testID?: string;
   shortcutActionId?: string;
+  shortcutHintPlacement?: ShortcutHintPlacement;
   showShortcutHint?: boolean;
 }
 
@@ -45,6 +47,7 @@ export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
       accessibilityLabel,
       testID,
       shortcutActionId,
+      shortcutHintPlacement,
       showShortcutHint = false,
     },
     ref,
@@ -77,6 +80,7 @@ export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
         testID={testID}
         chevron={showCaret ? undefined : null}
         shortcutActionId={shortcutActionId}
+        shortcutHintPlacement={shortcutHintPlacement}
         showShortcutHint={showShortcutHint}
       >
         {isSheet ? (

@@ -1853,6 +1853,8 @@ export const ja: TranslationResources = {
         muteUnmuteVoiceMode: "音声モードのミュートを切り替え",
         switchProject: "プロジェクトを切り替え",
         selectHost: "ホストを選択",
+        toggleFastMode: "高速モードを切り替える",
+        togglePlanMode: "プランモードを切り替える",
       },
       helpNotes: {
         showKeyboardShortcuts:

@@ -93,15 +93,40 @@ interface AgentControlOption {
 
 type AgentControlSelector = "provider" | "mode" | "model" | "thinking" | `feature-${string}`;
 const COMPOSER_CONTROL_KEYBOARD_ACTIONS = [
-  "message-input.provider.pick",
   "message-input.model.pick",
   "message-input.thinking.pick",
   "message-input.fast-mode.toggle",
+  "message-input.plan-mode.toggle",
 ] as const;
 const FAST_MODE_FEATURE_ID = "fast_mode";
+const PLAN_MODE_FEATURE_ID = "plan_mode";
 
 function includesFeature(features: AgentFeature[] | undefined, featureId: string): boolean {
   return Boolean(features?.some((feature) => feature.id === featureId));
+}
+
+function getFeatureShortcutActionId(
+  featureId: string,
+): "toggle-fast-mode" | "toggle-plan-mode" | undefined {
+  if (featureId === FAST_MODE_FEATURE_ID) return "toggle-fast-mode";
+  if (featureId === PLAN_MODE_FEATURE_ID) return "toggle-plan-mode";
+  return undefined;
+}
+
+function getFeatureShortcutHintPlacement(
+  featureId: string,
+  separateAdjacentHints: boolean,
+): "shift-left" | "shift-right" | undefined {
+  if (!separateAdjacentHints) return undefined;
+  if (featureId === FAST_MODE_FEATURE_ID) return "shift-left";
+  if (featureId === PLAN_MODE_FEATURE_ID) return "shift-right";
+  return undefined;
+}
+
+function getToggleFeatureIdForAction(actionId: string): string | null {
+  if (actionId === "message-input.fast-mode.toggle") return FAST_MODE_FEATURE_ID;
+  if (actionId === "message-input.plan-mode.toggle") return PLAN_MODE_FEATURE_ID;
+  return null;
 }
 
 interface ControlledAgentControlsProps {
@@ -667,18 +692,6 @@ function ControlledAgentControls({
   const handleKeyboardAction = useCallback(
     (action: KeyboardActionDefinition): boolean => {
       if (disabled || !isActiveComposer) return false;
-      if (action.id === "message-input.provider.pick") {
-        if (!canSelectProvider) return false;
-        // Compact has no standalone provider combobox; its model sheet owns
-        // provider selection.
-        if (isCompact) {
-          if (!canSelectModel) return false;
-          setOpenSelector("model");
-          return true;
-        }
-        setOpenSelector("provider");
-        return true;
-      }
       if (action.id === "message-input.model.pick") {
         if (!canSelectModel) return false;
         setOpenSelector("model");
@@ -693,16 +706,16 @@ function ControlledAgentControls({
         }
         return true;
       }
-      if (action.id !== "message-input.fast-mode.toggle") return false;
-      const fastMode = features?.find((feature) => feature.id === FAST_MODE_FEATURE_ID);
-      if (fastMode?.type !== "toggle" || !onSetFeature) return false;
-      onSetFeature(fastMode.id, !fastMode.value);
+      const toggleFeatureId = getToggleFeatureIdForAction(action.id);
+      if (!toggleFeatureId) return false;
+      const toggleFeature = features?.find((feature) => feature.id === toggleFeatureId);
+      if (toggleFeature?.type !== "toggle" || !onSetFeature) return false;
+      onSetFeature(toggleFeature.id, !toggleFeature.value);
       onDropdownClose?.();
       return true;
     },
     [
       canSelectModel,
-      canSelectProvider,
       canSelectThinking,
       disabled,
       features,
@@ -939,6 +952,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
   );
   const handleOpenFeatures = useCallback(() => handleOpenSheet("features"), [handleOpenSheet]);
   const hasFastMode = includesFeature(features, FAST_MODE_FEATURE_ID);
+  const hasPlanMode = includesFeature(features, PLAN_MODE_FEATURE_ID);
   return (
     <>
       {providerOptions && providerOptions.length > 0 ? (
@@ -952,8 +966,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             accessibilityRole="button"
             accessibilityLabel={t("agentControls.provider.select")}
             testID="agent-provider-selector"
-            shortcutActionId="select-provider"
-            showShortcutHint={isActiveComposer}
           >
             <Text style={styles.modeBadgeText}>{displayProvider}</Text>
           </ComboboxTrigger>
@@ -1060,10 +1072,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             <ComposerToolbarGlyph size={glyphSize}>
               <Settings2 size={glyphSize} color={theme.colors.foregroundMuted} />
             </ComposerToolbarGlyph>
-            <ShortcutHint
-              actionId="toggle-fast-mode"
-              enabled={hasFastMode && isActiveComposer && !disabled}
-            />
           </Pressable>
           <AdaptiveModalSheet
             header={featuresSheetHeader}
@@ -1093,6 +1101,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             handleOpenChange={handleOpenChange}
             onSetFeature={onSetFeature}
             onActionComplete={onDropdownClose}
+            separateAdjacentHints={hasFastMode && hasPlanMode}
           />
         ))
       )}
@@ -1272,6 +1281,7 @@ function DesktopFeatureItem({
   handleOpenChange,
   onSetFeature,
   onActionComplete,
+  separateAdjacentHints,
 }: {
   feature: AgentFeature;
   disabled: boolean;
@@ -1279,6 +1289,7 @@ function DesktopFeatureItem({
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   onSetFeature?: (featureId: string, value: unknown) => void;
   onActionComplete?: () => void;
+  separateAdjacentHints: boolean;
 }) {
   const { theme } = useUnistyles();
   const { isActiveComposer } = useComposerKeyboardScope();
@@ -1335,7 +1346,11 @@ function DesktopFeatureItem({
             onPress={handleTogglePress}
             accessibilityLabel={getFeatureTooltip(feature)}
             testID={`agent-feature-${feature.id}`}
-            shortcutActionId={feature.id === FAST_MODE_FEATURE_ID ? "toggle-fast-mode" : undefined}
+            shortcutActionId={getFeatureShortcutActionId(feature.id)}
+            shortcutHintPlacement={getFeatureShortcutHintPlacement(
+              feature.id,
+              separateAdjacentHints,
+            )}
             showShortcutHint={isActiveComposer}
           />
         </TooltipTrigger>
@@ -1453,7 +1468,7 @@ function SheetFeatureItem({
         onPress={handleTogglePress}
         accessibilityLabel={getFeatureTooltip(feature)}
         testID={`agent-feature-${feature.id}`}
-        shortcutActionId={feature.id === FAST_MODE_FEATURE_ID ? "toggle-fast-mode" : undefined}
+        shortcutActionId={getFeatureShortcutActionId(feature.id)}
         showShortcutHint={isActiveComposer}
       />
     );

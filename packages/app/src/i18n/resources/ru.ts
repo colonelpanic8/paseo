@@ -1875,6 +1875,8 @@ export const ru: TranslationResources = {
         muteUnmuteVoiceMode: "Отключить голосовой режим /unmute",
         switchProject: "Сменить проект",
         selectHost: "Выбрать хост",
+        toggleFastMode: "Переключить быстрый режим",
+        togglePlanMode: "Переключить режим планирования",
       },
       helpNotes: {
         showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",
