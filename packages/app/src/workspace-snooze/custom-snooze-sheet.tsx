@@ -8,11 +8,14 @@ import { Field } from "@/components/ui/form-field";
 import { useToast } from "@/contexts/toast-context";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import {
-  resolveCustomAgentSnoozeDate,
-  resolveDefaultCustomAgentSnoozeDate,
-} from "@/agent-snooze/model";
-import { useCustomSnoozeStore, type CustomSnoozeRequest } from "@/agent-snooze/custom-snooze-store";
-import { CustomSnoozeDateTimePicker } from "@/agent-snooze/date-time-picker-field";
+  resolveCustomWorkspaceSnoozeDate,
+  resolveDefaultCustomWorkspaceSnoozeDate,
+} from "@/workspace-snooze/model";
+import {
+  useCustomSnoozeStore,
+  type CustomSnoozeRequest,
+} from "@/workspace-snooze/custom-snooze-store";
+import { CustomSnoozeDateTimePicker } from "@/workspace-snooze/date-time-picker-field";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
@@ -47,12 +50,12 @@ function OpenCustomSnoozeSheet({
   const isConnected = useHostRuntimeIsConnected(request.serverId);
   const minimumDate = useMemo(() => new Date(), []);
   const [snoozedUntil, setSnoozedUntil] = useState(() =>
-    resolveDefaultCustomAgentSnoozeDate(minimumDate),
+    resolveDefaultCustomWorkspaceSnoozeDate(minimumDate),
   );
   const [validationNowMs, setValidationNowMs] = useState(() => Date.now());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const validation = useMemo(
-    () => resolveCustomAgentSnoozeDate(snoozedUntil, new Date(validationNowMs)),
+    () => resolveCustomWorkspaceSnoozeDate(snoozedUntil, new Date(validationNowMs)),
     [snoozedUntil, validationNowMs],
   );
   const validationError = validation.error;
@@ -77,35 +80,37 @@ function OpenCustomSnoozeSheet({
     }
   }, [isSubmitting, onClose]);
   const handleSubmit = useCallback(async () => {
-    const result = resolveCustomAgentSnoozeDate(snoozedUntil, new Date());
+    const result = resolveCustomWorkspaceSnoozeDate(snoozedUntil, new Date());
     if (!result.snoozedUntil || !client || !isConnected) {
       if (!result.snoozedUntil) {
         setValidationNowMs(Date.now());
       }
       if (!client || !isConnected) {
-        toast.error(t("workspace.terminal.hostDisconnected"));
+        toast.error(t("sidebar.workspace.toasts.hostDisconnected"));
       }
       return;
     }
     setIsSubmitting(true);
-    toast.show(t("workspace.tabs.toasts.snoozingAgent"), { durationMs: null });
+    toast.show(t("sidebar.workspace.toasts.snoozingWorkspace"), { durationMs: null });
     try {
-      await client.updateAgent(request.agentId, { snoozeUntil: result.snoozedUntil });
-      toast.show(t("workspace.tabs.toasts.snoozedAgent"), { variant: "success" });
+      await client.setWorkspaceSnooze(request.workspaceId, result.snoozedUntil);
+      toast.show(t("sidebar.workspace.toasts.snoozedWorkspace"), { variant: "success" });
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("workspace.tabs.toasts.failedToSnoozeAgent"),
+        error instanceof Error
+          ? error.message
+          : t("sidebar.workspace.toasts.failedToSnoozeWorkspace"),
       );
     } finally {
       setIsSubmitting(false);
     }
-  }, [client, isConnected, onClose, request.agentId, snoozedUntil, t, toast]);
+  }, [client, isConnected, onClose, request.workspaceId, snoozedUntil, t, toast]);
   const handleSubmitPress = useCallback(() => {
     void handleSubmit();
   }, [handleSubmit]);
   const header = useMemo<SheetHeader>(
-    () => ({ title: t("workspace.tabs.customSnooze.title") }),
+    () => ({ title: t("sidebar.workspace.customSnooze.title") }),
     [t],
   );
   const footer = useMemo(
@@ -116,7 +121,7 @@ function OpenCustomSnoozeSheet({
           style={styles.footerButton}
           disabled={isSubmitting}
           onPress={handleClose}
-          testID="agent-custom-snooze-cancel"
+          testID="workspace-custom-snooze-cancel"
         >
           {t("common.actions.cancel")}
         </Button>
@@ -126,9 +131,9 @@ function OpenCustomSnoozeSheet({
           disabled={Boolean(validationError) || !isConnected}
           loading={isSubmitting}
           onPress={handleSubmitPress}
-          testID="agent-custom-snooze-submit"
+          testID="workspace-custom-snooze-submit"
         >
-          {t("workspace.tabs.customSnooze.confirm")}
+          {t("sidebar.workspace.customSnooze.confirm")}
         </Button>
       </View>
     ),
@@ -143,22 +148,22 @@ function OpenCustomSnoozeSheet({
       onDismiss={onDismiss}
       footer={footer}
       snapPoints={["45%"]}
-      testID="agent-custom-snooze-sheet"
+      testID="workspace-custom-snooze-sheet"
     >
       <View style={styles.fields}>
         <Field
-          label={t("workspace.tabs.customSnooze.until")}
-          error={validationError ? t("workspace.tabs.customSnooze.pastTime") : null}
-          testID="agent-custom-snooze-datetime"
+          label={t("sidebar.workspace.customSnooze.until")}
+          error={validationError ? t("sidebar.workspace.customSnooze.pastTime") : null}
+          testID="workspace-custom-snooze-datetime"
         >
           <CustomSnoozeDateTimePicker
             value={snoozedUntil}
             minimumDate={minimumDate}
             onChange={handleSnoozedUntilChange}
             disabled={isSubmitting}
-            untilLabel={t("workspace.tabs.customSnooze.until")}
-            dateLabel={t("workspace.tabs.customSnooze.date")}
-            timeLabel={t("workspace.tabs.customSnooze.time")}
+            untilLabel={t("sidebar.workspace.customSnooze.until")}
+            dateLabel={t("sidebar.workspace.customSnooze.date")}
+            timeLabel={t("sidebar.workspace.customSnooze.time")}
           />
         </Field>
       </View>
@@ -166,7 +171,7 @@ function OpenCustomSnoozeSheet({
   );
 }
 
-export function AgentCustomSnoozeSheetHost() {
+export function WorkspaceCustomSnoozeSheetHost() {
   const request = useCustomSnoozeStore((state) => state.request);
   const close = useCustomSnoozeStore((state) => state.close);
   const [renderedRequest, setRenderedRequest] = useState<CustomSnoozeRequest | null>(request);
