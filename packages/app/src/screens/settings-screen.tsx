@@ -38,7 +38,6 @@ import {
   Smartphone,
   Sparkles,
   Blocks,
-  PanelsTopLeft,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -50,7 +49,6 @@ import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
-import { LayoutSection } from "@/screens/settings/layout/layout-section";
 import {
   useAppSettings,
   useSettings,
@@ -74,7 +72,6 @@ import { BackHeader } from "@/components/headers/back-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
-import { AddRemoteSshHostModal } from "@/components/add-remote-ssh-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
 import { EditorSection } from "@/screens/settings/editor-section";
@@ -82,6 +79,11 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  COMPOSER_SIGIL_CHOICES,
+  resolveComposerSigils,
+  type ComposerSigil,
+} from "@/composer/tokens/sigils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
 import { DesktopNotificationsSection } from "@/desktop/components/desktop-notifications-section";
@@ -132,6 +134,11 @@ import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { isNative, isWeb } from "@/constants/platform";
 
+const COMPOSER_SIGIL_OPTIONS = COMPOSER_SIGIL_CHOICES.map((choice) => ({
+  value: choice,
+  label: choice,
+}));
+
 // ---------------------------------------------------------------------------
 // View model
 // ---------------------------------------------------------------------------
@@ -147,12 +154,6 @@ interface SidebarSectionItem {
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
   { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
-  {
-    id: "layout",
-    labelKey: "settings.sections.layout",
-    icon: PanelsTopLeft,
-    desktopOnly: true,
-  },
   { id: "editor", labelKey: "settings.sections.editor", icon: Code2, webOnly: true },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
   {
@@ -282,6 +283,8 @@ interface GeneralSectionProps {
   handleServiceUrlBehaviorChange: (behavior: ServiceUrlBehavior) => void;
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
+  handleCommandTriggerSigilChange: (sigil: ComposerSigil) => void;
+  handleSkillTriggerSigilChange: (sigil: ComposerSigil) => void;
 }
 
 interface ServiceUrlBehaviorMenuItemProps {
@@ -289,24 +292,6 @@ interface ServiceUrlBehaviorMenuItemProps {
   label: string;
   selected: boolean;
   onChange: (value: ServiceUrlBehavior) => void;
-}
-
-interface SendBehaviorMenuItemProps {
-  value: SendBehavior;
-  label: string;
-  selected: boolean;
-  onChange: (value: SendBehavior) => void;
-}
-
-function SendBehaviorMenuItem({ value, label, selected, onChange }: SendBehaviorMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
 }
 
 function ServiceUrlBehaviorMenuItem({
@@ -356,13 +341,18 @@ function GeneralSection({
   handleServiceUrlBehaviorChange,
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
+  handleCommandTriggerSigilChange,
+  handleSkillTriggerSigilChange,
 }: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
   const sendBehaviorOptions = useMemo(() => getSendBehaviorOptions(t), [t]);
-  const selectedSendBehaviorLabel =
-    sendBehaviorOptions.find((option) => option.value === settings.sendBehavior)?.label ??
-    settings.sendBehavior;
+  // Displayed rather than stored: a stale or colliding stored pair still shows the
+  // pair the composer is actually using.
+  const activeSigils = resolveComposerSigils({
+    command: settings.commandTriggerSigil,
+    skill: settings.skillTriggerSigil,
+  });
   const sendBehaviorDescriptionKey = `settings.general.defaultSend.descriptions.${settings.sendBehavior}`;
   const selectedLanguageOption = LANGUAGE_OPTIONS.find(
     (option) => option.value === settings.language,
@@ -407,26 +397,44 @@ function GeneralSection({
             <Text style={settingsStyles.rowTitle}>{t("settings.general.defaultSend.label")}</Text>
             <Text style={settingsStyles.rowHint}>{t(sendBehaviorDescriptionKey)}</Text>
           </View>
-          <DropdownMenu>
-            <DropdownTrigger
-              accessibilityRole="button"
-              accessibilityLabel={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
-              style={themeTriggerStyle}
-            >
-              <Text style={styles.themeTriggerText}>{selectedSendBehaviorLabel}</Text>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={200}>
-              {sendBehaviorOptions.map((option) => (
-                <SendBehaviorMenuItem
-                  key={option.value}
-                  value={option.value}
-                  label={option.label}
-                  selected={settings.sendBehavior === option.value}
-                  onChange={handleSendBehaviorChange}
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <SegmentedControl
+            size="sm"
+            value={settings.sendBehavior}
+            onValueChange={handleSendBehaviorChange}
+            options={sendBehaviorOptions}
+          />
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.general.commandTrigger.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.commandTrigger.description")}
+            </Text>
+          </View>
+          <SegmentedControl
+            size="sm"
+            testID="settings-command-trigger"
+            value={activeSigils.command}
+            onValueChange={handleCommandTriggerSigilChange}
+            options={COMPOSER_SIGIL_OPTIONS}
+          />
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.general.skillTrigger.label")}</Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.skillTrigger.description")}
+            </Text>
+          </View>
+          <SegmentedControl
+            size="sm"
+            testID="settings-skill-trigger"
+            value={activeSigils.skill}
+            onValueChange={handleSkillTriggerSigilChange}
+            options={COMPOSER_SIGIL_OPTIONS}
+          />
         </View>
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
@@ -1188,7 +1196,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const { settings, isLoading: settingsLoading, updateSettings } = useAppSettings();
   const [isAddHostMethodVisible, setIsAddHostMethodVisible] = useState(false);
   const [isDirectHostVisible, setIsDirectHostVisible] = useState(false);
-  const [isRemoteSshVisible, setIsRemoteSshVisible] = useState(false);
   const [isPasteLinkVisible, setIsPasteLinkVisible] = useState(false);
   const [isPlaybackTestRunning, setIsPlaybackTestRunning] = useState(false);
   const [playbackTestResult, setPlaybackTestResult] = useState<string | null>(null);
@@ -1240,6 +1247,39 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
       void updateSettings({ serviceUrlBehavior: behavior });
     },
     [updateSettings],
+  );
+
+  // Picking the character the other menu already uses swaps the two rather than
+  // rejecting the choice — the user asked for that character, and a swap is the
+  // only outcome that both honours the pick and keeps the pair distinct.
+  const handleCommandTriggerSigilChange = useCallback(
+    (sigil: ComposerSigil) => {
+      const current = resolveComposerSigils({
+        command: settings.commandTriggerSigil,
+        skill: settings.skillTriggerSigil,
+      });
+      void updateSettings(
+        sigil === current.skill
+          ? { commandTriggerSigil: sigil, skillTriggerSigil: current.command }
+          : { commandTriggerSigil: sigil },
+      );
+    },
+    [settings.commandTriggerSigil, settings.skillTriggerSigil, updateSettings],
+  );
+
+  const handleSkillTriggerSigilChange = useCallback(
+    (sigil: ComposerSigil) => {
+      const current = resolveComposerSigils({
+        command: settings.commandTriggerSigil,
+        skill: settings.skillTriggerSigil,
+      });
+      void updateSettings(
+        sigil === current.command
+          ? { skillTriggerSigil: sigil, commandTriggerSigil: current.skill }
+          : { skillTriggerSigil: sigil },
+      );
+    },
+    [settings.commandTriggerSigil, settings.skillTriggerSigil, updateSettings],
   );
 
   const handleLanguageChange = useCallback(
@@ -1295,13 +1335,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const closeAddConnectionFlow = useCallback(() => {
     setIsAddHostMethodVisible(false);
     setIsDirectHostVisible(false);
-    setIsRemoteSshVisible(false);
     setIsPasteLinkVisible(false);
   }, []);
 
   const goBackToAddConnectionMethods = useCallback(() => {
     setIsDirectHostVisible(false);
-    setIsRemoteSshVisible(false);
     setIsPasteLinkVisible(false);
     setIsAddHostMethodVisible(true);
   }, []);
@@ -1321,11 +1359,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const handleSelectDirectConnection = useCallback(() => {
     setIsAddHostMethodVisible(false);
     setIsDirectHostVisible(true);
-  }, []);
-
-  const handleSelectRemoteSsh = useCallback(() => {
-    setIsAddHostMethodVisible(false);
-    setIsRemoteSshVisible(true);
   }, []);
 
   const handleSelectPasteLink = useCallback(() => {
@@ -1446,76 +1479,73 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     return null;
   })();
 
-  let content: ReactNode;
-  if (view.kind === "section" && view.section === "layout") {
-    content = isDesktopApp ? <LayoutSection /> : null;
-  } else {
-    content = (() => {
-      if (view.kind === "host") {
-        return renderHostSettingsContent(view, handleHostRemoved);
-      }
-      if (view.kind === "project") {
-        return (
-          <ProjectSettingsScreen
-            serverId={view.serverId}
-            projectId={view.projectId}
-            onBackToProjects={handleBackFromDetail}
-            showBackToProjects={!isCompactLayout}
-          />
-        );
-      }
-      if (view.kind === "section") {
-        switch (view.section) {
-          case "general":
-            return (
-              <>
-                <GeneralSection
-                  settings={settings}
-                  isDesktopApp={isDesktopApp}
-                  handleSendBehaviorChange={handleSendBehaviorChange}
-                  handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
-                  handleLanguageChange={handleLanguageChange}
-                  handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
-                />
-                {isDesktopApp ? <BrowserDataSection /> : null}
-              </>
-            );
-          case "appearance":
-            return <AppearanceSection />;
-          case "editor":
-            return isWeb ? <EditorSection /> : null;
-          case "shortcuts":
-            return isDesktopApp ? <KeyboardShortcutsSection /> : null;
-          case "integrations":
-            return isDesktopApp ? <IntegrationsSection /> : null;
-          case "notifications":
-            return isDesktopApp ? <DesktopNotificationsSection /> : null;
-          case "permissions":
-            return isDesktopApp ? <DesktopPermissionsSection /> : null;
-          case "diagnostics":
-            return (
-              <DiagnosticsSection
-                useLegacyTerminalRenderer={settings.useLegacyTerminalRenderer}
-                onUseLegacyTerminalRendererChange={handleUseLegacyTerminalRendererChange}
-                voiceAudioEngine={voiceAudioEngine}
-                isPlaybackTestRunning={isPlaybackTestRunning}
-                playbackTestResult={playbackTestResult}
-                handlePlaybackTest={handlePlaybackTest}
-              />
-            );
-          case "about":
-            return (
-              <AboutSection
-                appVersion={appVersion}
-                appVersionText={appVersionText}
+  const content = (() => {
+    if (view.kind === "host") {
+      return renderHostSettingsContent(view, handleHostRemoved);
+    }
+    if (view.kind === "project") {
+      return (
+        <ProjectSettingsScreen
+          serverId={view.serverId}
+          projectId={view.projectId}
+          onBackToProjects={handleBackFromDetail}
+          showBackToProjects={!isCompactLayout}
+        />
+      );
+    }
+    if (view.kind === "section") {
+      switch (view.section) {
+        case "general":
+          return (
+            <>
+              <GeneralSection
+                settings={settings}
                 isDesktopApp={isDesktopApp}
+                handleSendBehaviorChange={handleSendBehaviorChange}
+                handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
+                handleLanguageChange={handleLanguageChange}
+                handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+                handleCommandTriggerSigilChange={handleCommandTriggerSigilChange}
+                handleSkillTriggerSigilChange={handleSkillTriggerSigilChange}
               />
-            );
-        }
+              {isDesktopApp ? <BrowserDataSection /> : null}
+            </>
+          );
+        case "appearance":
+          return <AppearanceSection />;
+        case "editor":
+          return isWeb ? <EditorSection /> : null;
+        case "shortcuts":
+          return isDesktopApp ? <KeyboardShortcutsSection /> : null;
+        case "integrations":
+          return isDesktopApp ? <IntegrationsSection /> : null;
+        case "notifications":
+          return isDesktopApp ? <DesktopNotificationsSection /> : null;
+        case "permissions":
+          return isDesktopApp ? <DesktopPermissionsSection /> : null;
+        case "diagnostics":
+          return (
+            <DiagnosticsSection
+              useLegacyTerminalRenderer={settings.useLegacyTerminalRenderer}
+              onUseLegacyTerminalRendererChange={handleUseLegacyTerminalRendererChange}
+              voiceAudioEngine={voiceAudioEngine}
+              isPlaybackTestRunning={isPlaybackTestRunning}
+              playbackTestResult={playbackTestResult}
+              handlePlaybackTest={handlePlaybackTest}
+            />
+          );
+        case "about":
+          return (
+            <AboutSection
+              appVersion={appVersion}
+              appVersionText={appVersionText}
+              isDesktopApp={isDesktopApp}
+            />
+          );
       }
-      return null;
-    })();
-  }
+    }
+    return null;
+  })();
 
   if (settingsLoading) {
     return (
@@ -1541,18 +1571,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
         visible={isAddHostMethodVisible}
         onClose={closeAddConnectionFlow}
         onDirectConnection={handleSelectDirectConnection}
-        onRemoteSsh={handleSelectRemoteSsh}
         onPasteLink={handleSelectPasteLink}
         onScanQr={handleScanQr}
       />
       <AddHostModal
         visible={isDirectHostVisible}
-        onClose={closeAddConnectionFlow}
-        onCancel={goBackToAddConnectionMethods}
-        onSaved={handleHostAdded}
-      />
-      <AddRemoteSshHostModal
-        visible={isRemoteSshVisible}
         onClose={closeAddConnectionFlow}
         onCancel={goBackToAddConnectionMethods}
         onSaved={handleHostAdded}

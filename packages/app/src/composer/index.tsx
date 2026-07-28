@@ -53,7 +53,7 @@ import {
   type ComposerKeyPressEvent,
   type MessageInputRef,
 } from "./input/input";
-import type { ImageAttachment, MessagePayload, TextReplacement } from "./types";
+import type { ImageAttachment, MessagePayload } from "./types";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { encodeImages } from "@/utils/encode-images";
@@ -62,14 +62,14 @@ import {
   cancelComposerAgent,
   dispatchComposerAgentMessage,
   editQueuedComposerMessage,
-  findForgeItemByOption,
-  isAttachmentSelectedForForgeItem,
+  findGithubItemByOption,
+  isAttachmentSelectedForGithubItem,
   openComposerAttachment,
   pickAndPersistImages,
   queueComposerMessage,
   removeComposerAttachmentAtIndex,
   sendQueuedComposerMessageNow,
-  toggleForgeAttachmentFromPicker,
+  toggleGithubAttachmentFromPicker,
   uploadFileAttachments,
   type AttachmentPersister,
   type QueueWriter,
@@ -83,11 +83,6 @@ import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { AutocompletePopover } from "@/components/ui/autocomplete-popover";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAgentAutocomplete } from "@/hooks/use-agent-autocomplete";
-import { usePluginClientSlashCommands } from "@/plugins/client-slash-commands";
-import {
-  executePluginClientSlashCommand,
-  resolvePluginClientSlashCommand,
-} from "@/plugins/client-slash-commands/model";
 import {
   useHostRuntimeAgentDirectoryStatus,
   useHostRuntimeClient,
@@ -108,6 +103,8 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
+import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
+import { normalizeComposerTokensForSubmission } from "@/composer/tokens/tokens";
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
@@ -128,7 +125,7 @@ import { droppedItemsToPickedFiles } from "@/composer/attachments/drop";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { AttachmentLabel, AttachmentPill, AttachmentThumbnail } from "@/components/attachment-pill";
-import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
+import { AttachmentLightbox } from "@/components/attachment-lightbox";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
@@ -136,7 +133,7 @@ import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { getForgePresentation } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
-import { useComposerForgeAutoAttach } from "./forge-auto-attach";
+import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { readClipboardImage } from "./clipboard-image";
 import { normalizeNativePastedImages, type NativePastedFile } from "./native-pasted-image";
 import { PluginResourceAttachmentPill, usePluginAttachmentPicker } from "@/plugins";
@@ -928,20 +925,20 @@ interface ComposerProps {
   submitIcon?: "arrow" | "return";
   /** Externally controlled loading state. When true, disables the submit button. */
   isSubmitLoading?: boolean;
-  /** When true, waits for pasted forge links to resolve before enabling submit. */
-  waitForForgeAutoAttachOnSubmit?: boolean;
+  /** When true, waits for pasted GitHub links to resolve before enabling submit. */
+  waitForGithubAutoAttachOnSubmit?: boolean;
   submitBehavior?: "clear" | "preserve-and-lock";
   /** When true, blurs the input immediately when submitting. */
   blurOnSubmit?: boolean;
   value: string;
   onChangeText: (text: string) => void;
-  textReplacement: TextReplacement;
+  textReplacementKey: string;
   attachments: UserComposerAttachment[];
   attachmentScopeKeys?: readonly string[];
   onOpenWorkspaceAttachment?: (attachment: WorkspaceComposerAttachment) => void;
   onChangeAttachments: (updater: AttachmentListUpdater) => void;
-  onForgeChangeRequestDetected?: () => void;
-  onForgeChangeRequestAutoAttach?: (item: ForgeSearchItem) => void;
+  onGithubPrDetected?: () => void;
+  onGithubPrAutoAttach?: (item: ForgeSearchItem) => void;
   cwd: string;
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
   /** When true, auto-focuses the text input on web. */
@@ -1152,18 +1149,18 @@ function ComposerContentImpl({
   submitButtonTestID,
   submitIcon = "arrow",
   isSubmitLoading = false,
-  waitForForgeAutoAttachOnSubmit = false,
+  waitForGithubAutoAttachOnSubmit = false,
   submitBehavior = "clear",
   blurOnSubmit = false,
   value,
   onChangeText,
-  textReplacement,
+  textReplacementKey,
   attachments,
   attachmentScopeKeys = EMPTY_ATTACHMENT_SCOPE_KEYS,
   onOpenWorkspaceAttachment,
   onChangeAttachments,
-  onForgeChangeRequestDetected,
-  onForgeChangeRequestAutoAttach,
+  onGithubPrDetected,
+  onGithubPrAutoAttach,
   cwd,
   clearDraft,
   autoFocus = false,
@@ -1218,6 +1215,7 @@ function ComposerContentImpl({
   const isDesktopLayout = resolveIsDesktopWebBreakpoint(isCompactLayout);
   const messagePlaceholder = resolveMessagePlaceholder(inputMode, isDesktopLayout, t, placeholder);
   const userInput = value;
+  const composerSigils = useComposerSigils();
   const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
   const {
@@ -1239,7 +1237,7 @@ function ComposerContentImpl({
   const supportsForgeSearch = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.forgeSearch === true,
   );
-  const forgeAutoAttach = useComposerForgeAutoAttach({
+  const githubAutoAttach = useComposerGithubAutoAttach({
     text: userInput,
     remoteUrl: resolveCheckoutRemoteUrl(checkoutStatusQuery.status),
     attachments,
@@ -1249,8 +1247,8 @@ function ComposerContentImpl({
     cwd,
     supportsForgeSearch,
     setAttachments: setSelectedAttachments,
-    onChangeRequestDetected: onForgeChangeRequestDetected,
-    onChangeRequestAdded: onForgeChangeRequestAutoAttach,
+    onPullRequestDetected: onGithubPrDetected,
+    onPullRequestAdded: onGithubPrAutoAttach,
   });
   const [cursorIndex, setCursorIndex] = useState(0);
   const cursorPublication = useMemo(() => new AfterPaintPublication<number>(setCursorIndex), []);
@@ -1271,11 +1269,6 @@ function ComposerContentImpl({
     attachments,
     onChangeAttachments: setSelectedAttachments,
     anchorRef: attachButtonRef,
-  });
-  const pluginClientSlashCommands = usePluginClientSlashCommands({
-    serverId,
-    workspaceId,
-    agentId,
   });
   const isComposerLocked = resolveIsComposerLocked(submitBehavior, isSubmitLoading);
   const keyboardHandlerIdRef = useRef(
@@ -1328,27 +1321,6 @@ function ComposerContentImpl({
     ],
   );
 
-  const runPluginClientSlashCommand = useCallback(
-    (resolved: { command: (typeof pluginClientSlashCommands)[number]; args: string }): boolean => {
-      if (blurOnSubmit) messageInputRef.current?.blur();
-      clearDraft("sent");
-      replaceUserInput("");
-      setSelectedAttachments([]);
-      resetSuppression();
-      setSendError(null);
-      executePluginClientSlashCommand({
-        command: resolved.command,
-        args: resolved.args,
-        onError(error) {
-          console.error("[Composer] Failed to run plugin client slash command:", error);
-          toastErrorRef.current(error instanceof Error ? error.message : String(error));
-        },
-      });
-      return true;
-    },
-    [blurOnSubmit, clearDraft, replaceUserInput, resetSuppression, setSelectedAttachments],
-  );
-
   const autocomplete = useAgentAutocomplete({
     userInput,
     cursorIndex,
@@ -1357,8 +1329,8 @@ function ComposerContentImpl({
     agentId,
     draftConfig: commandDraftConfig,
     canExecuteClientSlashCommand: buildOutgoingAttachments(attachments).length === 0,
+    sigils: composerSigils,
     onClientSlashCommand: runClientSlashCommand,
-    pluginClientSlashCommands,
     onAutocompleteApplied: () => {
       messageInputRef.current?.focus();
     },
@@ -1508,20 +1480,6 @@ function ComposerContentImpl({
   const beginAgentCancellation = useSessionStore((state) => state.beginAgentCancellation);
   const settleAgentCancellation = useSessionStore((state) => state.settleAgentCancellation);
   const isAgentRunning = hasActiveTurn;
-  // Queueing behind a permission prompt would strand the message: the turn is
-  // parked until the request is answered.
-  const hasPendingPermission = useSessionStore((state) => {
-    const pendingPermissions = state.sessions[serverId]?.pendingPermissions;
-    if (!pendingPermissions) return false;
-    for (const permission of pendingPermissions.values()) {
-      if (permission.agentId === agentId) return true;
-    }
-    return false;
-  });
-  const activeSendBehavior = resolveActiveSendBehavior(
-    appSettings.sendBehavior,
-    hasPendingPermission,
-  );
   const hasAgent = agentState.status !== null;
 
   const queueWriter = useMemo<QueueWriter>(
@@ -1619,32 +1577,26 @@ function ComposerContentImpl({
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
       const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
-      const pluginSlashCommand = resolvePluginClientSlashCommand({
-        text: payload.text,
-        hasAttachments: outgoingAttachments.length > 0,
-        commands: pluginClientSlashCommands,
-      });
-      if (pluginSlashCommand && runPluginClientSlashCommand(pluginSlashCommand)) return;
 
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(submissionText, outgoingAttachments, payload.forceSend);
     },
     [
       attachments,
       blurOnSubmit,
       buildOutgoingAttachments,
+      composerSigils,
       runClientSlashCommand,
-      pluginClientSlashCommands,
-      runPluginClientSlashCommand,
       sendMessageWithContent,
     ],
   );
@@ -1773,7 +1725,7 @@ function ComposerContentImpl({
 
   const handleRemoveAttachment = useCallback(
     (index: number) => {
-      forgeAutoAttach.markForgeAttachmentRemoved(selectedAttachments[index]);
+      githubAutoAttach.markGithubAttachmentRemoved(selectedAttachments[index]);
       const didRemoveWorkspaceAttachment = removeAttachment({
         selectedAttachments,
         index,
@@ -1785,7 +1737,7 @@ function ComposerContentImpl({
         removeComposerAttachmentAtIndex({ attachments: prev, index, deleteAttachments }),
       );
     },
-    [forgeAutoAttach, removeAttachment, selectedAttachments, setSelectedAttachments],
+    [githubAutoAttach, removeAttachment, selectedAttachments, setSelectedAttachments],
   );
 
   const handleOpenAttachment = useCallback(
@@ -1887,29 +1839,17 @@ function ComposerContentImpl({
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
       const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
-      const pluginSlashCommand = resolvePluginClientSlashCommand({
-        text: payload.text,
-        hasAttachments: outgoingAttachments.length > 0,
-        commands: pluginClientSlashCommands,
-      });
-      if (pluginSlashCommand && runPluginClientSlashCommand(pluginSlashCommand)) return;
-      queueMessage(payload.text, outgoingAttachments);
+      queueMessage(submissionText, outgoingAttachments);
     },
-    [
-      attachments,
-      buildOutgoingAttachments,
-      pluginClientSlashCommands,
-      queueMessage,
-      runClientSlashCommand,
-      runPluginClientSlashCommand,
-    ],
+    [attachments, buildOutgoingAttachments, composerSigils, queueMessage, runClientSlashCommand],
   );
 
   const hasSendableContent = userInput.trim().length > 0 || selectedAttachments.length > 0;
@@ -2129,10 +2069,10 @@ function ComposerContentImpl({
 
   const handleToggleGithubItem = useCallback(
     (item: ForgeSearchItem) => {
-      const nextAttachments = toggleForgeAttachmentFromPicker({
+      const nextAttachments = toggleGithubAttachmentFromPicker({
         current: attachments,
         item,
-        markForgeAttachmentRemoved: forgeAutoAttach.markForgeAttachmentRemoved,
+        markGithubAttachmentRemoved: githubAutoAttach.markGithubAttachmentRemoved,
       });
       setSelectedAttachments(nextAttachments);
       setIsGithubPickerOpen(false);
@@ -2140,7 +2080,7 @@ function ComposerContentImpl({
     },
     [
       attachments,
-      forgeAutoAttach,
+      githubAutoAttach,
       setSelectedAttachments,
       setGithubSearchQuery,
       setIsGithubPickerOpen,
@@ -2188,10 +2128,6 @@ function ComposerContentImpl({
   const handleLightboxClose = useCallback(() => {
     setLightboxMetadata(null);
   }, []);
-  const lightboxSource = useMemo<ImageLightboxSource | null>(
-    () => (lightboxMetadata ? { type: "attachment", metadata: lightboxMetadata } : null),
-    [lightboxMetadata],
-  );
 
   const handleGithubPickerOpenChange = useCallback(
     (open: boolean) => {
@@ -2205,11 +2141,11 @@ function ComposerContentImpl({
 
   const renderGithubPickerOption = useCallback(
     ({ option, active }: { option: ComboboxOption; selected: boolean; active: boolean }) => {
-      const item = findForgeItemByOption(githubSearchItems, option.id);
+      const item = findGithubItemByOption(githubSearchItems, option.id);
       if (!item) {
         return <View key={option.id} />;
       }
-      const selected = isAttachmentSelectedForForgeItem(selectedAttachments, item);
+      const selected = isAttachmentSelectedForGithubItem(selectedAttachments, item);
       return (
         <GithubPickerOption
           key={option.id}
@@ -2267,7 +2203,7 @@ function ComposerContentImpl({
   const isSubmitLoadingVisible =
     isProcessing || isSubmitLoading || isUploadingFile || pendingNativeImagePastes > 0;
   const isSubmitDisabled =
-    isSubmitLoadingVisible || (waitForForgeAutoAttachOnSubmit && forgeAutoAttach.isResolving);
+    isSubmitLoadingVisible || (waitForGithubAutoAttachOnSubmit && githubAutoAttach.isResolving);
 
   // Disable drops while submitting/uploading: the submit path clears and restores attachments,
   // so a drop in that window would be lost or land on a locked draft. `disabled` hides the
@@ -2367,7 +2303,7 @@ function ComposerContentImpl({
                   voiceServerId={serverId}
                   voiceAgentId={agentId}
                   isAgentRunning={isAgentRunning}
-                  defaultSendBehavior={activeSendBehavior}
+                  defaultSendBehavior={appSettings.sendBehavior}
                   onQueue={handleQueue}
                   onSubmitLoadingPress={submitLoadingPressHandler}
                   onKeyPress={handleCommandKeyPress}
@@ -2378,7 +2314,7 @@ function ComposerContentImpl({
                   attachmentSlot={attachmentTray}
                   inputMode={inputMode}
                   readOnly={readOnly}
-                  textReplacement={textReplacement}
+                  textReplacementKey={textReplacementKey}
                   submitLabel={submitLabel}
                 />
               </RenderProfile>
@@ -2414,9 +2350,6 @@ function ComposerContentImpl({
 const animatedStaticStyles = RNStyleSheet.create({
   container: {
     flexDirection: "column",
-    // KeyboardDock reduces the available column height with bottom padding.
-    // Keep the composer's constraint chain shrinkable down to its scrolling input.
-    flexShrink: 1,
     position: "relative",
   },
 });
@@ -2427,7 +2360,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     backgroundColor: theme.colors.border,
   },
   inputAreaContainer: {
-    flexShrink: 1,
     position: "relative",
     minHeight: FOOTER_HEIGHT,
     marginHorizontal: "auto",
@@ -2441,13 +2373,11 @@ const styles = StyleSheet.create((theme: Theme) => ({
     opacity: 0.6,
   },
   inputAreaContent: {
-    flexShrink: 1,
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
     gap: theme.spacing[3],
   },
   messageInputContainer: {
-    flexShrink: 1,
     position: "relative",
     width: "100%",
     gap: theme.spacing[3],
