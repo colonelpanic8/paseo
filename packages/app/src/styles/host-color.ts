@@ -1,14 +1,28 @@
 import { StyleSheet } from "react-native-unistyles";
-import type { HostColorKey } from "@/types/host-connection";
+import { isHostColorKey, type HostColor, type HostColorKey } from "@/types/host-connection";
+import { resolveHostFillColor, resolveHostTextColor } from "@/styles/host-color-value";
 
 /**
- * Host colors are stored as palette keys, so every surface resolves them here.
+ * Host colors are stored as palette keys or as custom hex, and every surface
+ * resolves them here.
  *
- * Fills use the 500 step the status dots already use. Text uses the darker step
- * on light schemes, where 500 on a pale sidebar reads too faint — the same
- * scheme-aware treatment the synced-status loader uses for amber.
+ * Palette fills use the 500 step the status dots already use. Palette text uses the
+ * darker step on light schemes, where 500 on a pale sidebar reads too faint — the
+ * same scheme-aware treatment the synced-status loader uses for amber.
+ *
+ * Custom hex gets the same guarantee by computation instead of by hand: the
+ * `custom*` entries are Unistyles dynamic functions, so they see both the runtime
+ * color and the live theme, and re-derive a legible shade against the sidebar
+ * background. Dynamic functions are what keep this off `useUnistyles()`, which is
+ * banned — see docs/unistyles.md.
  */
 export const hostColorStyles = StyleSheet.create((theme) => ({
+  fillCustom: (hex: string) => ({
+    backgroundColor: resolveHostFillColor(hex, theme.colors.surfaceSidebar),
+  }),
+  textCustom: (hex: string) => ({
+    color: resolveHostTextColor(hex, theme.colors.surfaceSidebar),
+  }),
   fillBlue: { backgroundColor: theme.colors.palette.blue[500] },
   fillGreen: { backgroundColor: theme.colors.palette.green[500] },
   fillAmber: { backgroundColor: theme.colors.palette.amber[500] },
@@ -53,7 +67,14 @@ export const hostColorStyles = StyleSheet.create((theme) => ({
 
 // Read at render time, never at module scope: Unistyles styles must not be
 // materialized into module-level constants.
-export function getHostColorFillStyle(color: HostColorKey) {
+export function getHostColorFillStyle(color: HostColor) {
+  if (!isHostColorKey(color)) {
+    return hostColorStyles.fillCustom(color);
+  }
+  return getPaletteFillStyle(color);
+}
+
+function getPaletteFillStyle(color: HostColorKey) {
   switch (color) {
     case "blue":
       return hostColorStyles.fillBlue;
@@ -70,7 +91,13 @@ export function getHostColorFillStyle(color: HostColorKey) {
   }
 }
 
-export function getHostColorTextStyle(color: HostColorKey | null | undefined) {
+export function getHostColorTextStyle(color: HostColor | null | undefined) {
+  if (color == null) {
+    return null;
+  }
+  if (!isHostColorKey(color)) {
+    return hostColorStyles.textCustom(color);
+  }
   switch (color) {
     case "blue":
       return hostColorStyles.textBlue;
@@ -84,7 +111,5 @@ export function getHostColorTextStyle(color: HostColorKey | null | undefined) {
       return hostColorStyles.textRed;
     case "purple":
       return hostColorStyles.textPurple;
-    default:
-      return null;
   }
 }

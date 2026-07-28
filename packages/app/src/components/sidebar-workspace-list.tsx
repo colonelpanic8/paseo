@@ -53,7 +53,7 @@ import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sec
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProjectIcons } from "@/projects/icons";
-import type { HostColorKey } from "@/types/host-connection";
+import type { HostColor } from "@/types/host-connection";
 import {
   buildNewWorkspaceRoute,
   buildProjectSettingsRoute,
@@ -1765,7 +1765,7 @@ export function SidebarWorkspaceList({
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
   const onToggleWorkspacePin = useSidebarWorkspacePinController();
   const hostColorByServerId = useMemo(() => {
-    const colors = new Map<string, HostColorKey>();
+    const colors = new Map<string, HostColor>();
     for (const host of hosts) {
       if (host.color) {
         colors.set(host.serverId, host.color);
@@ -1851,7 +1851,7 @@ function SidebarStatusModeWrapper({
   shortcutIndexByWorkspaceKey: Map<string, number>;
   onWorkspacePress?: () => void;
   hostLabelByServerId: ReadonlyMap<string, string>;
-  hostColorByServerId: ReadonlyMap<string, HostColorKey>;
+  hostColorByServerId: ReadonlyMap<string, HostColor>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;

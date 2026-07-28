@@ -11,7 +11,7 @@ import {
   normalizeStoredHostProfile,
   upsertHostConnectionInProfiles,
   registryHasConnection,
-  type HostColorKey,
+  type HostColor,
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
@@ -1792,7 +1792,7 @@ export class HostRuntimeStore {
     await this.persistHosts();
   }
 
-  async setHostColor(serverId: string, color: HostColorKey | null): Promise<void> {
+  async setHostColor(serverId: string, color: HostColor | null): Promise<void> {
     while (true) {
       const baseHosts = this.hosts;
       const next = baseHosts.map((host) =>
@@ -2447,7 +2447,7 @@ export interface HostMutations {
     label?: string,
   ) => Promise<HostProfile>;
   renameHost: (serverId: string, label: string) => Promise<void>;
-  setHostColor: (serverId: string, color: HostColorKey | null) => Promise<void>;
+  setHostColor: (serverId: string, color: HostColor | null) => Promise<void>;
   removeHost: (serverId: string) => Promise<void>;
   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
 }

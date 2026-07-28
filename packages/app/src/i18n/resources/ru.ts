@@ -2064,6 +2064,12 @@ export const ru: TranslationResources = {
             red: "Красный",
             purple: "Фиолетовый",
           },
+          custom: {
+            label: "Свой цвет",
+            title: "Свой цвет",
+            submit: "Применить",
+            invalid: "Введите HEX-цвет, например #4f46e5",
+          },
         },
         restart: {
           title: "Перезапустить демон",

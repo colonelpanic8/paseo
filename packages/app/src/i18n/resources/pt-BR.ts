@@ -2060,6 +2060,12 @@ export const ptBR: TranslationResources = {
             red: "Vermelho",
             purple: "Roxo",
           },
+          custom: {
+            label: "Personalizado",
+            title: "Cor personalizada",
+            submit: "Aplicar",
+            invalid: "Informe uma cor hexadecimal como #4f46e5",
+          },
         },
         restart: {
           title: "Reiniciar daemon",
