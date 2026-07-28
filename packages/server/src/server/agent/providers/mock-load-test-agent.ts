@@ -18,6 +18,7 @@ import type {
   AgentRuntimeInfo,
   AgentSession,
   AgentSessionConfig,
+  AgentSlashCommand,
   AgentStreamEvent,
   AgentTimelineItem,
   FetchCatalogOptions,
@@ -39,6 +40,14 @@ const MOCK_LOAD_TEST_DURATION_MS = 5 * 60 * 1000;
 const MOCK_LOAD_TEST_INTERVAL_MS = 40;
 const ONE_PIXEL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl4Kj8AAAAASUVORK5CYII=";
+const MOCK_LOAD_TEST_COMMANDS: readonly AgentSlashCommand[] = [
+  {
+    name: "release-beta",
+    description: "Simulate a provider skill in development.",
+    argumentHint: "",
+    kind: "skill",
+  },
+];
 
 const CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -578,6 +587,10 @@ export class MockLoadTestAgentClient implements AgentClient {
     };
   }
 
+  async listCommands(_config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
+    return [...MOCK_LOAD_TEST_COMMANDS];
+  }
+
   async listImportableSessions(): Promise<ImportableProviderSession[]> {
     return [];
   }
@@ -633,6 +646,10 @@ export class MockLoadTestAgentSession implements AgentSession {
       requestedPromptRejections > 0
         ? requestedPromptRejections
         : 0;
+  }
+
+  async listCommands(): Promise<AgentSlashCommand[]> {
+    return [...MOCK_LOAD_TEST_COMMANDS];
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
