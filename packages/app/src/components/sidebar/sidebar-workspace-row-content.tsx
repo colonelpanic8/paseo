@@ -61,7 +61,7 @@ function renderChecksBadgeForgeIcon(icon: string) {
   return <ForgeBrandIcon iconKind={icon} size={10} uniProps={redColorMapping} />;
 }
 
-type SidebarWorkspaceScriptIconKind = "service" | "command";
+export type SidebarWorkspaceScriptIconKind = "service" | "command";
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -152,12 +152,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               {subtitle}
             </Text>
           ) : null}
-          {workspace.prHint ? (
-            <View style={styles.workspacePrBadgeRow}>
-              <PrBadge hint={workspace.prHint} />
-              <ChecksBadge checks={workspace.prHint.checks} forge={workspace.prHint.forge} />
-            </View>
-          ) : null}
+          {workspace.prHint ? <SidebarWorkspacePrBadgeRow hint={workspace.prHint} /> : null}
         </View>
       </View>
       {showShortcutBadge && shortcutNumber !== null ? (
@@ -169,7 +164,17 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   );
 });
 
-function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
+/** PR number + failing-checks badges. Shared by the project and status rows. */
+export function SidebarWorkspacePrBadgeRow({ hint }: { hint: PrHint }) {
+  return (
+    <View style={styles.workspacePrBadgeRow}>
+      <PrBadge hint={hint} />
+      <ChecksBadge checks={hint.checks} forge={hint.forge} />
+    </View>
+  );
+}
+
+export function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
   return (
     <View
       style={styles.workspaceTitleAccessory}
@@ -288,7 +293,7 @@ function StatusDotOverlay({
   return <View style={overlayStyle} />;
 }
 
-function PrBadge({ hint }: { hint: PrHint }) {
+export function PrBadge({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const handlePress = useCallback(
@@ -341,7 +346,13 @@ function PrBadge({ hint }: { hint: PrHint }) {
   );
 }
 
-function ChecksBadge({ checks, forge }: { checks: PrHint["checks"]; forge: PrHint["forge"] }) {
+export function ChecksBadge({
+  checks,
+  forge,
+}: {
+  checks: PrHint["checks"];
+  forge: PrHint["forge"];
+}) {
   if (!checks || checks.length === 0) return null;
   const failed = checks.filter((check) => check.status === "failure").length;
   if (failed === 0) return null;

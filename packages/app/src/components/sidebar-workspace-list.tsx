@@ -58,6 +58,7 @@ import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sec
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
+import type { HostColorKey } from "@/types/host-connection";
 import {
   buildNewWorkspaceRoute,
   buildProjectSettingsRoute,
@@ -1925,7 +1926,6 @@ export function SidebarWorkspaceList({
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByKey,
   collapsedProjectKeys,
   onToggleProjectCollapsed,
   shortcutIndexByWorkspaceKey,
@@ -1951,6 +1951,15 @@ export function SidebarWorkspaceList({
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
   const onToggleWorkspacePin = useSidebarWorkspacePinController();
+  const hostColorByServerId = useMemo(() => {
+    const colors = new Map<string, HostColorKey>();
+    for (const host of hosts) {
+      if (host.color) {
+        colors.set(host.serverId, host.color);
+      }
+    }
+    return colors;
+  }, [hosts]);
   const showHostLabels = useMemo(() => shouldShowSidebarHostLabels(projects), [projects]);
 
   const content =
@@ -1958,12 +1967,12 @@ export function SidebarWorkspaceList({
       <SidebarStatusModeWrapper
         statusGroups={statusGroups}
         pinnedGroups={pinnedGroups}
+        projects={projects}
         workspaceEntriesByKey={workspaceEntriesByKey}
-        projectNamesByKey={projectNamesByKey}
         shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
         onWorkspacePress={onWorkspacePress}
         hostLabelByServerId={hostLabelByServerId}
-        showHostLabels={showHostLabels}
+        hostColorByServerId={hostColorByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
         listHeaderComponent={listHeaderComponent}
@@ -1996,29 +2005,41 @@ export function SidebarWorkspaceList({
 function SidebarStatusModeWrapper({
   statusGroups,
   pinnedGroups,
+  projects,
   workspaceEntriesByKey,
-  projectNamesByKey,
   shortcutIndexByWorkspaceKey: _projectShortcutIndex,
   onWorkspacePress,
   hostLabelByServerId,
-  showHostLabels,
+  hostColorByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   listHeaderComponent,
 }: {
   statusGroups: StatusGroup[];
   pinnedGroups: PinnedSidebarGroups;
+  projects: SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
-  projectNamesByKey: Map<string, string>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
   onWorkspacePress?: () => void;
   hostLabelByServerId: ReadonlyMap<string, string>;
-  showHostLabels: boolean;
+  hostColorByServerId: ReadonlyMap<string, HostColorKey>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   listHeaderComponent?: ReactElement | null;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
+  // Status mode drops the project grouping, so every row carries its own project
+  // icon. One icon request per project (first host that can serve it), matching
+  // what project mode fetches.
+  const projectIconTargets = useMemo(
+    () =>
+      projects.flatMap((project) => {
+        const target = resolveSidebarProjectIconTarget(project);
+        return target ? [{ projectKey: project.projectKey, ...target }] : [];
+      }),
+    [projects],
+  );
+  const iconDataByProjectKey = useProjectIconDataByProjectKey({ projects: projectIconTargets });
 
   return (
     <SidebarStatusWorkspaceList
@@ -2027,12 +2048,12 @@ function SidebarStatusModeWrapper({
         const entry = workspaceEntriesByKey.get(workspace.workspaceKey);
         return entry ? [entry] : [];
       })}
-      projectNamesByKey={projectNamesByKey}
+      iconDataByProjectKey={iconDataByProjectKey}
       shortcutIndexByWorkspaceKey={_projectShortcutIndex}
       showShortcutBadges={showShortcutBadges}
       onWorkspacePress={onWorkspacePress}
       hostLabelByServerId={hostLabelByServerId}
-      showHostLabels={showHostLabels}
+      hostColorByServerId={hostColorByServerId}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
       listHeaderComponent={listHeaderComponent}
