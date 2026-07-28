@@ -123,3 +123,16 @@ existing controlled plain-text path.
 Web keeps rendering through the plain textarea instead of the mirror when the draft has
 no token. `ComposerTokenHighlightLayer` takes an `enabled` prop and installs no
 observers in that common path.
+
+## Sent messages: canonical data, configured presentation
+
+Submitted and queued text use the provider-compatible `/name` form. Sent-message
+bubbles recover token type from position — a leading slash is a command and a slash
+after whitespace is a skill — then display the token with the current configured
+command or skill sigil. The copy action, rewind, persistence and provider history still
+use the canonical text; only the rendered `Text` spans change.
+
+Unlike the controlled composer input, a sent message can safely use nested React Native
+`Text` spans, so pills render on web, Electron, iOS and Android without a mirror layer.
+Changing trigger settings consequently updates the presentation of existing history
+without rewriting that history.
