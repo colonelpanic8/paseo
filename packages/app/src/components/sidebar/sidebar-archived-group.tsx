@@ -4,8 +4,7 @@ import { View, Text, Pressable, type PressableStateCallbackType } from "react-na
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useMutation } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react-native";
-import { isNative as platformIsNative, isWeb as platformIsWeb } from "@/constants/platform";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { isWeb as platformIsWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import { ARCHIVED_GROUP_KEY } from "@/hooks/sidebar-status-view-model";
@@ -169,7 +168,6 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
 
   const unarchiveMutation = useMutation({
@@ -197,9 +195,6 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
   const handleHoverIn = useCallback(() => setIsHovered(true), []);
   const handleHoverOut = useCallback(() => setIsHovered(false), []);
 
-  // Hover is web-only; on native and compact layouts the control is always visible.
-  const showUnarchive = isHovered || platformIsNative || isCompact;
-
   return (
     <View
       style={styles.rowContainer}
@@ -218,14 +213,12 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
           ) : null}
         </View>
         {/*
-          Kept mounted and hidden with opacity rather than conditionally rendered:
-          mounting on hover would reflow the row under the cursor and cause the
-          hover flicker loop documented in docs/hover.md.
+          Always mounted and always visible. Unarchive is this row's only action, so
+          hiding it behind hover would strand it on touch and make the tail look
+          inert on desktop. Hover only lifts it out of its greyed resting state —
+          opacity never changes the slot's geometry, per docs/hover.md.
         */}
-        <View
-          style={[styles.unarchiveSlot, !showUnarchive && styles.unarchiveSlotHidden]}
-          pointerEvents={showUnarchive ? "auto" : "none"}
-        >
+        <View style={[styles.unarchiveSlot, !isHovered && styles.unarchiveSlotResting]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t(
@@ -330,8 +323,10 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  unarchiveSlotHidden: {
-    opacity: 0,
+  // The group already sits at reduced opacity; this only needs to pull the icon
+  // back a little further so it reads as available, not as the row's subject.
+  unarchiveSlotResting: {
+    opacity: 0.7,
   },
   unarchiveButton: {
     alignItems: "center",
