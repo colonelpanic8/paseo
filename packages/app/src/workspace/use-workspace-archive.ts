@@ -1,5 +1,11 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  archivedWorkspacesQueryKey,
+  beginArchivedWorkspaceTransition,
+  settleArchivedWorkspaceTransition,
+} from "@/hooks/use-archived-workspaces";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -24,6 +30,7 @@ export interface ArchiveWorkspaceInput {
   workspaceId: string;
   workspaceKind: WorkspaceDescriptor["workspaceKind"];
   name: string;
+  projectName: string;
   isDirty?: boolean | null;
   aheadOfOrigin?: number | null;
   diffStat?: { additions: number; deletions: number } | null;
@@ -42,6 +49,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     workspaceId,
     workspaceKind,
     name,
+    projectName,
     isDirty,
     aheadOfOrigin,
     diffStat,
@@ -51,6 +59,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
   } = input;
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const archiveWorkspaceRecord = useCallback(async () => {
     const client = getHostRuntimeStore().getClient(serverId);
@@ -59,6 +68,19 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
       return;
     }
     onSetHiding?.(true);
+    const workspaceKey = `${serverId}:${workspaceId}`;
+    await beginArchivedWorkspaceTransition({
+      queryClient,
+      entry: {
+        workspaceKey,
+        serverId,
+        workspaceId,
+        projectName,
+        name,
+        archivedAt: new Date(),
+        phase: "archiving",
+      },
+    });
     try {
       onArchiveStarted();
       await archiveWorkspaceOptimistically({
@@ -69,14 +91,37 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
         },
       });
       purgeArchivedWorkspaceState({ serverId, workspaceId });
+      settleArchivedWorkspaceTransition({
+        queryClient,
+        serverId,
+        workspaceKey,
+        outcome: "archived",
+      });
+      void queryClient.invalidateQueries({ queryKey: archivedWorkspacesQueryKey(serverId) });
     } catch (error) {
+      settleArchivedWorkspaceTransition({
+        queryClient,
+        serverId,
+        workspaceKey,
+        outcome: "failed",
+      });
       toast.error(
         error instanceof Error ? error.message : t("sidebar.workspace.toasts.archiveFailed"),
       );
     } finally {
       onSetHiding?.(false);
     }
-  }, [onArchiveStarted, onSetHiding, serverId, t, toast, workspaceId]);
+  }, [
+    name,
+    onArchiveStarted,
+    onSetHiding,
+    projectName,
+    queryClient,
+    serverId,
+    t,
+    toast,
+    workspaceId,
+  ]);
 
   const archive = useCallback(() => {
     void (async () => {

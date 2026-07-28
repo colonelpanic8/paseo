@@ -44,6 +44,29 @@ vi.mock("react-native-unistyles", () => ({
   withUnistyles: (component: unknown) => component,
 }));
 
+vi.mock("react-native-reanimated", () => {
+  const animation = {
+    duration: () => animation,
+  };
+  return {
+    default: {
+      View: ({
+        children,
+        entering: _entering,
+        exiting: _exiting,
+        layout: _layout,
+        collapsable: _collapsable,
+        ...props
+      }: React.PropsWithChildren<Record<string, unknown>>) =>
+        React.createElement("div", props, children),
+    },
+    FadeIn: animation,
+    FadeInUp: animation,
+    FadeOut: animation,
+    LinearTransition: animation,
+  };
+});
+
 vi.mock("lucide-react-native", () => {
   const createIcon = (name: string) => (props: Record<string, unknown>) =>
     React.createElement("span", { ...props, "data-icon": name });
@@ -122,6 +145,7 @@ function archivedEntry(index: number): ArchivedWorkspaceEntry {
     projectName: "Paseo",
     name: `Archived ${index}`,
     archivedAt: new Date(Date.UTC(2026, 6, index)),
+    phase: "archived",
   };
 }
 
@@ -185,5 +209,27 @@ describe("SidebarArchivedGroup", () => {
     });
 
     expect(container?.textContent).toBe("");
+  });
+
+  it("shows a pending indicator instead of unarchive while the workspace is moving", () => {
+    const pending = { ...archivedEntry(1), phase: "archiving" as const };
+    flushSync(() => {
+      root?.render(
+        <SidebarArchivedGroup
+          entries={[pending]}
+          hostLabelByServerId={new Map([["server", "Local"]])}
+          showHostLabels
+        />,
+      );
+    });
+
+    expect(
+      container?.querySelector(`[data-testid="sidebar-archived-pending-${pending.workspaceKey}"]`),
+    ).not.toBeNull();
+    expect(
+      container?.querySelector(
+        `[data-testid="sidebar-archived-unarchive-${pending.workspaceKey}"]`,
+      ),
+    ).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState, type MutableRefObject, type React
 import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, ScrollView, type PressableStateCallbackType } from "react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
+import Animated, { FadeOutDown, LinearTransition } from "react-native-reanimated";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
@@ -56,6 +57,8 @@ const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[5
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
 const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
+const STATUS_ROW_EXITING = FadeOutDown.duration(180);
+const STATUS_ROW_LAYOUT = LinearTransition.duration(180);
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
@@ -283,38 +286,40 @@ function StatusGroupRows({
   } = useLimitedSidebarGroup(group.rows);
 
   return (
-    <View style={styles.statusGroupBlock}>
-      <StatusGroupHeader group={group} collapsed={collapsed} />
-      {!collapsed ? (
-        <View
-          style={styles.statusWorkspaceListContainer}
-          testID={`sidebar-status-group-rows-${group.bucket}`}
-        >
-          {visibleWorkspaces.map((workspace) => (
-            <StatusWorkspaceRow
-              key={workspace.workspaceKey}
-              workspace={workspace}
-              iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
-              hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
-              hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
-              shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
-              showShortcutBadge={showShortcutBadges}
-              canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-              onToggleWorkspacePin={onToggleWorkspacePin}
-              onWorkspacePress={onWorkspacePress}
-              parentGestureRef={parentGestureRef}
-            />
-          ))}
-          {canToggleWorkspaces ? (
-            <SidebarGroupToggleRow
-              expanded={workspacesExpanded}
-              onPress={toggleWorkspacesExpanded}
-              testID={`sidebar-status-show-more-${group.bucket}`}
-            />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
+    <Animated.View exiting={STATUS_ROW_EXITING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
+      <View style={styles.statusGroupBlock}>
+        <StatusGroupHeader group={group} collapsed={collapsed} />
+        {!collapsed ? (
+          <View
+            style={styles.statusWorkspaceListContainer}
+            testID={`sidebar-status-group-rows-${group.bucket}`}
+          >
+            {visibleWorkspaces.map((workspace) => (
+              <StatusWorkspaceRow
+                key={workspace.workspaceKey}
+                workspace={workspace}
+                iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
+                hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
+                hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
+                shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
+                showShortcutBadge={showShortcutBadges}
+                canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+                onToggleWorkspacePin={onToggleWorkspacePin}
+                onWorkspacePress={onWorkspacePress}
+                parentGestureRef={parentGestureRef}
+              />
+            ))}
+            {canToggleWorkspaces ? (
+              <SidebarGroupToggleRow
+                expanded={workspacesExpanded}
+                onPress={toggleWorkspacesExpanded}
+                testID={`sidebar-status-show-more-${group.bucket}`}
+              />
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -510,6 +515,7 @@ function StatusWorkspaceRowWithMenu({
     workspaceId: workspace.workspaceId,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
+    projectName: workspace.projectName,
     ...toWorktreeArchiveRisk(workspace),
     onArchiveStarted: redirectAfterArchive,
     onSetHiding: setIsHidingWorkspace,
@@ -683,63 +689,65 @@ function StatusWorkspaceRowInner({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace}>
-      {({ isHovered, hoverHandlers }) => {
-        // Touch platforms have no hover, so the kebab is permanent there and the
-        // inline archive text button never appears.
-        const showActions = Boolean(onArchive && (isHovered || isTouchPlatform));
-        const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
-        return (
-          <View style={styles.workspaceRowContainer} {...hoverHandlers}>
-            <StatusRowSwipeContainer
-              archiveLabel={archiveLabel}
-              onArchive={onArchive}
-              isArchiving={isArchiving}
-              parentGestureRef={parentGestureRef}
-            >
-              <Pressable
-                disabled={isArchiving}
-                accessibilityRole="button"
-                accessibilityState={accessibilityState}
-                style={workspaceRowStyle}
-                onPress={onPress}
-                testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
+    <Animated.View exiting={STATUS_ROW_EXITING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
+      <SidebarWorkspaceRowFrame workspace={workspace}>
+        {({ isHovered, hoverHandlers }) => {
+          // Touch platforms have no hover, so the kebab is permanent there and the
+          // inline archive text button never appears.
+          const showActions = Boolean(onArchive && (isHovered || isTouchPlatform));
+          const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
+          return (
+            <View style={styles.workspaceRowContainer} {...hoverHandlers}>
+              <StatusRowSwipeContainer
+                archiveLabel={archiveLabel}
+                onArchive={onArchive}
+                isArchiving={isArchiving}
+                parentGestureRef={parentGestureRef}
               >
-                <SidebarStatusRowContent
-                  workspace={workspace}
-                  iconDataUri={iconDataUri}
-                  hostLabel={hostLabel}
-                  hostColor={hostColor}
-                  scriptIconKind={scriptIconKind}
-                  isArchiving={isArchiving}
-                  shortcutNumber={shortcutNumber}
-                  showShortcutBadge={showShortcutBadge}
-                  showActions={showActions}
+                <Pressable
+                  disabled={isArchiving}
+                  accessibilityRole="button"
+                  accessibilityState={accessibilityState}
+                  style={workspaceRowStyle}
+                  onPress={onPress}
+                  testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
                 >
-                  {showActions && onArchive ? (
-                    <StatusWorkspaceQuickActions
-                      workspace={workspace}
-                      showInlineArchive={!isTouchPlatform}
-                      isPinned={isPinned}
-                      onTogglePin={onTogglePin}
-                      onCopyPath={onCopyPath}
-                      onCopyBranchName={onCopyBranchName}
-                      onRename={onRename}
-                      onMarkAsRead={onMarkAsRead}
-                      onArchive={onArchive}
-                      archiveLabel={archiveLabel}
-                      archiveStatus={archiveStatus}
-                      archivePendingLabel={archivePendingLabel}
-                      archiveShortcutKeys={archiveShortcutKeys}
-                    />
-                  ) : null}
-                </SidebarStatusRowContent>
-              </Pressable>
-            </StatusRowSwipeContainer>
-          </View>
-        );
-      }}
-    </SidebarWorkspaceRowFrame>
+                  <SidebarStatusRowContent
+                    workspace={workspace}
+                    iconDataUri={iconDataUri}
+                    hostLabel={hostLabel}
+                    hostColor={hostColor}
+                    scriptIconKind={scriptIconKind}
+                    isArchiving={isArchiving}
+                    shortcutNumber={shortcutNumber}
+                    showShortcutBadge={showShortcutBadge}
+                    showActions={showActions}
+                  >
+                    {showActions && onArchive ? (
+                      <StatusWorkspaceQuickActions
+                        workspace={workspace}
+                        showInlineArchive={!isTouchPlatform}
+                        isPinned={isPinned}
+                        onTogglePin={onTogglePin}
+                        onCopyPath={onCopyPath}
+                        onCopyBranchName={onCopyBranchName}
+                        onRename={onRename}
+                        onMarkAsRead={onMarkAsRead}
+                        onArchive={onArchive}
+                        archiveLabel={archiveLabel}
+                        archiveStatus={archiveStatus}
+                        archivePendingLabel={archivePendingLabel}
+                        archiveShortcutKeys={archiveShortcutKeys}
+                      />
+                    ) : null}
+                  </SidebarStatusRowContent>
+                </Pressable>
+              </StatusRowSwipeContainer>
+            </View>
+          );
+        }}
+      </SidebarWorkspaceRowFrame>
+    </Animated.View>
   );
 }
 
