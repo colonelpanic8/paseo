@@ -545,7 +545,10 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "workspace-navigate-ready-waiting-next-alt-r",
     action: "workspace.navigate.ready-waiting.next",
     combo: "Alt+R",
-    when: { commandCenter: false },
+    // Alt/Option+R is a plain letter combo with no mod key, so it stays out of
+    // text entry and terminals: macOS turns Option+R into "®", and readline
+    // binds Alt+R to revert-line.
+    when: { commandCenter: false, editable: false, terminal: false },
     help: {
       id: "workspace-next-ready-waiting",
       section: "navigation",
