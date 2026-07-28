@@ -48,7 +48,7 @@ import {
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
   useSidebarWorkspacePinController,
@@ -65,11 +65,13 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
+  resolveSidebarServerIds,
   shouldShowSidebarHostLabels,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
+import { useArchivedWorkspaces } from "@/hooks/use-archived-workspaces";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useShowShortcutBadges } from "@/hooks/use-show-shortcut-badges";
@@ -1966,6 +1968,7 @@ export function SidebarWorkspaceList({
     groupMode === "status" ? (
       <SidebarStatusModeWrapper
         statusGroups={statusGroups}
+        allServerIds={serverIds}
         pinnedGroups={pinnedGroups}
         projects={projects}
         workspaceEntriesByKey={workspaceEntriesByKey}
@@ -2005,6 +2008,7 @@ export function SidebarWorkspaceList({
 
 function SidebarStatusModeWrapper({
   statusGroups,
+  allServerIds,
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
@@ -2018,6 +2022,7 @@ function SidebarStatusModeWrapper({
   listHeaderComponent,
 }: {
   statusGroups: StatusGroup[];
+  allServerIds: string[];
   pinnedGroups: PinnedSidebarGroups;
   projects: SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
@@ -2043,10 +2048,20 @@ function SidebarStatusModeWrapper({
     [projects],
   );
   const iconDataByProjectKey = useProjectIconDataByProjectKey({ projects: projectIconTargets });
+  // Only status mode renders the archived tail, so the query lives here rather
+  // than in the shared sidebar model — project mode never pays for it.
+  const hostFilters = useSidebarViewStore((state) => state.hostFilters);
+  const hostRegistryLoaded = useHostRegistryLoaded();
+  const archivedServerIds = useMemo(
+    () => resolveSidebarServerIds({ allServerIds, hostFilters, hostRegistryLoaded }),
+    [allServerIds, hostFilters, hostRegistryLoaded],
+  );
+  const archivedWorkspaces = useArchivedWorkspaces({ serverIds: archivedServerIds });
 
   return (
     <SidebarStatusWorkspaceList
       groups={statusGroups}
+      archivedWorkspaces={archivedWorkspaces}
       pinnedWorkspaces={pinnedGroups.pinnedChats.flatMap((workspace) => {
         const entry = workspaceEntriesByKey.get(workspace.workspaceKey);
         return entry ? [entry] : [];

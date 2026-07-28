@@ -854,6 +854,15 @@ export const WorkspaceRecoveryRestoreRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Recently-archived workspaces, newest first. This is an undo affordance for the
+// sidebar's status view, not an archive browser: the daemon caps what it returns
+// and the client never merges these into the live workspace directory.
+export const WorkspaceArchivedListRequestSchema = z.object({
+  type: z.literal("workspace.archived.list.request"),
+  limit: z.number().int().positive().max(200).optional(),
+  requestId: z.string(),
+});
+
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("set_voice_mode"),
   enabled: z.boolean(),
@@ -1569,6 +1578,25 @@ export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
     message: z.string(),
   }),
 ]);
+
+export const ArchivedWorkspacePayloadSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  projectDisplayName: z.string(),
+  name: z.string(),
+  // COMPAT(workspaces): keep legacy directory workspace kind parseable.
+  workspaceKind: z.enum(["directory", "local_checkout", "checkout", "worktree"]),
+  workspaceDirectory: z.string(),
+  archivedAt: z.string(),
+});
+
+export const WorkspaceArchivedListResponseSchema = z.object({
+  type: z.literal("workspace.archived.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    entries: z.array(ArchivedWorkspacePayloadSchema),
+  }),
+});
 
 export const WorkspaceRecoveryInspectResponseSchema = z.object({
   type: z.literal("workspace.recovery.inspect.response"),
@@ -2462,6 +2490,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspacePinSetRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
   WorkspaceRecoveryRestoreRequestSchema,
+  WorkspaceArchivedListRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -2812,6 +2841,8 @@ export const ServerInfoStatusPayloadSchema = z
         providerSubagents: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: z.boolean().optional(),
+        // COMPAT(archivedWorkspacesList): added in v0.2.0, remove gate after 2027-01-28.
+        archivedWorkspacesList: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -5262,6 +5293,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspacePinSetResponseSchema,
   WorkspaceRecoveryInspectResponseSchema,
   WorkspaceRecoveryRestoreResponseSchema,
+  WorkspaceArchivedListResponseSchema,
   WaitForFinishResponseMessageSchema,
   AgentPermissionRequestMessageSchema,
   AgentPermissionResolvedMessageSchema,
@@ -5455,6 +5487,7 @@ export type WorkspaceRecoveryInspectResponse = z.infer<
 export type WorkspaceRecoveryRestoreResponse = z.infer<
   typeof WorkspaceRecoveryRestoreResponseSchema
 >;
+export type WorkspaceArchivedListResponse = z.infer<typeof WorkspaceArchivedListResponseSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
@@ -5593,6 +5626,8 @@ export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSc
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
 export type WorkspaceRecoveryInspectRequest = z.infer<typeof WorkspaceRecoveryInspectRequestSchema>;
 export type WorkspaceRecoveryRestoreRequest = z.infer<typeof WorkspaceRecoveryRestoreRequestSchema>;
+export type WorkspaceArchivedListRequest = z.infer<typeof WorkspaceArchivedListRequestSchema>;
+export type ArchivedWorkspacePayload = z.infer<typeof ArchivedWorkspacePayloadSchema>;
 export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;
 export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMessageSchema>;
 export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;

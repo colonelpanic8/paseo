@@ -984,6 +984,12 @@ export const fr: TranslationResources = {
         archiving: "Archivage...",
         hiding: "Dissimulation...",
       },
+      archived: {
+        groupTitle: "Archivés récemment",
+        unarchive: "Désarchiver",
+        unarchiving: "Désarchivage...",
+        unarchiveFailed: "Échec du désarchivage de l'espace de travail",
+      },
       confirmations: {
         hideTitle: "Masquer l'espace de travail?",
         hideMessage:

@@ -944,6 +944,12 @@ export const zhCN: TranslationResources = {
         archiving: "正在归档...",
         hiding: "正在隐藏...",
       },
+      archived: {
+        groupTitle: "最近归档",
+        unarchive: "取消归档",
+        unarchiving: "正在取消归档...",
+        unarchiveFailed: "取消归档 workspace 失败",
+      },
       confirmations: {
         hideTitle: "隐藏 workspace？",
         hideMessage: "从侧边栏隐藏「{{workspaceName}}」？\n\n磁盘上的文件不会被更改。",

@@ -41,6 +41,8 @@ import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-men
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
+import { SidebarArchivedGroup } from "@/components/sidebar/sidebar-archived-group";
+import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import type { HostColorKey } from "@/types/host-connection";
 import type { GestureType } from "react-native-gesture-handler";
@@ -63,6 +65,7 @@ const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedCircleX = withUnistyles(CircleX);
 interface StatusWorkspaceListProps {
   groups: StatusGroup[];
+  archivedWorkspaces: ArchivedWorkspaceEntry[];
   pinnedWorkspaces: SidebarWorkspaceEntry[];
   /** Project icon data URIs keyed by projectKey; null when the project has no icon. */
   iconDataByProjectKey: ReadonlyMap<string, string | null>;
@@ -80,6 +83,7 @@ interface StatusWorkspaceListProps {
 
 export function SidebarStatusWorkspaceList({
   groups,
+  archivedWorkspaces,
   pinnedWorkspaces,
   iconDataByProjectKey,
   shortcutIndexByWorkspaceKey,
@@ -162,6 +166,11 @@ export function SidebarStatusWorkspaceList({
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
         parentGestureRef={parentGestureRef}
+      />
+      <SidebarArchivedGroup
+        entries={archivedWorkspaces}
+        hostLabelByServerId={hostLabelByServerId}
+        showHostLabels
       />
     </>
   );
