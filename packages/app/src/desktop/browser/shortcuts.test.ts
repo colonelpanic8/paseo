@@ -234,6 +234,7 @@ describe("buildBrowserKeyboardPolicy", () => {
       alt: true,
       code: "KeyR",
       control: false,
+      editable: false,
       key: "r",
       meta: false,
       shift: false,
