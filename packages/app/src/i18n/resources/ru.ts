@@ -2229,6 +2229,8 @@ export const ru: TranslationResources = {
         muteUnmuteVoiceMode: "Выключить/включить звук в голосовом режиме",
         switchProject: "Сменить проект",
         selectHost: "Выбрать хост",
+        toggleFastMode: "Переключить быстрый режим",
+        togglePlanMode: "Переключить режим планирования",
       },
       helpNotes: {
         showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",

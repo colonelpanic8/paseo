@@ -204,10 +204,10 @@ describe("keyboard-shortcuts", () => {
       action: "workspace.host.pick",
     },
     {
-      name: "matches Ctrl+Shift+G to select the provider on non-mac",
-      event: { key: "G", code: "KeyG", ctrlKey: true, shiftKey: true },
-      context: { isMac: false, focusScope: "message-input" },
-      action: "message-input.provider.pick",
+      name: "matches Cmd+Alt+P to toggle plan mode on mac",
+      event: { key: "p", code: "KeyP", metaKey: true, altKey: true },
+      context: { isMac: true, focusScope: "message-input" },
+      action: "message-input.plan-mode.toggle",
     },
     {
       name: "matches question-mark shortcut to toggle the shortcuts dialog",
@@ -697,8 +697,8 @@ describe("keyboard-shortcut help sections", () => {
         "select-thinking": ["mod", "shift", "E"],
         "select-agent-mode": ["mod", "shift", "A"],
         "toggle-fast-mode": ["mod", "alt", "F"],
+        "toggle-plan-mode": ["mod", "alt", "P"],
         "select-host": ["mod", "shift", "H"],
-        "select-provider": ["mod", "shift", "G"],
       },
     },
     {
