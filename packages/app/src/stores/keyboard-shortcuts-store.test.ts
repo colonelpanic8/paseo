@@ -67,4 +67,14 @@ describe("keyboard shortcut badge state", () => {
     expect(useKeyboardShortcutsStore.getState().showControlShortcutBadges).toBe(true);
     expect(useKeyboardShortcutsStore.getState().showShortcutBadges).toBe(false);
   });
+
+  it("keeps control hints visible when sidebar modifier state is cleared", () => {
+    useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
+    vi.advanceTimersByTime(150);
+
+    useKeyboardShortcutsStore.getState().setCmdOrCtrlDown(true);
+    useKeyboardShortcutsStore.getState().setCmdOrCtrlDown(false);
+
+    expect(useKeyboardShortcutsStore.getState().showControlShortcutBadges).toBe(true);
+  });
 });

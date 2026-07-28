@@ -2431,6 +2431,8 @@ export const en = {
         muteUnmuteVoiceMode: "Mute/unmute voice mode",
         switchProject: "Switch project",
         selectHost: "Select host",
+        toggleFastMode: "Toggle fast mode",
+        togglePlanMode: "Toggle plan mode",
       },
       helpNotes: {
         showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",

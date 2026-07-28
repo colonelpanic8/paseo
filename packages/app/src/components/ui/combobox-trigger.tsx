@@ -19,7 +19,7 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronDown } from "lucide-react-native";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { ShortcutHint } from "@/components/ui/shortcut-hint";
+import { ShortcutHint, type ShortcutHintPlacement } from "@/components/ui/shortcut-hint";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 
@@ -40,6 +40,7 @@ interface ComboboxTriggerProps extends Omit<PressableProps, "style" | "children"
   children?: ReactNode;
   chevron?: ReactNode | null;
   shortcutActionId?: string;
+  shortcutHintPlacement?: ShortcutHintPlacement;
   showShortcutHint?: boolean;
   // Fill the Pressable's width and use the standard sidebar-row gap, so the
   // trigger reads as a full-width row: the label expands and the chevron pins to
@@ -53,6 +54,7 @@ export const ComboboxTrigger = forwardRef<View, ComboboxTriggerProps>(function C
     children,
     chevron,
     shortcutActionId,
+    shortcutHintPlacement,
     showShortcutHint = false,
     style,
     block = false,
@@ -109,7 +111,11 @@ export const ComboboxTrigger = forwardRef<View, ComboboxTriggerProps>(function C
           ))}
       </View>
       {shortcutActionId ? (
-        <ShortcutHint actionId={shortcutActionId} enabled={showShortcutHint && !props.disabled} />
+        <ShortcutHint
+          actionId={shortcutActionId}
+          enabled={showShortcutHint && !props.disabled}
+          placement={shortcutHintPlacement}
+        />
       ) : null}
     </Pressable>
   );

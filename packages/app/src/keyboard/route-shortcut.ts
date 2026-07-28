@@ -68,12 +68,15 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
   "workspace.pane.move-tab.down": { id: "workspace.pane.move-tab.down", scope: "workspace" },
   "workspace.pane.close": { id: "workspace.pane.close", scope: "workspace" },
   "view.toggle.focus": { id: "workspace.focus.toggle", scope: "workspace" },
-  "message-input.provider.pick": { id: "message-input.provider.pick", scope: "message-input" },
   "message-input.model.pick": { id: "message-input.model.pick", scope: "message-input" },
   "message-input.thinking.pick": { id: "message-input.thinking.pick", scope: "message-input" },
   "message-input.mode.pick": { id: "message-input.mode.pick", scope: "message-input" },
   "message-input.fast-mode.toggle": {
     id: "message-input.fast-mode.toggle",
+    scope: "message-input",
+  },
+  "message-input.plan-mode.toggle": {
+    id: "message-input.plan-mode.toggle",
     scope: "message-input",
   },
 };
