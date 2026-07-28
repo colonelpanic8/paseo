@@ -4,7 +4,7 @@
  * A token is a *view* over the composer's plain text, re-derived on every render
  * from the same string that gets submitted. Nothing is stored alongside the text:
  * drafts, dictation, undo and the wire format all keep working because the text
- * is still the only source of truth. Deleting the sigil deletes the pill.
+ * is still the only source of truth. Deleting the canonical slash deletes the pill.
  */
 
 import { DEFAULT_COMMAND_SIGIL, type ComposerSigils } from "./sigils";
@@ -57,9 +57,8 @@ function isBoundary(char: string | undefined): boolean {
  * Find token-shaped ranges in `text`. Callers must still check the catalog before
  * treating a range as a command or skill.
  *
- * The command trigger represents a command only at the start of the prompt.
- * Either trigger represents a skill after whitespace, preserving the existing
- * inline slash-skill flow while adding a dedicated skills trigger.
+ * A configured command sigil represents a command only at the start of the
+ * prompt. Either configured sigil represents a skill after whitespace.
  */
 function scanComposerTokens(text: string, sigils: ComposerSigils): ComposerToken[] {
   const tokens: ComposerToken[] = [];
@@ -102,10 +101,11 @@ function isRecognizedToken(token: ComposerToken, catalog: ComposerTokenCatalog):
 
 export function collectComposerTokens(
   text: string,
-  sigils: ComposerSigils,
   catalog: ComposerTokenCatalog,
 ): ComposerToken[] {
-  return scanComposerTokens(text, sigils).filter((token) => isRecognizedToken(token, catalog));
+  return scanComposerTokens(text, CANONICAL_SUBMISSION_SIGILS).filter((token) =>
+    isRecognizedToken(token, catalog),
+  );
 }
 
 /**
@@ -125,32 +125,6 @@ export function getComposerTokenDisplayText(
 ): string {
   const sigil = token.type === "command" ? sigils.command : sigils.skill;
   return `${sigil}${token.name}`;
-}
-
-/**
- * Convert configurable UI triggers to the slash form understood by the daemon
- * and every agent provider.
- */
-export function normalizeComposerTokensForSubmission(
-  text: string,
-  sigils: ComposerSigils,
-  catalog: ComposerTokenCatalog,
-): string {
-  const tokens = collectComposerTokens(text, sigils, catalog);
-  if (tokens.length === 0) {
-    return text;
-  }
-
-  let normalized = "";
-  let cursor = 0;
-  for (const token of tokens) {
-    normalized += text.slice(cursor, token.start);
-    normalized += DEFAULT_COMMAND_SIGIL;
-    normalized += text.slice(token.start + 1, token.end);
-    cursor = token.end;
-  }
-  normalized += text.slice(cursor);
-  return normalized;
 }
 
 /**
