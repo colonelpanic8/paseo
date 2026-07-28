@@ -85,6 +85,21 @@ test("composer token pills and trigger settings stay aligned", async ({
   await expect(composer).not.toHaveAttribute("data-composer-tokenized", "");
   await expect(mirror).toHaveCount(0);
 
+  await composer.fill("please run !release-beta");
+  await composer.press("Enter");
+  const sentMessage = page.getByTestId("user-message").last();
+  const sentToken = sentMessage.getByTestId("sent-message-token");
+  await expect(sentMessage).toBeVisible();
+  await expect(sentToken).toHaveText("!release-beta");
+  await expect(sentMessage).not.toContainText("/release-beta");
+
+  const sentMessageScreenshot = testInfo.outputPath("sent-message-token-pill.png");
+  await sentMessage.screenshot({ path: sentMessageScreenshot });
+  await testInfo.attach("sent-message-token-pill", {
+    path: sentMessageScreenshot,
+    contentType: "image/png",
+  });
+
   await expect(
     page.locator("[data-nextjs-dialog], .vite-error-overlay, #webpack-dev-server-client-overlay"),
   ).toHaveCount(0);
