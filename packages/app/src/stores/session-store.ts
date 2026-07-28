@@ -117,11 +117,6 @@ export interface Agent {
   provider: AgentProvider;
   status: AgentLifecycleStatus;
   activeTurn: { turnId: string | null; startedAt: Date | null } | null;
-  snoozeStatus?: {
-    status: "snoozed";
-    snoozedAt: Date;
-    snoozedUntil: Date;
-  } | null;
   createdAt: Date;
   updatedAt: Date;
   lastUserMessageAt: Date | null;
@@ -163,6 +158,7 @@ export interface WorkspaceDescriptor {
   name: string;
   title?: string | null;
   pinnedAt?: string | null;
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
   status: WorkspaceDescriptorPayload["status"];
   statusEnteredAt: Date | null;
   archivingAt: string | null;
@@ -199,6 +195,7 @@ export function normalizeWorkspaceDescriptor(
     name: payload.name,
     title: payload.title ?? null,
     pinnedAt: payload.pinnedAt ?? null,
+    snoozeStatus: payload.snoozeStatus ?? null,
     status: payload.status,
     statusEnteredAt,
     archivingAt: payload.archivingAt ?? null,
@@ -1995,7 +1992,6 @@ export const useSessionStore = create<SessionStore>()(
             serverId,
             title: agent.title ?? null,
             status: agent.status,
-            snoozeStatus: agent.snoozeStatus ?? null,
             lastActivityAt,
             cwd: agent.cwd,
             provider: agent.provider,

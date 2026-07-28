@@ -5,8 +5,6 @@ import { useSessionStore } from "@/stores/session-store";
 import type { AgentDirectoryEntry } from "@/types/agent-directory";
 import type { Agent } from "@/stores/session-store";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
-import { isAgentEffectivelySnoozed } from "@/agent-snooze/model";
-import { useAgentSnoozeClock } from "@/agent-snooze/use-agent-snooze-clock";
 
 export interface AggregatedAgent extends AgentDirectoryEntry {
   serverId: string;
@@ -42,7 +40,6 @@ export function useAggregatedAgents(options?: {
       return result;
     }),
   );
-  const snoozeNowMs = useAgentSnoozeClock(Object.values(sessionAgents));
 
   const refreshAll = useCallback(() => {
     runtime.refreshAllAgentDirectories();
@@ -70,10 +67,7 @@ export function useAggregatedAgents(options?: {
       }
       const serverLabel = serverLabelById.get(serverId) ?? serverId;
       for (const agent of agents.values()) {
-        if (
-          !includeArchived &&
-          (agent.archivedAt || isAgentEffectivelySnoozed(agent, snoozeNowMs))
-        ) {
+        if (!includeArchived && agent.archivedAt) {
           continue;
         }
         const nextAgent: AggregatedAgent = {
@@ -82,7 +76,6 @@ export function useAggregatedAgents(options?: {
           serverLabel,
           title: agent.title ?? null,
           status: agent.status,
-          snoozeStatus: agent.snoozeStatus ?? null,
           lastActivityAt: agent.lastActivityAt,
           cwd: agent.cwd,
           workspaceId: agent.workspaceId,
@@ -154,7 +147,7 @@ export function useAggregatedAgents(options?: {
       isInitialLoad,
       isRevalidating,
     };
-  }, [daemons, includeArchived, runtime, runtimeVersion, sessionAgents, snoozeNowMs]);
+  }, [daemons, includeArchived, runtime, runtimeVersion, sessionAgents]);
 
   return {
     ...result,

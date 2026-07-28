@@ -16,7 +16,6 @@ function makeAgent(input: {
   createdAt?: Date;
   lastActivityAt?: Date;
   labels?: Record<string, string>;
-  snoozeStatus?: Agent["snoozeStatus"];
 }): Agent {
   const createdAt = input.createdAt ?? new Date("2026-03-04T00:00:00.000Z");
   const lastActivityAt = input.lastActivityAt ?? createdAt;
@@ -26,7 +25,6 @@ function makeAgent(input: {
     provider: "codex",
     status: "idle",
     activeTurn: null,
-    snoozeStatus: input.snoozeStatus ?? null,
     createdAt,
     updatedAt: createdAt,
     lastUserMessageAt: null,
@@ -107,36 +105,6 @@ describe("workspace agent visibility", () => {
     expect(result.activeAgentIds).toEqual(new Set<string>());
     expect(result.autoOpenAgentIds).toEqual(new Set<string>());
     expect(result.knownAgentIds).toEqual(new Set(["archived-child"]));
-  });
-
-  it("keeps snoozed agents known while excluding them from active and auto-open", () => {
-    const snoozed = makeAgent({
-      id: "snoozed-agent",
-      cwd: "/repo/worktree",
-      workspaceId: WORKSPACE_ID,
-      snoozeStatus: {
-        status: "snoozed",
-        snoozedAt: new Date("2026-03-04T00:30:00.000Z"),
-        snoozedUntil: new Date("2026-03-04T02:00:00.000Z"),
-      },
-    });
-
-    const hidden = deriveWorkspaceAgentVisibility({
-      sessionAgents: new Map([[snoozed.id, snoozed]]),
-      workspaceId: WORKSPACE_ID,
-      nowMs: Date.parse("2026-03-04T01:00:00.000Z"),
-    });
-    const awake = deriveWorkspaceAgentVisibility({
-      sessionAgents: new Map([[snoozed.id, snoozed]]),
-      workspaceId: WORKSPACE_ID,
-      nowMs: Date.parse("2026-03-04T03:00:00.000Z"),
-    });
-
-    expect(hidden.activeAgentIds).toEqual(new Set<string>());
-    expect(hidden.autoOpenAgentIds).toEqual(new Set<string>());
-    expect(hidden.knownAgentIds).toEqual(new Set([snoozed.id]));
-    expect(awake.activeAgentIds).toEqual(new Set([snoozed.id]));
-    expect(awake.autoOpenAgentIds).toEqual(new Set([snoozed.id]));
   });
 
   it("excludes a child from auto-open even when its snapshot arrives before the parent", () => {
