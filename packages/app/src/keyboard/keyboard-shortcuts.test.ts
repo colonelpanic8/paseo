@@ -464,6 +464,21 @@ describe("keyboard-shortcuts", () => {
       context: { isMac: true, isDesktop: true, focusScope: "message-input" },
     },
     {
+      name: "keeps mac Option+R available for text input in the message input",
+      event: { key: "®", code: "KeyR", altKey: true },
+      context: { isMac: true, focusScope: "message-input" },
+    },
+    {
+      name: "keeps Alt+R available in generic editable fields",
+      event: { key: "r", code: "KeyR", altKey: true },
+      context: { focusScope: "editable" },
+    },
+    {
+      name: "does not jump to the next ready/waiting workspace while a terminal is focused",
+      event: { key: "r", code: "KeyR", altKey: true },
+      context: { focusScope: "terminal" },
+    },
+    {
       name: "does not match Ctrl+K for command center on non-mac in terminal",
       event: { key: "k", code: "KeyK", ctrlKey: true },
       context: { isMac: false, focusScope: "terminal" },
