@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import { getElectronHost } from "@/desktop/electron/host";
 import type { BrowserKeyboardPolicy } from "@/keyboard/browser-shortcuts";
 import type { SessionInboundMessage, SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type { ManagedHostRegistry } from "@getpaseo/protocol/managed-hosts";
 
 type BrowserAutomationExecuteRequest = Extract<
   SessionOutboundMessage,
@@ -169,6 +170,10 @@ export interface DesktopInvokeBridge {
   invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 }
 
+export interface DesktopManagedHostsBridge {
+  read?: () => Promise<ManagedHostRegistry | null>;
+}
+
 export interface DesktopHostBridge {
   platform?: string;
   invoke?: DesktopInvokeBridge["invoke"];
@@ -183,6 +188,7 @@ export interface DesktopHostBridge {
   webUtils?: DesktopWebUtilsBridge;
   menu?: DesktopMenuBridge;
   browser?: DesktopBrowserBridge;
+  managedHosts?: DesktopManagedHostsBridge;
 }
 
 declare global {
