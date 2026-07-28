@@ -312,6 +312,69 @@ describe("ProviderUsageService", () => {
     }
   });
 
+  it("reports an unauthenticated account as unavailable instead of another account's quota", async () => {
+    const emptyAccount = mkdtempSync(join(tmpdir(), "usage-account-empty-"));
+    const originalCodexHome = process.env["CODEX_HOME"];
+    const sharedCodexHome = mkdtempSync(join(tmpdir(), "usage-shared-codex-"));
+    try {
+      // A signed-in default account that the isolated one must not fall back to.
+      writeCodexAuth(sharedCodexHome, "at_default_account");
+      process.env["CODEX_HOME"] = sharedCodexHome;
+
+      const service = new ProviderUsageService({
+        logger: createLogger(),
+        now: () => Date.parse("2026-06-19T00:00:00.000Z"),
+        fetchers: [],
+        cacheTtlMs: 0,
+        fetch: mockFetch(new Map()) as typeof fetch,
+        listAccountProfiles: () => [
+          {
+            providerId: "codex-work",
+            baseProviderId: "codex",
+            displayName: "Codex · Work",
+            configDir: emptyAccount,
+          },
+        ],
+      });
+
+      const [usage] = (await service.listUsage()).providers;
+      expect(usage?.providerId).toBe("codex-work");
+      expect(usage?.status).toBe("unavailable");
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env["CODEX_HOME"];
+      } else {
+        process.env["CODEX_HOME"] = originalCodexHome;
+      }
+      rmSync(emptyAccount, { recursive: true, force: true });
+      rmSync(sharedCodexHome, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a Claude account off the shared macOS keychain", async () => {
+    const emptyAccount = mkdtempSync(join(tmpdir(), "usage-account-claude-empty-"));
+    try {
+      const keychain = vi.fn(async () => ({
+        claudeAiOauth: { accessToken: "at_default", refreshToken: "rt_default" },
+      }));
+      const logger = createLogger();
+      const accountFetcher = new ClaudeQuotaProvider({
+        logger,
+        accountConfigDir: emptyAccount,
+        platform: "darwin",
+        claudeKeychainReader: keychain,
+        fetch: mockFetch(new Map()) as typeof fetch,
+      });
+
+      await expect(accountFetcher.fetchUsage()).resolves.toMatchObject({
+        status: "unavailable",
+      });
+      expect(keychain).not.toHaveBeenCalled();
+    } finally {
+      rmSync(emptyAccount, { recursive: true, force: true });
+    }
+  });
+
   it("stops serving cached usage once an account is added or removed", async () => {
     let profiles: {
       providerId: string;

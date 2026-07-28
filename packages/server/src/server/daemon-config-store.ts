@@ -8,7 +8,10 @@ import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
 } from "@getpaseo/protocol/messages";
-import { findAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import {
+  BUILTIN_PROVIDER_IDS,
+  findAgentProviderDefinition,
+} from "@getpaseo/protocol/provider-manifest";
 
 export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
 
@@ -71,6 +74,11 @@ export function listProviderAccountProfiles(config: MutableDaemonConfig): Provid
   const profiles: ProviderAccountProfile[] = [];
   for (const [providerId, provider] of Object.entries(config.providers)) {
     if (provider.enabled === false) {
+      continue;
+    }
+    // An entry named after a built-in provider configures that provider itself
+    // rather than adding an account beside it.
+    if (BUILTIN_PROVIDER_IDS.includes(providerId)) {
       continue;
     }
     const parsed = ProviderOverrideSchema.safeParse(provider);

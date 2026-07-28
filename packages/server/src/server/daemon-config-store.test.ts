@@ -668,6 +668,26 @@ describe("provider account directories", () => {
     ).toBeUndefined();
   });
 
+  test("does not mistake a built-in provider's own override for an account", () => {
+    expect(
+      listProviderAccountProfiles({
+        mcp: { injectIntoAgents: false },
+        browserTools: { enabled: false },
+        providers: {
+          claude: {
+            extends: "claude",
+            label: "Claude",
+            env: { CLAUDE_CONFIG_DIR: "/home/you/.claude-elsewhere" },
+          },
+        },
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      }),
+    ).toEqual([]);
+  });
+
   test("lists each configured account so per-account subsystems can fan out", () => {
     expect(
       listProviderAccountProfiles({

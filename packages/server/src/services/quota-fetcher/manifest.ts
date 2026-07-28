@@ -21,7 +21,7 @@ export const PROVIDER_USAGE_FETCHERS: readonly ProviderUsageFetcherManifestEntry
       new ClaudeQuotaProvider({
         logger: options.logger,
         fetch: options.fetch,
-        claudeHome: options.accountConfigDir,
+        accountConfigDir: options.accountConfigDir,
       }),
   },
   {
@@ -30,7 +30,7 @@ export const PROVIDER_USAGE_FETCHERS: readonly ProviderUsageFetcherManifestEntry
       new CodexQuotaProvider({
         logger: options.logger,
         fetch: options.fetch,
-        codexHome: options.accountConfigDir,
+        accountConfigDir: options.accountConfigDir,
       }),
   },
   {

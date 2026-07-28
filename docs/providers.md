@@ -87,7 +87,7 @@ To add plan usage for a provider, add `packages/server/src/services/quota-fetche
 
 Keep the protocol shape provider-agnostic. Do not add provider-specific renderers for new limit windows; labels and generic bars should carry the UI. API responses should be parsed and normalized with Zod inside the fetcher, while the protocol boundary stays strict so old/new client compatibility is explicit.
 
-Give the fetcher an option for its credential directory (`claudeHome`, `codexHome`, and so on) and read the factory's `accountConfigDir` in `manifest.ts`. That is what lets a provider declaring `accounts` report one usage row per account instead of collapsing them onto the base provider.
+If the provider declares `accounts`, give the fetcher an `accountConfigDir` option and pass the factory's `accountConfigDir` through in `manifest.ts`, so each account reports its own usage row instead of collapsing onto the base provider. `accountConfigDir` must mean _only_ this directory: suppress every shared credential fallback the default fetcher relies on — ambient env vars, legacy paths, the macOS Keychain — or an account that isn't signed in will silently report another account's quota.
 
 Kimi Code usage follows the CLI-managed credential file at `KIMI_CODE_HOME` or `~/.kimi-code/credentials/kimi-code.json`; do not probe the legacy `~/.kimi` path as the primary source for current Kimi Code installs.
 
