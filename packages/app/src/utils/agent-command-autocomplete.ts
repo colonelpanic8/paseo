@@ -1,3 +1,4 @@
+import type { ComposerSigil, ComposerSigils } from "@/composer/tokens/sigils";
 import {
   compareMatchScores,
   type MatchScore,
@@ -18,16 +19,26 @@ interface InlineSkillCommandEntry extends CommandAutocompleteEntry {
 
 export type SlashCommandPosition = "start" | "inline";
 
+/**
+ * Which menu the trigger opens. `command` is the full slash-command list;
+ * `skill` is the skills-only list opened by the dedicated skill sigil.
+ */
+export type SlashCommandMenu = "command" | "skill";
+
 export interface SlashCommandRange {
   start: number;
   end: number;
   query: string;
   position: SlashCommandPosition;
+  menu: SlashCommandMenu;
+  /** The sigil that opened this trigger, so replacement can write it back. */
+  sigil: ComposerSigil;
 }
 
 interface FindActiveSlashCommandInput {
   text: string;
   cursorIndex: number;
+  sigils: ComposerSigils;
 }
 
 interface ApplySlashCommandReplacementInput {
@@ -82,34 +93,54 @@ export function filterInlineSkillCommandEntries<TEntry extends InlineSkillComman
   return entries.filter((entry) => entry.source === "provider" && entry.command.kind === "skill");
 }
 
-const INVALID_SLASH_COMMAND_QUERY_CHARS = /[/\s\n\r\t"']/;
+const INVALID_QUERY_CHARS = /[/\s\n\r\t"']/;
 
+function isInvalidQuery(query: string, sigils: ComposerSigils): boolean {
+  // A second sigil inside the query means the earlier one was not the live
+  // trigger — the nearer sigil owns the cursor.
+  return (
+    INVALID_QUERY_CHARS.test(query) ||
+    query.includes(sigils.command) ||
+    query.includes(sigils.skill)
+  );
+}
+
+/**
+ * Find the trigger the cursor currently sits inside, scanning backwards so the
+ * sigil nearest the cursor wins.
+ */
 export function findActiveSlashCommand(
   input: FindActiveSlashCommandInput,
 ): SlashCommandRange | null {
   const clampedCursor = Math.max(0, Math.min(input.cursorIndex, input.text.length));
   const beforeCursor = input.text.slice(0, clampedCursor);
+  const { sigils } = input;
 
-  for (
-    let slashIndex = beforeCursor.lastIndexOf("/");
-    slashIndex >= 0;
-    slashIndex = slashIndex === 0 ? -1 : beforeCursor.lastIndexOf("/", slashIndex - 1)
-  ) {
-    const previousCharacter = slashIndex > 0 ? input.text[slashIndex - 1] : "";
+  for (let index = clampedCursor - 1; index >= 0; index -= 1) {
+    const character = beforeCursor[index];
+    const isCommandSigil = character === sigils.command;
+    const isSkillSigil = character === sigils.skill;
+    if (!isCommandSigil && !isSkillSigil) {
+      continue;
+    }
+
+    const previousCharacter = index > 0 ? input.text[index - 1] : "";
     if (previousCharacter && !/\s/.test(previousCharacter)) {
       continue;
     }
 
-    const query = beforeCursor.slice(slashIndex + 1);
-    if (INVALID_SLASH_COMMAND_QUERY_CHARS.test(query)) {
+    const query = beforeCursor.slice(index + 1);
+    if (isInvalidQuery(query, sigils)) {
       continue;
     }
 
     return {
-      start: slashIndex,
+      start: index,
       end: clampedCursor,
       query,
-      position: slashIndex === 0 ? "start" : "inline",
+      position: index === 0 ? "start" : "inline",
+      menu: isSkillSigil ? "skill" : "command",
+      sigil: character,
     };
   }
 
@@ -119,6 +150,6 @@ export function findActiveSlashCommand(
 export function applySlashCommandReplacement(input: ApplySlashCommandReplacementInput): string {
   const before = input.text.slice(0, input.command.start);
   const after = input.text.slice(input.command.end);
-  const replacement = `${before}/${input.commandName}${after}`;
+  const replacement = `${before}${input.command.sigil}${input.commandName}${after}`;
   return input.command.end === input.text.length ? `${replacement} ` : replacement;
 }
