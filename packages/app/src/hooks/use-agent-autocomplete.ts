@@ -29,6 +29,7 @@ import {
   type FileMentionRange,
 } from "@/utils/file-mention-autocomplete";
 import type { ComposerSigils } from "@/composer/tokens/sigils";
+import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
 
 interface UseAgentAutocompleteInput {
   userInput: string;
@@ -76,6 +77,7 @@ interface AgentAutocompleteResult {
   errorMessage?: string;
   loadingText: string;
   emptyText: string;
+  tokenCatalog: ComposerTokenCatalog;
   onSelectOption: (option: AutocompleteOption, input?: AgentAutocompleteInputSnapshot) => void;
   onKeyPress: (event: AgentAutocompleteKeyPressEvent) => boolean;
 }
@@ -399,6 +401,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     [cursorIndex, userInput, sigils],
   );
   const showCommandAutocomplete = activeSlashCommand !== null;
+  const hasTokenCandidate = userInput.includes(sigils.command) || userInput.includes(sigils.skill);
   const commandFilterQuery = activeSlashCommand?.query ?? "";
 
   const activeFileMention = useMemo(
@@ -448,11 +451,23 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const commandsQuery = useAgentCommandsQuery({
     serverId,
     agentId,
-    enabled: mode === "command" && canLoadCommands && canListCommands,
+    enabled: hasTokenCandidate && canLoadCommands && canListCommands,
     draftConfig: queryDraftConfig,
   });
   const { commands, isError, error } = commandsQuery;
   const isCommandsLoading = canListCommands && commandsQuery.isLoading;
+
+  const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
+    const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
+    const skillNames = new Set<string>();
+    for (const command of commands) {
+      commandNames.add(command.name);
+      if (command.kind === "skill") {
+        skillNames.add(command.name);
+      }
+    }
+    return { commandNames, skillNames };
+  }, [commands]);
 
   const isVisible = canShowAutocomplete && !(mode === "command" && isCommandsLoading);
 
@@ -632,6 +647,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     errorMessage,
     loadingText,
     emptyText,
+    tokenCatalog,
     onSelectOption,
     onKeyPress,
   };

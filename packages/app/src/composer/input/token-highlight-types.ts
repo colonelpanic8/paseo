@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import type { ComposerSigils } from "@/composer/tokens/sigils";
+import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
 
 export interface ComposerTokenHighlightProps {
   /**
@@ -10,6 +11,7 @@ export interface ComposerTokenHighlightProps {
   enabled: boolean;
   value: string;
   sigils: ComposerSigils;
+  tokenCatalog: ComposerTokenCatalog;
   /** The underlying `<textarea>` on web; unused on native. */
   textareaRef: RefObject<unknown>;
 }
