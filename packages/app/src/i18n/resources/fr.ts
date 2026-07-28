@@ -2253,6 +2253,7 @@ export const fr: TranslationResources = {
       connectedHosts: "Hôtes connectés",
       offline: "Hors ligne",
       versionDiffers: "Version différente de celle de cet appareil",
+      viewCommit: "Voir le commit sur GitHub",
       releaseChannel: {
         label: "Canal de publication",
         description:
