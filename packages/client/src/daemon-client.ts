@@ -101,6 +101,7 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
+  ArchivedWorkspacePayload,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -2611,6 +2612,21 @@ export class DaemonClient {
         },
       });
     return payload.state;
+  }
+
+  async listArchivedWorkspaces(
+    options?: { limit?: number },
+    requestId?: string,
+  ): Promise<ArchivedWorkspacePayload[]> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.archived.list.response">({
+        requestId,
+        message: {
+          type: "workspace.archived.list.request",
+          ...(options?.limit === undefined ? {} : { limit: options.limit }),
+        },
+      });
+    return payload.entries;
   }
 
   async restoreWorkspace(workspaceId: string, requestId?: string): Promise<void> {

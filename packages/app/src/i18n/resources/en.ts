@@ -974,6 +974,12 @@ export const en = {
         archiving: "Archiving...",
         hiding: "Hiding...",
       },
+      archived: {
+        groupTitle: "Recently archived",
+        unarchive: "Unarchive",
+        unarchiving: "Unarchiving...",
+        unarchiveFailed: "Failed to unarchive workspace",
+      },
       confirmations: {
         hideTitle: "Hide workspace?",
         hideMessage:

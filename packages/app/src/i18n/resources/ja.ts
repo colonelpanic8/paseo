@@ -975,6 +975,12 @@ export const ja: TranslationResources = {
         archiving: "アーカイブ中...",
         hiding: "非表示にしています...",
       },
+      archived: {
+        groupTitle: "最近アーカイブしたもの",
+        unarchive: "アーカイブ解除",
+        unarchiving: "アーカイブを解除しています...",
+        unarchiveFailed: "ワークスペースのアーカイブ解除に失敗しました",
+      },
       confirmations: {
         hideTitle: "ワークスペースを非表示にしますか？",
         hideMessage:

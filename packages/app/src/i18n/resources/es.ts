@@ -995,6 +995,12 @@ export const es: TranslationResources = {
         archiving: "Archivando...",
         hiding: "Ocultación...",
       },
+      archived: {
+        groupTitle: "Archivados recientemente",
+        unarchive: "Desarchivar",
+        unarchiving: "Desarchivando...",
+        unarchiveFailed: "No se pudo desarchivar el espacio de trabajo",
+      },
       confirmations: {
         hideTitle: "¿Ocultar espacio de trabajo?",
         hideMessage:

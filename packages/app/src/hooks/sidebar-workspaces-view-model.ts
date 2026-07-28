@@ -86,6 +86,28 @@ interface SidebarWorkspaceSessionSource {
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
 }
 
+/**
+ * The hosts the sidebar is currently showing. Every sidebar surface must agree on
+ * this set, or a filtered-out host leaks rows into one section but not another.
+ * Once the registry has settled and no pinned host still exists, fall back to
+ * every host rather than rendering an empty sidebar.
+ */
+export function resolveSidebarServerIds(input: {
+  allServerIds: readonly string[];
+  hostFilters: readonly string[];
+  hostRegistryLoaded: boolean;
+}): string[] {
+  if (input.hostFilters.length === 0) {
+    return [...input.allServerIds];
+  }
+  const selected = new Set(input.hostFilters);
+  const matched = input.allServerIds.filter((id) => selected.has(id));
+  if (input.hostRegistryLoaded && matched.length === 0) {
+    return [...input.allServerIds];
+  }
+  return matched;
+}
+
 export function selectSidebarWorkspaceSessions(
   sessions: Record<string, SidebarWorkspaceSessionSource | undefined>,
   serverIds: readonly string[],

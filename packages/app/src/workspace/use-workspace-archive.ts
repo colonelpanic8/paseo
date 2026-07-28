@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
+import { archivedWorkspacesQueryKey } from "@/hooks/use-archived-workspaces";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -51,6 +53,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
   } = input;
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const archiveWorkspaceRecord = useCallback(async () => {
     const client = getHostRuntimeStore().getClient(serverId);
@@ -69,6 +72,9 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
         },
       });
       purgeArchivedWorkspaceState({ serverId, workspaceId });
+      // Status mode's recently-archived tail is only useful if the workspace you
+      // just archived is already in it when you realize the mistake.
+      void queryClient.invalidateQueries({ queryKey: archivedWorkspacesQueryKey(serverId) });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t("sidebar.workspace.toasts.archiveFailed"),
@@ -76,7 +82,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     } finally {
       onSetHiding?.(false);
     }
-  }, [onArchiveStarted, onSetHiding, serverId, t, toast, workspaceId]);
+  }, [onArchiveStarted, onSetHiding, queryClient, serverId, t, toast, workspaceId]);
 
   const archive = useCallback(() => {
     void (async () => {

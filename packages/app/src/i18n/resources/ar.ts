@@ -964,6 +964,12 @@ export const ar: TranslationResources = {
         archiving: "أرشفة...",
         hiding: "إخفاء...",
       },
+      archived: {
+        groupTitle: "المؤرشفة مؤخرًا",
+        unarchive: "إلغاء الأرشفة",
+        unarchiving: "جارٍ إلغاء الأرشفة...",
+        unarchiveFailed: "تعذر إلغاء أرشفة مساحة العمل",
+      },
       confirmations: {
         hideTitle: "إخفاء مساحة العمل؟",
         hideMessage:

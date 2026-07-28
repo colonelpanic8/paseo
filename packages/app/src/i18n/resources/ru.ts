@@ -986,6 +986,12 @@ export const ru: TranslationResources = {
         archiving: "Архивирование...",
         hiding: "Скрытие...",
       },
+      archived: {
+        groupTitle: "Недавно архивированные",
+        unarchive: "Разархивировать",
+        unarchiving: "Разархивирование...",
+        unarchiveFailed: "Не удалось разархивировать рабочее пространство",
+      },
       confirmations: {
         hideTitle: "Скрыть рабочее пространство?",
         hideMessage:

@@ -81,6 +81,29 @@ leave both Paseo's `archivedAt` and the provider's native archive state unchange
 the only transition back to an interactive runtime: it runs the provider's native unarchive hook
 (including Codex `thread/unarchive`) before the normal agent resume and timeline hydration flow.
 
+### The recently-archived tail
+
+Status mode renders a greyed-out **Recently archived** group after every real status group, newest
+archive first, so a mis-archive is one click from being undone. It is an undo affordance, not an
+archive browser.
+
+The rows come from `workspace.archived.list.request` (capability
+`server_info.features.archivedWorkspacesList`), **not** from the workspace directory. This split is
+deliberate and load-bearing: every consumer of the session store's workspace map — project mode, the
+workspace switcher, status counts — treats a present descriptor as live. Archived workspaces must
+never enter that map, so they live only in the `archivedWorkspaces` query
+(`packages/app/src/hooks/use-archived-workspaces.ts`) and only status mode reads it. If you ever need
+archived workspaces somewhere else, add another reader of that query; do not widen the directory.
+
+`archived` is not a status bucket. It is deliberately excluded from `STATUS_BUCKET_ORDER` and from the
+1–9 keyboard shortcut index — archived workspaces have no live status and nothing to navigate to. The
+only action on a row is unarchive, which goes through the existing
+`workspace.recovery.restore.request`, so the daemon (not the client) still decides between plain
+unarchive and recreating a Paseo-owned worktree.
+
+The daemon caps its response and drops workspaces whose owning project is archived; unarchiving one
+would surface a workspace under a project the user cannot see.
+
 Provider session connection owns every process it spawns until the session is registered with
 `AgentManager`. If initialization, persisted-session resume, or initial history hydration fails,
 `connect()` must dispose that process before rethrowing; the manager cannot clean up a session it never
