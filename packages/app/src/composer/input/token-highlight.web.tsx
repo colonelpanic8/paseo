@@ -29,7 +29,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { withUnistyles } from "react-native-unistyles";
-import { collectComposerTokens, segmentComposerText } from "@/composer/tokens/tokens";
+import {
+  collectComposerTokens,
+  getComposerTokenDisplayText,
+  segmentComposerText,
+} from "@/composer/tokens/tokens";
 import type { Theme } from "@/styles/theme";
 import type { ComposerTokenHighlightProps } from "./token-highlight-types";
 
@@ -218,9 +222,8 @@ function ComposerTokenHighlight({
   }, [enabled, textareaRef]);
 
   const segments = useMemo(
-    () =>
-      enabled ? segmentComposerText(value, collectComposerTokens(value, sigils, tokenCatalog)) : [],
-    [enabled, value, sigils, tokenCatalog],
+    () => (enabled ? segmentComposerText(value, collectComposerTokens(value, tokenCatalog)) : []),
+    [enabled, value, tokenCatalog],
   );
 
   const containerStyle = useMemo<CSSProperties>(
@@ -250,7 +253,7 @@ function ComposerTokenHighlight({
             <span key={segment.start}>{segment.text}</span>
           ) : (
             <span key={segment.start} style={tokenStyle}>
-              {segment.text}
+              {getComposerTokenDisplayText(segment.token, sigils)}
             </span>
           ),
         )}

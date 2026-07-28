@@ -1,4 +1,8 @@
-import type { ComposerSigil, ComposerSigils } from "@/composer/tokens/sigils";
+import {
+  DEFAULT_COMMAND_SIGIL,
+  type ComposerSigil,
+  type ComposerSigils,
+} from "@/composer/tokens/sigils";
 import {
   compareMatchScores,
   type MatchScore,
@@ -31,7 +35,7 @@ export interface SlashCommandRange {
   query: string;
   position: SlashCommandPosition;
   menu: SlashCommandMenu;
-  /** The sigil that opened this trigger, so replacement can write it back. */
+  /** The configured sigil that opened this trigger. */
   sigil: ComposerSigil;
 }
 
@@ -150,6 +154,6 @@ export function findActiveSlashCommand(
 export function applySlashCommandReplacement(input: ApplySlashCommandReplacementInput): string {
   const before = input.text.slice(0, input.command.start);
   const after = input.text.slice(input.command.end);
-  const replacement = `${before}${input.command.sigil}${input.commandName}${after}`;
+  const replacement = `${before}${DEFAULT_COMMAND_SIGIL}${input.commandName}${after}`;
   return input.command.end === input.text.length ? `${replacement} ` : replacement;
 }

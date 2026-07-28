@@ -28,7 +28,7 @@ import {
   findActiveFileMention,
   type FileMentionRange,
 } from "@/utils/file-mention-autocomplete";
-import type { ComposerSigils } from "@/composer/tokens/sigils";
+import { DEFAULT_COMMAND_SIGIL, type ComposerSigils } from "@/composer/tokens/sigils";
 import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
 
 interface UseAgentAutocompleteInput {
@@ -401,7 +401,10 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     [cursorIndex, userInput, sigils],
   );
   const showCommandAutocomplete = activeSlashCommand !== null;
-  const hasTokenCandidate = userInput.includes(sigils.command) || userInput.includes(sigils.skill);
+  const hasTokenCandidate =
+    userInput.includes(DEFAULT_COMMAND_SIGIL) ||
+    userInput.includes(sigils.command) ||
+    userInput.includes(sigils.skill);
   const commandFilterQuery = activeSlashCommand?.query ?? "";
 
   const activeFileMention = useMemo(
