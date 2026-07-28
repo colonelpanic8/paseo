@@ -1,5 +1,6 @@
 import type { AttachmentMetadata } from "@/attachments/types";
 import { getAttachmentStore } from "@/attachments/store";
+import { collectLiveAttachmentIds } from "@/attachments/live-attachments";
 
 export async function persistAttachmentFromBlob(input: {
   blob: Blob;
@@ -134,5 +135,11 @@ export async function garbageCollectAttachments(input: {
   referencedIds: ReadonlySet<string>;
 }): Promise<void> {
   const store = await getAttachmentStore();
-  await store.garbageCollect({ referencedIds: input.referencedIds });
+  // Whatever a mounted component is displaying right now is reachable, even when no draft
+  // or queued message roots it. Previews depend on this: their only other protection is the
+  // age fallback in gc-policy.ts, which would otherwise delete the bytes behind an image
+  // that is still on screen once it outlives the max age.
+  const referencedIds = new Set(input.referencedIds);
+  collectLiveAttachmentIds(referencedIds);
+  await store.garbageCollect({ referencedIds });
 }

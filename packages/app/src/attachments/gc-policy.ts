@@ -5,6 +5,11 @@ import { isPreviewAttachmentId } from "@/attachments/utils";
 // is every keystroke in the composer. They are a cache of bytes the daemon still owns, so
 // they expire on age instead. Anything without a usable timestamp is kept: a preview whose
 // age we cannot establish is cheaper to keep than to delete out from under a mounted image.
+//
+// Age is a lifetime for previews nothing is showing. A preview a mounted component is
+// displaying arrives here with `isReferenced` already true — `garbageCollectAttachments`
+// unions the retentions from live-attachments.ts into the referenced set — so this policy
+// never expires an image that is on screen, however long it stays there.
 export const PREVIEW_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function shouldDeleteAttachmentDuringGc(input: {

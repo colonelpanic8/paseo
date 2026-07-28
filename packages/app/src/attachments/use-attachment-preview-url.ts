@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { releaseAttachmentPreviewUrl, resolveAttachmentPreviewUrl } from "@/attachments/service";
+import { retainLiveAttachment } from "@/attachments/live-attachments";
 
 export type AttachmentPreviewUrlState =
   | { status: "idle" }
@@ -37,6 +38,20 @@ export function useAttachmentPreviewUrlState(
   const mimeType = attachment?.mimeType;
   const reloadKey = options?.reloadKey;
   const hasSeenReloadKeyRef = useRef(false);
+  // A reload signal that arrived while a resolve was still in flight. That attempt read the
+  // store before the refreshed bytes landed, so its failure says nothing about them — retry
+  // instead of latching "failed", which nothing else would clear once the caller's key stops
+  // changing.
+  const pendingReloadRef = useRef(false);
+
+  // Garbage collection may not delete bytes we are displaying. Retaining by id (rather than
+  // waiting for a resolved URL) also covers the window where the resolve is still in flight.
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+    return retainLiveAttachment(id);
+  }, [id]);
 
   useEffect(() => {
     if (!hasSeenReloadKeyRef.current) {
@@ -45,6 +60,10 @@ export function useAttachmentPreviewUrlState(
     }
     if (stateRef.current.status === "failed") {
       setRetryAttempt((attempt) => attempt + 1);
+      return;
+    }
+    if (stateRef.current.status === "resolving") {
+      pendingReloadRef.current = true;
     }
   }, [reloadKey]);
 
@@ -54,6 +73,8 @@ export function useAttachmentPreviewUrlState(
     const current = attachmentRef.current;
 
     activeAttachmentRef.current = current ?? null;
+    // A fresh attempt supersedes any reload that arrived during the previous one.
+    pendingReloadRef.current = false;
     if (!current) {
       setState({ status: "idle" });
       return;
@@ -75,9 +96,15 @@ export function useAttachmentPreviewUrlState(
           attachmentId: current.id,
           error,
         });
-        if (!disposed) {
-          setState({ status: "failed" });
+        if (disposed) {
+          return;
         }
+        if (pendingReloadRef.current) {
+          pendingReloadRef.current = false;
+          setRetryAttempt((attempt) => attempt + 1);
+          return;
+        }
+        setState({ status: "failed" });
       }
     })();
 
