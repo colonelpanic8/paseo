@@ -407,6 +407,17 @@ export class ProviderSnapshotManager {
       this.providerLoads.delete(cwd);
       this.snapshots.set(cwd, this.reconcileSnapshotForRegistry(cwd));
       this.emitChange(cwd);
+      // Load whatever the reconcile left as "loading" — providers added by
+      // this config change — so already-subscribed clients see their models
+      // without having to force a refresh themselves.
+      const target =
+        cwd === GLOBAL_PROVIDER_SNAPSHOT_KEY
+          ? createGlobalSnapshotTarget()
+          : createWorkspaceSnapshotTarget(cwd);
+      const providersToWarm = this.resolveProvidersToWarm(cwd);
+      if (providersToWarm.length > 0) {
+        void this.warmUp(target, providersToWarm);
+      }
     }
 
     return this.getAgentManagerProviderState();
@@ -604,11 +615,22 @@ export class ProviderSnapshotManager {
         accounts: definition?.accounts,
       };
 
-      if (!definition?.enabled || !current || current.status === "loading") {
+      if (!definition?.enabled) {
         entries.set(provider, {
           ...metadata,
           status: "unavailable",
-          enabled: definition?.enabled ?? true,
+          enabled: false,
+        });
+        continue;
+      }
+
+      // A provider the old snapshot never loaded — typically one just added by
+      // a config change, like a new account — must come back as "loading" so
+      // the warm-up path picks it up; "unavailable" entries are never warmed.
+      if (!current || current.status === "loading") {
+        entries.set(provider, {
+          ...metadata,
+          status: "loading",
         });
         continue;
       }
