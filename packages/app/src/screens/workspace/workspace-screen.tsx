@@ -24,7 +24,6 @@ import {
   ArrowLeftToLine,
   ArrowRightToLine,
   ChevronDown,
-  Clock,
   Copy,
   Ellipsis,
   Globe,
@@ -181,8 +180,6 @@ import {
 } from "@/panels/panel-instance-attributes";
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
-import { useAgentSnoozeMenu } from "@/agent-snooze/use-agent-snooze-menu";
-import { useAgentSnoozeClock } from "@/agent-snooze/use-agent-snooze-clock";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import {
@@ -252,7 +249,6 @@ const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCopy = withUnistyles(Copy);
-const ThemedClock = withUnistyles(Clock);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
@@ -582,8 +578,6 @@ function MobileTabDropdownMenuItem({
         return <ThemedArrowRightToLine size={16} uniProps={mutedColorMapping} />;
       case "copy-x":
         return <ThemedCopyX size={16} uniProps={mutedColorMapping} />;
-      case "clock":
-        return <ThemedClock size={16} uniProps={mutedColorMapping} />;
       case "pencil":
         return <ThemedPencil size={16} uniProps={mutedColorMapping} />;
       case "x":
@@ -630,7 +624,6 @@ function MobileWorkspaceTabOption({
   onCloseTabsAbove,
   onCloseTabsBelow,
   onCloseOtherTabs,
-  onOpenCustomSnooze,
 }: {
   tab: WorkspaceTabDescriptor;
   tabIndex: number;
@@ -650,23 +643,8 @@ function MobileWorkspaceTabOption({
   onCloseTabsAbove: (tabId: string) => Promise<void> | void;
   onCloseTabsBelow: (tabId: string) => Promise<void> | void;
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
-  onOpenCustomSnooze: (open: () => void) => void;
 }) {
   const { t } = useTranslation();
-  const snooze = useAgentSnoozeMenu(
-    normalizedServerId,
-    tab.target.kind === "agent" ? tab.target.agentId : null,
-  );
-  const mobileSnooze = useMemo(
-    () =>
-      snooze
-        ? {
-            ...snooze,
-            onCustom: () => onOpenCustomSnooze(snooze.onCustom),
-          }
-        : undefined,
-    [onOpenCustomSnooze, snooze],
-  );
   const tabMenuLabels = useMemo<WorkspaceTabMenuLabels>(
     () => ({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
@@ -702,7 +680,6 @@ function MobileWorkspaceTabOption({
     onCloseTabsBefore: onCloseTabsAbove,
     onCloseTabsAfter: onCloseTabsBelow,
     onCloseOtherTabs,
-    snooze: mobileSnooze,
     labels: tabMenuLabels,
   });
 
@@ -776,7 +753,6 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const anchorRef = useRef<View>(null);
-  const pendingCustomSnoozeRef = useRef<(() => void) | null>(null);
   const tabIndexByKey = useMemo(() => {
     const map = new Map<string, number>();
     tabs.forEach((tab, index) => {
@@ -788,15 +764,6 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   const handleOpenSwitcher = useCallback(() => {
     Keyboard.dismiss();
     setIsOpen(true);
-  }, []);
-  const handleOpenCustomSnooze = useCallback((open: () => void) => {
-    pendingCustomSnoozeRef.current = open;
-    setIsOpen(false);
-  }, []);
-  const handleSwitcherDismiss = useCallback(() => {
-    const openCustomSnooze = pendingCustomSnoozeRef.current;
-    pendingCustomSnoozeRef.current = null;
-    openCustomSnooze?.();
   }, []);
 
   const renderTabOption = useCallback(
@@ -839,7 +806,6 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
           onCloseTabsAbove={onCloseTabsAbove}
           onCloseTabsBelow={onCloseTabsBelow}
           onCloseOtherTabs={onCloseOtherTabs}
-          onOpenCustomSnooze={handleOpenCustomSnooze}
         />
       );
     },
@@ -859,7 +825,6 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
       onCloseTabsAbove,
       onCloseTabsBelow,
       onCloseOtherTabs,
-      handleOpenCustomSnooze,
     ],
   );
 
@@ -892,7 +857,6 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
         searchPlaceholder={t("workspace.tabs.switcher.searchPlaceholder")}
         open={isOpen}
         onOpenChange={setIsOpen}
-        onMobileDismiss={handleSwitcherDismiss}
         anchorRef={anchorRef}
         renderOption={renderTabOption}
       />
@@ -1925,10 +1889,6 @@ function WorkspaceScreenContent({
     ),
   });
 
-  const workspaceSessionAgents = useSessionStore(
-    (state) => state.sessions[normalizedServerId]?.agents,
-  );
-  const workspaceSnoozeNowMs = useAgentSnoozeClock([workspaceSessionAgents]);
   const workspaceAgentVisibility = useStoreWithEqualityFn(
     useSessionStore,
     (state) =>
@@ -1936,7 +1896,6 @@ function WorkspaceScreenContent({
         sessionAgents: state.sessions[normalizedServerId]?.agents,
         agentDetails: state.sessions[normalizedServerId]?.agentDetails,
         workspaceId: normalizedWorkspaceId,
-        nowMs: workspaceSnoozeNowMs,
       }),
     workspaceAgentVisibilityEqual,
   );

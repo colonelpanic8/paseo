@@ -2559,11 +2559,7 @@ export class DaemonClient {
 
   async updateAgent(
     agentId: string,
-    updates: {
-      name?: string;
-      labels?: Record<string, string>;
-      snoozeUntil?: string | null;
-    },
+    updates: { name?: string; labels?: Record<string, string> },
   ): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
@@ -2573,7 +2569,6 @@ export class DaemonClient {
       ...(updates.labels && Object.keys(updates.labels).length > 0
         ? { labels: updates.labels }
         : {}),
-      ...(updates.snoozeUntil !== undefined ? { snoozeUntil: updates.snoozeUntil } : {}),
       requestId,
     });
     const payload = await this.sendRequest({
@@ -2682,6 +2677,26 @@ export class DaemonClient {
       throw new Error(payload.error ?? "setWorkspacePinned rejected");
     }
     return { pinnedAt: payload.pinnedAt };
+  }
+
+  async setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId?: string,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.snooze.set.request",
+        workspaceId,
+        snoozedUntil,
+      },
+      responseType: "workspace.snooze.set.response",
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "setWorkspaceSnooze rejected");
+    }
+    return { snoozeStatus: payload.snoozeStatus };
   }
 
   async inspectWorkspaceRecovery(

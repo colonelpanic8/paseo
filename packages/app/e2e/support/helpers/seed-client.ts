@@ -12,6 +12,7 @@ export interface SeedWorkspaceDescriptor {
   projectDisplayName: string;
   projectRootPath: string;
   workspaceDirectory: string;
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
 }
 
 interface SeedProjectDescriptor {
@@ -43,6 +44,10 @@ export interface SeedDaemonClient {
     entries: SeedWorkspaceDescriptor[];
   }>;
   listProjects(): Promise<{ projects: SeedProjectDescriptor[] }>;
+  setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }>;
   createWorkspace(input: {
     source:
       | { kind: "directory"; path: string; projectId?: string }
@@ -113,11 +118,6 @@ export interface SeedDaemonClient {
         model: string | null;
         currentModeId: string | null;
         status: string;
-        snoozeStatus?: {
-          status: "snoozed";
-          snoozedAt: string;
-          snoozedUntil: string;
-        } | null;
         title?: string | null;
       };
     }>;

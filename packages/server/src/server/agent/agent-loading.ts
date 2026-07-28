@@ -122,7 +122,6 @@ export async function ensureAgentLoaded(
       }
       snapshot = await deps.agentManager.createAgent(config, agentId, {
         labels: record.labels,
-        snoozeStatus: record.snoozeStatus ?? null,
         workspaceId: record.workspaceId,
         owner: record.owner,
       });

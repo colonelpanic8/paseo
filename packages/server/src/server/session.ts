@@ -1840,6 +1840,7 @@ export class Session {
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceRecoveryMessage(msg) ??
+      this.dispatchWorkspaceMetadataMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg) ??
       this.dispatchWorkspaceFileMessage(msg, source) ??
       this.dispatchProviderMessage(msg) ??
@@ -1981,13 +1982,7 @@ export class Session {
       case "close_items_request":
         return this.handleCloseItemsRequest(msg);
       case "update_agent_request":
-        return this.handleUpdateAgentRequest(
-          msg.agentId,
-          msg.name,
-          msg.labels,
-          msg.snoozeUntil,
-          msg.requestId,
-        );
+        return this.handleUpdateAgentRequest(msg.agentId, msg.name, msg.labels, msg.requestId);
       case "project.rename.request":
         return this.handleProjectRenameRequest(msg.projectId, msg.customName, msg.requestId);
       case "project.icon.set.request":
@@ -2164,10 +2159,23 @@ export class Session {
         return this.handleWorkspaceCreateRequest(msg);
       case "workspace.clear_attention.request":
         return this.handleWorkspaceClearAttentionRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchWorkspaceMetadataMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
       case "workspace.title.set.request":
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      case "workspace.snooze.set.request":
+        return this.handleWorkspaceSnoozeSetRequest(
+          msg.workspaceId,
+          msg.snoozedUntil,
+          msg.requestId,
+        );
       default:
         return undefined;
     }
@@ -2603,7 +2611,6 @@ export class Session {
     agentId: string,
     name: string | undefined,
     labels: Record<string, string> | undefined,
-    snoozeUntil: string | null | undefined,
     requestId: string,
   ): Promise<void> {
     this.sessionLogger.info(
@@ -2619,7 +2626,7 @@ export class Session {
     try {
       const result = await updateAgentCommand(
         { agentManager: this.agentManager },
-        { agentId, name, labels, snoozeUntil },
+        { agentId, name, labels },
       );
 
       if (!result.accepted) {
@@ -3021,6 +3028,67 @@ export class Session {
         },
       });
       emitResponse(false, null, getErrorMessageOr(error, "Failed to pin workspace"));
+    }
+  }
+
+  private async handleWorkspaceSnoozeSetRequest(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId: string,
+  ): Promise<void> {
+    const logContext = { workspaceId, snoozedUntil, requestId };
+    this.sessionLogger.info(logContext, "session: workspace.snooze.set.request");
+    const emitResponse = (
+      accepted: boolean,
+      snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null,
+      error: string | null,
+    ) => {
+      this.emit({
+        type: "workspace.snooze.set.response",
+        payload: { requestId, workspaceId, accepted, snoozeStatus, error },
+      });
+    };
+
+    try {
+      const now = new Date();
+      if (snoozedUntil !== null && !(Date.parse(snoozedUntil) > now.getTime())) {
+        emitResponse(false, null, "Workspace snooze wake time must be a valid future timestamp");
+        return;
+      }
+      const nextSnoozeStatus =
+        snoozedUntil === null
+          ? null
+          : {
+              snoozedAt: now.toISOString(),
+              snoozedUntil: new Date(Date.parse(snoozedUntil)).toISOString(),
+            };
+      const updatedAt = now.toISOString();
+      const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
+        ...existing,
+        snoozeStatus: nextSnoozeStatus,
+        updatedAt,
+      }));
+      if (!updated) {
+        emitResponse(false, null, "Workspace not found");
+        return;
+      }
+      emitResponse(true, nextSnoozeStatus, null);
+      await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
+    } catch (error) {
+      this.sessionLogger.error(
+        { ...logContext, err: error },
+        "session: workspace.snooze.set.request error",
+      );
+      this.emit({
+        type: "activity_log",
+        payload: {
+          id: uuidv4(),
+          timestamp: new Date(),
+          type: "error",
+          content: `Failed to snooze workspace: ${getErrorMessage(error)}`,
+        },
+      });
+      emitResponse(false, null, getErrorMessageOr(error, "Failed to snooze workspace"));
     }
   }
 
@@ -4387,6 +4455,7 @@ export class Session {
       name: resolveWorkspaceDisplayName(workspace),
       title: workspace.title,
       pinnedAt: workspace.pinnedAt,
+      snoozeStatus: workspace.snoozeStatus,
       archivingAt: null,
       status: "done",
       statusEnteredAt: null,
@@ -4478,6 +4547,7 @@ export class Session {
       }),
       title: result.workspace.title,
       pinnedAt: result.workspace.pinnedAt,
+      snoozeStatus: result.workspace.snoozeStatus,
       archivingAt: null,
       status: "done",
       statusEnteredAt: result.workspace.createdAt,
