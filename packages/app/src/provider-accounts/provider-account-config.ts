@@ -1,28 +1,17 @@
+import type { AgentProviderAccounts, ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
 
-export type AccountProvider = "claude" | "codex";
-
-interface AccountProviderSpec {
-  providerPrefix: string;
+/**
+ * A provider that told us it can be registered more than once. Nothing here
+ * knows which providers those are — the daemon reports `accounts` on the
+ * snapshot entry, and a provider that doesn't report it simply never offers
+ * accounts in the UI.
+ */
+export interface ProviderAccountBase {
+  providerId: string;
   label: string;
-  description: string;
-  directoryEnvKey: "CLAUDE_CONFIG_DIR" | "CODEX_HOME";
+  accounts: AgentProviderAccounts;
 }
-
-const ACCOUNT_PROVIDER_SPECS: Record<AccountProvider, AccountProviderSpec> = {
-  claude: {
-    providerPrefix: "claude-account-",
-    label: "Claude",
-    description: "Claude Code account with a separate configuration directory",
-    directoryEnvKey: "CLAUDE_CONFIG_DIR",
-  },
-  codex: {
-    providerPrefix: "codex-account-",
-    label: "Codex",
-    description: "Codex account with separate ChatGPT or OpenAI credentials",
-    directoryEnvKey: "CODEX_HOME",
-  },
-};
 
 export interface ProviderAccountDraft {
   name: string;
@@ -32,6 +21,22 @@ export interface ProviderAccountDraft {
 export interface ProviderAccountConfigPatch {
   providerId: string;
   patch: MutableDaemonConfigPatch;
+}
+
+export function listProviderAccountBases(
+  entries: ProviderSnapshotEntry[] | undefined,
+): ProviderAccountBase[] {
+  return (entries ?? []).flatMap((entry) =>
+    entry.accounts
+      ? [
+          {
+            providerId: entry.provider,
+            label: entry.label ?? entry.provider,
+            accounts: entry.accounts,
+          },
+        ]
+      : [],
+  );
 }
 
 function slugifyAccountName(name: string): string {
@@ -44,22 +49,21 @@ function slugifyAccountName(name: string): string {
 }
 
 function nextProviderId(
-  provider: AccountProvider,
+  base: ProviderAccountBase,
   name: string,
   existingProviderIds: ReadonlySet<string>,
 ): string {
-  const spec = ACCOUNT_PROVIDER_SPECS[provider];
   const slug = slugifyAccountName(name) || "account";
-  const base = `${spec.providerPrefix}${slug}`;
-  if (!existingProviderIds.has(base)) {
-    return base;
+  const candidate = `${base.providerId}-${slug}`;
+  if (!existingProviderIds.has(candidate)) {
+    return candidate;
   }
 
   let suffix = 2;
-  while (existingProviderIds.has(`${base}-${suffix}`)) {
+  while (existingProviderIds.has(`${candidate}-${suffix}`)) {
     suffix += 1;
   }
-  return `${base}-${suffix}`;
+  return `${candidate}-${suffix}`;
 }
 
 export function isAbsoluteHostPath(value: string): boolean {
@@ -68,14 +72,18 @@ export function isAbsoluteHostPath(value: string): boolean {
   );
 }
 
+/**
+ * Directories already claimed by an account of this provider, so the form can
+ * reject pointing two accounts at the same credentials.
+ */
 export function listProviderAccountConfigDirs(
-  accountProvider: AccountProvider,
+  base: ProviderAccountBase,
   config: MutableDaemonConfig | null,
 ): ReadonlySet<string> {
   const directories = new Set<string>();
   for (const provider of Object.values(config?.providers ?? {})) {
     if (
-      provider.extends === accountProvider &&
+      provider.extends === base.providerId &&
       typeof provider.accountConfigDir === "string" &&
       provider.accountConfigDir.trim()
     ) {
@@ -85,30 +93,27 @@ export function listProviderAccountConfigDirs(
   return directories;
 }
 
+/**
+ * An account is an ordinary derived provider: it extends its base and points
+ * the base's account env var somewhere else. There is no account-shaped config.
+ */
 export function buildProviderAccountConfigPatch(
-  accountProvider: AccountProvider,
+  base: ProviderAccountBase,
   draft: ProviderAccountDraft,
-  config: MutableDaemonConfig | null,
+  existingProviderIds: ReadonlySet<string>,
 ): ProviderAccountConfigPatch {
-  const spec = ACCOUNT_PROVIDER_SPECS[accountProvider];
   const name = draft.name.trim();
-  const configDir = draft.configDir.trim();
-  const providerId = nextProviderId(
-    accountProvider,
-    name,
-    new Set(Object.keys(config?.providers ?? {})),
-  );
+  const providerId = nextProviderId(base, name, existingProviderIds);
 
   return {
     providerId,
     patch: {
       providers: {
         [providerId]: {
-          extends: accountProvider,
-          label: `${spec.label} · ${name}`,
-          description: spec.description,
+          extends: base.providerId,
+          label: `${base.label} · ${name}`,
           env: {
-            [spec.directoryEnvKey]: configDir,
+            [base.accounts.envVar]: draft.configDir.trim(),
           },
           enabled: true,
         },

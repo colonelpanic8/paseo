@@ -602,6 +602,25 @@ test("Claude account profile receives its isolated config directory", () => {
   });
 });
 
+test("base providers advertise accounts but an account does not offer more of its own", () => {
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      "claude-work": {
+        extends: "claude",
+        label: "Claude · Work",
+        env: { CLAUDE_CONFIG_DIR: "/accounts/claude-work" },
+      },
+    },
+  });
+
+  expect(registry.claude.accounts).toEqual({
+    envVar: "CLAUDE_CONFIG_DIR",
+    directoryExample: "/home/you/.claude-work",
+  });
+  expect(registry["claude-work"].accounts).toBeUndefined();
+  expect(registry.opencode.accounts).toBeUndefined();
+});
+
 test("Codex account profile receives its isolated Codex home", () => {
   const registry = buildProviderRegistry(logger, {
     providerOverrides: {

@@ -762,18 +762,4 @@ describe("checkout PR schemas", () => {
       providerRemoval: true,
     });
   });
-
-  test("accepts the provider accounts server_info feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          providerAccounts: true,
-        },
-      }).features,
-    ).toEqual({
-      providerAccounts: true,
-    });
-  });
 });

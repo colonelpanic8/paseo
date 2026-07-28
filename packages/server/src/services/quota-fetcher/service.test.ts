@@ -262,6 +262,101 @@ describe("ProviderUsageService", () => {
     expect(calls).toBe(1);
   });
 
+  it("gives every configured account its own usage row", async () => {
+    const claudeWork = mkdtempSync(join(tmpdir(), "usage-account-claude-"));
+    const codexWork = mkdtempSync(join(tmpdir(), "usage-account-codex-"));
+    try {
+      writeClaudeCredentials(claudeWork, "at_work");
+      writeCodexAuth(codexWork, "at_codex_work");
+      const service = new ProviderUsageService({
+        logger: createLogger(),
+        now: () => Date.parse("2026-06-19T00:00:00.000Z"),
+        fetchers: [],
+        cacheTtlMs: 0,
+        fetch: mockFetch(new Map()) as typeof fetch,
+        listAccountProfiles: () => [
+          {
+            providerId: "claude-work",
+            baseProviderId: "claude",
+            displayName: "Claude · Work",
+            configDir: claudeWork,
+          },
+          {
+            providerId: "codex-work",
+            baseProviderId: "codex",
+            displayName: "Codex · Work",
+            configDir: codexWork,
+          },
+          {
+            providerId: "opencode-work",
+            baseProviderId: "opencode",
+            displayName: "OpenCode · Work",
+            configDir: "/accounts/opencode-work",
+          },
+        ],
+      });
+
+      const result = await service.listUsage();
+
+      expect(result.providers.map((usage) => usage.providerId)).toEqual([
+        "claude-work",
+        "codex-work",
+      ]);
+      expect(result.providers.map((usage) => usage.displayName)).toEqual([
+        "Claude · Work",
+        "Codex · Work",
+      ]);
+    } finally {
+      rmSync(claudeWork, { recursive: true, force: true });
+      rmSync(codexWork, { recursive: true, force: true });
+    }
+  });
+
+  it("stops serving cached usage once an account is added or removed", async () => {
+    let profiles: {
+      providerId: string;
+      baseProviderId: string;
+      displayName: string;
+      configDir: string;
+    }[] = [];
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => Date.parse("2026-06-19T00:00:00.000Z"),
+      fetchers: [
+        usageFetcher({
+          providerId: "claude",
+          displayName: "Claude",
+          status: "available",
+          planLabel: "Max",
+          windows: [],
+        }),
+      ],
+      listAccountProfiles: () => profiles,
+    });
+
+    expect((await service.listUsage()).providers.map((usage) => usage.providerId)).toEqual([
+      "claude",
+    ]);
+
+    profiles = [
+      {
+        providerId: "claude-work",
+        baseProviderId: "claude",
+        displayName: "Claude · Work",
+        configDir: "/accounts/claude-work",
+      },
+    ];
+    expect((await service.listUsage()).providers.map((usage) => usage.providerId)).toEqual([
+      "claude",
+    ]);
+
+    service.invalidate();
+    expect((await service.listUsage()).providers.map((usage) => usage.providerId)).toEqual([
+      "claude",
+      "claude-work",
+    ]);
+  });
+
   it("isolates one provider error without dropping other providers", async () => {
     const service = new ProviderUsageService({
       logger: createLogger(),

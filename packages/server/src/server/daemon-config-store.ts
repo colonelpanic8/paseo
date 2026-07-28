@@ -8,6 +8,7 @@ import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
 } from "@getpaseo/protocol/messages";
+import { findAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 
 export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
 
@@ -35,20 +36,59 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Surfaces the account directory of a derived provider so clients can show it
+ * without reading raw `env`. Which env var holds it is the base provider's
+ * declaration, not something this module knows.
+ */
 export function getProviderAccountConfigDir(
   provider: Pick<ProviderOverride, "extends" | "env">,
 ): string | undefined {
-  let envKey: "CLAUDE_CONFIG_DIR" | "CODEX_HOME" | null = null;
-  if (provider.extends === "claude") {
-    envKey = "CLAUDE_CONFIG_DIR";
-  } else if (provider.extends === "codex") {
-    envKey = "CODEX_HOME";
-  }
-  if (!envKey) {
+  if (!provider.extends) {
     return undefined;
   }
-  const value = provider.env?.[envKey]?.trim();
-  return value || undefined;
+  const envVar = findAgentProviderDefinition(provider.extends)?.accounts?.envVar;
+  if (!envVar) {
+    return undefined;
+  }
+  return provider.env?.[envVar]?.trim() || undefined;
+}
+
+/** A configured provider that points its base provider at its own account directory. */
+export interface ProviderAccountProfile {
+  providerId: string;
+  baseProviderId: string;
+  displayName: string;
+  configDir: string;
+}
+
+/**
+ * Every configured account, for subsystems that have to work per-account rather
+ * than per-provider — usage quotas being the obvious one, since two accounts on
+ * the same provider have entirely separate limits.
+ */
+export function listProviderAccountProfiles(config: MutableDaemonConfig): ProviderAccountProfile[] {
+  const profiles: ProviderAccountProfile[] = [];
+  for (const [providerId, provider] of Object.entries(config.providers)) {
+    if (provider.enabled === false) {
+      continue;
+    }
+    const parsed = ProviderOverrideSchema.safeParse(provider);
+    if (!parsed.success || !parsed.data.extends) {
+      continue;
+    }
+    const configDir = getProviderAccountConfigDir(parsed.data);
+    if (!configDir) {
+      continue;
+    }
+    profiles.push({
+      providerId,
+      baseProviderId: parsed.data.extends,
+      displayName: parsed.data.label ?? providerId,
+      configDir,
+    });
+  }
+  return profiles;
 }
 
 export function toClientMutableDaemonConfig(config: MutableDaemonConfig): MutableDaemonConfig {

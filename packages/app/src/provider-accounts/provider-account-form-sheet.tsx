@@ -10,7 +10,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   buildProviderAccountConfigPatch,
   listProviderAccountConfigDirs,
-  type AccountProvider,
+  type ProviderAccountBase,
 } from "./provider-account-config";
 import {
   openProviderAccountForm,
@@ -20,8 +20,9 @@ import {
 import { useTranslation } from "react-i18next";
 
 interface ProviderAccountFormSheetProps {
-  provider: AccountProvider;
+  base: ProviderAccountBase;
   config: MutableDaemonConfig;
+  existingProviderIds: ReadonlySet<string>;
   patchConfig: (patch: MutableDaemonConfigPatch) => Promise<MutableDaemonConfig | undefined>;
   refreshProviders: (providers?: AgentProvider[]) => Promise<void>;
   onClose: () => void;
@@ -51,8 +52,9 @@ function configDirErrorMessage(
 }
 
 export function ProviderAccountFormSheet({
-  provider,
+  base,
   config,
+  existingProviderIds,
   patchConfig,
   refreshProviders,
   onClose,
@@ -61,7 +63,7 @@ export function ProviderAccountFormSheet({
   const isCompact = useIsCompactFormFactor();
   const [model] = useState(() =>
     openProviderAccountForm({
-      existingConfigDirs: listProviderAccountConfigDirs(provider, config),
+      existingConfigDirs: listProviderAccountConfigDirs(base, config),
     }),
   );
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
@@ -70,13 +72,9 @@ export function ProviderAccountFormSheet({
 
   const header = useMemo<SheetHeader>(
     () => ({
-      title: t(
-        provider === "claude"
-          ? "settings.providers.accounts.addClaudeTitle"
-          : "settings.providers.accounts.addCodexTitle",
-      ),
+      title: t("settings.providers.accounts.addTitle", { provider: base.label }),
     }),
-    [provider, t],
+    [base.label, t],
   );
   const controlSize = isCompact ? "md" : "sm";
 
@@ -85,7 +83,11 @@ export function ProviderAccountFormSheet({
     if (!draft) return;
 
     try {
-      const { providerId, patch } = buildProviderAccountConfigPatch(provider, draft, config);
+      const { providerId, patch } = buildProviderAccountConfigPatch(
+        base,
+        draft,
+        existingProviderIds,
+      );
       const updatedConfig = await patchConfig(patch);
       if (!updatedConfig) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -95,7 +97,7 @@ export function ProviderAccountFormSheet({
     } catch (error) {
       model.endSubmit(error instanceof Error ? error.message : String(error));
     }
-  }, [config, model, onClose, patchConfig, provider, refreshProviders, t]);
+  }, [base, existingProviderIds, model, onClose, patchConfig, refreshProviders, t]);
   const handleSubmitPress = useCallback(() => {
     void handleSubmit();
   }, [handleSubmit]);
@@ -117,13 +119,13 @@ export function ProviderAccountFormSheet({
           onPress={handleSubmitPress}
           disabled={!state.canSubmit}
           loading={state.isSubmitting}
-          testID={`${provider}-account-submit`}
+          testID={`${base.providerId}-account-submit`}
         >
           {t("settings.providers.accounts.add")}
         </Button>
       </View>
     ),
-    [handleSubmitPress, onClose, provider, state.canSubmit, state.isSubmitting, t],
+    [base.providerId, handleSubmitPress, onClose, state.canSubmit, state.isSubmitting, t],
   );
 
   return (
@@ -132,12 +134,12 @@ export function ProviderAccountFormSheet({
       visible
       onClose={onClose}
       footer={footer}
-      testID={`${provider}-account-form-sheet`}
+      testID={`${base.providerId}-account-form-sheet`}
     >
       <Field
         label={t("settings.providers.accounts.name")}
         error={nameErrorMessage(state.nameError, t)}
-        testID={`${provider}-account-name-field`}
+        testID={`${base.providerId}-account-name-field`}
       >
         <FormTextInput
           size={controlSize}
@@ -147,36 +149,24 @@ export function ProviderAccountFormSheet({
           autoCapitalize="words"
           autoCorrect={false}
           editable={!state.isSubmitting}
-          testID={`${provider}-account-name`}
+          testID={`${base.providerId}-account-name`}
         />
       </Field>
       <Field
-        label={t(
-          provider === "claude"
-            ? "settings.providers.accounts.claudeDirectory"
-            : "settings.providers.accounts.codexDirectory",
-        )}
-        hint={t(
-          provider === "claude"
-            ? "settings.providers.accounts.claudeDirectoryHint"
-            : "settings.providers.accounts.codexDirectoryHint",
-        )}
+        label={t("settings.providers.accounts.directory")}
+        hint={t("settings.providers.accounts.directoryHint", { envVar: base.accounts.envVar })}
         error={configDirErrorMessage(state.configDirError, t)}
-        testID={`${provider}-account-directory-field`}
+        testID={`${base.providerId}-account-directory-field`}
       >
         <FormTextInput
           size={controlSize}
           value={state.configDir}
           onChangeText={model.setConfigDir}
-          placeholder={t(
-            provider === "claude"
-              ? "settings.providers.accounts.claudeDirectoryPlaceholder"
-              : "settings.providers.accounts.codexDirectoryPlaceholder",
-          )}
+          placeholder={base.accounts.directoryExample}
           autoCapitalize="none"
           autoCorrect={false}
           editable={!state.isSubmitting}
-          testID={`${provider}-account-directory`}
+          testID={`${base.providerId}-account-directory`}
         />
       </Field>
       {state.submitError ? <Text style={styles.errorText}>{state.submitError}</Text> : null}

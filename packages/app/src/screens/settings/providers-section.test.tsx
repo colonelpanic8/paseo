@@ -17,7 +17,6 @@ const {
   providerSnapshotServerIds,
   connectedServerIds,
   featureRequests,
-  featureState,
 } = vi.hoisted(() => ({
   theme: {
     spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
@@ -55,9 +54,6 @@ const {
   providerSnapshotServerIds: [] as string[],
   connectedServerIds: [] as string[],
   featureRequests: [] as Array<{ serverId: string; feature: string }>,
-  featureState: {
-    providerAccounts: true,
-  },
 }));
 
 vi.mock("react-native", () => ({
@@ -137,16 +133,7 @@ vi.mock("react-i18next", () => ({
           "settings.providers.addErrorTitle": "Unable to add provider",
           "settings.providers.updateErrorTitle": "Unable to update provider",
           "settings.providers.loading": "Loading...",
-          "settings.providers.accounts.title": "Accounts",
-          "settings.providers.accounts.updateHost": "Update the host to manage provider accounts.",
-          "settings.providers.accounts.addClaudeTitle": "Add Claude account",
-          "settings.providers.accounts.addClaude": "Claude Code account",
-          "settings.providers.accounts.addClaudeDescription":
-            "Use a separate Claude configuration directory",
-          "settings.providers.accounts.addCodexTitle": "Add Codex account",
-          "settings.providers.accounts.addCodex": "Codex / ChatGPT account",
-          "settings.providers.accounts.addCodexDescription":
-            "Use a separate Codex home and sign-in",
+          "settings.providers.addProvider": "Add provider",
           "settings.providers.actions.menu": "{{name}} actions",
           "settings.providers.actions.remove": "Remove provider",
           "settings.providers.actions.removing": "Removing...",
@@ -267,12 +254,39 @@ vi.mock("@/stores/provider-settings-store", () => ({
 }));
 
 vi.mock("@/components/provider-catalog-list", () => ({
-  ProviderCatalogList: () => null,
+  ProviderCatalogList: ({
+    accountBases,
+    onAddAccount,
+  }: {
+    accountBases: { providerId: string; label: string }[];
+    onAddAccount: (base: { providerId: string; label: string }) => void;
+  }) =>
+    React.createElement(
+      "div",
+      { "data-testid": "provider-catalog-list" },
+      accountBases.map((base) =>
+        React.createElement("button", {
+          key: base.providerId,
+          type: "button",
+          "data-testid": `add-account-${base.providerId}`,
+          onClick: () => onAddAccount(base),
+        }),
+      ),
+    ),
 }));
 
 vi.mock("@/provider-accounts/provider-account-form-sheet", () => ({
-  ProviderAccountFormSheet: ({ provider }: { provider: "claude" | "codex" }) =>
-    React.createElement("div", { "data-testid": `${provider}-account-form-sheet` }),
+  ProviderAccountFormSheet: ({
+    base,
+    existingProviderIds,
+  }: {
+    base: { providerId: string };
+    existingProviderIds: ReadonlySet<string>;
+  }) =>
+    React.createElement("div", {
+      "data-testid": `${base.providerId}-account-form-sheet`,
+      "data-existing-provider-ids": [...existingProviderIds].sort().join(","),
+    }),
 }));
 
 vi.mock("@/hooks/use-providers-snapshot", () => ({
@@ -312,7 +326,7 @@ vi.mock("@/runtime/host-runtime", () => ({
 vi.mock("@/runtime/host-features", () => ({
   useHostFeature: (serverId: string, feature: string) => {
     featureRequests.push({ serverId, feature });
-    return feature === "providerAccounts" ? featureState.providerAccounts : false;
+    return false;
   },
 }));
 
@@ -330,6 +344,7 @@ const claudeEntry: ProviderSnapshotEntry = {
   description: "Claude Code",
   defaultModeId: null,
   modes: [],
+  accounts: { envVar: "CLAUDE_CONFIG_DIR", directoryExample: "/home/you/.claude-work" },
   models: [
     { provider: "claude", id: "claude-opus-4-7", label: "Claude Opus 4.7" },
     { provider: "claude", id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
@@ -395,7 +410,6 @@ describe("ProvidersSection", () => {
     providerSnapshotServerIds.length = 0;
     connectedServerIds.length = 0;
     featureRequests.length = 0;
-    featureState.providerAccounts = true;
   });
 
   afterEach(() => {
@@ -456,10 +470,7 @@ describe("ProvidersSection", () => {
     expect(providerSnapshotServerIds).toContain("server-1");
     expect(connectedServerIds).toContain("server-1");
     expect(featureRequests).toEqual(
-      expect.arrayContaining([
-        { serverId: "server-1", feature: "providerRemoval" },
-        { serverId: "server-1", feature: "providerAccounts" },
-      ]),
+      expect.arrayContaining([{ serverId: "server-1", feature: "providerRemoval" }]),
     );
 
     const switchEl =
@@ -537,54 +548,56 @@ describe("ProvidersSection", () => {
     });
   });
 
-  it("opens the Claude account form from provider settings", () => {
+  it("adds an account through the same flow that adds a provider", () => {
     snapshotState.entries = [claudeEntry];
     configState.config = makeConfig();
 
     render();
 
-    const addAccount = findRow("Add Claude account");
+    const addAccount = container?.querySelector<HTMLElement>('[data-testid="add-account-claude"]');
+    expect(addAccount).not.toBeNull();
     act(() => {
-      addAccount.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      addAccount?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
     });
 
     expect(container?.querySelector('[data-testid="claude-account-form-sheet"]')).not.toBeNull();
   });
 
-  it("waits for the selected host config before enabling account actions", () => {
+  it("withholds account actions until the host config lands", () => {
     snapshotState.entries = [claudeEntry];
+    configState.config = null;
     configState.isLoading = true;
 
     render();
 
-    expect(container?.textContent).toContain("Loading...");
-    expect(container?.querySelector('[data-testid="add-claude-account"]')).toBeNull();
-    expect(container?.querySelector('[data-testid="add-codex-account"]')).toBeNull();
+    expect(container?.querySelector('[data-testid="add-account-claude"]')).toBeNull();
   });
 
-  it("asks for a host update when provider accounts are unsupported", () => {
-    snapshotState.entries = [claudeEntry];
-    configState.config = makeConfig();
-    featureState.providerAccounts = false;
-
-    render();
-
-    expect(container?.textContent).toContain("Update the host to manage provider accounts.");
-    expect(container?.querySelector('[data-testid="add-claude-account"]')).toBeNull();
-    expect(container?.querySelector('[data-testid="add-codex-account"]')).toBeNull();
-  });
-
-  it("opens the Codex account form from provider settings", () => {
+  it("offers no account option for providers that did not report support", () => {
     snapshotState.entries = [disabledCodexEntry];
     configState.config = makeConfig();
 
     render();
 
-    const addAccount = findRow("Add Codex account");
+    expect(container?.querySelector('[data-testid="add-account-codex"]')).toBeNull();
+  });
+
+  it("hands the form every taken provider id so a new account cannot collide", () => {
+    snapshotState.entries = [claudeEntry, disabledCodexEntry];
+    configState.config = makeConfig({ "claude-work": { extends: "claude" } });
+
+    render();
+
     act(() => {
-      addAccount.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      container
+        ?.querySelector<HTMLElement>('[data-testid="add-account-claude"]')
+        ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container?.querySelector('[data-testid="codex-account-form-sheet"]')).not.toBeNull();
+    expect(
+      container
+        ?.querySelector('[data-testid="claude-account-form-sheet"]')
+        ?.getAttribute("data-existing-provider-ids"),
+    ).toBe("claude,claude-work,codex");
   });
 });

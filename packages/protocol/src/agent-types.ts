@@ -100,6 +100,20 @@ export function normalizeAgentModelDefinition(model: AgentModelDefinition): Agen
   return { ...model, defaultThinkingOptionId };
 }
 
+/**
+ * Declared by providers that keep every piece of per-account state (auth,
+ * settings, history) under one directory, which is what makes them safe to
+ * register more than once. Each extra registration is an ordinary derived
+ * provider with `envVar` pointed at its own directory — there is no separate
+ * "account" concept below the UI.
+ */
+export interface AgentProviderAccounts {
+  /** Env var that points the provider at an account directory. */
+  envVar: string;
+  /** Example absolute path, shown as the directory field's placeholder. */
+  directoryExample: string;
+}
+
 export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
@@ -112,6 +126,8 @@ export interface ProviderSnapshotEntry {
   label?: string;
   description?: string;
   defaultModeId?: string | null;
+  /** Present only on providers that can be registered more than once. */
+  accounts?: AgentProviderAccounts;
 }
 
 export interface AgentFeatureToggle {

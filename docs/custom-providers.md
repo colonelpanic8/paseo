@@ -693,26 +693,19 @@ The built-in `claude` provider appends concrete model IDs from `~/.claude/settin
 
 This lets users who already configured Claude Code for Bedrock, OpenRouter, ollama, Z.AI, or another Anthropic-compatible gateway select the exact model ID in Paseo. When `agents.providers.claude.models` is set it **replaces** both the hardcoded first-party Claude list and any settings.json-discovered entries; use `agents.providers.claude.additionalModels` to keep the first-party list and append curated entries on top.
 
-### Multiple Claude accounts
+### Multiple accounts for one provider
 
-Paseo models an additional account as a derived provider profile. In the app, open **Settings → Providers → Accounts → Claude Code account**, give the account a name, and enter its absolute Claude configuration directory on the host. The resulting account appears separately in every provider/model picker and can run concurrently with the default account.
+Adding a second account is the same act as adding a provider. In **Settings → Providers → Add provider**, any provider that supports accounts appears as its own row ("Claude account", "Codex account") alongside the ACP catalog entries. Give the account a name and an absolute directory on the host, and it becomes an ordinary derived provider that shows up separately in every provider/model picker, runs concurrently with the default account, and reports its own usage quota.
 
-The account directory owns that profile's Claude authentication, settings, commands, skills, and session history. Authenticate it from a host terminal before using it in Paseo:
-
-```bash
-CLAUDE_CONFIG_DIR=/home/you/.claude-work claude
-```
-
-The equivalent manual configuration is:
+There is no "account" concept underneath the UI. The form writes the same config a hand-written custom provider would:
 
 ```json
 {
   "agents": {
     "providers": {
-      "claude-account-work": {
+      "claude-work": {
         "extends": "claude",
         "label": "Claude · Work",
-        "description": "Claude Code account with a separate configuration directory",
         "env": {
           "CLAUDE_CONFIG_DIR": "/home/you/.claude-work"
         }
@@ -722,20 +715,24 @@ The equivalent manual configuration is:
 }
 ```
 
+The account directory owns that profile's authentication, settings, commands, skills, and session history. Authenticate it from a host terminal before using it in Paseo.
+
+#### Claude
+
+```bash
+CLAUDE_CONFIG_DIR=/home/you/.claude-work claude
+```
+
 Claude catalog discovery, launches, imports, resume/history hydration, and ephemeral transcript cleanup all resolve against the profile's `CLAUDE_CONFIG_DIR`; they must not fall back to the daemon's default Claude directory.
 
-### Multiple Codex / ChatGPT accounts
-
-In the app, open **Settings → Providers → Accounts → Codex / ChatGPT account**, name the account, and enter an absolute Codex home directory on the host. Paseo creates a derived Codex provider whose authentication, configuration, prompts, skills, and session history are isolated by `CODEX_HOME`.
-
-Authenticate the account with ChatGPT before using it in Paseo:
+#### Codex
 
 ```bash
 mkdir -p /home/you/.codex-work
 CODEX_HOME=/home/you/.codex-work codex login
 ```
 
-Ensure `/home/you/.codex-work/config.toml` contains `cli_auth_credentials_store = "file"` before logging in.
+Ensure `/home/you/.codex-work/config.toml` contains `cli_auth_credentials_store = "file"` before logging in. File-based credential storage is what keeps `auth.json` inside the selected `CODEX_HOME`; a config that explicitly uses `keyring` stores credentials in the operating system credential store instead, where the accounts would collide.
 
 Codex also supports API-key authentication in the same isolated home:
 
@@ -743,28 +740,20 @@ Codex also supports API-key authentication in the same isolated home:
 printenv OPENAI_API_KEY | env CODEX_HOME=/home/you/.codex-work codex login --with-api-key
 ```
 
-File-based credential storage is important for account isolation: it keeps `auth.json` inside the selected `CODEX_HOME`. A Codex configuration that explicitly uses `keyring` stores credentials in the operating system credential store instead.
+Codex app-server launches, model discovery, imports, archive operations, resume/history hydration, custom prompts, and fallback skill discovery all resolve against the profile's `CODEX_HOME`.
 
-The equivalent manual configuration is:
+#### Enabling accounts for another provider
 
-```json
-{
-  "agents": {
-    "providers": {
-      "codex-account-work": {
-        "extends": "codex",
-        "label": "Codex · Work",
-        "description": "Codex account with separate ChatGPT or OpenAI credentials",
-        "env": {
-          "CODEX_HOME": "/home/you/.codex-work"
-        }
-      }
-    }
-  }
-}
+Nothing in the client, the config store, or the settings UI names Claude or Codex. A provider opts in by declaring one field in `packages/protocol/src/provider-manifest.ts`:
+
+```ts
+accounts: {
+  envVar: "CLAUDE_CONFIG_DIR",
+  directoryExample: "/home/you/.claude-work",
+},
 ```
 
-Codex app-server launches, model discovery, imports, archive operations, resume/history hydration, custom prompts, and fallback skill discovery all resolve against the profile's `CODEX_HOME`.
+That declaration rides along on the provider snapshot, which is also the capability signal — a daemon too old to isolate accounts simply never sends it, so the option never appears. Only declare it for providers that keep _all_ per-account state (auth, settings, history) under that one directory; a provider that also reads a shared keychain or a fixed path will leak between accounts.
 
 ### Gotcha: `extends: "claude"` with third-party endpoints
 

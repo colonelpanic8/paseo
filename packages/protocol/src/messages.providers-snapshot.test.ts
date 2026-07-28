@@ -50,6 +50,30 @@ describe("provider snapshot message schemas", () => {
     expect(parsed.source).toBe("custom");
   });
 
+  test("carries the account declaration that makes a provider addable twice", () => {
+    const parsed = ProviderSnapshotEntrySchema.parse({
+      provider: "claude",
+      status: "ready",
+      label: "Claude",
+      accounts: { envVar: "CLAUDE_CONFIG_DIR", directoryExample: "/home/you/.claude-work" },
+    });
+
+    expect(parsed.accounts).toEqual({
+      envVar: "CLAUDE_CONFIG_DIR",
+      directoryExample: "/home/you/.claude-work",
+    });
+  });
+
+  test("treats a daemon that never mentions accounts as offering none", () => {
+    const parsed = ProviderSnapshotEntrySchema.parse({
+      provider: "claude",
+      status: "ready",
+      label: "Claude",
+    });
+
+    expect(parsed.accounts).toBeUndefined();
+  });
+
   test("defaults missing enabled state in providers snapshot response entries", () => {
     const parsed = GetProvidersSnapshotResponseMessageSchema.parse({
       type: "get_providers_snapshot_response",

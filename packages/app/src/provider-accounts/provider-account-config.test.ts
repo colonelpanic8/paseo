@@ -1,10 +1,25 @@
 import { describe, expect, test } from "vitest";
+import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import type { MutableDaemonConfig } from "@getpaseo/protocol/messages";
 import {
   buildProviderAccountConfigPatch,
   isAbsoluteHostPath,
+  listProviderAccountBases,
   listProviderAccountConfigDirs,
+  type ProviderAccountBase,
 } from "./provider-account-config";
+
+const CLAUDE: ProviderAccountBase = {
+  providerId: "claude",
+  label: "Claude",
+  accounts: { envVar: "CLAUDE_CONFIG_DIR", directoryExample: "/home/you/.claude-work" },
+};
+
+const CODEX: ProviderAccountBase = {
+  providerId: "codex",
+  label: "Codex",
+  accounts: { envVar: "CODEX_HOME", directoryExample: "/home/you/.codex-work" },
+};
 
 function config(providers: MutableDaemonConfig["providers"] = {}): MutableDaemonConfig {
   return {
@@ -18,22 +33,47 @@ function config(providers: MutableDaemonConfig["providers"] = {}): MutableDaemon
   };
 }
 
+function snapshotEntry(entry: Partial<ProviderSnapshotEntry>): ProviderSnapshotEntry {
+  return { provider: "claude", status: "ready", enabled: true, ...entry };
+}
+
 describe("provider account config", () => {
-  test("builds a derived Claude provider with an isolated config directory", () => {
+  test("offers accounts only for providers that reported support", () => {
+    expect(
+      listProviderAccountBases([
+        snapshotEntry({
+          provider: "claude",
+          label: "Claude",
+          accounts: { envVar: "CLAUDE_CONFIG_DIR", directoryExample: "/home/you/.claude-work" },
+        }),
+        snapshotEntry({ provider: "opencode", label: "OpenCode" }),
+      ]),
+    ).toEqual([CLAUDE]);
+  });
+
+  test("reports no account support when the host predates the feature", () => {
+    expect(
+      listProviderAccountBases([
+        snapshotEntry({ provider: "claude", label: "Claude" }),
+        snapshotEntry({ provider: "codex", label: "Codex" }),
+      ]),
+    ).toEqual([]);
+  });
+
+  test("builds an ordinary derived provider pointed at its own directory", () => {
     expect(
       buildProviderAccountConfigPatch(
-        "claude",
+        CLAUDE,
         { name: "Work", configDir: "/home/ivan/.claude-work" },
-        config(),
+        new Set(["claude", "codex"]),
       ),
     ).toEqual({
-      providerId: "claude-account-work",
+      providerId: "claude-work",
       patch: {
         providers: {
-          "claude-account-work": {
+          "claude-work": {
             extends: "claude",
             label: "Claude · Work",
-            description: "Claude Code account with a separate configuration directory",
             env: { CLAUDE_CONFIG_DIR: "/home/ivan/.claude-work" },
             enabled: true,
           },
@@ -42,48 +82,39 @@ describe("provider account config", () => {
     });
   });
 
-  test("builds a derived Codex provider with an isolated Codex home", () => {
+  test("uses each provider's own account env var", () => {
     expect(
       buildProviderAccountConfigPatch(
-        "codex",
+        CODEX,
         { name: "Work", configDir: "/home/ivan/.codex-work" },
-        config(),
-      ),
+        new Set(["claude", "codex"]),
+      ).patch.providers?.["codex-work"],
     ).toEqual({
-      providerId: "codex-account-work",
-      patch: {
-        providers: {
-          "codex-account-work": {
-            extends: "codex",
-            label: "Codex · Work",
-            description: "Codex account with separate ChatGPT or OpenAI credentials",
-            env: { CODEX_HOME: "/home/ivan/.codex-work" },
-            enabled: true,
-          },
-        },
-      },
+      extends: "codex",
+      label: "Codex · Work",
+      env: { CODEX_HOME: "/home/ivan/.codex-work" },
+      enabled: true,
     });
   });
 
   test("adds a stable suffix when the generated provider id is already used", () => {
-    const existing = config({
-      "claude-account-work": {
-        extends: "claude",
-        label: "Claude · Work",
-      },
-      "claude-account-work-2": {
-        extends: "claude",
-        label: "Claude · Other work",
-      },
-    });
-
     expect(
       buildProviderAccountConfigPatch(
-        "claude",
+        CLAUDE,
         { name: "Work", configDir: "/home/ivan/.claude-third" },
-        existing,
+        new Set(["claude", "claude-work", "claude-work-2"]),
       ).providerId,
-    ).toBe("claude-account-work-3");
+    ).toBe("claude-work-3");
+  });
+
+  test("never collides with a provider that only exists in the snapshot", () => {
+    expect(
+      buildProviderAccountConfigPatch(
+        CLAUDE,
+        { name: "Zai", configDir: "/home/ivan/.claude-zai" },
+        new Set(["claude", "claude-zai"]),
+      ).providerId,
+    ).toBe("claude-zai-2");
   });
 
   test("recognizes Unix, Windows drive, and UNC absolute paths", () => {
@@ -94,12 +125,12 @@ describe("provider account config", () => {
     expect(isAbsoluteHostPath(".claude-work")).toBe(false);
   });
 
-  test("lists only Claude account config directories", () => {
+  test("lists directories claimed by accounts of the same provider only", () => {
     expect(
       listProviderAccountConfigDirs(
-        "claude",
+        CLAUDE,
         config({
-          "claude-account-work": {
+          "claude-work": {
             extends: "claude",
             accountConfigDir: "/accounts/work",
           },
@@ -107,29 +138,27 @@ describe("provider account config", () => {
             extends: "claude",
             env: { ANTHROPIC_BASE_URL: "https://example.com" },
           },
-          codex: {
-            env: { CODEX_HOME: "/accounts/codex" },
+          "codex-work": {
+            extends: "codex",
+            accountConfigDir: "/accounts/codex",
           },
         }),
       ),
     ).toEqual(new Set(["/accounts/work"]));
   });
 
-  test("lists only Codex account homes", () => {
+  test("lists Codex account homes separately from Claude's", () => {
     expect(
       listProviderAccountConfigDirs(
-        "codex",
+        CODEX,
         config({
-          "codex-account-work": {
+          "codex-work": {
             extends: "codex",
             accountConfigDir: "/accounts/work",
           },
-          proxy: {
-            extends: "codex",
-            env: { OPENAI_BASE_URL: "https://example.com" },
-          },
-          claude: {
-            env: { CLAUDE_CONFIG_DIR: "/accounts/claude" },
+          "claude-work": {
+            extends: "claude",
+            accountConfigDir: "/accounts/claude",
           },
         }),
       ),
