@@ -13,8 +13,9 @@ token is stored anywhere.
 ```
 
 `packages/app/src/composer/tokens/tokens.ts` owns this. `collectComposerTokens` finds
-tokens; `segmentComposerText` splits the draft into alternating plain/token segments
-covering the whole string, each carrying its source offset.
+token-shaped text and keeps only names present in the current command/skill catalog;
+`segmentComposerText` splits the draft into alternating plain/token segments covering
+the whole string, each carrying its source offset.
 
 Because text is still the only source of truth, drafts, dictation and undo need no
 parallel token state. Deleting the sigil deletes the pill. Submission runs that string
@@ -30,6 +31,9 @@ Detection rules:
 - A trigger glued to a preceding word is prose, and slash-delimited paths are not
   tokens. `40$usd` and `/tmp/project` therefore stay plain text.
 - A name is `[A-Za-z][A-Za-z0-9:_-]*`. A bare sigil with no name is not a token.
+- A syntactically valid name that is absent from the current command catalog is prose.
+  This is the safety boundary that keeps shell variables such as `$HOME` and `$project`
+  from being rendered as skills or rewritten on submission.
 
 ## Sigils are configurable
 
@@ -49,9 +53,10 @@ In the settings UI, picking the character the _other_ menu already uses swaps th
 rather than rejecting the choice.
 
 The sigils configure editing, not the provider protocol. Before a prompt is sent,
-recognized tokens are normalized to `/name`. Without that boundary, choosing `!` for
+recognized catalog entries are normalized to `/name`. If the catalog has not loaded,
+submission preserves the user's exact text. Without those boundaries, choosing `!` for
 commands would silently turn executable provider and client commands into ordinary
-prompt text.
+prompt text, while `$` could silently rewrite shell variables.
 
 ## Web: a mirror layer
 

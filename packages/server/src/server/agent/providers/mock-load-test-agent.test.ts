@@ -49,6 +49,28 @@ describe("MockLoadTestAgentClient", () => {
     });
   });
 
+  test("lists mock skills for draft and live sessions", async () => {
+    const client = new MockLoadTestAgentClient();
+    const config = {
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    } as const;
+    const expectedCommands = [
+      {
+        name: "release-beta",
+        description: "Simulate a provider skill in development.",
+        argumentHint: "",
+        kind: "skill",
+      },
+    ];
+
+    await expect(client.listCommands(config)).resolves.toEqual(expectedCommands);
+
+    const session = await client.createSession(config);
+    await expect(session.listCommands?.()).resolves.toEqual(expectedCommands);
+  });
+
   test("rejects the configured number of prompts before starting a retry", async () => {
     const client = new MockLoadTestAgentClient();
     const session = await client.createSession({

@@ -21,6 +21,11 @@ export interface ComposerToken {
   end: number;
 }
 
+export interface ComposerTokenCatalog {
+  commandNames: ReadonlySet<string>;
+  skillNames: ReadonlySet<string>;
+}
+
 /** `start` is the segment's offset in the source text and its React key. */
 export type ComposerTextSegment =
   | { kind: "text"; text: string; start: number }
@@ -49,13 +54,14 @@ function isBoundary(char: string | undefined): boolean {
 }
 
 /**
- * Find every command/skill token in `text`.
+ * Find token-shaped ranges in `text`. Callers must still check the catalog before
+ * treating a range as a command or skill.
  *
  * The command trigger represents a command only at the start of the prompt.
  * Either trigger represents a skill after whitespace, preserving the existing
  * inline slash-skill flow while adding a dedicated skills trigger.
  */
-export function collectComposerTokens(text: string, sigils: ComposerSigils): ComposerToken[] {
+function scanComposerTokens(text: string, sigils: ComposerSigils): ComposerToken[] {
   const tokens: ComposerToken[] = [];
 
   for (let index = 0; index < text.length; index += 1) {
@@ -89,6 +95,19 @@ export function collectComposerTokens(text: string, sigils: ComposerSigils): Com
   return tokens;
 }
 
+function isRecognizedToken(token: ComposerToken, catalog: ComposerTokenCatalog): boolean {
+  const names = token.type === "command" ? catalog.commandNames : catalog.skillNames;
+  return names.has(token.name);
+}
+
+export function collectComposerTokens(
+  text: string,
+  sigils: ComposerSigils,
+  catalog: ComposerTokenCatalog,
+): ComposerToken[] {
+  return scanComposerTokens(text, sigils).filter((token) => isRecognizedToken(token, catalog));
+}
+
 /**
  * Read the canonical slash syntax stored in submitted user messages.
  *
@@ -97,7 +116,7 @@ export function collectComposerTokens(text: string, sigils: ComposerSigils): Com
  * a skill.
  */
 export function collectSubmittedComposerTokens(text: string): ComposerToken[] {
-  return collectComposerTokens(text, CANONICAL_SUBMISSION_SIGILS);
+  return scanComposerTokens(text, CANONICAL_SUBMISSION_SIGILS);
 }
 
 export function getComposerTokenDisplayText(
@@ -112,8 +131,12 @@ export function getComposerTokenDisplayText(
  * Convert configurable UI triggers to the slash form understood by the daemon
  * and every agent provider.
  */
-export function normalizeComposerTokensForSubmission(text: string, sigils: ComposerSigils): string {
-  const tokens = collectComposerTokens(text, sigils);
+export function normalizeComposerTokensForSubmission(
+  text: string,
+  sigils: ComposerSigils,
+  catalog: ComposerTokenCatalog,
+): string {
+  const tokens = collectComposerTokens(text, sigils, catalog);
   if (tokens.length === 0) {
     return text;
   }
