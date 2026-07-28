@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/shallow";
 import { useFetchQueries } from "@/data/query";
 import { getHostRuntimeStore, useHostRuntimeConnectionStatuses } from "@/runtime/host-runtime";
@@ -18,6 +18,12 @@ export interface ArchivedWorkspaceEntry {
   projectName: string;
   name: string;
   archivedAt: Date;
+  phase: "archiving" | "archived";
+}
+
+export interface ArchivedWorkspaceSource {
+  isOnline: boolean;
+  entries: ArchivedWorkspaceEntry[] | undefined;
 }
 
 export function archivedWorkspacesQueryKey(serverId: string): [string, string] {
@@ -66,6 +72,7 @@ export function useArchivedWorkspaces({
           projectName: entry.projectDisplayName,
           name: entry.name,
           archivedAt: new Date(entry.archivedAt),
+          phase: "archived" as const,
         }));
       },
       enabled: connectionStatuses.get(serverId) === "online",
@@ -102,7 +109,13 @@ export function useArchivedWorkspaces({
     };
   }, [connectionStatuses, queryClient, supportedServerIds]);
 
-  return mergeArchivedWorkspaces(queries.map((query) => query.data));
+  const sources = supportedServerIds.map(
+    (serverId, index): ArchivedWorkspaceSource => ({
+      isOnline: connectionStatuses.get(serverId) === "online",
+      entries: queries[index]?.data,
+    }),
+  );
+  return mergeArchivedWorkspaces(sources);
 }
 
 export function shouldRefreshArchivedWorkspaces(
@@ -117,15 +130,46 @@ export function shouldRefreshArchivedWorkspaces(
 }
 
 export function mergeArchivedWorkspaces(
-  slices: ReadonlyArray<ArchivedWorkspaceEntry[] | undefined>,
+  sources: readonly ArchivedWorkspaceSource[],
 ): ArchivedWorkspaceEntry[] {
   const merged: ArchivedWorkspaceEntry[] = [];
-  for (const slice of slices) {
-    if (slice) merged.push(...slice);
+  for (const source of sources) {
+    if (source.isOnline && source.entries) {
+      merged.push(...source.entries);
+    }
   }
   return merged
     .sort((left, right) => compareArchivedWorkspaces(left, right))
     .slice(0, ARCHIVED_WORKSPACE_LIMIT);
+}
+
+export async function beginArchivedWorkspaceTransition(input: {
+  queryClient: QueryClient;
+  entry: ArchivedWorkspaceEntry;
+}): Promise<void> {
+  const queryKey = archivedWorkspacesQueryKey(input.entry.serverId);
+  await input.queryClient.cancelQueries({ queryKey });
+  input.queryClient.setQueryData<ArchivedWorkspaceEntry[]>(queryKey, (current = []) => [
+    input.entry,
+    ...current.filter((entry) => entry.workspaceKey !== input.entry.workspaceKey),
+  ]);
+}
+
+export function settleArchivedWorkspaceTransition(input: {
+  queryClient: QueryClient;
+  serverId: string;
+  workspaceKey: string;
+  outcome: "archived" | "failed";
+}): void {
+  const queryKey = archivedWorkspacesQueryKey(input.serverId);
+  input.queryClient.setQueryData<ArchivedWorkspaceEntry[]>(queryKey, (current = []) => {
+    if (input.outcome === "failed") {
+      return current.filter((entry) => entry.workspaceKey !== input.workspaceKey);
+    }
+    return current.map((entry) =>
+      entry.workspaceKey === input.workspaceKey ? { ...entry, phase: "archived" } : entry,
+    );
+  });
 }
 
 // Newest archive first. Entries archived in the same millisecond (a cascade
