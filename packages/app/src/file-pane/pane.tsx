@@ -454,6 +454,7 @@ export function FilePane({
   const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
   const imagePreviewUri = useAttachmentPreviewUrl(
     resolvedPreview.key === previewKey ? resolvedPreview.imageAttachment : null,
+    { reloadKey: query.dataUpdatedAt },
   );
   const isMarkdown = isMarkdownPreview(preview, location.path);
   const editable = isEditableTextFile({

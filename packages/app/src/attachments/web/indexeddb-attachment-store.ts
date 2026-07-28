@@ -9,6 +9,7 @@ import {
   normalizeMimeType,
   parseDataUrl,
 } from "@/attachments/utils";
+import { shouldDeleteAttachmentDuringGc } from "@/attachments/gc-policy";
 
 interface StoredBlobRecord {
   id: string;
@@ -190,6 +191,7 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
 
     async garbageCollect({ referencedIds }): Promise<void> {
       const db = await openAttachmentDb();
+      const nowMs = Date.now();
       try {
         await new Promise<void>((resolve, reject) => {
           const tx = db.transaction(STORE_NAME, "readwrite");
@@ -210,7 +212,15 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
             }
 
             const key = String(cursor.key);
-            if (!referencedIds.has(key)) {
+            const record = cursor.value as StoredBlobRecord | undefined;
+            if (
+              shouldDeleteAttachmentDuringGc({
+                id: key,
+                isReferenced: referencedIds.has(key),
+                createdAtMs: typeof record?.createdAt === "number" ? record.createdAt : null,
+                nowMs,
+              })
+            ) {
               cursor.delete();
             }
             cursor.continue();

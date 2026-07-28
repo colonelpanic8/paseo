@@ -102,7 +102,10 @@ import {
   useAssistantLinkPress,
 } from "@/assistant-file-links";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
-import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
+import {
+  type AttachmentPreviewUrlState,
+  useAttachmentPreviewUrlState,
+} from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/attachments/service";
 import {
   AttachmentFrame,
@@ -984,8 +987,14 @@ function AssistantMarkdownImage({
     },
   });
 
-  const fileAssetUri = useAttachmentPreviewUrl(query.data);
-  const dataImageAssetUri = useAttachmentPreviewUrl(dataImageQuery.data);
+  const filePreview = useAttachmentPreviewUrlState(query.data, {
+    reloadKey: query.dataUpdatedAt,
+  });
+  const dataImagePreview = useAttachmentPreviewUrlState(dataImageQuery.data, {
+    reloadKey: dataImageQuery.dataUpdatedAt,
+  });
+  const fileAssetUri = previewUrlOrNull(filePreview);
+  const dataImageAssetUri = previewUrlOrNull(dataImagePreview);
   const directUri = resolution?.kind === "direct" && !dataImage ? resolution.uri : null;
   const resolvedUri = directUri ?? dataImageAssetUri ?? fileAssetUri ?? null;
 
@@ -1012,7 +1021,13 @@ function AssistantMarkdownImage({
     );
   }
 
-  if (query.isLoading || dataImageQuery.isLoading) {
+  // Resolving the preview URL is a second async hop after the bytes land, so treat it as
+  // part of loading — otherwise the failure text paints for a frame on every success.
+  if (
+    query.isLoading ||
+    dataImageQuery.isLoading ||
+    isAnyPreviewResolving(filePreview, dataImagePreview)
+  ) {
     return (
       <View style={stateFrameStyle}>
         <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
@@ -1031,6 +1046,14 @@ function AssistantMarkdownImage({
       <Text style={assistantMessageStylesheet.imageErrorText}>{errorText}</Text>
     </View>
   );
+}
+
+function previewUrlOrNull(state: AttachmentPreviewUrlState): string | null {
+  return state.status === "ready" ? state.url : null;
+}
+
+function isAnyPreviewResolving(...states: readonly AttachmentPreviewUrlState[]): boolean {
+  return states.some((state) => state.status === "resolving");
 }
 
 function resolveAssistantImageErrorText(

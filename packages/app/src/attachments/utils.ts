@@ -81,6 +81,16 @@ export function getFileNameFromPath(path: string | null | undefined): string | n
   return fileName || null;
 }
 
+// Preview attachments are a content-addressed cache of images the daemon already owns
+// (assistant markdown images, file explorer previews), not user data. They are keyed by
+// this prefix so attachment garbage collection can tell them apart from composer
+// attachments, which are rooted in drafts and queued messages.
+export const PREVIEW_ATTACHMENT_ID_PREFIX = "preview_";
+
+export function isPreviewAttachmentId(id: string): boolean {
+  return id.startsWith(PREVIEW_ATTACHMENT_ID_PREFIX);
+}
+
 export function createPreviewAttachmentId(input: {
   mimeType: string;
   path?: string | null;
@@ -93,7 +103,7 @@ export function createPreviewAttachmentId(input: {
   const modifiedAt = input.modifiedAt?.trim() ?? "";
   const contentLength = Number.isFinite(input.contentLength) ? String(input.contentLength) : "";
   const hash = hashString(`${input.mimeType}\0${path}\0${size}\0${modifiedAt}\0${contentLength}`);
-  return `preview_${size || contentLength || "unknown"}_${hash}`;
+  return `${PREVIEW_ATTACHMENT_ID_PREFIX}${size || contentLength || "unknown"}_${hash}`;
 }
 
 export async function blobToBase64(blob: Blob): Promise<string> {

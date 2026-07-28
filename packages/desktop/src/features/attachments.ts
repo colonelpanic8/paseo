@@ -6,6 +6,13 @@ const ATTACHMENTS_DIRNAME = "desktop-attachments";
 const ATTACHMENT_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const EXTENSION_PATTERN = /^\.[A-Za-z0-9]{1,16}$/;
 
+// Mirrors the renderer's attachment GC policy (packages/app/src/attachments/gc-policy.ts).
+// Preview attachments cache bytes the daemon still owns and are never rooted in drafts, so
+// reference-based collection would delete them on every composer keystroke. They expire on
+// age instead. Keep the prefix and max age in sync with the renderer.
+const PREVIEW_ATTACHMENT_ID_PREFIX = "preview_";
+const PREVIEW_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 interface AttachmentFileResult {
   path: string;
   byteSize: number;
@@ -173,12 +180,36 @@ export async function garbageCollectManagedAttachmentFiles(input: {
       )
     : new Set<string>();
 
+  const nowMs = Date.now();
   const entries = await readdir(dirPath, { withFileTypes: true });
-  const toDelete = entries.filter(
+  const unreferenced = entries.filter(
     (entry) => entry.isFile() && !referencedIds.has(path.parse(entry.name).name),
   );
 
-  await Promise.all(toDelete.map((entry) => rm(path.join(dirPath, entry.name), { force: true })));
+  const deletions = await Promise.all(
+    unreferenced.map(async (entry) => {
+      const filePath = path.join(dirPath, entry.name);
+      if (path.parse(entry.name).name.startsWith(PREVIEW_ATTACHMENT_ID_PREFIX)) {
+        const expired = await isExpiredPreviewFile(filePath, nowMs);
+        if (!expired) {
+          return false;
+        }
+      }
+      await rm(filePath, { force: true });
+      return true;
+    }),
+  );
 
-  return toDelete.length;
+  return deletions.filter(Boolean).length;
+}
+
+// A preview whose age cannot be established is kept: keeping it costs disk, deleting it
+// breaks an image that is very likely still on screen.
+async function isExpiredPreviewFile(filePath: string, nowMs: number): Promise<boolean> {
+  try {
+    const stats = await stat(filePath);
+    return nowMs - stats.mtimeMs > PREVIEW_ATTACHMENT_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
 }

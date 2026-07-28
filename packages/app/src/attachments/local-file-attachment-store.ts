@@ -9,10 +9,12 @@ import {
   fileUriToPath,
   generateAttachmentId,
   getFileExtensionFromName,
+  isPreviewAttachmentId,
   normalizeMimeType,
   parseDataUrl,
   pathToFileUri,
 } from "@/attachments/utils";
+import { shouldDeleteAttachmentDuringGc } from "@/attachments/gc-policy";
 
 const IMAGE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "image/png": ".png",
@@ -42,6 +44,14 @@ async function ensureDirectory(fileSystem: AttachmentFileSystem, uri: string): P
     return;
   }
   await fileSystem.makeDirectory(uri, { intermediates: true });
+}
+
+async function readModificationTimeMs(
+  fileSystem: AttachmentFileSystem,
+  uri: string,
+): Promise<number | null> {
+  const info = await fileSystem.getInfo(uri);
+  return info.exists ? info.modificationTimeMs : null;
 }
 
 async function dataUrlToBytes(dataUrl: string): Promise<Uint8Array> {
@@ -190,15 +200,31 @@ export function createLocalFileAttachmentStore(params: {
       }
       await ensureDirectory(fileSystem, baseDirectory);
       const entries = await fileSystem.listDirectory(baseDirectory);
+      const nowMs = Date.now();
       await Promise.all(
         entries.map(async (entryName) => {
           const id = entryName.split(".", 1)[0] ?? "";
-          if (!id || referencedIds.has(id)) {
+          if (!id) {
             return;
           }
-          await fileSystem.delete(`${baseDirectory}${entryName}`, {
-            idempotent: true,
-          });
+          const uri = `${baseDirectory}${entryName}`;
+          // Only previews need an age, and only when they are unreferenced — skip the stat
+          // for everything else so the common composer-attachment sweep stays a plain listing.
+          const createdAtMs =
+            !referencedIds.has(id) && isPreviewAttachmentId(id)
+              ? await readModificationTimeMs(fileSystem, uri)
+              : null;
+          if (
+            !shouldDeleteAttachmentDuringGc({
+              id,
+              isReferenced: referencedIds.has(id),
+              createdAtMs,
+              nowMs,
+            })
+          ) {
+            return;
+          }
+          await fileSystem.delete(uri, { idempotent: true });
         }),
       );
     },

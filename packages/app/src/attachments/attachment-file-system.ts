@@ -2,7 +2,13 @@ import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
 export type AttachmentFileInfo =
-  | { exists: true; isDirectory: boolean; size: number | null }
+  | {
+      exists: true;
+      isDirectory: boolean;
+      size: number | null;
+      /** Epoch milliseconds, or null when the platform does not report one. */
+      modificationTimeMs: number | null;
+    }
   | { exists: false };
 
 export interface AttachmentFileSystem {
@@ -28,7 +34,14 @@ export function createExpoAttachmentFileSystem(): AttachmentFileSystem {
         typeof (info as { size?: number }).size === "number"
           ? (info as { size: number }).size
           : null;
-      return { exists: true, isDirectory: info.isDirectory ?? false, size };
+      // expo-file-system reports modificationTime in seconds.
+      const modificationTime = (info as { modificationTime?: number }).modificationTime;
+      return {
+        exists: true,
+        isDirectory: info.isDirectory ?? false,
+        size,
+        modificationTimeMs: typeof modificationTime === "number" ? modificationTime * 1000 : null,
+      };
     },
     async makeDirectory(uri, options) {
       await FileSystem.makeDirectoryAsync(uri, options);

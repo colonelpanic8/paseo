@@ -5,6 +5,7 @@ export interface TestAttachmentFileSystem extends AttachmentFileSystem {
   readonly directories: ReadonlySet<string>;
   setFile(uri: string, bytes: Uint8Array): void;
   setDirectory(uri: string): void;
+  setModificationTimeMs(uri: string, modificationTimeMs: number): void;
 }
 
 export function createTestAttachmentFileSystem(options?: {
@@ -12,6 +13,7 @@ export function createTestAttachmentFileSystem(options?: {
 }): TestAttachmentFileSystem {
   const files = new Map<string, Uint8Array>();
   const directories = new Set<string>();
+  const modificationTimesMs = new Map<string, number>();
   const cacheDirectory =
     options && Object.hasOwn(options, "cacheDirectory")
       ? (options.cacheDirectory ?? null)
@@ -19,11 +21,16 @@ export function createTestAttachmentFileSystem(options?: {
 
   function describe(uri: string): AttachmentFileInfo {
     if (directories.has(uri) || directories.has(stripTrailingSlash(uri))) {
-      return { exists: true, isDirectory: true, size: null };
+      return { exists: true, isDirectory: true, size: null, modificationTimeMs: null };
     }
     const bytes = files.get(uri);
     if (bytes) {
-      return { exists: true, isDirectory: false, size: bytes.byteLength };
+      return {
+        exists: true,
+        isDirectory: false,
+        size: bytes.byteLength,
+        modificationTimeMs: modificationTimesMs.get(uri) ?? null,
+      };
     }
     return { exists: false };
   }
@@ -37,6 +44,9 @@ export function createTestAttachmentFileSystem(options?: {
     },
     setDirectory(uri) {
       directories.add(stripTrailingSlash(uri));
+    },
+    setModificationTimeMs(uri, modificationTimeMs) {
+      modificationTimesMs.set(uri, modificationTimeMs);
     },
     async getInfo(uri) {
       return describe(uri);
@@ -62,6 +72,7 @@ export function createTestAttachmentFileSystem(options?: {
       return toBase64(bytes);
     },
     async delete(uri, deleteOptions) {
+      modificationTimesMs.delete(uri);
       if (!files.delete(uri) && !deleteOptions.idempotent) {
         throw new Error(`delete: file does not exist: ${uri}`);
       }
