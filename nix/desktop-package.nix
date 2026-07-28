@@ -15,57 +15,16 @@
   # the upstream hash via `paseo.override { npmDepsHash = "..."; }`.
   paseo,
 }:
-
-let
-  version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
-  darwinInfoPlist = builtins.toFile "Paseo-Info.plist" (
-    lib.generators.toPlist { escape = true; } {
-      CFBundleDisplayName = "Paseo";
-      CFBundleExecutable = "Paseo";
-      CFBundleIconFile = "Paseo.icns";
-      CFBundleIdentifier = "sh.paseo.desktop";
-      CFBundleInfoDictionaryVersion = "6.0";
-      CFBundleName = "Paseo";
-      CFBundlePackageType = "APPL";
-      CFBundleShortVersionString = version;
-      CFBundleURLTypes = [
-        {
-          CFBundleURLName = "Paseo agent link";
-          CFBundleURLSchemes = [ "paseo" ];
-        }
-      ];
-      CFBundleVersion = version;
-      LSApplicationCategoryType = "public.app-category.developer-tools";
-      LSEnvironment.MallocNanoZone = "0";
-      LSMinimumSystemVersion = "12.0";
-      NSAppTransportSecurity.NSAllowsArbitraryLoads = true;
-      NSAudioCaptureUsageDescription = "Paseo needs access to audio capture for voice input.";
-      NSBluetoothAlwaysUsageDescription = "Paseo needs access to Bluetooth audio devices.";
-      NSBluetoothPeripheralUsageDescription = "Paseo needs access to Bluetooth audio devices.";
-      NSCameraUsageDescription = "Paseo needs access to the camera for image attachments.";
-      NSHighResolutionCapable = true;
-      NSMainNibFile = "MainMenu";
-      NSMicrophoneUsageDescription = "Paseo needs access to the microphone for voice input.";
-      NSPrefersDisplaySafeAreaCompatibilityMode = false;
-      NSPrincipalClass = "AtomApplication";
-      NSQuitAlwaysKeepsWindows = false;
-      NSRequiresAquaSystemAppearance = false;
-      NSSupportsAutomaticGraphicsSwitching = true;
-    }
-  );
-in
 buildNpmPackage {
   pname = "paseo-desktop";
-  inherit version;
+  version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
 
   src = lib.cleanSourceWith {
     src = ./..;
-    filter =
-      path: type:
-      let
-        baseName = builtins.baseNameOf path;
-        relPath = lib.removePrefix (toString ./..) path;
-      in
+    filter = path: type: let
+      baseName = builtins.baseNameOf path;
+      relPath = lib.removePrefix (toString ./..) path;
+    in
       # Exclude mobile-only platform code (we only need the web/electron build)
       !(lib.hasPrefix "/packages/app/android" relPath)
       && !(lib.hasPrefix "/packages/app/ios" relPath)
@@ -86,16 +45,18 @@ buildNpmPackage {
 
   # Prevent onnxruntime-node's install script from running during automatic
   # npm rebuild. We manually rebuild only node-pty in buildPhase.
-  npmRebuildFlags = [ "--ignore-scripts" ];
+  npmRebuildFlags = ["--ignore-scripts"];
 
   nativeBuildInputs =
     [
       python3 # for node-gyp (node-pty)
-      makeWrapper
     ]
-    ++ lib.optionals stdenv.hostPlatform.isLinux [ copyDesktopItems ];
+    ++ lib.optionals stdenv.hostPlatform.isLinux [
+      makeWrapper
+      copyDesktopItems
+    ];
 
-  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ libuv ];
+  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [libuv];
 
   dontNpmBuild = true;
 
@@ -121,8 +82,25 @@ buildNpmPackage {
     # Expo web export for the Electron renderer
     ( cd packages/app && PASEO_WEB_PLATFORM=electron npx expo export --platform web )
 
-    # Desktop main process (tsc only — NOT electron-builder)
+    # Desktop main process
     npm run build:main --workspace=@getpaseo/desktop
+
+    ${lib.optionalString stdenv.hostPlatform.isDarwin ''
+      # Let electron-builder create the native bundle layout (including helper
+      # app names and bundle identifiers), but source Electron from nixpkgs
+      # instead of downloading a release at build time.
+      (
+        cd packages/desktop
+        CSC_IDENTITY_AUTO_DISCOVERY=false \
+          ../../node_modules/.bin/electron-builder \
+            --config electron-builder.yml \
+            --dir \
+            --mac \
+            --publish never \
+            --config.electronDist=${electron}/Applications \
+            --config.mac.notarize=false
+      )
+    ''}
 
     runHook postBuild
   '';
@@ -130,28 +108,30 @@ buildNpmPackage {
   installPhase = ''
     runHook preInstall
 
-    mkdir -p $out/share/paseo-desktop $out/bin
-
-    # Preserve the monorepo layout so main.js's dev-mode path resolution
-    # (`__dirname/../../app/dist`, `__dirname/../assets/icon.png`) works
-    # without patching: invoked unpackaged via `electron path/to/main.js`,
-    # `app.isPackaged` is false, so these relative paths are used.
-    #
-    # Copy the entire packages/ tree (not just built artifacts) because npm
-    # creates workspace symlinks from node_modules/@getpaseo/* into packages/*.
-    # Missing any workspace package leaves dangling symlinks and fails the
-    # noBrokenSymlinks output check. The cleanSourceWith filter above already
-    # drops the big platform-specific things (android/ios, website, tests).
-    cp package.json $out/share/paseo-desktop/
-    cp -a packages $out/share/paseo-desktop/
-    cp -a node_modules $out/share/paseo-desktop/
-
-    # Skills directory referenced at runtime by some agents
-    if [ -d skills ]; then
-      cp -a skills $out/share/paseo-desktop/
-    fi
+    mkdir -p $out/bin
 
     ${lib.optionalString stdenv.hostPlatform.isLinux ''
+      mkdir -p $out/share/paseo-desktop
+
+      # Preserve the monorepo layout so main.js's dev-mode path resolution
+      # (`__dirname/../../app/dist`, `__dirname/../assets/icon.png`) works
+      # without patching: invoked unpackaged via `electron path/to/main.js`,
+      # `app.isPackaged` is false, so these relative paths are used.
+      #
+      # Copy the entire packages/ tree (not just built artifacts) because npm
+      # creates workspace symlinks from node_modules/@getpaseo/* into packages/*.
+      # Missing any workspace package leaves dangling symlinks and fails the
+      # noBrokenSymlinks output check. The cleanSourceWith filter above already
+      # drops the big platform-specific things (android/ios, website, tests).
+      cp package.json $out/share/paseo-desktop/
+      cp -a packages $out/share/paseo-desktop/
+      cp -a node_modules $out/share/paseo-desktop/
+
+      # Skills directory referenced at runtime by some agents
+      if [ -d skills ]; then
+        cp -a skills $out/share/paseo-desktop/
+      fi
+
       # Hicolor icon for desktop environments
       install -Dm644 packages/desktop/assets/icon.png \
         $out/share/icons/hicolor/512x512/apps/paseo-desktop.png
@@ -166,30 +146,13 @@ buildNpmPackage {
     ''}
 
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
-      app="$out/Applications/Paseo.app"
-      mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-
-      # Reuse nixpkgs' Electron framework through store symlinks so the Paseo
-      # output stays small while still presenting a normal application bundle
-      # to LaunchServices.
-      ln -s ${electron}/Applications/Electron.app/Contents/Frameworks \
-        "$app/Contents/Frameworks"
-      ln -s ${electron}/Applications/Electron.app/Contents/MacOS/Electron \
-        "$app/Contents/MacOS/Electron"
-      for resource in ${electron}/Applications/Electron.app/Contents/Resources/*; do
-        ln -s "$resource" "$app/Contents/Resources/$(basename "$resource")"
-      done
-
-      cp ${darwinInfoPlist} "$app/Contents/Info.plist"
-      cp ${electron}/Applications/Electron.app/Contents/PkgInfo "$app/Contents/PkgInfo"
-      cp packages/desktop/assets/icon.icns "$app/Contents/Resources/Paseo.icns"
-
-      # Keep the same unpackaged runtime layout as the Linux Nix package. The
-      # outer .app supplies native macOS identity, icon, and URL handling while
-      # the wrapper points Electron at the immutable built main process.
-      makeWrapper "$app/Contents/MacOS/Electron" "$app/Contents/MacOS/Paseo" \
-        --add-flags "$out/share/paseo-desktop/packages/desktop/dist/main.js" \
-        --set EXPO_DEV_URL "paseo://app/"
+      app="$(find packages/desktop/release -maxdepth 3 -type d -name Paseo.app -print -quit)"
+      if [ -z "$app" ]; then
+        echo "electron-builder did not produce Paseo.app" >&2
+        exit 1
+      fi
+      mkdir -p "$out/Applications"
+      cp -R "$app" "$out/Applications/Paseo.app"
       ln -s ../Applications/Paseo.app/Contents/MacOS/Paseo "$out/bin/paseo-desktop"
     ''}
 
@@ -204,7 +167,7 @@ buildNpmPackage {
       comment = "Self-hosted daemon for AI coding agents";
       exec = "paseo-desktop";
       icon = "paseo-desktop";
-      categories = [ "Development" ];
+      categories = ["Development"];
       startupWMClass = "Paseo";
     })
   ];
