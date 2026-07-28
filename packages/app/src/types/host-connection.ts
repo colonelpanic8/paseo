@@ -62,9 +62,17 @@ export function defaultLifecycle(): HostLifecycle {
 }
 
 export function normalizeHostColor(value: unknown): HostColorKey | null {
-  return typeof value === "string" && (HOST_COLOR_KEYS as readonly string[]).includes(value)
-    ? (value as HostColorKey)
-    : null;
+  switch (value) {
+    case "blue":
+    case "green":
+    case "amber":
+    case "orange":
+    case "red":
+    case "purple":
+      return value;
+    default:
+      return null;
+  }
 }
 
 export function normalizeHostLabel(value: string | null | undefined, serverId: string): string {

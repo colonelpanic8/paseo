@@ -2727,6 +2727,37 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
+  it("setHostColor updates and clears the stored palette key", async () => {
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+      storage: createMemoryHostRuntimeStorage(),
+    });
+
+    try {
+      await store.upsertDirectConnection({
+        serverId: "srv_color",
+        endpoint: "lan:6767",
+        label: "colored host",
+      });
+
+      await store.setHostColor("srv_color", "purple");
+      expect(store.getHosts().find((host) => host.serverId === "srv_color")?.color).toBe("purple");
+
+      await store.setHostColor("srv_color", null);
+      expect(store.getHosts().find((host) => host.serverId === "srv_color")?.color).toBeNull();
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("preserves a manual host rename when desktop status re-advertises the daemon hostname", async () => {
     const advertisedHostname = "macbook-pro.local";
     const store = new HostRuntimeStore({

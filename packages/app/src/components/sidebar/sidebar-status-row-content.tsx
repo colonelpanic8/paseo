@@ -5,6 +5,7 @@ import { Archive } from "lucide-react-native";
 import { DiffStat } from "@/components/diff-stat";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { getProviderIcon } from "@/components/provider-icons";
+import { SyncedLoader } from "@/components/synced-loader";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   ChecksBadge,
@@ -18,6 +19,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { Theme } from "@/styles/theme";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
 import { formatTimeAgo } from "@/utils/time";
 import { getHostColorTextStyle } from "@/styles/host-color";
@@ -32,9 +34,32 @@ const ARCHIVE_ICON_SIZE = 14;
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const providerIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const syncedLoaderColorMapping = (theme: Theme) => ({
+  color:
+    theme.colorScheme === "light"
+      ? theme.colors.palette.amber[700]
+      : theme.colors.palette.amber[500],
+});
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedArchive = withUnistyles(Archive);
+const ThemedSyncedLoader = withUnistyles(SyncedLoader);
+
+function DynamicProviderIcon({
+  provider,
+  size,
+  color = "",
+}: {
+  provider: string;
+  size: number;
+  color?: string;
+}) {
+  const Icon = getProviderIcon(provider);
+  return <Icon size={size} color={color} />;
+}
+
+const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
 
 /**
  * Status-mode row body. Project mode keeps `SidebarWorkspaceRowContent`; this is
@@ -226,8 +251,13 @@ function StatusRowProviderIcons({ providers }: { providers: readonly string[] })
 }
 
 function StatusRowProviderIcon({ provider }: { provider: string }) {
-  const Icon = getProviderIcon(provider);
-  return <Icon size={PROVIDER_ICON_SIZE} color={styles.providerIcon.color} />;
+  return (
+    <ThemedDynamicProviderIcon
+      provider={provider}
+      size={PROVIDER_ICON_SIZE}
+      uniProps={providerIconColorMapping}
+    />
+  );
 }
 
 /**
@@ -272,6 +302,10 @@ function StatusRowLeadingVisual({
   iconDataUri: string | null;
 }) {
   const dotColorStyle = getStatusDotColorStyle(workspace.statusBucket);
+  const showRunningIndicator = shouldRenderSyncedStatusLoader({
+    bucket: workspace.statusBucket,
+  });
+
   return (
     <View style={styles.leadingVisualSlot}>
       <ProjectIconView
@@ -282,6 +316,11 @@ function StatusRowLeadingVisual({
         fallbackStyle={styles.projectIconFallback}
         textStyle={styles.projectIconFallbackText}
       />
+      {showRunningIndicator ? (
+        <View style={styles.statusLoaderOverlay} testID="workspace-status-indicator-running">
+          <ThemedSyncedLoader size={11} uniProps={syncedLoaderColorMapping} />
+        </View>
+      ) : null}
       {dotColorStyle ? <View style={[styles.statusDotOverlay, dotColorStyle]} /> : null}
     </View>
   );
@@ -344,7 +383,7 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
     case "failed":
       return styles.statusDotFailed;
     case "running":
-      return styles.statusDotRunning;
+      return null;
     case "attention":
       return styles.statusDotAttention;
     case "done":
@@ -393,14 +432,22 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: theme.borderWidth[2],
     borderColor: theme.colors.surfaceSidebar,
   },
+  statusLoaderOverlay: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
   statusDotNeedsInput: {
     backgroundColor: theme.colors.palette.amber[500],
   },
   statusDotFailed: {
     backgroundColor: theme.colors.palette.red[500],
-  },
-  statusDotRunning: {
-    backgroundColor: theme.colors.palette.blue[500],
   },
   statusDotAttention: {
     backgroundColor: theme.colors.palette.green[500],
@@ -494,9 +541,6 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
     flexShrink: 0,
-  },
-  providerIcon: {
-    color: theme.colors.foregroundMuted,
   },
   archiveAction: {
     flexDirection: "row",
