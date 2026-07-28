@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
+import { AgentSnoozeStatusSchema } from "./agent-snooze.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
 import { AgentProviderSchema } from "./provider-manifest.js";
 import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
@@ -716,6 +717,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastUserMessageAt: z.string().nullable(),
   status: AgentStatusSchema,
   activeTurn: AgentActiveTurnPayloadSchema.nullable().optional(),
+  snoozeStatus: AgentSnoozeStatusSchema.nullable().optional(),
   capabilities: AgentCapabilityFlagsSchema,
   currentModeId: z.string().nullable(),
   availableModes: z.array(AgentModeSchema),
@@ -744,6 +746,7 @@ export const AgentListItemPayloadSchema = z.object({
   thinkingOptionId: z.string().nullable().optional(),
   effectiveThinkingOptionId: z.string().nullable().optional(),
   status: AgentStatusSchema,
+  snoozeStatus: AgentSnoozeStatusSchema.nullable().optional(),
   cwd: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -828,6 +831,7 @@ export const UpdateAgentRequestMessageSchema = z.object({
   agentId: z.string(),
   name: z.string().optional(),
   labels: z.record(z.string(), z.string()).optional(),
+  snoozeUntil: z.string().nullable().optional(),
   requestId: z.string(),
 });
 

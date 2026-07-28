@@ -36,7 +36,11 @@ class FakeLifecycleAgentManager implements LifecycleAgentManager {
   readonly closedAgentIds: string[] = [];
   readonly metadataUpdates: Array<{
     agentId: string;
-    updates: { title?: string; labels?: Record<string, string> };
+    updates: {
+      title?: string;
+      labels?: Record<string, string>;
+      snoozeUntil?: string | null;
+    };
   }> = [];
   readonly labelUpdates: Array<{ agentId: string; labels: Record<string, string> }> = [];
   readonly notifiedAgentIds: string[] = [];
@@ -155,6 +159,7 @@ class FakeLifecycleAgentManager implements LifecycleAgentManager {
     updates: {
       title?: string;
       labels?: Record<string, string>;
+      snoozeUntil?: string | null;
     },
   ): Promise<void> {
     this.metadataUpdates.push({ agentId, updates });
@@ -269,8 +274,11 @@ describe("agent lifecycle commands", () => {
       updateAgentCommand({ agentManager: manager }, { agentId: "agent-1", name: "   " }),
     ).resolves.toEqual({
       accepted: false,
-      error: "Nothing to update (provide name and/or labels)",
+      error: "Nothing to update (provide name, labels, and/or snoozeUntil)",
     });
+    await expect(
+      updateAgentCommand({ agentManager: manager }, { agentId: "agent-1", snoozeUntil: null }),
+    ).resolves.toEqual({ accepted: true, error: null });
 
     expect(storage.upserts).toHaveLength(0);
     expect(manager.metadataUpdates).toEqual([
@@ -279,6 +287,12 @@ describe("agent lifecycle commands", () => {
         updates: {
           title: "Renamed agent",
           labels: { team: "infra" },
+        },
+      },
+      {
+        agentId: "agent-1",
+        updates: {
+          snoozeUntil: null,
         },
       },
     ]);
