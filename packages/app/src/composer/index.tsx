@@ -115,7 +115,10 @@ import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
-import { normalizeComposerTokensForSubmission } from "@/composer/tokens/tokens";
+import {
+  normalizeComposerTokensForSubmission,
+  type ComposerTokenCatalog,
+} from "@/composer/tokens/tokens";
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
@@ -163,6 +166,11 @@ import {
   resolveWorkspaceFileDrop,
   type WorkspaceFileDragPayload,
 } from "@/attachments/workspace-file-drag";
+
+const EMPTY_TOKEN_CATALOG: ComposerTokenCatalog = {
+  commandNames: new Set<string>(),
+  skillNames: new Set<string>(),
+};
 
 const composerImageAttachmentPersister: Pick<
   AttachmentPersister,
@@ -985,6 +993,7 @@ function ComposerAutocompleteBinding({
   anchorRef,
   show,
   ref,
+  onTokenCatalog,
 }: {
   text: ComposerTextSource;
   cursor: StoreApi<number>;
@@ -996,6 +1005,7 @@ function ComposerAutocompleteBinding({
   anchorRef: React.RefObject<View | null>;
   show: boolean;
   ref: React.Ref<ComposerAutocompleteHandle>;
+  onTokenCatalog?: (catalog: ComposerTokenCatalog) => void;
 }) {
   const userInput = useSyncExternalStore(text.subscribe, text.getSnapshot, text.getSnapshot);
   const cursorIndex = useStore(cursor);
@@ -1008,6 +1018,10 @@ function ComposerAutocompleteBinding({
   useImperativeHandle(ref, () => ({ onKeyPress: autocomplete.onKeyPress }), [
     autocomplete.onKeyPress,
   ]);
+  const tokenCatalog = autocomplete.tokenCatalog;
+  useEffect(() => {
+    onTokenCatalog?.(tokenCatalog);
+  }, [onTokenCatalog, tokenCatalog]);
   const selectOption = autocomplete.onSelectOption;
   const onSelect = useCallback(
     (option: AutocompleteOption) => selectOption(option, inputRef.current?.getInputSnapshot()),
@@ -1278,6 +1292,7 @@ function ComposerContentImpl({
     () => textSource.getSnapshot().trim().length > 0,
   );
   const composerSigils = useComposerSigils();
+  const [tokenCatalog, setTokenCatalog] = useState<ComposerTokenCatalog>(EMPTY_TOKEN_CATALOG);
   const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
   const {
@@ -1671,7 +1686,11 @@ function ComposerContentImpl({
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
-      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
+      const submissionText = normalizeComposerTokensForSubmission(
+        payload.text,
+        composerSigils,
+        tokenCatalog,
+      );
       const clientSlashCommand = resolveClientSlashCommand({
         text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
@@ -1696,6 +1715,7 @@ function ComposerContentImpl({
       blurOnSubmit,
       buildOutgoingAttachments,
       composerSigils,
+      tokenCatalog,
       runClientSlashCommand,
       pluginClientSlashCommands,
       runPluginClientSlashCommand,
@@ -1926,7 +1946,11 @@ function ComposerContentImpl({
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
-      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
+      const submissionText = normalizeComposerTokensForSubmission(
+        payload.text,
+        composerSigils,
+        tokenCatalog,
+      );
       const clientSlashCommand = resolveClientSlashCommand({
         text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
@@ -1945,6 +1969,7 @@ function ComposerContentImpl({
     [
       attachments,
       buildOutgoingAttachments,
+      tokenCatalog,
       composerSigils,
       pluginClientSlashCommands,
       queueMessage,
@@ -2384,6 +2409,7 @@ function ComposerContentImpl({
                 show={mode.showAutocomplete}
                 ref={autocompleteRef}
                 configuration={autocompleteConfiguration}
+                onTokenCatalog={setTokenCatalog}
               />
               <ComposerForgeBinding
                 text={textSource}
@@ -2397,6 +2423,7 @@ function ComposerContentImpl({
                 <StableMessageInput
                   ref={messageInputRef}
                   value={textSource.getSnapshot()}
+                  tokenCatalog={tokenCatalog}
                   onChangeText={setUserInput}
                   onSubmit={handleSubmit}
                   hasExternalContent={hasExternalContent}
