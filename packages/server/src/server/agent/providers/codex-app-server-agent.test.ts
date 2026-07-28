@@ -61,6 +61,7 @@ interface CodexSessionTestAccess {
 
 interface CodexClientLike {
   request: (method: string, ...rest: unknown[]) => Promise<unknown>;
+  dispose?: () => Promise<void>;
 }
 
 type CodexTestSession = AgentSession & {
@@ -1271,6 +1272,59 @@ describe("Codex app-server provider", () => {
     }
   });
 
+  test("lists custom prompts and fallback skills from the account Codex home", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "codex-account-home-"));
+    const promptsDir = path.join(tempDir, "prompts");
+    const skillDir = path.join(tempDir, "skills", "account-skill");
+    mkdirSync(promptsDir, { recursive: true });
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      path.join(promptsDir, "review.md"),
+      "---\ndescription: Review from this account.\n---\nReview $ARGUMENTS",
+    );
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: account-skill\ndescription: Skill from this account.\n---\n",
+    );
+
+    const session = new CodexAppServerAgentSession(
+      createConfig(),
+      null,
+      createTestLogger(),
+      () => {
+        throw new Error("Test session cannot spawn Codex app-server");
+      },
+      { codexHome: tempDir },
+    ) as CodexTestSession;
+    session.connected = true;
+    session.client = {
+      request: vi.fn(async (method: string) => (method === "skills/list" ? { data: [] } : {})),
+      dispose: vi.fn(async () => {}),
+    };
+
+    try {
+      await expect(session.listCommands()).resolves.toEqual(
+        expect.arrayContaining([
+          {
+            name: "prompts:review",
+            description: "Review from this account.",
+            argumentHint: "",
+            kind: "command",
+          },
+          {
+            name: "account-skill",
+            description: "Skill from this account.",
+            argumentHint: "",
+            kind: "skill",
+          },
+        ]),
+      );
+    } finally {
+      await session.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   const logger = createTestLogger();
 
   test("extracts context window usage from snake_case token payloads", () => {
@@ -1747,6 +1801,7 @@ describe("Codex app-server provider", () => {
     const env = buildCodexAppServerEnv(
       {
         env: {
+          CODEX_HOME: "/accounts/codex-work",
           PASEO_AGENT_ID: "runtime-value",
           PASEO_TEST_FLAG: "runtime-test-value",
         },
@@ -1754,6 +1809,7 @@ describe("Codex app-server provider", () => {
       launchContext.env,
     );
 
+    expect(env.CODEX_HOME).toBe("/accounts/codex-work");
     expect(env.PASEO_AGENT_ID).toBe(launchContext.env?.PASEO_AGENT_ID);
     expect(env.PASEO_TEST_FLAG).toBe(launchContext.env?.PASEO_TEST_FLAG);
   });

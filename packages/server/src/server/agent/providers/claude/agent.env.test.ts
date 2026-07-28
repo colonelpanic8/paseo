@@ -68,6 +68,11 @@ describe("Claude SDK env", () => {
       logger: createTestLogger(),
       queryFactory,
       resolveBinary: async () => "/test/claude/bin",
+      runtimeSettings: {
+        env: {
+          CLAUDE_CONFIG_DIR: "/test/claude-account",
+        },
+      },
     });
     const session = await client.createSession(
       {
@@ -82,6 +87,7 @@ describe("Claude SDK env", () => {
       expect(result.sessionId).toBe("managed-agent-env-session");
       expect(capturedEnv?.PASEO_AGENT_ID).toBe(launchContext.env?.PASEO_AGENT_ID);
       expect(capturedEnv?.PASEO_TEST_FLAG).toBe(launchContext.env?.PASEO_TEST_FLAG);
+      expect(capturedEnv?.CLAUDE_CONFIG_DIR).toBe("/test/claude-account");
     } finally {
       await session.close();
     }

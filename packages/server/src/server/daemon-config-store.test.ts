@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { DaemonConfigStore, applyMutableProviderConfigToOverrides } from "./daemon-config-store.js";
+import {
+  DaemonConfigStore,
+  applyMutableProviderConfigToOverrides,
+  toClientMutableDaemonConfig,
+} from "./daemon-config-store.js";
 import { loadPersistedConfig } from "./persisted-config.js";
 
 describe("applyMutableProviderConfigToOverrides", () => {
@@ -51,6 +55,46 @@ describe("applyMutableProviderConfigToOverrides", () => {
         ],
       },
     });
+  });
+});
+
+describe("toClientMutableDaemonConfig", () => {
+  test("exposes account directories without exposing provider environment secrets", () => {
+    const clientConfig = toClientMutableDaemonConfig({
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {
+        "claude-account-work": {
+          extends: "claude",
+          label: "Claude · Work",
+          env: {
+            CLAUDE_CONFIG_DIR: "/accounts/claude-work",
+            ANTHROPIC_API_KEY: "secret",
+          },
+        },
+        proxy: {
+          extends: "claude",
+          env: {
+            ANTHROPIC_BASE_URL: "https://example.com",
+            ANTHROPIC_API_KEY: "also-secret",
+          },
+        },
+      },
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    expect(clientConfig.providers["claude-account-work"]).toEqual({
+      extends: "claude",
+      label: "Claude · Work",
+      accountConfigDir: "/accounts/claude-work",
+    });
+    expect(clientConfig.providers.proxy).toEqual({
+      extends: "claude",
+    });
+    expect(JSON.stringify(clientConfig)).not.toContain("secret");
   });
 });
 

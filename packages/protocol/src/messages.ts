@@ -103,9 +103,19 @@ const MutableDaemonProviderModelSchema = z
 
 const MutableDaemonProviderConfigSchema = z
   .object({
+    extends: z.string().optional(),
+    label: z.string().optional(),
+    description: z.string().optional(),
+    accountConfigDir: z.string().optional(),
     enabled: z.boolean().optional(),
     additionalModels: z.array(MutableDaemonProviderModelSchema).optional(),
   })
+  .passthrough();
+
+const MutableDaemonProviderConfigPatchSchema = MutableDaemonProviderConfigSchema.extend({
+  env: z.record(z.string(), z.string()).optional(),
+})
+  .partial()
   .passthrough();
 
 const MutableStructuredGenerationProviderSchema = z
@@ -160,9 +170,7 @@ export const MutableDaemonConfigPatchSchema = z
   .object({
     mcp: MutableDaemonConfigSchema.shape.mcp.partial().optional(),
     browserTools: MutableBrowserToolsConfigSchema.partial().optional(),
-    providers: z
-      .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
-      .optional(),
+    providers: z.record(z.string(), MutableDaemonProviderConfigPatchSchema).optional(),
     removeProviders: z.array(z.string().min(1)).optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
@@ -2820,6 +2828,8 @@ export const ServerInfoStatusPayloadSchema = z
         commitBaseClassification: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
+        // COMPAT(providerAccounts): added in v0.2.4, remove after 2027-01-28 once daemon floor >= v0.2.4.
+        providerAccounts: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
         importSessionWorkspaceTarget: z.boolean().optional(),
         // COMPAT(forgeProviders): added in v0.1.106, drop the gate when daemon floor >= v0.1.106.

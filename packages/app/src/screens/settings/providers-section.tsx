@@ -34,6 +34,8 @@ import {
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { ProviderAccountFormSheet } from "@/provider-accounts/provider-account-form-sheet";
+import type { AccountProvider } from "@/provider-accounts/provider-account-config";
 import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react-native";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
@@ -320,12 +322,129 @@ export interface ProvidersSectionProps {
   serverId: string;
 }
 
+interface ProviderAccountsSectionProps {
+  serverId: string;
+  isConnected: boolean;
+  config: ReturnType<typeof useDaemonConfig>["config"];
+  isConfigLoading: boolean;
+  patchConfig: ReturnType<typeof useDaemonConfig>["patchConfig"];
+  refreshProviders: ReturnType<typeof useProvidersSnapshot>["refresh"];
+}
+
+function accountActionStyle({
+  pressed,
+  hovered,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.accountAction, hovered && styles.rowHovered, pressed && styles.rowPressed];
+}
+
+function accountActionLastStyle({
+  pressed,
+  hovered,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    styles.accountAction,
+    styles.accountActionLast,
+    hovered && styles.rowHovered,
+    pressed && styles.rowPressed,
+  ];
+}
+
+function ProviderAccountsSection({
+  serverId,
+  isConnected,
+  config,
+  isConfigLoading,
+  patchConfig,
+  refreshProviders,
+}: ProviderAccountsSectionProps) {
+  const { t } = useTranslation();
+  const supportsProviderAccounts = useHostFeature(serverId, "providerAccounts");
+  const [accountFormProvider, setAccountFormProvider] = useState<AccountProvider | null>(null);
+  const handleOpenClaudeAccountForm = useCallback(() => setAccountFormProvider("claude"), []);
+  const handleOpenCodexAccountForm = useCallback(() => setAccountFormProvider("codex"), []);
+  const handleCloseAccountForm = useCallback(() => setAccountFormProvider(null), []);
+
+  if (!serverId || !isConnected) {
+    return null;
+  }
+
+  return (
+    <>
+      <SettingsSection
+        title={t("settings.providers.accounts.title")}
+        testID="host-page-add-account-card"
+        style={styles.addProviderSection}
+      >
+        {!supportsProviderAccounts ? (
+          <View style={[settingsStyles.card, styles.emptyCard]}>
+            <Text style={styles.emptyText}>{t("settings.providers.accounts.updateHost")}</Text>
+          </View>
+        ) : null}
+        {supportsProviderAccounts && (isConfigLoading || !config) ? (
+          <View style={[settingsStyles.card, styles.emptyCard]}>
+            <Text style={styles.emptyText}>{t("settings.providers.loading")}</Text>
+          </View>
+        ) : null}
+        {supportsProviderAccounts && config ? (
+          <View style={settingsStyles.card}>
+            <Pressable
+              style={accountActionStyle}
+              onPress={handleOpenClaudeAccountForm}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.providers.accounts.addClaudeTitle")}
+              testID="add-claude-account"
+            >
+              <View style={styles.accountActionText}>
+                <Text style={settingsStyles.rowTitle}>
+                  {t("settings.providers.accounts.addClaude")}
+                </Text>
+                <Text style={styles.accountActionDescription}>
+                  {t("settings.providers.accounts.addClaudeDescription")}
+                </Text>
+              </View>
+              <ChevronRight size={18} />
+            </Pressable>
+            <Pressable
+              style={accountActionLastStyle}
+              onPress={handleOpenCodexAccountForm}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.providers.accounts.addCodexTitle")}
+              testID="add-codex-account"
+            >
+              <View style={styles.accountActionText}>
+                <Text style={settingsStyles.rowTitle}>
+                  {t("settings.providers.accounts.addCodex")}
+                </Text>
+                <Text style={styles.accountActionDescription}>
+                  {t("settings.providers.accounts.addCodexDescription")}
+                </Text>
+              </View>
+              <ChevronRight size={18} />
+            </Pressable>
+          </View>
+        ) : null}
+      </SettingsSection>
+      {accountFormProvider && config ? (
+        <ProviderAccountFormSheet
+          key={`${serverId}:${accountFormProvider}`}
+          provider={accountFormProvider}
+          config={config}
+          patchConfig={patchConfig}
+          refreshProviders={refreshProviders}
+          onClose={handleCloseAccountForm}
+        />
+      ) : null}
+    </>
+  );
+}
+
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const supportsProviderRemoval = useHostFeature(serverId, "providerRemoval");
   const { entries, isLoading, refresh } = useProvidersSnapshot(serverId);
-  const { patchConfig } = useDaemonConfig(serverId);
+  const { config, isLoading: isConfigLoading, patchConfig } = useDaemonConfig(serverId);
   const openProviderSettings = useProviderSettingsStore((state) => state.open);
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [removingProviderId, setRemovingProviderId] = useState<string | null>(null);
@@ -409,7 +528,6 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     },
     [installingProviderId, patchConfig, refresh, t],
   );
-
   return (
     <>
       <SettingsSection
@@ -452,6 +570,15 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
         ) : null}
       </SettingsSection>
 
+      <ProviderAccountsSection
+        serverId={serverId}
+        isConnected={isConnected}
+        config={config}
+        isConfigLoading={isConfigLoading}
+        patchConfig={patchConfig}
+        refreshProviders={refresh}
+      />
+
       {hasServer && isConnected ? (
         <SettingsSection
           title={t("settings.providers.addProvider")}
@@ -475,6 +602,25 @@ const styles = StyleSheet.create((theme) => ({
   },
   addProviderSection: {
     marginTop: theme.spacing[4],
+  },
+  accountAction: {
+    padding: theme.spacing[4],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.border,
+  },
+  accountActionText: {
+    flex: 1,
+    gap: theme.spacing[1],
+  },
+  accountActionLast: {
+    borderBottomWidth: 0,
+  },
+  accountActionDescription: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   emptyCard: {
     padding: theme.spacing[4],

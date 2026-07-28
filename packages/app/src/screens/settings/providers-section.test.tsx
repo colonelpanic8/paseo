@@ -7,41 +7,58 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import type { MutableDaemonConfig } from "@getpaseo/protocol/messages";
 
-const { theme, snapshotState, configState, patchConfigMock, openProviderSettingsMock } = vi.hoisted(
-  () => ({
-    theme: {
-      spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
-      iconSize: { sm: 14, md: 20 },
-      fontSize: { xs: 11, sm: 13, base: 15 },
-      fontWeight: { normal: "400" },
-      borderRadius: { lg: 8 },
-      opacity: { 50: 0.5 },
-      colors: {
-        surface1: "#111",
-        surface2: "#222",
-        surface3: "#333",
-        foreground: "#fff",
-        foregroundMuted: "#aaa",
-        border: "#555",
-        accent: "#0a84ff",
-        statusSuccess: "#00ff00",
-        statusWarning: "#ff9500",
-        statusDanger: "#ff0000",
-        palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
-      },
+const {
+  theme,
+  snapshotState,
+  configState,
+  patchConfigMock,
+  openProviderSettingsMock,
+  daemonConfigServerIds,
+  providerSnapshotServerIds,
+  connectedServerIds,
+  featureRequests,
+  featureState,
+} = vi.hoisted(() => ({
+  theme: {
+    spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
+    iconSize: { sm: 14, md: 20 },
+    fontSize: { xs: 11, sm: 13, base: 15 },
+    fontWeight: { normal: "400" },
+    borderRadius: { lg: 8 },
+    opacity: { 50: 0.5 },
+    colors: {
+      surface1: "#111",
+      surface2: "#222",
+      surface3: "#333",
+      foreground: "#fff",
+      foregroundMuted: "#aaa",
+      border: "#555",
+      accent: "#0a84ff",
+      statusSuccess: "#00ff00",
+      statusWarning: "#ff9500",
+      statusDanger: "#ff0000",
+      palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
     },
-    snapshotState: {
-      entries: undefined as ProviderSnapshotEntry[] | undefined,
-      isLoading: false,
-      isRefreshing: false,
-    },
-    configState: {
-      config: null as MutableDaemonConfig | null,
-    },
-    patchConfigMock: vi.fn(async () => undefined),
-    openProviderSettingsMock: vi.fn(),
-  }),
-);
+  },
+  snapshotState: {
+    entries: undefined as ProviderSnapshotEntry[] | undefined,
+    isLoading: false,
+    isRefreshing: false,
+  },
+  configState: {
+    config: null as MutableDaemonConfig | null,
+    isLoading: false,
+  },
+  patchConfigMock: vi.fn(async (_serverId: string, _patch: unknown) => undefined),
+  openProviderSettingsMock: vi.fn(),
+  daemonConfigServerIds: [] as string[],
+  providerSnapshotServerIds: [] as string[],
+  connectedServerIds: [] as string[],
+  featureRequests: [] as Array<{ serverId: string; feature: string }>,
+  featureState: {
+    providerAccounts: true,
+  },
+}));
 
 vi.mock("react-native", () => ({
   Platform: { OS: "web" },
@@ -119,6 +136,17 @@ vi.mock("react-i18next", () => ({
           "settings.providers.models.many": "{{count}} models",
           "settings.providers.addErrorTitle": "Unable to add provider",
           "settings.providers.updateErrorTitle": "Unable to update provider",
+          "settings.providers.loading": "Loading...",
+          "settings.providers.accounts.title": "Accounts",
+          "settings.providers.accounts.updateHost": "Update the host to manage provider accounts.",
+          "settings.providers.accounts.addClaudeTitle": "Add Claude account",
+          "settings.providers.accounts.addClaude": "Claude Code account",
+          "settings.providers.accounts.addClaudeDescription":
+            "Use a separate Claude configuration directory",
+          "settings.providers.accounts.addCodexTitle": "Add Codex account",
+          "settings.providers.accounts.addCodex": "Codex / ChatGPT account",
+          "settings.providers.accounts.addCodexDescription":
+            "Use a separate Codex home and sign-in",
           "settings.providers.actions.menu": "{{name}} actions",
           "settings.providers.actions.remove": "Remove provider",
           "settings.providers.actions.removing": "Removing...",
@@ -242,33 +270,50 @@ vi.mock("@/components/provider-catalog-list", () => ({
   ProviderCatalogList: () => null,
 }));
 
+vi.mock("@/provider-accounts/provider-account-form-sheet", () => ({
+  ProviderAccountFormSheet: ({ provider }: { provider: "claude" | "codex" }) =>
+    React.createElement("div", { "data-testid": `${provider}-account-form-sheet` }),
+}));
+
 vi.mock("@/hooks/use-providers-snapshot", () => ({
-  useProvidersSnapshot: () => ({
-    entries: snapshotState.entries,
-    isLoading: snapshotState.isLoading,
-    isFetching: false,
-    isRefreshing: snapshotState.isRefreshing,
-    error: null,
-    supportsSnapshot: true,
-    refresh: vi.fn(async () => {}),
-    refetchIfStale: vi.fn(),
-  }),
+  useProvidersSnapshot: (serverId: string) => {
+    providerSnapshotServerIds.push(serverId);
+    return {
+      entries: snapshotState.entries,
+      isLoading: snapshotState.isLoading,
+      isFetching: false,
+      isRefreshing: snapshotState.isRefreshing,
+      error: null,
+      supportsSnapshot: true,
+      refresh: vi.fn(async () => {}),
+      refetchIfStale: vi.fn(),
+    };
+  },
 }));
 
 vi.mock("@/hooks/use-daemon-config", () => ({
-  useDaemonConfig: () => ({
-    config: configState.config,
-    isLoading: false,
-    patchConfig: patchConfigMock,
-  }),
+  useDaemonConfig: (serverId: string) => {
+    daemonConfigServerIds.push(serverId);
+    return {
+      config: configState.config,
+      isLoading: configState.isLoading,
+      patchConfig: (patch: unknown) => patchConfigMock(serverId, patch),
+    };
+  },
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
-  useHostRuntimeIsConnected: () => true,
+  useHostRuntimeIsConnected: (serverId: string) => {
+    connectedServerIds.push(serverId);
+    return true;
+  },
 }));
 
 vi.mock("@/runtime/host-features", () => ({
-  useHostFeature: () => false,
+  useHostFeature: (serverId: string, feature: string) => {
+    featureRequests.push({ serverId, feature });
+    return feature === "providerAccounts" ? featureState.providerAccounts : false;
+  },
 }));
 
 vi.mock("@/utils/confirm-dialog", () => ({
@@ -342,9 +387,15 @@ describe("ProvidersSection", () => {
     snapshotState.isLoading = false;
     snapshotState.isRefreshing = false;
     configState.config = null;
+    configState.isLoading = false;
     patchConfigMock.mockReset();
     patchConfigMock.mockResolvedValue(undefined);
     openProviderSettingsMock.mockReset();
+    daemonConfigServerIds.length = 0;
+    providerSnapshotServerIds.length = 0;
+    connectedServerIds.length = 0;
+    featureRequests.length = 0;
+    featureState.providerAccounts = true;
   });
 
   afterEach(() => {
@@ -393,6 +444,33 @@ describe("ProvidersSection", () => {
     expect(indexOfText(codexNodes, "Codex")).toBeGreaterThanOrEqual(0);
     expect(indexOfText(codexNodes, "codex")).toBe(-1);
     expect(indexOfText(codexNodes, "Disabled")).toBeGreaterThanOrEqual(0);
+  });
+
+  it("scopes provider reads, feature gates, and config writes to the requested host", async () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+
+    render();
+
+    expect(daemonConfigServerIds).toContain("server-1");
+    expect(providerSnapshotServerIds).toContain("server-1");
+    expect(connectedServerIds).toContain("server-1");
+    expect(featureRequests).toEqual(
+      expect.arrayContaining([
+        { serverId: "server-1", feature: "providerRemoval" },
+        { serverId: "server-1", feature: "providerAccounts" },
+      ]),
+    );
+
+    const switchEl =
+      findRow("Claude provider details").querySelector<HTMLElement>('[role="switch"]');
+    await act(async () => {
+      switchEl?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(patchConfigMock).toHaveBeenCalledWith("server-1", {
+      providers: { claude: { enabled: false } },
+    });
   });
 
   it("composes the row as chevron, icon, label, status, model count, then switch", () => {
@@ -454,8 +532,59 @@ describe("ProvidersSection", () => {
     });
 
     expect(patchConfigMock).toHaveBeenCalledTimes(1);
-    expect(patchConfigMock).toHaveBeenCalledWith({
+    expect(patchConfigMock).toHaveBeenCalledWith("server-1", {
       providers: { claude: { enabled: false } },
     });
+  });
+
+  it("opens the Claude account form from provider settings", () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+
+    render();
+
+    const addAccount = findRow("Add Claude account");
+    act(() => {
+      addAccount.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container?.querySelector('[data-testid="claude-account-form-sheet"]')).not.toBeNull();
+  });
+
+  it("waits for the selected host config before enabling account actions", () => {
+    snapshotState.entries = [claudeEntry];
+    configState.isLoading = true;
+
+    render();
+
+    expect(container?.textContent).toContain("Loading...");
+    expect(container?.querySelector('[data-testid="add-claude-account"]')).toBeNull();
+    expect(container?.querySelector('[data-testid="add-codex-account"]')).toBeNull();
+  });
+
+  it("asks for a host update when provider accounts are unsupported", () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+    featureState.providerAccounts = false;
+
+    render();
+
+    expect(container?.textContent).toContain("Update the host to manage provider accounts.");
+    expect(container?.querySelector('[data-testid="add-claude-account"]')).toBeNull();
+    expect(container?.querySelector('[data-testid="add-codex-account"]')).toBeNull();
+  });
+
+  it("opens the Codex account form from provider settings", () => {
+    snapshotState.entries = [disabledCodexEntry];
+    configState.config = makeConfig();
+
+    render();
+
+    const addAccount = findRow("Add Codex account");
+    act(() => {
+      addAccount.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container?.querySelector('[data-testid="codex-account-form-sheet"]')).not.toBeNull();
   });
 });

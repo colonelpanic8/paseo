@@ -169,4 +169,34 @@ describe("browser automation protocol integration", () => {
       }).browserTools,
     ).toEqual({ enabled: true });
   });
+
+  test("provider account config exposes a safe directory field and accepts env only in patches", () => {
+    expect(
+      MutableDaemonConfigSchema.parse({
+        mcp: { injectIntoAgents: false },
+        providers: {
+          "codex-account-work": {
+            extends: "codex",
+            label: "Codex · Work",
+            accountConfigDir: "/accounts/codex-work",
+          },
+        },
+      }).providers["codex-account-work"],
+    ).toEqual({
+      extends: "codex",
+      label: "Codex · Work",
+      accountConfigDir: "/accounts/codex-work",
+    });
+
+    expect(
+      MutableDaemonConfigPatchSchema.parse({
+        providers: {
+          "codex-account-work": {
+            extends: "codex",
+            env: { CODEX_HOME: "/accounts/codex-work" },
+          },
+        },
+      }).providers?.["codex-account-work"]?.env,
+    ).toEqual({ CODEX_HOME: "/accounts/codex-work" });
+  });
 });

@@ -35,6 +35,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function getProviderAccountConfigDir(
+  provider: Pick<ProviderOverride, "extends" | "env">,
+): string | undefined {
+  let envKey: "CLAUDE_CONFIG_DIR" | "CODEX_HOME" | null = null;
+  if (provider.extends === "claude") {
+    envKey = "CLAUDE_CONFIG_DIR";
+  } else if (provider.extends === "codex") {
+    envKey = "CODEX_HOME";
+  }
+  if (!envKey) {
+    return undefined;
+  }
+  const value = provider.env?.[envKey]?.trim();
+  return value || undefined;
+}
+
+export function toClientMutableDaemonConfig(config: MutableDaemonConfig): MutableDaemonConfig {
+  const providers = Object.fromEntries(
+    Object.entries(config.providers).map(([providerId, provider]) => {
+      const parsedOverride = ProviderOverrideSchema.safeParse(provider);
+      let accountConfigDir: string | undefined;
+      if (typeof provider.accountConfigDir === "string" && provider.accountConfigDir.trim()) {
+        accountConfigDir = provider.accountConfigDir.trim();
+      } else if (parsedOverride.success) {
+        accountConfigDir = getProviderAccountConfigDir(parsedOverride.data);
+      }
+      return [
+        providerId,
+        {
+          ...(typeof provider.extends === "string" ? { extends: provider.extends } : {}),
+          ...(typeof provider.label === "string" ? { label: provider.label } : {}),
+          ...(typeof provider.description === "string"
+            ? { description: provider.description }
+            : {}),
+          ...(typeof provider.enabled === "boolean" ? { enabled: provider.enabled } : {}),
+          ...(provider.additionalModels ? { additionalModels: provider.additionalModels } : {}),
+          ...(accountConfigDir ? { accountConfigDir } : {}),
+        },
+      ];
+    }),
+  );
+  return {
+    ...config,
+    providers,
+  };
+}
+
 function deepMerge<T extends Record<string, unknown>>(
   current: T,
   patch: Record<string, unknown>,

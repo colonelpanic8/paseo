@@ -15,6 +15,20 @@ describe("resolveProviderIconName", () => {
     expect(resolveProviderIconName("minimax")).toEqual({ kind: "builtin", id: "minimax" });
   });
 
+  it("returns the Claude icon for Claude account profiles", () => {
+    expect(resolveProviderIconName("claude-account-work")).toEqual({
+      kind: "builtin",
+      id: "claude",
+    });
+  });
+
+  it("returns the Codex icon for Codex account profiles", () => {
+    expect(resolveProviderIconName("codex-account-work")).toEqual({
+      kind: "builtin",
+      id: "codex",
+    });
+  });
+
   it("returns the catalog identifier for ACP catalog provider ids that ship an icon", () => {
     expect(resolveProviderIconName("amp-acp")).toEqual({ kind: "catalog", id: "amp-acp" });
     expect(resolveProviderIconName("gemini")).toEqual({ kind: "catalog", id: "gemini" });
