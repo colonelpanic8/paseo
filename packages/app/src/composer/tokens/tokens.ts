@@ -28,6 +28,10 @@ export type ComposerTextSegment =
 
 const NAME_START = /[A-Za-z]/;
 const NAME_BODY = /[A-Za-z0-9:_-]/;
+const CANONICAL_SUBMISSION_SIGILS: ComposerSigils = {
+  command: DEFAULT_COMMAND_SIGIL,
+  skill: DEFAULT_COMMAND_SIGIL,
+};
 
 function readTokenName(text: string, nameStart: number): number {
   if (nameStart >= text.length || !NAME_START.test(text[nameStart] ?? "")) {
@@ -83,6 +87,25 @@ export function collectComposerTokens(text: string, sigils: ComposerSigils): Com
   }
 
   return tokens;
+}
+
+/**
+ * Read the canonical slash syntax stored in submitted user messages.
+ *
+ * Submission no longer carries the configured editing sigils. Position recovers
+ * the distinction: a leading slash is a command and a slash after whitespace is
+ * a skill.
+ */
+export function collectSubmittedComposerTokens(text: string): ComposerToken[] {
+  return collectComposerTokens(text, CANONICAL_SUBMISSION_SIGILS);
+}
+
+export function getComposerTokenDisplayText(
+  token: Pick<ComposerToken, "type" | "name">,
+  sigils: ComposerSigils,
+): string {
+  const sigil = token.type === "command" ? sigils.command : sigils.skill;
+  return `${sigil}${token.name}`;
 }
 
 /**

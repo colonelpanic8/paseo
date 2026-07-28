@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_COMPOSER_SIGILS } from "./sigils";
 import {
   collectComposerTokens,
+  collectSubmittedComposerTokens,
+  getComposerTokenDisplayText,
   normalizeComposerTokensForSubmission,
   segmentComposerText,
 } from "./tokens";
@@ -88,6 +90,27 @@ describe("normalizeComposerTokensForSubmission", () => {
     expect(
       normalizeComposerTokensForSubmission("important! cost 40$usd; read /tmp/project", sigils),
     ).toBe("important! cost 40$usd; read /tmp/project");
+  });
+});
+
+describe("submitted composer token presentation", () => {
+  it("recovers command and skill tokens from canonical slash syntax", () => {
+    expect(collectSubmittedComposerTokens("/plan then /release-beta")).toEqual([
+      { type: "command", name: "plan", start: 0, end: 5 },
+      { type: "skill", name: "release-beta", start: 11, end: 24 },
+    ]);
+  });
+
+  it("maps canonical tokens back to the active display sigils", () => {
+    const remapped = { command: "#", skill: "!" } as const;
+    expect(getComposerTokenDisplayText({ type: "command", name: "plan" }, remapped)).toBe("#plan");
+    expect(getComposerTokenDisplayText({ type: "skill", name: "release-beta" }, remapped)).toBe(
+      "!release-beta",
+    );
+  });
+
+  it("keeps paths and ordinary slash prose out of sent-message pills", () => {
+    expect(collectSubmittedComposerTokens("read /tmp/project and/or continue")).toEqual([]);
   });
 });
 
