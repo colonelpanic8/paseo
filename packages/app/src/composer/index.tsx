@@ -114,6 +114,8 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
+import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
+import { normalizeComposerTokensForSubmission } from "@/composer/tokens/tokens";
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
@@ -1315,6 +1317,7 @@ function ComposerContentImpl({
     () => textSource.getSnapshot().trim().length > 0,
     () => textSource.getSnapshot().trim().length > 0,
   );
+  const composerSigils = useComposerSigils();
   const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
   const {
@@ -1708,15 +1711,16 @@ function ComposerContentImpl({
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
       const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
       const pluginSlashCommand = resolvePluginClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
         commands: pluginClientSlashCommands,
       });
@@ -1725,12 +1729,13 @@ function ComposerContentImpl({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(submissionText, outgoingAttachments, payload.forceSend);
     },
     [
       attachments,
       blurOnSubmit,
       buildOutgoingAttachments,
+      composerSigils,
       runClientSlashCommand,
       pluginClientSlashCommands,
       runPluginClientSlashCommand,
@@ -1961,24 +1966,26 @@ function ComposerContentImpl({
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const submissionText = normalizeComposerTokensForSubmission(payload.text, composerSigils);
       const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
       const pluginSlashCommand = resolvePluginClientSlashCommand({
-        text: payload.text,
+        text: submissionText,
         hasAttachments: outgoingAttachments.length > 0,
         commands: pluginClientSlashCommands,
       });
       if (pluginSlashCommand && runPluginClientSlashCommand(pluginSlashCommand)) return;
-      queueMessage(payload.text, outgoingAttachments);
+      queueMessage(submissionText, outgoingAttachments);
     },
     [
       attachments,
       buildOutgoingAttachments,
+      composerSigils,
       pluginClientSlashCommands,
       queueMessage,
       runClientSlashCommand,
@@ -2342,10 +2349,12 @@ function ComposerContentImpl({
       agentId,
       draft: commandDraft,
       canExecuteClientSlashCommand: buildOutgoingAttachments(attachments).length === 0,
+      sigils: composerSigils,
       onClientSlashCommand: runClientSlashCommand,
       pluginClientSlashCommands,
     }),
     [
+      composerSigils,
       replaceUserInput,
       serverId,
       agentId,
