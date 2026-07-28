@@ -40,6 +40,8 @@ test("composer token pills and trigger settings stay aligned", async ({
   await expect(page.locator("[data-composer-token-mirror]")).toHaveCount(0);
 
   await composer.fill("please run $release-beta");
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("please run /release-beta ");
   await expect(composer).toHaveAttribute("data-composer-tokenized", "");
 
   const mirror = page.locator("[data-composer-token-mirror]");
@@ -82,6 +84,8 @@ test("composer token pills and trigger settings stay aligned", async ({
 
   await clickSettingsBackToWorkspace(page);
   await composer.fill("please run !release-beta");
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("please run /release-beta ");
   await expect(composer).toHaveAttribute("data-composer-tokenized", "");
   await expect(mirror.getByText("!release-beta", { exact: true })).toBeVisible();
 
@@ -89,7 +93,9 @@ test("composer token pills and trigger settings stay aligned", async ({
   await expect(composer).not.toHaveAttribute("data-composer-tokenized", "");
   await expect(mirror).toHaveCount(0);
 
-  await composer.fill("please run !release-beta ");
+  await composer.fill("please run !release-beta");
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("please run /release-beta ");
   await composer.press("Enter");
   const sentMessage = page.getByTestId("user-message").last();
   const sentToken = sentMessage.getByTestId("sent-message-token");
