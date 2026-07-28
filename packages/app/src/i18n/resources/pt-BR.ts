@@ -974,6 +974,12 @@ export const ptBR: TranslationResources = {
         archiving: "Arquivando...",
         hiding: "Ocultando...",
       },
+      archived: {
+        groupTitle: "Arquivados recentemente",
+        unarchive: "Desarquivar",
+        unarchiving: "Desarquivando...",
+        unarchiveFailed: "Falha ao desarquivar o workspace",
+      },
       confirmations: {
         hideTitle: "Ocultar workspace?",
         hideMessage:

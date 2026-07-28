@@ -44,6 +44,8 @@ import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-men
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
+import { SidebarArchivedGroup } from "@/components/sidebar/sidebar-archived-group";
+import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 
 // Themed icon wrappers
@@ -63,6 +65,7 @@ const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedCircleX = withUnistyles(CircleX);
 interface StatusWorkspaceListProps {
   groups: StatusGroup[];
+  archivedWorkspaces: ArchivedWorkspaceEntry[];
   pinnedWorkspaces: SidebarWorkspaceEntry[];
   projectNamesByKey: Map<string, string>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
@@ -77,6 +80,7 @@ interface StatusWorkspaceListProps {
 
 export function SidebarStatusWorkspaceList({
   groups,
+  archivedWorkspaces,
   pinnedWorkspaces,
   projectNamesByKey,
   shortcutIndexByWorkspaceKey,
@@ -150,6 +154,11 @@ export function SidebarStatusWorkspaceList({
         showHostLabels={showHostLabels}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
+      />
+      <SidebarArchivedGroup
+        entries={archivedWorkspaces}
+        hostLabelByServerId={hostLabelByServerId}
+        showHostLabels={showHostLabels}
       />
     </>
   );
