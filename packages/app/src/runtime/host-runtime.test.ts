@@ -2832,6 +2832,49 @@ describe("HostRuntimeStore", () => {
     }
   });
 
+  it("does not update the host color when persistence fails", async () => {
+    const memoryStorage = createMemoryHostRuntimeStorage();
+    let rejectWrites = false;
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+      storage: {
+        getItem: memoryStorage.getItem,
+        setItem: async (key, value) => {
+          if (rejectWrites) {
+            throw new Error("host registry unavailable");
+          }
+          await memoryStorage.setItem(key, value);
+        },
+      },
+    });
+
+    try {
+      await store.upsertDirectConnection({
+        serverId: "srv_color_failure",
+        endpoint: "lan:6767",
+        label: "unsaved color host",
+      });
+      rejectWrites = true;
+
+      await expect(store.setHostColor("srv_color_failure", "purple")).rejects.toThrow(
+        "host registry unavailable",
+      );
+      expect(
+        store.getHosts().find((host) => host.serverId === "srv_color_failure")?.color,
+      ).toBeNull();
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("preserves a manual host rename when desktop status re-advertises the daemon hostname", async () => {
     const advertisedHostname = "macbook-pro.local";
     const store = new HostRuntimeStore({

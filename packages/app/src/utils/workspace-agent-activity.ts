@@ -37,6 +37,7 @@ export function buildWorkspaceAgentActivityIndex(
       providerActivityByWorkspaceId,
       workspaceId: agent.workspaceId,
       provider: agent.provider,
+      status: agent.status,
       enteredAt,
     });
 
@@ -93,9 +94,10 @@ function recordProviderActivity(input: {
   providerActivityByWorkspaceId: Map<string, Map<string, number>>;
   workspaceId: string;
   provider: string | undefined;
+  status: Agent["status"];
   enteredAt: Date;
 }): void {
-  if (!input.provider) {
+  if (!input.provider || input.status === "closed" || input.status === "error") {
     return;
   }
   let byProvider = input.providerActivityByWorkspaceId.get(input.workspaceId);

@@ -359,11 +359,31 @@ describe("workspace agent activity index", () => {
             archivedAt: "2026-06-01T10:05:00.000Z",
           }),
         ],
+        [
+          "closed",
+          agent({
+            id: "closed",
+            workspaceId: "workspace-a",
+            status: "closed",
+            updatedAt: "2026-06-01T10:06:00.000Z",
+            provider: "pi",
+          }),
+        ],
+        [
+          "error",
+          agent({
+            id: "error",
+            workspaceId: "workspace-a",
+            status: "error",
+            updatedAt: "2026-06-01T10:07:00.000Z",
+            provider: "opencode",
+          }),
+        ],
       ]),
     );
 
     const activity = index.get("workspace-a");
-    expect(activity?.agentId).toBe("codex-new");
+    expect(activity?.agentId).toBe("error");
     expect(activity?.providers).toEqual(["codex", "claude"]);
   });
 
