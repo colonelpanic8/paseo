@@ -404,9 +404,16 @@ function HostColorCard({ host }: { host: HostProfile }) {
         return;
       }
       setIsSaving(true);
-      void setHostColor(host.serverId, color).finally(() => setIsSaving(false));
+      void setHostColor(host.serverId, color)
+        .catch((error) => {
+          Alert.alert(
+            t("common.errors.unableToSave"),
+            error instanceof Error ? error.message : String(error),
+          );
+        })
+        .finally(() => setIsSaving(false));
     },
-    [host.serverId, isSaving, selectedColor, setHostColor],
+    [host.serverId, isSaving, selectedColor, setHostColor, t],
   );
 
   return (

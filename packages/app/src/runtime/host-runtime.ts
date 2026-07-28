@@ -1795,8 +1795,8 @@ export class HostRuntimeStore {
     const next = this.hosts.map((h) =>
       h.serverId === serverId ? { ...h, color, updatedAt: new Date().toISOString() } : h,
     );
+    await this.writeHosts(next);
     this.setHostsAndSync(next);
-    await this.persistHosts();
   }
 
   async removeHost(serverId: string): Promise<void> {
@@ -1877,10 +1877,14 @@ export class HostRuntimeStore {
 
   private async persistHosts(): Promise<void> {
     try {
-      await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(this.hosts));
+      await this.writeHosts(this.hosts);
     } catch (error) {
       console.error("[HostRuntime] Failed to persist host registry", error);
     }
+  }
+
+  private async writeHosts(hosts: readonly HostProfile[]): Promise<void> {
+    await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(hosts));
   }
 
   private emitHostList(): void {
