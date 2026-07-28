@@ -2357,6 +2357,7 @@ export const fr: TranslationResources = {
         queueMessage: "Message de file d'attente",
         muteUnmuteVoiceMode: "Mode vocal/unmutemuet",
         switchProject: "Changer de projet",
+        selectHost: "Sélectionner l'hôte",
       },
       helpNotes: {
         showKeyboardShortcuts:

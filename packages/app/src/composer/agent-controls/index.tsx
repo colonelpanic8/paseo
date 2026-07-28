@@ -91,6 +91,11 @@ import {
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { ShortcutHint } from "@/components/ui/shortcut-hint";
+import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
+import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
+import { useShowControlShortcutBadges } from "@/hooks/use-show-shortcut-badges";
+import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 
 interface AgentControlOption {
   id: string;
@@ -98,6 +103,17 @@ interface AgentControlOption {
 }
 
 type AgentControlSelector = "provider" | "mode" | "model" | "thinking" | `feature-${string}`;
+const COMPOSER_CONTROL_KEYBOARD_ACTIONS = [
+  "message-input.provider.pick",
+  "message-input.model.pick",
+  "message-input.thinking.pick",
+  "message-input.fast-mode.toggle",
+] as const;
+const FAST_MODE_FEATURE_ID = "fast_mode";
+
+function includesFeature(features: AgentFeature[] | undefined, featureId: string): boolean {
+  return Boolean(features?.some((feature) => feature.id === featureId));
+}
 
 const EMPTY_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
 
@@ -505,6 +521,8 @@ function ControlledAgentControls({
 }: ControlledAgentControlsProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
+  const showControlShortcutBadges = useShowControlShortcutBadges();
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompact = isCompactLayout ?? isCompactFormFactor;
   const { fontScale } = useWindowDimensions();
@@ -514,6 +532,7 @@ function ControlledAgentControls({
   const [density, setDensity] = useState<ComposerControlDensity>(initialDensity);
   const densityRef = useRef<ComposerControlDensity>(initialDensity);
   const availableWidthRef = useRef(0);
+  const keyboardHandlerIdRef = useRef(`composer-controls:${Math.random().toString(36).slice(2)}`);
 
   const providerAnchorRef = useRef<View>(null);
   const _modelAnchorRef = useRef<View>(null);
@@ -727,13 +746,73 @@ function ControlledAgentControls({
     [onSelectModel, onSelectProvider, onSelectProviderAndModel, provider],
   );
 
+  const handleKeyboardAction = useCallback(
+    (action: KeyboardActionDefinition): boolean => {
+      if (disabled || !isActiveComposer) return false;
+      if (action.id === "message-input.provider.pick") {
+        if (!canSelectProvider) return false;
+        // Compact has no standalone provider combobox; its model sheet owns
+        // provider selection.
+        if (isCompact) {
+          if (!canSelectModel) return false;
+          setOpenSelector("model");
+          return true;
+        }
+        setOpenSelector("provider");
+        return true;
+      }
+      if (action.id === "message-input.model.pick") {
+        if (!canSelectModel) return false;
+        setOpenSelector("model");
+        return true;
+      }
+      if (action.id === "message-input.thinking.pick") {
+        if (!canSelectThinking) return false;
+        if (isCompact) {
+          handleOpenSheet("thinking");
+        } else {
+          setOpenSelector("thinking");
+        }
+        return true;
+      }
+      if (action.id !== "message-input.fast-mode.toggle") return false;
+      const fastMode = features?.find((feature) => feature.id === FAST_MODE_FEATURE_ID);
+      if (fastMode?.type !== "toggle" || !onSetFeature) return false;
+      onSetFeature(fastMode.id, !fastMode.value);
+      onDropdownClose?.();
+      return true;
+    },
+    [
+      canSelectModel,
+      canSelectProvider,
+      canSelectThinking,
+      disabled,
+      features,
+      handleOpenSheet,
+      isActiveComposer,
+      isCompact,
+      onDropdownClose,
+      onSetFeature,
+    ],
+  );
+  useKeyboardActionHandler({
+    handlerId: keyboardHandlerIdRef.current,
+    actions: COMPOSER_CONTROL_KEYBOARD_ACTIONS,
+    enabled: isActiveComposer && !disabled,
+    priority: 200,
+    handle: handleKeyboardAction,
+  });
+
   if (!hasAnyControl) {
     return null;
   }
 
   return (
     <ComposerControlLayoutProvider value={layoutContextValue}>
-      <View style={styles.container} onLayout={handleLayout}>
+      <View
+        style={[styles.container, showControlShortcutBadges && styles.controlShortcutHintsVisible]}
+        onLayout={handleLayout}
+      >
         {!isCompact ? (
           <DesktopAgentControlsContent
             provider={provider}
@@ -893,6 +972,7 @@ const DESKTOP_SEARCH_THRESHOLD = 6;
 function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const {
     provider,
     providerOptions,
@@ -953,6 +1033,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     [t],
   );
   const handleOpenFeatures = useCallback(() => handleOpenSheet("features"), [handleOpenSheet]);
+  const hasFastMode = includesFeature(features, FAST_MODE_FEATURE_ID);
   return (
     <>
       {providerOptions && providerOptions.length > 0 ? (
@@ -966,6 +1047,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             accessibilityRole="button"
             accessibilityLabel={t("agentControls.provider.select")}
             testID="agent-provider-selector"
+            shortcutActionId="select-provider"
+            showShortcutHint={isActiveComposer}
           >
             <Text style={styles.modeBadgeText}>{displayProvider}</Text>
           </ComboboxTrigger>
@@ -1006,7 +1089,10 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 desktopPlacement="top-start"
                 desktopMinWidth={360}
                 toolbar={modelToolbar}
+                open={openSelector === "model"}
+                onOpenChange={handleOpenChange("model")}
               />
+              <ShortcutHint actionId="select-model" enabled={isActiveComposer && !modelDisabled} />
             </View>
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
@@ -1034,6 +1120,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                   value: displayThinking,
                 })}
                 testID="agent-thinking-selector"
+                shortcutActionId="select-thinking"
+                showShortcutHint={isActiveComposer}
               />
             </TooltipTrigger>
             <TooltipContent side="top" align="center" offset={8}>
@@ -1070,6 +1158,10 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             <ComposerToolbarGlyph size={glyphSize}>
               <Settings2 size={glyphSize} color={theme.colors.foregroundMuted} />
             </ComposerToolbarGlyph>
+            <ShortcutHint
+              actionId="toggle-fast-mode"
+              enabled={hasFastMode && isActiveComposer && !disabled}
+            />
           </Pressable>
           <AdaptiveModalSheet
             header={featuresSheetHeader}
@@ -1150,6 +1242,7 @@ interface SheetAgentControlsContentProps {
 
 function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const {
     provider,
     selectedModelId,
@@ -1220,6 +1313,8 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
               value: displayThinking,
             })}
             testID="agent-controls-thinking"
+            shortcutActionId="select-thinking"
+            showShortcutHint={isActiveComposer}
           />
           <Combobox
             options={comboboxThinkingOptions}
@@ -1272,6 +1367,9 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       serverId={modelSelectorServerId}
       glyphSize={glyphSize}
       canSwitchProvider={canSwitchProvider}
+      open={openSelector === "model"}
+      onOpenChange={handleOpenChange("model")}
+      showShortcutHint={isActiveComposer}
     >
       {sheetControls}
     </CompactModelSheet>
@@ -1294,6 +1392,7 @@ function DesktopFeatureItem({
   onActionComplete?: () => void;
 }) {
   const { theme } = useUnistyles();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
 
@@ -1347,6 +1446,8 @@ function DesktopFeatureItem({
             onPress={handleTogglePress}
             accessibilityLabel={getFeatureTooltip(feature)}
             testID={`agent-feature-${feature.id}`}
+            shortcutActionId={feature.id === FAST_MODE_FEATURE_ID ? "toggle-fast-mode" : undefined}
+            showShortcutHint={isActiveComposer}
           />
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>
@@ -1416,6 +1517,7 @@ function SheetFeatureItem({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
 
@@ -1466,6 +1568,8 @@ function SheetFeatureItem({
           onPress={handleSelectPress}
           accessibilityLabel={getFeatureTooltip(feature)}
           testID={`agent-feature-${feature.id}`}
+          shortcutActionId={feature.id === FAST_MODE_FEATURE_ID ? "toggle-fast-mode" : undefined}
+          showShortcutHint={isActiveComposer}
         />
         <Combobox
           options={comboboxOptions}
@@ -1971,6 +2075,10 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
     backgroundColor: "transparent",
     borderRadius: theme.borderRadius.full,
+    overflow: "visible",
+  },
+  controlShortcutHintsVisible: {
+    overflow: "visible",
   },
   modeBadgeHovered: {
     backgroundColor: theme.colors.surface2,
