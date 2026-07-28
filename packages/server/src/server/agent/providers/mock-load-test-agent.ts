@@ -42,6 +42,12 @@ const ONE_PIXEL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl4Kj8AAAAASUVORK5CYII=";
 const MOCK_LOAD_TEST_COMMANDS: readonly AgentSlashCommand[] = [
   {
+    name: "HOME",
+    description: "Exercise shell-variable collisions in development.",
+    argumentHint: "",
+    kind: "skill",
+  },
+  {
     name: "release-beta",
     description: "Simulate a provider skill in development.",
     argumentHint: "",
