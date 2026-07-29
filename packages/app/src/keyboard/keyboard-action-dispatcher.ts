@@ -30,7 +30,7 @@ export type KeyboardActionId =
   | "sidebar.toggle.right"
   | "workspace.new"
   | "workspace.project.pick"
-  | "workspace.isolation.pick"
+  | "workspace.isolation.toggle"
   | "workspace.ref.pick"
   | "workspace.host.pick"
   | "worktree.new"
@@ -72,7 +72,7 @@ export type KeyboardActionDefinition =
   | { id: "sidebar.toggle.right"; scope: KeyboardActionScope }
   | { id: "workspace.new"; scope: KeyboardActionScope }
   | { id: "workspace.project.pick"; scope: KeyboardActionScope }
-  | { id: "workspace.isolation.pick"; scope: KeyboardActionScope }
+  | { id: "workspace.isolation.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.ref.pick"; scope: KeyboardActionScope }
   | { id: "workspace.host.pick"; scope: KeyboardActionScope }
   | { id: "worktree.new"; scope: KeyboardActionScope }

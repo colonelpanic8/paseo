@@ -31,7 +31,7 @@ describe("routeKeyboardShortcut — dispatch passthroughs", () => {
     ["workspace.tab.new", { id: "workspace.tab.new", scope: "workspace" }],
     ["workspace.new", { id: "workspace.new", scope: "sidebar" }],
     ["workspace.project.pick", { id: "workspace.project.pick", scope: "workspace" }],
-    ["workspace.isolation.pick", { id: "workspace.isolation.pick", scope: "workspace" }],
+    ["workspace.isolation.toggle", { id: "workspace.isolation.toggle", scope: "workspace" }],
     ["workspace.ref.pick", { id: "workspace.ref.pick", scope: "workspace" }],
     ["workspace.host.pick", { id: "workspace.host.pick", scope: "workspace" }],
     ["workspace.archive", { id: "workspace.archive", scope: "sidebar" }],

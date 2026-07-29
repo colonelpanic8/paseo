@@ -45,7 +45,7 @@ export type KeyboardActionId =
   | "workspace.terminal.new"
   | "workspace.new"
   | "workspace.project.pick"
-  | "workspace.isolation.pick"
+  | "workspace.isolation.toggle"
   | "workspace.ref.pick"
   | "workspace.host.pick"
   | "worktree.new"
