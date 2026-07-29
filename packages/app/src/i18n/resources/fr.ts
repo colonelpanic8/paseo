@@ -1913,6 +1913,7 @@ export const fr: TranslationResources = {
         queueMessage: "Message de file d'attente",
         muteUnmuteVoiceMode: "Mode vocal/unmutemuet",
         switchProject: "Changer de projet",
+        toggleWorkspaceIsolation: "Basculer l'isolation de l'espace de travail",
         selectHost: "Sélectionner l'hôte",
         toggleFastMode: "Activer/désactiver le mode rapide",
         togglePlanMode: "Activer/désactiver le mode planification",

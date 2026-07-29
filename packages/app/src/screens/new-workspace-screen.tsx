@@ -179,7 +179,7 @@ const PR_OPTION_PREFIX = "github-pr:";
 const PROJECT_ICON_FALLBACK_FONT_SIZE = 10;
 // Stable reference so the keyboard-action handler doesn't re-register each render.
 const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pick"];
-const ISOLATION_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.isolation.pick"];
+const ISOLATION_TOGGLE_ACTIONS: readonly KeyboardActionId[] = ["workspace.isolation.toggle"];
 const REF_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.ref.pick"];
 const HOST_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.host.pick"];
 // Height of a single picker-trigger badge. The Base-row spacer reserves exactly
@@ -194,7 +194,7 @@ function useNewWorkspaceControlShortcuts(input: {
   showRefPicker: boolean;
   selectedSourceDirectory: string | null;
   openProjectPicker: () => void;
-  openIsolationPicker: () => void;
+  toggleIsolation: () => void;
   openRefPicker: () => void;
   openHostPicker: () => void;
 }) {
@@ -206,7 +206,7 @@ function useNewWorkspaceControlShortcuts(input: {
     showRefPicker,
     selectedSourceDirectory,
     openProjectPicker,
-    openIsolationPicker,
+    toggleIsolation,
     openRefPicker,
     openHostPicker,
   } = input;
@@ -222,16 +222,16 @@ function useNewWorkspaceControlShortcuts(input: {
     handle: handleProjectPick,
   });
 
-  const handleIsolationPick = useCallback(() => {
-    openIsolationPicker();
+  const handleIsolationToggle = useCallback(() => {
+    toggleIsolation();
     return true;
-  }, [openIsolationPicker]);
+  }, [toggleIsolation]);
   useKeyboardActionHandler({
-    handlerId: "new-workspace-isolation-pick",
-    actions: ISOLATION_PICK_ACTIONS,
+    handlerId: "new-workspace-isolation-toggle",
+    actions: ISOLATION_TOGGLE_ACTIONS,
     enabled: canCreateWorktree && !isPending,
     priority: 0,
-    handle: handleIsolationPick,
+    handle: handleIsolationToggle,
   });
 
   const handleRefPick = useCallback(() => {
@@ -752,7 +752,7 @@ function IsolationPickerTrigger({
       style={badgePressableStyle}
       accessibilityRole="button"
       accessibilityLabel="Workspace isolation"
-      shortcutActionId="select-workspace-isolation"
+      shortcutActionId="toggle-workspace-isolation"
       showShortcutHint={!disabled}
     >
       <View style={styles.badgeIconBox}>
@@ -1888,6 +1888,12 @@ export function NewWorkspaceScreen({
     setIsolationPickerOpen(true);
   }, []);
 
+  // Isolation is binary, so the keyboard action flips it in place instead of
+  // opening the picker. Pointer users still get the picker from the trigger.
+  const toggleIsolation = useCallback(() => {
+    setIsolation(effectiveIsolation === "worktree" ? "local" : "worktree");
+  }, [effectiveIsolation, setIsolation]);
+
   const handleIsolationPickerOpenChange = useCallback((nextOpen: boolean) => {
     setIsolationPickerOpen(nextOpen);
   }, []);
@@ -1900,7 +1906,7 @@ export function NewWorkspaceScreen({
     showRefPicker,
     selectedSourceDirectory,
     openProjectPicker,
-    openIsolationPicker,
+    toggleIsolation,
     openRefPicker: openPicker,
     openHostPicker,
   });
