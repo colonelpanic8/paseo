@@ -92,6 +92,7 @@ import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispat
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
+import { ComposerStash } from "@/composer/stash";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
@@ -2021,6 +2022,13 @@ export function Composer({
 
   const messageInputContainerRef = useRef<View>(null);
 
+  // Stash queues are scoped per provider: the live agent's provider when one
+  // exists, otherwise the draft flow's selected provider.
+  const stashProvider =
+    resolveAgentControlsMode(agentControls) === "draft" && agentControls
+      ? agentControls.selectedProvider
+      : agentState.provider;
+
   const isSubmitBusy =
     isProcessing ||
     isSubmitLoading ||
@@ -2061,6 +2069,16 @@ export function Composer({
             {sendErrorNode}
 
             <View ref={messageInputContainerRef} style={styles.messageInputContainer}>
+              <ComposerStash
+                provider={stashProvider}
+                anchorRef={messageInputContainerRef}
+                userInput={userInput}
+                setUserInput={setUserInput}
+                attachments={attachments}
+                setAttachments={setSelectedAttachments}
+                disabled={isComposerLocked || isSubmitBusy}
+                focusInput={focusInput}
+              />
               <AutocompletePopover
                 visible={autocompleteVisible}
                 anchorRef={messageInputContainerRef}
