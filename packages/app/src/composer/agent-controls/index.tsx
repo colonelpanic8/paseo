@@ -983,7 +983,16 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
       ) : null}
 
       {canSelectModel ? (
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+        // The model combobox renders inside this trigger, so a tooltip left
+        // open when the menu opens can outlive it: React routes the pointer's
+        // enter/leave through the React tree, and the menu unmounts before the
+        // pointer ever crosses back out of the trigger. Opening the menu closes
+        // the tooltip — the same thing pressing the trigger already does.
+        <Tooltip
+          delayDuration={0}
+          enabledOnDesktop={openSelector !== "model"}
+          enabledOnMobile={false}
+        >
           <TooltipTrigger asChild triggerRefProp="ref">
             <View style={styles.modelControl}>
               <CombinedModelSelector
