@@ -1581,6 +1581,8 @@ export class VoiceAssistantWebSocketServer {
         stableProjectIdentity: true,
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: true,
+        // COMPAT(agentEnv): added in v0.2.4, drop the gate when floor >= v0.2.4.
+        agentEnv: true,
       },
     };
   }
