@@ -15,12 +15,9 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import type { Theme } from "@/styles/theme";
 import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
-import {
-  estimateStreamItemHeight,
-  shouldAdjustScrollForVirtualRowResize,
-} from "./web-virtualization";
+import { estimateStreamItemHeight } from "./web-virtualization";
+import { applySessionFindHighlights, clearSessionFindHighlights } from "./find-highlight";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
-import { useRevisedHistoryRows } from "./history-row-revision";
 import { createStreamStrategy } from "./strategy";
 import {
   abandonHistoryStartPaginationRequest,
@@ -86,11 +83,23 @@ const historyStartSlotStyle: CSSProperties = {
   flexShrink: 0,
 };
 
-const streamRowStyle: CSSProperties = {
+// Per-item anchor for find-in-session scroll targeting and match highlighting.
+// Mirrors the virtualized row wrapper layout so `alignSelf`-centered stream
+// item wrappers keep behaving as flex children.
+const rowAnchorStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   width: "100%",
 };
+
+// CSS.escape is missing in some test DOMs; inside a double-quoted attribute
+// selector only quotes and backslashes need escaping.
+function escapeItemIdForSelector(itemId: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(itemId);
+  }
+  return itemId.replace(/["\\]/g, "\\$&");
+}
 
 function isScrollContainerNearBottom(
   scrollContainer: Pick<HTMLElement, "scrollTop" | "clientHeight" | "scrollHeight">,
@@ -280,8 +289,7 @@ function isScrollContainerOverscrolledPastBottom(
 
 function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: boolean }) {
   const {
-    segments: inputSegments,
-    historyRowRevision,
+    segments,
     liveHeadRowRevision,
     boundary,
     renderers,
@@ -295,18 +303,10 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     isLoadingOlderHistory,
     hasOlderHistory,
     olderHistoryProgressKey,
+    sessionFind = null,
     scrollEnabled,
     isMobileBreakpoint,
   } = props;
-  const historyVirtualized = useRevisedHistoryRows(
-    inputSegments.historyVirtualized,
-    historyRowRevision,
-  );
-  const historyMounted = useRevisedHistoryRows(inputSegments.historyMounted, historyRowRevision);
-  const segments = useMemo(
-    () => ({ ...inputSegments, historyVirtualized, historyMounted }),
-    [historyMounted, historyVirtualized, inputSegments],
-  );
   const isActive = useRetainedPanelActive();
   const isActiveRef = useRef(isActive);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -384,17 +384,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     overscan: 8,
   });
   useEffect(() => {
-    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (_item, _delta, instance) => {
+      if (historyStartPrependAnchorActiveRef.current) {
+        return false;
+      }
       const viewportHeight = instance.scrollRect?.height ?? 0;
       const scrollOffset = instance.scrollOffset ?? 0;
       const remainingDistance = instance.getTotalSize() - (scrollOffset + viewportHeight);
-      return shouldAdjustScrollForVirtualRowResize({
-        isHistoryStartPrependActive: historyStartPrependAnchorActiveRef.current,
-        rowStart: item.start,
-        scrollOffset,
-        remainingDistanceFromBottom: remainingDistance,
-        bottomThreshold: AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
-      });
+      return remainingDistance > AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
     };
     return () => {
       rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
@@ -1109,6 +1106,41 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     rearmHistoryStartFromUserIntent,
   ]);
 
+  const scrollRowIntoView = useCallback((itemId: string): boolean => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) {
+      return false;
+    }
+    const row = scrollContainer.querySelector(
+      `[data-stream-item-id="${escapeItemIdForSelector(itemId)}"]`,
+    );
+    if (!row) {
+      return false;
+    }
+    row.scrollIntoView({ block: "center" });
+    return true;
+  }, []);
+
+  const scrollToItem = useStableEvent((itemId: string) => {
+    cancelPendingStickToBottom();
+    setFollowOutput(false);
+    if (scrollRowIntoView(itemId)) {
+      return;
+    }
+    const virtualIndex = segments.historyVirtualized.findIndex((item) => item.id === itemId);
+    if (virtualIndex < 0) {
+      return;
+    }
+    rowVirtualizer.scrollToIndex(virtualIndex, { align: "center" });
+    // Dynamic row heights make the virtualizer jump approximate; re-center on
+    // the real element once it mounts and measures.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        scrollRowIntoView(itemId);
+      });
+    });
+  });
+
   useEffect(() => {
     const handle: StreamViewportHandle = {
       scrollToBottom: () => {
@@ -1122,6 +1154,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         }
         scheduleStickToBottom();
       },
+      scrollToItem,
       scrollToMessage,
     };
     viewportRef.current = handle;
@@ -1136,7 +1169,46 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     forceStickToBottom,
     scheduleStickToBottom,
     scrollToMessage,
+    scrollToItem,
     viewportRef,
+  ]);
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!sessionFind || !scrollContainer) {
+      clearSessionFindHighlights();
+      return;
+    }
+    let pendingFrame: number | null = null;
+    const apply = () => {
+      pendingFrame = null;
+      const container = scrollContainerRef.current;
+      if (container) {
+        applySessionFindHighlights({ container, find: sessionFind });
+      }
+    };
+    // Rows mount and unmount as the virtualizer window moves, so re-scan on
+    // scroll in addition to content changes (covered by the effect deps).
+    const scheduleApply = () => {
+      if (pendingFrame === null) {
+        pendingFrame = window.requestAnimationFrame(apply);
+      }
+    };
+    apply();
+    scrollContainer.addEventListener("scroll", scheduleApply, { passive: true });
+    return () => {
+      scrollContainer.removeEventListener("scroll", scheduleApply);
+      if (pendingFrame !== null) {
+        window.cancelAnimationFrame(pendingFrame);
+      }
+      clearSessionFindHighlights();
+    };
+  }, [
+    sessionFind,
+    segments.historyMounted,
+    segments.historyVirtualized,
+    segments.liveHead,
+    virtualTotalSize,
   ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
@@ -1192,7 +1264,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   );
   const mountedHistoryRows = useMemo(() => {
     return segments.historyMounted.map((item, index) => (
-      <div key={item.id} data-history-row-id={item.id} style={streamRowStyle}>
+      <div
+        key={item.id}
+        data-history-row-id={item.id}
+        data-stream-item-id={item.id}
+        style={rowAnchorStyle}
+      >
         {renderHistoryMountedRow(item, index, segments.historyMounted)}
       </div>
     ));
@@ -1200,7 +1277,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const liveHeadRows = useMemo(() => {
     void liveHeadRowRevision;
     return segments.liveHead.map((item, index) => (
-      <div key={item.id} data-history-row-id={item.id} style={streamRowStyle}>
+      <div
+        key={item.id}
+        data-history-row-id={item.id}
+        data-stream-item-id={item.id}
+        style={rowAnchorStyle}
+      >
         {renderLiveHeadRow(item, index, segments.liveHead)}
       </div>
     ));
@@ -1253,6 +1335,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
                     key={virtualRow.key}
                     data-index={virtualRow.index}
                     data-history-row-id={item.id}
+                    data-stream-item-id={item.id}
                     ref={measureVirtualizedRowElement}
                     style={renderVirtualRowStyle(virtualRow.start)}
                   >
