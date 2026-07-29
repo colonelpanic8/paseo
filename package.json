@@ -23,6 +23,7 @@
   "workspaces": [
     "plugins",
     "packages/expo-two-way-audio",
+    "packages/expo-wear-bridge",
     "packages/highlight",
     "packages/plugin",
     "packages/protocol",
