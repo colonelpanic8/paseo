@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BUILD_COMMIT_DATE_ENV_VAR,
   BUILD_COMMIT_ENV_VAR,
+  BUILD_COMMIT_MESSAGE_ENV_VAR,
   BUILD_REPO_URL_ENV_VAR,
   resolveBuildInfo,
 } from "./build-info.js";
@@ -31,11 +32,13 @@ describe("resolveBuildInfo", () => {
       resolveBuildInfo({
         [BUILD_COMMIT_ENV_VAR]: COMMIT,
         [BUILD_COMMIT_DATE_ENV_VAR]: "2026-07-28T12:34:56Z",
+        [BUILD_COMMIT_MESSAGE_ENV_VAR]: "Fix the frobnicator",
         [BUILD_REPO_URL_ENV_VAR]: "https://github.com/colonelpanic8/paseo",
       }),
     ).toEqual({
       commit: COMMIT,
       commitDate: "2026-07-28T12:34:56Z",
+      commitMessage: "Fix the frobnicator",
       repoUrl: "https://github.com/colonelpanic8/paseo",
     });
   });
@@ -44,6 +47,7 @@ describe("resolveBuildInfo", () => {
     expect(resolveBuildInfo({ [BUILD_COMMIT_ENV_VAR]: COMMIT })).toEqual({
       commit: COMMIT,
       commitDate: null,
+      commitMessage: null,
       repoUrl: null,
     });
   });
