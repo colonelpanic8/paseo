@@ -62,12 +62,16 @@ export function useSessionFind(input: {
     if (!isOpen || !query) {
       return null;
     }
+    const activeItemId = activeMatch?.itemId ?? null;
     return {
       query,
-      activeItemId: activeMatch?.itemId ?? null,
+      activeItemId,
       activeOccurrenceIndex: activeMatch?.occurrenceIndex ?? -1,
+      activeItemOccurrenceCount: activeItemId
+        ? matches.filter((match) => match.itemId === activeItemId).length
+        : 0,
     };
-  }, [activeMatch, isOpen, query]);
+  }, [activeMatch, isOpen, matches, query]);
 
   const goToMatch = useCallback(
     (nextMatches: SessionFindMatch[], index: number) => {
