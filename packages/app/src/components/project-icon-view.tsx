@@ -1,9 +1,12 @@
 import { useMemo } from "react";
 import { Image, type StyleProp, Text, type TextStyle, View } from "react-native";
 import { deriveIdentityColorName, identityColor } from "@/styles/identity-colors";
+import { SvgXml } from "react-native-svg";
+import { canRenderProjectIconImage, projectIconSvgXml } from "@/utils/project-icon-source";
 
 const WHITE_TEXT = { color: "#ffffff" } as const;
 const FALLBACK_LAYOUT = { alignItems: "center", justifyContent: "center" } as const;
+const SVG_CONTAINER = { overflow: "hidden" } as const;
 
 /**
  * Corner radius of the *generated* project icon — the colored square with an initial — as a
@@ -44,6 +47,11 @@ export function ProjectIconView({
   const imageSource = useMemo(() => ({ uri: iconDataUri ?? "" }), [iconDataUri]);
   // The uploaded image is sized but never clipped — see projectIconRadius.
   const box = useMemo(() => ({ width: size, height: size }), [size]);
+  const svgXml = useMemo(
+    () => (iconDataUri ? projectIconSvgXml(iconDataUri) : null),
+    [iconDataUri],
+  );
+  const svgContainerStyles = useMemo(() => [box, SVG_CONTAINER], [box]);
   const fallbackStyles = useMemo(
     () => [
       box,
@@ -55,7 +63,14 @@ export function ProjectIconView({
   );
   const textStyles = useMemo(() => [textStyle, WHITE_TEXT], [textStyle]);
 
-  if (iconDataUri) {
+  if (svgXml) {
+    return (
+      <View style={svgContainerStyles}>
+        <SvgXml xml={svgXml} width="100%" height="100%" />
+      </View>
+    );
+  }
+  if (iconDataUri && canRenderProjectIconImage(iconDataUri)) {
     return <Image source={imageSource} style={box} />;
   }
   return (
