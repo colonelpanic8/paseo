@@ -201,6 +201,65 @@ describe("createWebStreamStrategy", () => {
     expect(renderLiveHeadRow).toHaveBeenCalledTimes(2);
   });
 
+  it("scrolls a mounted stream item into view via its anchor", () => {
+    const scrollIntoView = vi.fn();
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
+      const viewportRef = React.createRef<StreamViewportHandle>();
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+
+      act(() => {
+        root?.render(
+          strategy.render({
+            agentId: "agent",
+            segments: {
+              historyVirtualized: [],
+              historyMounted: [userMessage(1), userMessage(2)],
+              liveHead: [],
+            },
+            boundary: {
+              hasVirtualizedHistory: false,
+              hasMountedHistory: true,
+              hasLiveHead: false,
+            },
+            renderers: createRenderers(vi.fn()),
+            listEmptyComponent: null,
+            viewportRef,
+            routeBottomAnchorRequest: null,
+            isAuthoritativeHistoryReady: true,
+            onNearBottomChange: vi.fn(),
+            onNearHistoryStart: vi.fn(),
+            isLoadingOlderHistory: false,
+            hasOlderHistory: false,
+            olderHistoryProgressKey: null,
+            scrollEnabled: true,
+            listStyle: null,
+            baseListContentContainerStyle: null,
+            forwardListContentContainerStyle: null,
+          }),
+        );
+      });
+
+      expect(container.querySelector('[data-stream-item-id="message-2"]')).not.toBeNull();
+
+      act(() => {
+        viewportRef.current?.scrollToItem?.("message-2");
+      });
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+    } finally {
+      if (originalScrollIntoView) {
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+      } else {
+        Reflect.deleteProperty(Element.prototype, "scrollIntoView");
+      }
+    }
+  });
+
   it("keeps bottom anchoring through subpixel browser rounding", () => {
     const scrollTo = vi.fn();
     HTMLElement.prototype.scrollTo = scrollTo;

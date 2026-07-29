@@ -177,6 +177,13 @@ export const zhCN: TranslationResources = {
   agentStream: {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
+    find: {
+      placeholder: "在会话中查找",
+      matchCount: "{{current}}/{{total}}",
+      previous: "上一个匹配项",
+      next: "下一个匹配项",
+      close: "关闭查找",
+    },
     permission: {
       plan: "Plan",
       required: "需要权限",
@@ -1815,6 +1822,7 @@ export const zhCN: TranslationResources = {
         queueMessage: "消息排队",
         muteUnmuteVoiceMode: "静音/取消静音语音模式",
         switchProject: "切换项目",
+        findInConversation: "在会话中查找",
       },
       helpNotes: {
         showKeyboardShortcuts: "焦点不在文本输入框或终端内时可用。",

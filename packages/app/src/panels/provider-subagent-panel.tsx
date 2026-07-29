@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import { AgentStreamView } from "@/agent-stream/view";
 import { getProviderIcon } from "@/components/provider-icons";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
-import { usePaneContext } from "@/panels/pane-context";
+import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { useSessionStore } from "@/stores/session-store";
 import {
@@ -64,6 +64,7 @@ function useProviderSubagentDescriptor(
 function ProviderSubagentPanel() {
   const { t } = useTranslation();
   const { serverId, target, openFileInWorkspace } = usePaneContext();
+  const { isInteractive } = usePaneFocus();
   invariant(target.kind === "provider_subagent", "ProviderSubagentPanel requires provider target");
   const key = providerSubagentKey(serverId, target.parentAgentId, target.subagentId);
   const streamId = `provider:${encodeURIComponent(target.parentAgentId)}:${encodeURIComponent(target.subagentId)}`;
@@ -175,6 +176,7 @@ function ProviderSubagentPanel() {
         pendingPermissions={EMPTY_PERMISSIONS}
         isAuthoritativeHistoryReady
         onOpenWorkspaceFile={openFileInWorkspace}
+        isPaneFocused={isInteractive}
         readOnly
         historyPagination={historyPagination}
       />

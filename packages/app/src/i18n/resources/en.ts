@@ -175,6 +175,13 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    find: {
+      placeholder: "Find in conversation",
+      matchCount: "{{current}}/{{total}}",
+      previous: "Previous match",
+      next: "Next match",
+      close: "Close find",
+    },
     permission: {
       plan: "Plan",
       required: "Permission Required",
@@ -1846,6 +1853,7 @@ export const en = {
         queueMessage: "Queue message",
         muteUnmuteVoiceMode: "Mute/unmute voice mode",
         switchProject: "Switch project",
+        findInConversation: "Find in conversation",
       },
       helpNotes: {
         showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",
