@@ -187,9 +187,18 @@ export function ComposerStash({
   userInputRef.current = userInput;
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   const restoreEntry = useCallback(
     (entryId: string) => {
+      // A locked/submitting composer must not accept a restore: the submit
+      // path clears and restores its own input, and taking the entry without
+      // landing it in the composer would lose the prompt. Read through a ref
+      // so a stale `disabled` captured by the Undo toast can't slip through.
+      if (disabledRef.current) {
+        return;
+      }
       // Take first so a double activation (click + Enter) can't restore twice.
       const entry = usePromptStashStore.getState().takeEntry(scopeKey, entryId);
       if (!entry) {
