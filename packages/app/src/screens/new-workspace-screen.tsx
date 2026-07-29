@@ -180,7 +180,7 @@ function noopClearDraft() {}
 
 // Stable reference so the keyboard-action handler doesn't re-register each render.
 const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pick"];
-const ISOLATION_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.isolation.pick"];
+const ISOLATION_TOGGLE_ACTIONS: readonly KeyboardActionId[] = ["workspace.isolation.toggle"];
 const REF_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.ref.pick"];
 const HOST_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.host.pick"];
 function useNewWorkspaceControlShortcuts(input: {
@@ -191,7 +191,7 @@ function useNewWorkspaceControlShortcuts(input: {
   showRefPicker: boolean;
   selectedSourceDirectory: string | null;
   openProjectPicker: () => void;
-  openIsolationPicker: () => void;
+  toggleIsolation: () => void;
   openRefPicker: () => void;
   openHostPicker: () => void;
 }) {
@@ -203,7 +203,7 @@ function useNewWorkspaceControlShortcuts(input: {
     showRefPicker,
     selectedSourceDirectory,
     openProjectPicker,
-    openIsolationPicker,
+    toggleIsolation,
     openRefPicker,
     openHostPicker,
   } = input;
@@ -219,16 +219,16 @@ function useNewWorkspaceControlShortcuts(input: {
     handle: handleProjectPick,
   });
 
-  const handleIsolationPick = useCallback(() => {
-    openIsolationPicker();
+  const handleIsolationToggle = useCallback(() => {
+    toggleIsolation();
     return true;
-  }, [openIsolationPicker]);
+  }, [toggleIsolation]);
   useKeyboardActionHandler({
-    handlerId: "new-workspace-isolation-pick",
-    actions: ISOLATION_PICK_ACTIONS,
+    handlerId: "new-workspace-isolation-toggle",
+    actions: ISOLATION_TOGGLE_ACTIONS,
     enabled: canCreateWorktree && !isPending,
     priority: 0,
-    handle: handleIsolationPick,
+    handle: handleIsolationToggle,
   });
 
   const handleRefPick = useCallback(() => {
@@ -1258,6 +1258,10 @@ export function NewWorkspaceScreen({
     setIsolationPickerOpen(nextOpen);
   }, []);
 
+  const toggleIsolation = useCallback(() => {
+    setIsolation(effectiveIsolation === "worktree" ? "local" : "worktree");
+  }, [effectiveIsolation, setIsolation]);
+
   useNewWorkspaceControlShortcuts({
     isPending,
     projectCount: projectPickerOptions.length,
@@ -1266,7 +1270,7 @@ export function NewWorkspaceScreen({
     showRefPicker,
     selectedSourceDirectory,
     openProjectPicker,
-    openIsolationPicker,
+    toggleIsolation,
     openRefPicker: openPicker,
     openHostPicker,
   });

@@ -88,7 +88,7 @@ export function useKeyboardShortcuts({
     { isMac, usesDesktopBindings: usesDesktopBindings },
     bindings,
   );
-  const controlShortcutModifierKey = isMac ? "Meta" : "Control";
+  const controlShortcutModifierKey = "Alt";
 
   // The keyup listener matches the released key against the current modifier,
   // so a modifier held while the jump binding changes could never be released
@@ -232,12 +232,13 @@ export function useKeyboardShortcuts({
       useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
     }
     if (key === "Shift") {
-      // Shift+Mod chords hide workspace badges while keeping control hints visible.
+      // Shift chords hide workspace badges and prompt-control hints.
       const state = useKeyboardShortcutsStore.getState();
       if (state.altDown || state.cmdOrCtrlDown) {
         state.setAltDown(false);
         state.setCmdOrCtrlDown(false);
       }
+      state.setControlShortcutModifierDown(false);
     }
 
     return true;

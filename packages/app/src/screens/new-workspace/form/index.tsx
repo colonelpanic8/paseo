@@ -258,7 +258,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
       onPress={isolation.open}
       disabled={isPending}
       testID="workspace-create-isolation-trigger"
-      shortcutActionId="select-workspace-isolation"
+      shortcutActionId="toggle-workspace-isolation"
     />
   ) : null;
   const baseField = base.showRefPicker ? (
