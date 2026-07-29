@@ -13,6 +13,10 @@
 {
   buildCommit ? null,
   buildCommitDate ? null,
+  # The commit's subject line. A flake cannot see this (`self` exposes only
+  # the rev), so flake-driven builds leave it unset; builders that run next to
+  # a real checkout (e.g. the F-Droid pipeline) pass it explicitly.
+  buildCommitMessage ? null,
   buildRepoUrl ? null,
 }:
 let
@@ -27,6 +31,7 @@ let
       lib.filterAttrs (_: isSet) {
         PASEO_BUILD_COMMIT = buildCommit;
         PASEO_BUILD_COMMIT_DATE = buildCommitDate;
+        PASEO_BUILD_COMMIT_MESSAGE = buildCommitMessage;
         PASEO_BUILD_REPO_URL = buildRepoUrl;
       };
 in

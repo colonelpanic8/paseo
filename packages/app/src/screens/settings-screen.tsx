@@ -94,7 +94,7 @@ import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openChangelog } from "@/changelog";
 import {
-  formatBuildStamp,
+  formatCommitDate,
   resolveBuildInfo,
   resolveClientBuildInfo,
   type ResolvedBuildInfo,
@@ -469,20 +469,26 @@ function BuildStampLink({ build, testID }: { build: ResolvedBuildInfo; testID?: 
   const handlePress = useCallback(() => {
     void openExternalUrl(build.commitUrl);
   }, [build.commitUrl]);
+  const commitDate = formatCommitDate(build.commitDate);
 
   return (
-    <Pressable
-      onPress={handlePress}
-      accessibilityRole="link"
-      accessibilityLabel={t("settings.about.viewCommit")}
-      style={styles.aboutBuildLink}
-      testID={testID}
-    >
-      <Text style={styles.aboutBuildText} numberOfLines={1}>
-        {formatBuildStamp(build)}
-      </Text>
-      <ExternalLink size={12} color={theme.colors.foregroundMuted} />
-    </Pressable>
+    <View style={styles.aboutBuild} testID={testID}>
+      <Pressable
+        onPress={handlePress}
+        accessibilityRole="link"
+        accessibilityLabel={t("settings.about.viewCommit")}
+        style={styles.aboutBuildLink}
+      >
+        <Text style={styles.aboutBuildText}>{build.commit}</Text>
+        <ExternalLink size={12} color={theme.colors.foregroundMuted} />
+      </Pressable>
+      {commitDate ? <Text style={styles.aboutBuildDetail}>{commitDate}</Text> : null}
+      {build.commitMessage ? (
+        <Text style={styles.aboutBuildDetail} numberOfLines={3}>
+          {build.commitMessage}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -1562,17 +1568,25 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
   },
+  aboutBuild: {
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
   aboutBuildLink: {
     alignItems: "center",
     alignSelf: "flex-start",
     flexDirection: "row",
     gap: theme.spacing[1],
-    marginTop: theme.spacing[1],
   },
   aboutBuildText: {
     color: theme.colors.foregroundMuted,
+    flexShrink: 1,
     fontFamily: theme.fontFamily.mono,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
+  },
+  aboutBuildDetail: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   aboutVersionMismatch: {
     color: theme.colors.palette.amber[500],
