@@ -1,3 +1,5 @@
+// React Native has no global Buffer; the polyfill has to be imported explicitly.
+import { Buffer } from "buffer";
 import { isNative } from "@/constants/platform";
 
 /**
