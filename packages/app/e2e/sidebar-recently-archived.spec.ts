@@ -51,7 +51,7 @@ test.describe("Recently archived sidebar transition", () => {
 
       await expect(liveRow).toHaveCount(0, { timeout: 30_000 });
       await expect(
-        page.getByTestId("sidebar-archived-group-rows").filter({
+        page.getByTestId("sidebar-archived-row").filter({
           hasText: "Archive transition workspace",
         }),
       ).toBeVisible({ timeout: 30_000 });
@@ -64,7 +64,7 @@ test.describe("Recently archived sidebar transition", () => {
       await expect(liveRow).toBeVisible({ timeout: 30_000 });
       await expect(
         page
-          .getByTestId("sidebar-archived-group-rows")
+          .getByTestId("sidebar-archived-row")
           .getByText("Archive transition workspace", { exact: true }),
       ).toHaveCount(0);
     } finally {

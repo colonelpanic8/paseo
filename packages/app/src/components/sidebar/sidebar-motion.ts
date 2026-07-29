@@ -19,6 +19,18 @@ import {
 // double-image. Fading before removal keeps the exit fully in our control.
 // The tail keeps an unmount exit fade because nothing slides underneath it.
 //
+// A layout-animated view must NEVER change its own size, only its position.
+// The web backend implements LinearTransition as a translate+scale keyframe on
+// the element (reanimated's Linear.web.ts), so a resizing animated container
+// visibly squishes everything inside it — a group wrapper that shrinks when
+// one of its rows is archived drags its own heading through a scale animation
+// even though the heading's final position never moved. The sidebar therefore
+// renders headings, rows, and show-more toggles as fixed-size siblings in one
+// flat flow (group "containers" are fragments, not views) so every layout
+// transition is a pure translation. Invisible boxes (spacers, the pinned
+// section wrapper) may resize and snap freely; only visible elements need an
+// animated wrapper, and each animates its own movement.
+//
 // Curves are spelled as explicit beziers: the web backend silently downgrades
 // anything that isn't a plain bezier to CSS "ease", which would fork web and
 // native behavior.

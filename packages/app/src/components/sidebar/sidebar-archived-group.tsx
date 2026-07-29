@@ -74,40 +74,53 @@ export function SidebarArchivedGroup({
     return null;
   }
 
+  // Flat siblings, not a group container: a shared animated wrapper would
+  // resize as tail rows come and go, and the web backend animates that resize
+  // as a scale that drags the header along (see sidebar-motion.ts). Each
+  // fixed-size element slides on its own; the receded tint is applied per
+  // element for the same reason.
   return (
-    <Animated.View
-      entering={isReceivingArchive ? ARCHIVED_GROUP_ENTERING : undefined}
-      exiting={ARCHIVED_GROUP_EXITING}
-      layout={ARCHIVED_ROW_LAYOUT}
-      collapsable={false}
-    >
-      <View style={styles.groupBlock}>
-        <ArchivedGroupHeader collapsed={collapsed} />
-        {!collapsed ? (
-          <View testID="sidebar-archived-group-rows">
-            {visibleEntries.map((entry) => (
-              <ArchivedWorkspaceRow
-                key={entry.workspaceKey}
-                entry={entry}
-                subtitle={buildArchivedRowSubtitle({
-                  projectName: entry.projectName,
-                  hostLabel: showHostLabels
-                    ? (hostLabelByServerId.get(entry.serverId) ?? entry.serverId)
-                    : null,
-                })}
-              />
-            ))}
-            {canToggle ? (
-              <SidebarGroupToggleRow
-                expanded={expanded}
-                onPress={toggleExpanded}
-                testID="sidebar-archived-show-more"
-              />
-            ) : null}
+    <>
+      <Animated.View
+        entering={isReceivingArchive ? ARCHIVED_GROUP_ENTERING : undefined}
+        exiting={ARCHIVED_GROUP_EXITING}
+        layout={ARCHIVED_ROW_LAYOUT}
+        collapsable={false}
+      >
+        <View style={styles.receded}>
+          <ArchivedGroupHeader collapsed={collapsed} />
+        </View>
+      </Animated.View>
+      {!collapsed
+        ? visibleEntries.map((entry) => (
+            <ArchivedWorkspaceRow
+              key={entry.workspaceKey}
+              entry={entry}
+              subtitle={buildArchivedRowSubtitle({
+                projectName: entry.projectName,
+                hostLabel: showHostLabels
+                  ? (hostLabelByServerId.get(entry.serverId) ?? entry.serverId)
+                  : null,
+              })}
+            />
+          ))
+        : null}
+      {!collapsed && canToggle ? (
+        <Animated.View
+          exiting={ARCHIVED_GROUP_EXITING}
+          layout={ARCHIVED_ROW_LAYOUT}
+          collapsable={false}
+        >
+          <View style={styles.receded}>
+            <SidebarGroupToggleRow
+              expanded={expanded}
+              onPress={toggleExpanded}
+              testID="sidebar-archived-show-more"
+            />
           </View>
-        ) : null}
-      </View>
-    </Animated.View>
+        </Animated.View>
+      ) : null}
+    </>
   );
 }
 
@@ -228,9 +241,10 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
       exiting={ARCHIVED_ROW_EXITING}
       layout={ARCHIVED_ROW_LAYOUT}
       collapsable={false}
+      testID="sidebar-archived-row"
     >
       <View
-        style={styles.rowContainer}
+        style={[styles.rowContainer, styles.receded]}
         onPointerEnter={handleHoverIn}
         onPointerLeave={handleHoverOut}
       >
@@ -296,9 +310,11 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
 });
 
 const styles = StyleSheet.create((theme) => ({
-  groupBlock: {
-    marginBottom: theme.spacing[1],
-    // The whole tail reads as receded: it is history, not live state.
+  // The whole tail reads as receded: it is history, not live state. Applied
+  // per element (header, each row, toggle) because the tail has no shared
+  // container view anymore; kept on inner plain views so Unistyles never
+  // patches a node Reanimated manages.
+  receded: {
     opacity: 0.55,
   },
   groupRow: {
