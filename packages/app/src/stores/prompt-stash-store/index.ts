@@ -38,6 +38,14 @@ interface PromptStashActions {
 
 type PromptStashStore = PromptStashState & PromptStashActions;
 
+// Settles when hydration finishes OR fails. persist's own onFinishHydration
+// listeners never fire on a storage error, so waiting on them could block the
+// attachment GC forever; the onRehydrateStorage callback runs on both paths.
+let settleHydration: () => void;
+const hydrationSettled = new Promise<void>((resolve) => {
+  settleHydration = resolve;
+});
+
 export const usePromptStashStore = create<PromptStashStore>()(
   persist(
     (set, get) => ({
@@ -63,25 +71,23 @@ export const usePromptStashStore = create<PromptStashStore>()(
       version: PROMPT_STASH_STORE_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: ({ queuesByScopeKey }) => ({ queuesByScopeKey }),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) {
+          console.warn("[PromptStash] Failed to rehydrate stash", error);
+        }
+        settleHydration();
+      },
     },
   ),
 );
 
 /**
- * Resolves once the persisted stash has rehydrated. Attachment GC must wait
- * for this before computing its referenced-id set, or a GC pass early in
- * startup would delete blobs that only the stash still references.
+ * Resolves once stash rehydration has settled (loaded or failed). Attachment
+ * GC must wait for this before computing its referenced-id set, or a GC pass
+ * early in startup would delete blobs that only the stash still references.
  */
 export function awaitPromptStashHydration(): Promise<void> {
-  if (usePromptStashStore.persist.hasHydrated()) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    const unsubscribe = usePromptStashStore.persist.onFinishHydration(() => {
-      unsubscribe();
-      resolve();
-    });
-  });
+  return hydrationSettled;
 }
 
 /** Image attachment ids referenced by stashed prompts, for the attachment GC. */
