@@ -187,6 +187,13 @@ export const ru: TranslationResources = {
   agentStream: {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
+    find: {
+      placeholder: "Поиск по беседе",
+      matchCount: "{{current}}/{{total}}",
+      previous: "Предыдущее совпадение",
+      next: "Следующее совпадение",
+      close: "Закрыть поиск",
+    },
     permission: {
       plan: "План",
       required: "Требуется разрешение",
@@ -1900,6 +1907,7 @@ export const ru: TranslationResources = {
         queueMessage: "Сообщение в очереди",
         muteUnmuteVoiceMode: "Отключить голосовой режим /unmute",
         switchProject: "Сменить проект",
+        findInConversation: "Поиск по беседе",
       },
       helpNotes: {
         showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",

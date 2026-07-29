@@ -187,6 +187,13 @@ export const ja: TranslationResources = {
   agentStream: {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
+    find: {
+      placeholder: "会話内を検索",
+      matchCount: "{{current}}/{{total}}",
+      previous: "前の一致",
+      next: "次の一致",
+      close: "検索を閉じる",
+    },
     permission: {
       plan: "プラン",
       required: "権限が必要です",
@@ -1878,6 +1885,7 @@ export const ja: TranslationResources = {
         queueMessage: "メッセージをキューに追加",
         muteUnmuteVoiceMode: "音声モードのミュートを切り替え",
         switchProject: "プロジェクトを切り替え",
+        findInConversation: "会話内を検索",
       },
       helpNotes: {
         showKeyboardShortcuts:

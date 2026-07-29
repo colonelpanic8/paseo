@@ -66,6 +66,8 @@ import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/vi
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
+import { SessionFindBar } from "./find-bar";
+import { useSessionFind } from "./use-session-find";
 import {
   CompletedTurnFooterRow,
   TurnFooter,
@@ -239,6 +241,8 @@ export interface AgentStreamViewProps {
   isAuthoritativeHistoryReady?: boolean;
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  /** Enables pane-scoped keyboard actions such as find-in-session (Cmd/Ctrl+F). */
+  isPaneFocused?: boolean;
   readOnly?: boolean;
   historyPagination?: {
     hasOlder: boolean;
@@ -279,6 +283,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       isAuthoritativeHistoryReady = true,
       toast,
       onOpenWorkspaceFile,
+      isPaneFocused = false,
       readOnly = false,
       historyPagination,
     },
@@ -482,6 +487,23 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         toolCallDetailLevel,
       ],
     );
+
+    // Matches are computed over the projected items, i.e. what the stream
+    // actually renders, in display order (tail then live head on web).
+    const findSearchItems = useMemo(() => {
+      if (projectedToolCalls.head.length === 0) {
+        return projectedToolCalls.tail;
+      }
+      return [...projectedToolCalls.tail, ...projectedToolCalls.head];
+    }, [projectedToolCalls.head, projectedToolCalls.tail]);
+    const find = useSessionFind({
+      agentId,
+      items: findSearchItems,
+      viewportRef,
+      isPaneFocused,
+      isPanelActive: isActive,
+    });
+    const sessionFind = find.sessionFind;
 
     const baseRenderModel = useMemo(() => {
       return buildAgentStreamRenderModel({
@@ -951,12 +973,27 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
               olderHistoryProgressKey: progressKey,
+              sessionFind,
               scrollEnabled: streamScrollEnabled,
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
             })}
           </MessageOuterSpacingProvider>
+          {find.isOpen ? (
+            <View style={stylesheet.findBarContainer} pointerEvents="box-none">
+              <SessionFindBar
+                query={find.query}
+                matchCount={find.matches.length}
+                activeMatchNumber={find.activeIndex + 1}
+                focusRequestId={find.focusRequestId}
+                onQueryChange={find.onQueryChange}
+                onNext={find.next}
+                onPrevious={find.previous}
+                onClose={find.close}
+              />
+            </View>
+          ) : null}
           {!isNearBottom && (
             <View style={stylesheet.scrollToBottomContainer} pointerEvents="box-none">
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
@@ -1090,6 +1127,7 @@ function agentStreamViewPropsEqual(
   }
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
+  if (left.isPaneFocused !== right.isPaneFocused) reasons.push("isPaneFocused");
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
@@ -1464,6 +1502,12 @@ const stylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     textAlign: "center",
+  },
+  findBarContainer: {
+    position: "absolute",
+    top: theme.spacing[2],
+    right: theme.spacing[4],
+    alignItems: "flex-end",
   },
   scrollToBottomContainer: {
     position: "absolute",

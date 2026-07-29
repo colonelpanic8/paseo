@@ -187,6 +187,13 @@ export const es: TranslationResources = {
   agentStream: {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
+    find: {
+      placeholder: "Buscar en la conversación",
+      matchCount: "{{current}}/{{total}}",
+      previous: "Coincidencia anterior",
+      next: "Siguiente coincidencia",
+      close: "Cerrar búsqueda",
+    },
     permission: {
       plan: "Plan",
       required: "Permiso requerido",
@@ -1910,6 +1917,7 @@ export const es: TranslationResources = {
         queueMessage: "mensaje de cola",
         muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",
         switchProject: "Cambiar proyecto",
+        findInConversation: "Buscar en la conversación",
       },
       helpNotes: {
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",

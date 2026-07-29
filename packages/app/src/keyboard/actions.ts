@@ -18,6 +18,7 @@ export type MessageInputKeyboardActionKind =
 
 export type KeyboardActionId =
   | "agent.interrupt"
+  | "agent.find"
   | "agent.new"
   | "workspace.tab.new"
   | "workspace.tab.close.current"
