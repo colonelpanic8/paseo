@@ -1,0 +1,69 @@
+import { requireOptionalNativeModule } from "expo-modules-core";
+
+export interface WearNode {
+  id: string;
+  name: string;
+}
+
+export interface WearCommandEvent {
+  payload: string;
+}
+
+interface ExpoWearBridgeNativeModule {
+  isAvailable(): Promise<boolean>;
+  getConnectedNodes(): Promise<WearNode[]>;
+  publishSnapshot(payload: string): Promise<boolean>;
+  clearSnapshot(): Promise<boolean>;
+  drainPendingCommands(): Promise<string[]>;
+  addListener(
+    event: "onWearCommand",
+    listener: (event: WearCommandEvent) => void,
+  ): { remove(): void };
+}
+
+/**
+ * Optional on purpose: the native module only exists on Android, and only in
+ * builds that include Play Services. iOS, web, and F-Droid builds all get null,
+ * and every export below degrades to a no-op rather than throwing.
+ *
+ * Wear OS dropped iOS support, so there is no iOS implementation to write.
+ */
+const native = requireOptionalNativeModule<ExpoWearBridgeNativeModule>("ExpoWearBridge");
+
+export const isWearBridgeSupported = native != null;
+
+export async function isWearAvailable(): Promise<boolean> {
+  if (!native) return false;
+  return native.isAvailable();
+}
+
+export async function getConnectedWearNodes(): Promise<WearNode[]> {
+  if (!native) return [];
+  return native.getConnectedNodes();
+}
+
+export async function publishWearSnapshot(payload: string): Promise<boolean> {
+  if (!native) return false;
+  return native.publishSnapshot(payload);
+}
+
+export async function clearWearSnapshot(): Promise<boolean> {
+  if (!native) return false;
+  return native.clearSnapshot();
+}
+
+/**
+ * Commands that arrived while no JS listener was attached — for example while the
+ * app process was killed and Play Services started only the listener service.
+ */
+export async function drainPendingWearCommands(): Promise<string[]> {
+  if (!native) return [];
+  return native.drainPendingCommands();
+}
+
+export function addWearCommandListener(listener: (payload: string) => void): { remove(): void } {
+  if (!native) {
+    return { remove: () => undefined };
+  }
+  return native.addListener("onWearCommand", (event) => listener(event.payload));
+}
