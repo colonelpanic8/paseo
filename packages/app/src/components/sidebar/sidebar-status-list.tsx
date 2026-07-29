@@ -153,17 +153,23 @@ export function SidebarStatusWorkspaceList({
                 />
               ))}
               {canTogglePinnedWorkspaces ? (
-                <SidebarGroupToggleRow
-                  expanded={pinnedWorkspacesExpanded}
-                  onPress={togglePinnedWorkspacesExpanded}
-                  testID="sidebar-pinned-show-more"
-                />
+                <Animated.View layout={STATUS_ROW_LAYOUT} collapsable={false}>
+                  <SidebarGroupToggleRow
+                    expanded={pinnedWorkspacesExpanded}
+                    onPress={togglePinnedWorkspacesExpanded}
+                    testID="sidebar-pinned-show-more"
+                  />
+                </Animated.View>
               ) : null}
             </>
           )}
         </View>
       ) : null}
-      {listHeaderComponent}
+      {listHeaderComponent ? (
+        <Animated.View layout={STATUS_ROW_LAYOUT} collapsable={false}>
+          {listHeaderComponent}
+        </Animated.View>
+      ) : null}
       <StatusGroupList
         groups={groups}
         collapsedStatusGroupKeys={collapsedStatusGroupKeys}
@@ -290,41 +296,49 @@ function StatusGroupRows({
     toggleExpanded: toggleWorkspacesExpanded,
   } = useLimitedSidebarGroup(group.rows);
 
+  // Flat siblings, not a group container: an animated wrapper around the whole
+  // group would resize when its own rows change, and the web backend animates
+  // that as a scale that drags the heading along (see sidebar-motion.ts). Each
+  // fixed-size element animates its own translation instead; the trailing
+  // spacer is invisible, so it can snap.
   return (
-    <Animated.View entering={STATUS_ROW_ENTERING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
-      <View style={styles.statusGroupBlock}>
+    <>
+      <Animated.View entering={STATUS_ROW_ENTERING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
         <StatusGroupHeader group={group} collapsed={collapsed} />
-        {!collapsed ? (
-          <View
-            style={styles.statusWorkspaceListContainer}
-            testID={`sidebar-status-group-rows-${group.bucket}`}
-          >
-            {visibleWorkspaces.map((workspace) => (
-              <StatusWorkspaceRow
-                key={workspace.workspaceKey}
-                workspace={workspace}
-                iconDataUri={iconDataByProjectKey.get(workspace.projectKey) ?? null}
-                hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
-                hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
-                shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
-                showShortcutBadge={showShortcutBadges}
-                canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-                onToggleWorkspacePin={onToggleWorkspacePin}
-                onWorkspacePress={onWorkspacePress}
-                parentGestureRef={parentGestureRef}
-              />
-            ))}
-            {canToggleWorkspaces ? (
-              <SidebarGroupToggleRow
-                expanded={workspacesExpanded}
-                onPress={toggleWorkspacesExpanded}
-                testID={`sidebar-status-show-more-${group.bucket}`}
-              />
-            ) : null}
-          </View>
-        ) : null}
-      </View>
-    </Animated.View>
+      </Animated.View>
+      {!collapsed
+        ? visibleWorkspaces.map((workspace) => (
+            <StatusWorkspaceRow
+              key={workspace.workspaceKey}
+              workspace={workspace}
+              iconDataUri={iconDataByProjectKey.get(workspace.projectKey) ?? null}
+              hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
+              hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
+              shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
+              showShortcutBadge={showShortcutBadges}
+              canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+              onToggleWorkspacePin={onToggleWorkspacePin}
+              onWorkspacePress={onWorkspacePress}
+              parentGestureRef={parentGestureRef}
+              containerTestID={`sidebar-status-row-${group.bucket}`}
+            />
+          ))
+        : null}
+      {!collapsed && canToggleWorkspaces ? (
+        <Animated.View
+          entering={STATUS_ROW_ENTERING}
+          layout={STATUS_ROW_LAYOUT}
+          collapsable={false}
+        >
+          <SidebarGroupToggleRow
+            expanded={workspacesExpanded}
+            onPress={toggleWorkspacesExpanded}
+            testID={`sidebar-status-show-more-${group.bucket}`}
+          />
+        </Animated.View>
+      ) : null}
+      <View style={styles.groupSpacer} />
+    </>
   );
 }
 
@@ -434,6 +448,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   onToggleWorkspacePin,
   onWorkspacePress,
   parentGestureRef,
+  containerTestID,
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
@@ -445,6 +460,8 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onWorkspacePress?: () => void;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
+  /** Stamped on the row's outer animated view so tests can scope rows to a status bucket. */
+  containerTestID?: string;
 }) {
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const selected =
@@ -470,6 +487,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
       onToggleWorkspacePin={onToggleWorkspacePin}
       parentGestureRef={parentGestureRef}
       onPress={handlePress}
+      containerTestID={containerTestID}
     />
   );
 });
@@ -486,6 +504,7 @@ function StatusWorkspaceRowWithMenu({
   onToggleWorkspacePin,
   parentGestureRef,
   onPress,
+  containerTestID,
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
@@ -498,6 +517,7 @@ function StatusWorkspaceRowWithMenu({
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   onPress: () => void;
+  containerTestID?: string;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -619,6 +639,7 @@ function StatusWorkspaceRowWithMenu({
         isPinned={isPinned}
         onTogglePin={onTogglePin}
         parentGestureRef={parentGestureRef}
+        containerTestID={containerTestID}
       />
       <AdaptiveRenameModal
         visible={isRenameOpen}
@@ -656,6 +677,7 @@ function StatusWorkspaceRowInner({
   isPinned,
   onTogglePin,
   parentGestureRef,
+  containerTestID,
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
@@ -678,6 +700,7 @@ function StatusWorkspaceRowInner({
   isPinned?: boolean;
   onTogglePin?: () => void;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
+  containerTestID?: string;
 }) {
   const isTouchPlatform = platformIsNative;
   const archiveDismissStyle = useArchiveDismissStyle(isArchiving);
@@ -700,6 +723,7 @@ function StatusWorkspaceRowInner({
       layout={STATUS_ROW_LAYOUT}
       style={archiveDismissStyle}
       collapsable={false}
+      testID={containerTestID}
     >
       <SidebarWorkspaceRowFrame workspace={workspace}>
         {({ isHovered, hoverHandlers }) => {
@@ -845,10 +869,11 @@ const styles = StyleSheet.create((theme) => ({
   pinnedSection: {
     marginBottom: theme.spacing[1],
   },
-  statusGroupBlock: {
-    marginBottom: theme.spacing[1],
+  // Trailing gap of a status group; a plain view because it is invisible and
+  // may snap while the animated siblings around it slide.
+  groupSpacer: {
+    height: theme.spacing[1],
   },
-  statusWorkspaceListContainer: {},
   statusGroupRow: {
     minHeight: 36,
     paddingVertical: theme.spacing[2],
