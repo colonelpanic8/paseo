@@ -324,7 +324,16 @@ export function ComposerStash({
     [deleteEntry, entries, t],
   );
 
-  const header = useMemo(() => ({ title: t("composer.stash.menuTitle") }), [t]);
+  // `leading` is load-bearing, not decoration: the desktop inline header only
+  // renders when a back/leading/actions/search slot is present, so a
+  // title-only header would leave the popover unlabeled on web.
+  const header = useMemo(
+    () => ({
+      title: t("composer.stash.menuTitle"),
+      leading: <ThemedBookmark size={ICON_SIZE.sm} uniProps={iconMutedMapping} />,
+    }),
+    [t],
+  );
   const footer = useMemo(
     () =>
       otherScopesCount > 0 ? (
