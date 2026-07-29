@@ -159,14 +159,28 @@ describe("session find highlights", () => {
     releaseSessionFindHighlightOwner(owner);
   });
 
-  // The model counts occurrences in an item's source text while the renderer
-  // enumerates rendered text nodes; a needle split across an inline-formatting
-  // boundary makes the two disagree, so the ordinal cannot be trusted.
-  it("emphasizes every occurrence in the active row when the counts disagree", () => {
+  // Syntax highlighting splits a contiguous source string into one span per
+  // token, so per-node matching would find nothing to highlight here.
+  it("highlights an occurrence the renderer split across text nodes", () => {
     const owner = acquireSessionFindHighlightOwner();
     const container = createContainer([
-      // Only the first "deploy" survives as a single text node.
-      { itemId: "first", textNodes: ["deploy now, dep", "loy again"] },
+      { itemId: "first", textNodes: ["npm ", "run", " ", "typecheck"] },
+    ]);
+
+    applySessionFindHighlights({
+      owner,
+      container,
+      find: findState({ query: "run typecheck" }),
+    });
+
+    expect(rangeTexts(owner.activeName)).toEqual(["run typecheck"]);
+    releaseSessionFindHighlightOwner(owner);
+  });
+
+  it("keeps occurrence order when matches span node boundaries", () => {
+    const owner = acquireSessionFindHighlightOwner();
+    const container = createContainer([
+      { itemId: "first", textNodes: ["dep", "loy once, then de", "ploy twice"] },
     ]);
 
     applySessionFindHighlights({
@@ -175,7 +189,28 @@ describe("session find highlights", () => {
       find: findState({ activeOccurrenceIndex: 1, activeItemOccurrenceCount: 2 }),
     });
 
+    // Both occurrences are found, so the ordinal is trusted: the second is active.
     expect(rangeTexts(owner.activeName)).toEqual(["deploy"]);
+    expect(rangeTexts(owner.matchName)).toEqual(["deploy"]);
+    releaseSessionFindHighlightOwner(owner);
+  });
+
+  // The model sees an item's source text; a row can still render extra text the
+  // model never searched, so the ordinal cannot be trusted unconditionally.
+  it("emphasizes every occurrence in the active row when the counts disagree", () => {
+    const owner = acquireSessionFindHighlightOwner();
+    const container = createContainer([
+      // Rendered chrome contributes an occurrence the match model never saw.
+      { itemId: "first", textNodes: ["deploy", "deploy once"] },
+    ]);
+
+    applySessionFindHighlights({
+      owner,
+      container,
+      find: findState({ activeOccurrenceIndex: 0, activeItemOccurrenceCount: 1 }),
+    });
+
+    expect(rangeTexts(owner.activeName)).toEqual(["deploy", "deploy"]);
     expect(registry.get(owner.matchName)?.ranges).toHaveLength(0);
     releaseSessionFindHighlightOwner(owner);
   });

@@ -5,6 +5,8 @@ import { act, renderHook } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
+import { resolveKeyboardShortcut } from "@/keyboard/keyboard-shortcuts";
+import { routeKeyboardShortcut } from "@/keyboard/route-shortcut";
 import type { StreamItem } from "@/types/stream";
 import type { StreamViewportHandle } from "./strategy";
 import { useSessionFind } from "./use-session-find";
@@ -53,6 +55,49 @@ function openFind(): void {
   });
 }
 
+/**
+ * Drives the same chain the app's window keydown listener does — real binding
+ * resolution, real routing, real dispatcher — so the find shortcut is covered
+ * from the keystroke through to the handler rather than from the action alone.
+ */
+function pressFindShortcut({ isMac }: { isMac: boolean }): void {
+  const resolved = resolveKeyboardShortcut({
+    event: {
+      key: "f",
+      code: "KeyF",
+      altKey: false,
+      ctrlKey: !isMac,
+      metaKey: isMac,
+      shiftKey: false,
+      repeat: false,
+    },
+    context: { isMac, isDesktop: true, focusScope: "other", commandCenterOpen: false },
+    chordState: { candidateIndices: [], step: 0, timeoutId: null },
+    onChordReset: () => undefined,
+  });
+  const match = resolved.match;
+  if (!match) {
+    throw new Error("expected the find shortcut to resolve to an action");
+  }
+  const routed = routeKeyboardShortcut(
+    { action: match.action, payload: match.payload },
+    {
+      pathname: "/host/local/workspace/ws-1",
+      isMobile: false,
+      sidebarShortcutTargets: [],
+      navigationActiveWorkspace: null,
+      commandCenterOpen: false,
+      shortcutsDialogOpen: false,
+    },
+  );
+  if (routed.kind !== "dispatch") {
+    throw new Error(`expected a dispatch action, got ${routed.kind}`);
+  }
+  act(() => {
+    keyboardActionDispatcher.dispatch(routed.action);
+  });
+}
+
 function pressEscape(): boolean {
   let handled = false;
   act(() => {
@@ -68,6 +113,23 @@ describe("useSessionFind", () => {
     expect(result.current.isOpen).toBe(false);
     expect(pressEscape()).toBe(false);
     expect(result.current.isOpen).toBe(false);
+  });
+
+  it.each([
+    { platform: "mac", isMac: true },
+    { platform: "non-mac", isMac: false },
+  ])("opens and scrolls to the first match from a $platform find keystroke", ({ isMac }) => {
+    const { result, scrollToItem } = setup();
+
+    pressFindShortcut({ isMac });
+    expect(result.current.isOpen).toBe(true);
+
+    act(() => {
+      result.current.onQueryChange("deploy");
+    });
+
+    expect(scrollToItem).toHaveBeenCalledWith("first");
+    expect(result.current.matches).toHaveLength(3);
   });
 
   it("opens on the agent.find keyboard action and requests input focus", () => {
