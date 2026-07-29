@@ -12,8 +12,8 @@ import {
 import { ComposerTrackBar } from "@/composer/tracks";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
-import { usePaneContext } from "@/panels/pane-context";
-import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
+import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { useSessionStore } from "@/stores/session-store";
 import { useSubagentsForParent } from "@/subagents/select";
 import { SubagentsTrack } from "@/subagents/track";
@@ -109,6 +109,7 @@ function useProviderSubagentDescriptor(
 function ProviderSubagentPanel() {
   const { t } = useTranslation();
   const { serverId, target, openFileInWorkspace, openTab } = usePaneContext();
+  const { isInteractive } = usePaneFocus();
   invariant(target.kind === "provider_subagent", "ProviderSubagentPanel requires provider target");
   const key = providerSubagentKey(serverId, target.parentAgentId, target.subagentId);
   const streamId = `provider:${encodeURIComponent(target.parentAgentId)}:${encodeURIComponent(target.subagentId)}`;
@@ -258,6 +259,7 @@ function ProviderSubagentPanel() {
         pendingPermissions={EMPTY_PERMISSIONS}
         isAuthoritativeHistoryReady
         onOpenWorkspaceFile={openFileInWorkspace}
+        isPaneFocused={isInteractive}
         readOnly
         historyPagination={historyPagination}
         bottomOverlayTailClearance={childTrackClearance.tail}
@@ -288,7 +290,8 @@ const styles = StyleSheet.create((theme) => ({
   unsupportedText: { color: theme.colors.foregroundMuted, textAlign: "center" },
 }));
 
-export const providerSubagentPanelRegistration = definePanel("provider_subagent", {
+export const providerSubagentPanelRegistration: PanelRegistration<"provider_subagent"> = {
+  kind: "provider_subagent",
   component: ProviderSubagentPanel,
   useDescriptor: useProviderSubagentDescriptor,
-});
+};
