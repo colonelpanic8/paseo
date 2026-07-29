@@ -14,6 +14,7 @@ export interface ResolvedBuildInfo {
   commit: string;
   shortCommit: string;
   commitDate: Date | null;
+  commitMessage: string | null;
   commitUrl: string;
 }
 
@@ -58,6 +59,7 @@ export function resolveBuildInfo(info: BuildInfo | null | undefined): ResolvedBu
     commit,
     shortCommit: commit.slice(0, SHORT_COMMIT_LENGTH),
     commitDate: parseCommitDate(info?.commitDate),
+    commitMessage: trimmedOrNull(info?.commitMessage),
     commitUrl: `${repoUrl}/commit/${commit}`,
   };
 }
@@ -92,6 +94,7 @@ export function resolveClientBuildInfo(): ResolvedBuildInfo | null {
   return resolveBuildInfo({
     commit: process.env.EXPO_PUBLIC_PASEO_BUILD_COMMIT ?? "",
     commitDate: process.env.EXPO_PUBLIC_PASEO_BUILD_COMMIT_DATE ?? null,
+    commitMessage: process.env.EXPO_PUBLIC_PASEO_BUILD_COMMIT_MESSAGE ?? null,
     repoUrl: process.env.EXPO_PUBLIC_PASEO_BUILD_REPO_URL ?? null,
   });
 }

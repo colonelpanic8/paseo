@@ -12,6 +12,7 @@ import type { BuildInfo } from "@getpaseo/protocol/messages";
  */
 export const BUILD_COMMIT_ENV_VAR = "PASEO_BUILD_COMMIT";
 export const BUILD_COMMIT_DATE_ENV_VAR = "PASEO_BUILD_COMMIT_DATE";
+export const BUILD_COMMIT_MESSAGE_ENV_VAR = "PASEO_BUILD_COMMIT_MESSAGE";
 export const BUILD_REPO_URL_ENV_VAR = "PASEO_BUILD_REPO_URL";
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | null {
@@ -34,6 +35,7 @@ export function resolveBuildInfo(env: NodeJS.ProcessEnv = process.env): BuildInf
   return {
     commit,
     commitDate: readEnv(env, BUILD_COMMIT_DATE_ENV_VAR),
+    commitMessage: readEnv(env, BUILD_COMMIT_MESSAGE_ENV_VAR),
     repoUrl: readEnv(env, BUILD_REPO_URL_ENV_VAR),
   };
 }
