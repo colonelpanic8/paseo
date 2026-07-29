@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/constants/platform", () => ({ isNative: true, isWeb: false }));
-
-const { canRenderProjectIconImage, parseProjectIconDataUri, projectIconSvgXml } =
-  await import("./project-icon-source");
+import { describe, expect, it } from "vitest";
+import {
+  canRenderProjectIconImage,
+  parseProjectIconDataUri,
+  projectIconSvgXml,
+} from "./project-icon-source";
 
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"></svg>';
 const svgDataUri = `data:image/svg+xml;base64,${Buffer.from(SVG).toString("base64")}`;
@@ -24,11 +24,15 @@ describe("parseProjectIconDataUri", () => {
 
 describe("projectIconSvgXml", () => {
   it("decodes SVG icons on native so react-native-svg can render them", () => {
-    expect(projectIconSvgXml(svgDataUri)).toBe(SVG);
+    expect(projectIconSvgXml(svgDataUri, true)).toBe(SVG);
+  });
+
+  it("leaves SVG icons to <img> on web", () => {
+    expect(projectIconSvgXml(svgDataUri, false)).toBeNull();
   });
 
   it("leaves raster icons to <Image>", () => {
-    expect(projectIconSvgXml("data:image/png;base64,abc")).toBeNull();
+    expect(projectIconSvgXml("data:image/png;base64,abc", true)).toBeNull();
   });
 
   // React Native has no global Buffer. Vitest runs in Node, where it exists, so
@@ -39,7 +43,7 @@ describe("projectIconSvgXml", () => {
     const original = globals.Buffer;
     delete globals.Buffer;
     try {
-      expect(projectIconSvgXml(svgDataUri)).toBe(SVG);
+      expect(projectIconSvgXml(svgDataUri, true)).toBe(SVG);
     } finally {
       globals.Buffer = original;
     }
@@ -48,12 +52,16 @@ describe("projectIconSvgXml", () => {
 
 describe("canRenderProjectIconImage", () => {
   it("rejects ICO on native, where <Image> renders nothing", () => {
-    expect(canRenderProjectIconImage("data:image/x-icon;base64,abc")).toBe(false);
-    expect(canRenderProjectIconImage("data:image/vnd.microsoft.icon;base64,abc")).toBe(false);
+    expect(canRenderProjectIconImage("data:image/x-icon;base64,abc", true)).toBe(false);
+    expect(canRenderProjectIconImage("data:image/vnd.microsoft.icon;base64,abc", true)).toBe(false);
+  });
+
+  it("accepts ICO on web, where browsers decode it natively", () => {
+    expect(canRenderProjectIconImage("data:image/x-icon;base64,abc", false)).toBe(true);
   });
 
   it("accepts formats <Image> can decode", () => {
-    expect(canRenderProjectIconImage("data:image/png;base64,abc")).toBe(true);
-    expect(canRenderProjectIconImage("data:image/webp;base64,abc")).toBe(true);
+    expect(canRenderProjectIconImage("data:image/png;base64,abc", true)).toBe(true);
+    expect(canRenderProjectIconImage("data:image/webp;base64,abc", true)).toBe(true);
   });
 });

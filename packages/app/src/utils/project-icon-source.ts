@@ -29,9 +29,13 @@ export function parseProjectIconDataUri(dataUri: string): ProjectIconDataUriPart
   return { mimeType: mimeType.toLowerCase(), base64 };
 }
 
-/** The SVG markup for a data URI that native must render via react-native-svg. */
-export function projectIconSvgXml(dataUri: string): string | null {
-  if (!isNative) {
+/**
+ * The SVG markup for a data URI that native must render via react-native-svg.
+ * The platform is an explicit parameter (defaulting to the real constant) so
+ * tests can cover both variants without mocking module initialization.
+ */
+export function projectIconSvgXml(dataUri: string, native: boolean = isNative): string | null {
+  if (!native) {
     return null;
   }
   const parts = parseProjectIconDataUri(dataUri);
@@ -46,8 +50,8 @@ export function projectIconSvgXml(dataUri: string): string | null {
 }
 
 /** False when the platform's <Image> cannot decode this icon at all (native ICO). */
-export function canRenderProjectIconImage(dataUri: string): boolean {
-  if (!isNative) {
+export function canRenderProjectIconImage(dataUri: string, native: boolean = isNative): boolean {
+  if (!native) {
     return true;
   }
   const parts = parseProjectIconDataUri(dataUri);
