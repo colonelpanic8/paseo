@@ -46,7 +46,7 @@ import { SidebarArchivedGroup } from "@/components/sidebar/sidebar-archived-grou
 import {
   sidebarListSettle,
   sidebarRowEnter,
-  useArchiveDismissStyle,
+  useArchiveCollapse,
 } from "@/components/sidebar/sidebar-motion";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
@@ -703,7 +703,7 @@ function StatusWorkspaceRowInner({
   containerTestID?: string;
 }) {
   const isTouchPlatform = platformIsNative;
-  const archiveDismissStyle = useArchiveDismissStyle(isArchiving);
+  const archiveCollapse = useArchiveCollapse(isArchiving);
 
   const isDesktop = !isTouchPlatform;
   const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
@@ -721,7 +721,8 @@ function StatusWorkspaceRowInner({
     <Animated.View
       entering={STATUS_ROW_ENTERING}
       layout={STATUS_ROW_LAYOUT}
-      style={archiveDismissStyle}
+      onLayout={archiveCollapse.onLayout}
+      style={archiveCollapse.style}
       collapsable={false}
       testID={containerTestID}
     >

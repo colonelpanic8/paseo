@@ -20,7 +20,7 @@ import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attentio
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { isNative as platformIsNative } from "@/constants/platform";
-import { useArchiveDismissStyle } from "@/components/sidebar/sidebar-motion";
+import { useArchiveCollapse } from "@/components/sidebar/sidebar-motion";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import {
@@ -255,7 +255,7 @@ function WorkspaceRowBody({
   archiveShortcutKeys,
 }: WorkspaceRowBodyProps) {
   const isTouchPlatform = platformIsNative;
-  const archiveDismissStyle = useArchiveDismissStyle(isArchiving);
+  const archiveCollapse = useArchiveCollapse(isArchiving);
   const draggable = Boolean(drag);
   const interaction = useLongPressDragInteraction({
     drag: drag ?? noop,
@@ -279,7 +279,7 @@ function WorkspaceRowBody({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <Animated.View style={archiveDismissStyle}>
+    <Animated.View onLayout={archiveCollapse.onLayout} style={archiveCollapse.style}>
       <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
         {({ isHovered, hoverHandlers }) => {
           const isDesktop = !isTouchPlatform;
