@@ -9,11 +9,17 @@ import {
   type ViewStyle,
 } from "react-native";
 import { deriveIdentityColorName, identityColor } from "@/styles/identity-colors";
-import { SvgXml } from "react-native-svg";
+// SvgCss, not SvgXml: favicon SVGs commonly style paths via <style> blocks,
+// which SvgXml silently ignores — paths then render with default (black) fill.
+import { SvgCss } from "react-native-svg/css";
 import { canRenderProjectIconImage, projectIconSvgXml } from "@/utils/project-icon-source";
 
 const WHITE_TEXT = { color: "#ffffff" } as const;
 const SVG_CONTAINER = { overflow: "hidden" } as const;
+
+function ignoreSvgParseError() {
+  // A repo's icon is arbitrary user data; a malformed SVG just falls back.
+}
 
 export function ProjectIconView({
   iconDataUri,
@@ -45,19 +51,30 @@ export function ProjectIconView({
   );
   const textStyles = useMemo(() => [textStyle, WHITE_TEXT], [textStyle]);
 
+  const fallback = useMemo(
+    () => (
+      <View style={fallbackStyles}>
+        <Text style={textStyles}>{initial}</Text>
+      </View>
+    ),
+    [fallbackStyles, initial, textStyles],
+  );
+
   if (svgXml) {
     return (
       <View style={svgContainerStyles}>
-        <SvgXml xml={svgXml} width="100%" height="100%" />
+        <SvgCss
+          xml={svgXml}
+          width="100%"
+          height="100%"
+          fallback={fallback}
+          onError={ignoreSvgParseError}
+        />
       </View>
     );
   }
   if (iconDataUri && canRenderProjectIconImage(iconDataUri)) {
     return <Image source={imageSource} style={imageStyle} />;
   }
-  return (
-    <View style={fallbackStyles}>
-      <Text style={textStyles}>{initial}</Text>
-    </View>
-  );
+  return fallback;
 }
