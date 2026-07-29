@@ -122,7 +122,9 @@ export function useKeyboardShortcuts({
       { isMac, isDesktop: isDesktopApp },
       bindings,
     );
-    const controlShortcutModifierKey = isMac ? "Meta" : "Control";
+    // Every prompt-control chord is a plain Alt chord, so Alt is what reveals
+    // the control hints — the key you hold is the key you press with.
+    const controlShortcutModifierKey = "Alt";
     const setBadgeModifierDown = (down: boolean) => {
       const state = useKeyboardShortcutsStore.getState();
       if (isDesktopApp) {
@@ -352,14 +354,14 @@ export function useKeyboardShortcuts({
         useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
       }
       if (key === "Shift") {
-        // Shift+Mod chords are not workspace jumps, so hide the sidebar
-        // number badges — but leave the control hints alone: their chords
-        // are Mod+Shift+key, so the hints must survive Shift going down.
+        // Shift+Mod chords are not workspace jumps, so hide the sidebar number
+        // badges. No control chord uses Shift either, so hide those too.
         const state = useKeyboardShortcutsStore.getState();
         if (state.altDown || state.cmdOrCtrlDown) {
           state.setAltDown(false);
           state.setCmdOrCtrlDown(false);
         }
+        state.setControlShortcutModifierDown(false);
       }
 
       const focusScope = resolveKeyboardFocusScope({
