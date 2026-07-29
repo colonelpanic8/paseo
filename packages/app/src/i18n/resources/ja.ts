@@ -919,12 +919,6 @@ export const ja: TranslationResources = {
       sessions: "履歴",
       schedules: "スケジュール",
     },
-    worktreeSetup: {
-      title: "ワークツリースクリプトを設定",
-      description:
-        "新しいワークツリーが依存関係をインストールして自動的に準備できるようにセットアップコマンドを追加してください。",
-      openProjectSettings: "プロジェクト設定を開く",
-    },
     project: {
       actions: {
         menu: "プロジェクトアクション",
