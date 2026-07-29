@@ -13,7 +13,13 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { Theme } from "@/styles/theme";
 import { estimateStreamItemHeight } from "./web-virtualization";
-import { applySessionFindHighlights, clearSessionFindHighlights } from "./find-highlight";
+import {
+  acquireSessionFindHighlightOwner,
+  applySessionFindHighlights,
+  clearSessionFindHighlights,
+  releaseSessionFindHighlightOwner,
+  type SessionFindHighlightOwner,
+} from "./find-highlight";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { createStreamStrategy } from "./strategy";
 import {
@@ -144,6 +150,16 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   } = props;
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
+  // Declared before the highlight effect so the slot exists by the time it runs.
+  const highlightOwnerRef = useRef<SessionFindHighlightOwner | null>(null);
+  useEffect(() => {
+    const owner = acquireSessionFindHighlightOwner();
+    highlightOwnerRef.current = owner;
+    return () => {
+      highlightOwnerRef.current = null;
+      releaseSessionFindHighlightOwner(owner);
+    };
+  }, []);
   const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
     scrollContainerRef.current = node;
   }, []);
@@ -601,8 +617,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
-    if (!sessionFind || !scrollContainer) {
-      clearSessionFindHighlights();
+    const owner = highlightOwnerRef.current;
+    if (!sessionFind || !scrollContainer || !owner) {
+      // Only this viewport's slot is cleared, so panes without an open find bar
+      // (including background tabs re-running this on every stream flush) cannot
+      // wipe the highlights of the pane the user is searching in.
+      if (owner) {
+        clearSessionFindHighlights(owner);
+      }
       return;
     }
     let pendingFrame: number | null = null;
@@ -610,7 +632,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       pendingFrame = null;
       const container = scrollContainerRef.current;
       if (container) {
-        applySessionFindHighlights({ container, find: sessionFind });
+        applySessionFindHighlights({ owner, container, find: sessionFind });
       }
     };
     // Rows mount and unmount as the virtualizer window moves, so re-scan on
@@ -627,7 +649,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       if (pendingFrame !== null) {
         window.cancelAnimationFrame(pendingFrame);
       }
-      clearSessionFindHighlights();
+      clearSessionFindHighlights(owner);
     };
   }, [
     sessionFind,
