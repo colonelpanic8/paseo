@@ -24,6 +24,7 @@ import type { Logger } from "pino";
 import type { ToolPolicy } from "@getpaseo/protocol/agent-types";
 import type { ProviderPaseoToolsPolicy } from "@getpaseo/protocol/provider-config";
 import { z } from "zod";
+import { captureAgentEnv, resolveAgentEnvCommand } from "../../utils/agent-env.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 
 import {
@@ -5809,11 +5810,13 @@ export class AgentManager {
         mcpServerOwners = transformed.mcpServerOwners;
       }
     }
+    const agentEnvOverlay = await this.resolveAgentEnvOverlay(cwd);
     const context: AgentLaunchContext = {
       agentId,
       mcpServers,
       mcpServerOwners,
       env: {
+        ...agentEnvOverlay,
         ...env,
         ...agentIdentityEnv({ agentId, cwd, opening }),
       },
@@ -5839,6 +5842,28 @@ export class AgentManager {
     }
     this.sessionOpenGenerations.set(agentId, generation);
     return context;
+  }
+
+  // Run the committed `agentEnv` command from the project's paseo.json (if any)
+  // and capture the env it produces, so the agent process — and the MCP servers
+  // it spawns — see the project environment (direnv/mise-style). A failing
+  // command fails the launch: silently starting the agent without its env is
+  // the exact failure mode this feature exists to fix.
+  private async resolveAgentEnvOverlay(cwd: string): Promise<Record<string, string>> {
+    const command = resolveAgentEnvCommand(cwd);
+    if (!command) {
+      return {};
+    }
+    if (process.platform === "win32") {
+      this.logger.warn({ cwd, command }, "agentEnv is not supported on Windows; skipping");
+      return {};
+    }
+    const overlay = await captureAgentEnv({ command, cwd });
+    this.logger.info(
+      { cwd, command, keys: Object.keys(overlay) },
+      "Captured agentEnv overlay for agent launch",
+    );
+    return overlay;
   }
 
   private resolveProviderLaunchConfig(

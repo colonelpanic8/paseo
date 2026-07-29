@@ -213,4 +213,21 @@ describe("paseo config schema", () => {
       },
     });
   });
+
+  it("parses agentEnv in both raw and runtime schemas", () => {
+    const config = { agentEnv: "direnv exec ." };
+
+    expect(PaseoConfigRawSchema.parse(config)).toEqual(config);
+    expect(PaseoConfigSchema.parse(config)).toEqual(config);
+  });
+
+  it("runtime schema drops a malformed agentEnv without failing the whole config", () => {
+    const parsed = PaseoConfigSchema.parse({
+      agentEnv: ["not", "a", "string"],
+      worktree: { setup: "npm install" },
+    });
+
+    expect(parsed.agentEnv).toBeUndefined();
+    expect(parsed.worktree?.setup).toEqual(["npm install"]);
+  });
 });
