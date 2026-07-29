@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { SvgXml } from "react-native-svg";
 import { useTranslation } from "react-i18next";
 import { createNameId } from "mnemonic-id";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -25,6 +26,7 @@ import type {
   DaemonClient,
 } from "@getpaseo/client/internal/daemon-client";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
+import { canRenderProjectIconImage, projectIconSvgXml } from "@/utils/project-icon-source";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -38,6 +40,32 @@ function toProjectIconDataUri(icon: { mimeType: string; data: string } | null): 
 }
 
 const SNAP_POINTS: string[] = ["82%", "94%"];
+
+function WorkspaceSetupProjectIcon({
+  svgXml,
+  source,
+  placeholderInitial,
+}: {
+  svgXml: string | null;
+  source: { uri: string } | null;
+  placeholderInitial: string;
+}) {
+  if (svgXml) {
+    return (
+      <View style={styles.projectIcon}>
+        <SvgXml xml={svgXml} width="100%" height="100%" />
+      </View>
+    );
+  }
+  if (source) {
+    return <Image source={source} style={styles.projectIcon} />;
+  }
+  return (
+    <View style={styles.projectIconFallback}>
+      <Text style={styles.projectIconFallbackText}>{placeholderInitial}</Text>
+    </View>
+  );
+}
 
 function resolveWorkspaceTitle({
   workspace,
@@ -380,7 +408,17 @@ export function WorkspaceSetupDialog() {
   const placeholderLabel = projectIconPlaceholderLabelFromDisplayName(workspaceTitle);
   const placeholderInitial = placeholderLabel.charAt(0).toUpperCase();
 
-  const iconSource = useMemo(() => (iconDataUri ? { uri: iconDataUri } : null), [iconDataUri]);
+  const iconSvgXml = useMemo(
+    () => (iconDataUri ? projectIconSvgXml(iconDataUri) : null),
+    [iconDataUri],
+  );
+  const iconSource = useMemo(
+    () =>
+      iconDataUri && !iconSvgXml && canRenderProjectIconImage(iconDataUri)
+        ? { uri: iconDataUri }
+        : null,
+    [iconDataUri, iconSvgXml],
+  );
   const agentControlsWithDisabled = useMemo(
     () =>
       composerState
@@ -395,19 +433,17 @@ export function WorkspaceSetupDialog() {
   const subtitleContent = useMemo(
     () => (
       <View style={styles.subtitleRow}>
-        {iconSource ? (
-          <Image source={iconSource} style={styles.projectIcon} />
-        ) : (
-          <View style={styles.projectIconFallback}>
-            <Text style={styles.projectIconFallbackText}>{placeholderInitial}</Text>
-          </View>
-        )}
+        <WorkspaceSetupProjectIcon
+          svgXml={iconSvgXml}
+          source={iconSource}
+          placeholderInitial={placeholderInitial}
+        />
         <Text style={styles.projectTitle} numberOfLines={1}>
           {workspaceTitle}
         </Text>
       </View>
     ),
-    [iconSource, placeholderInitial, workspaceTitle],
+    [iconSource, iconSvgXml, placeholderInitial, workspaceTitle],
   );
 
   const sheetHeader = useMemo<SheetHeader>(
