@@ -101,25 +101,79 @@ function collectTextNodes(root: Element): Text[] {
   return nodes;
 }
 
-function collectRowRanges(row: Element, needle: string): Range[] {
-  const ranges: Range[] = [];
-  for (const textNode of collectTextNodes(row)) {
-    const haystack = textNode.textContent?.toLowerCase();
-    if (!haystack) {
+interface RowTextSegment {
+  node: Text;
+  /** Offset of this node's text within the row's concatenated text. */
+  start: number;
+  end: number;
+}
+
+interface RowText {
+  lowerCaseText: string;
+  segments: RowTextSegment[];
+}
+
+/**
+ * Flattens a row's text nodes into one searchable string plus the offset map
+ * needed to turn a match back into a DOM range.
+ *
+ * Searching each text node separately would miss any occurrence the renderer
+ * split across nodes — which is the common case inside highlighted code blocks,
+ * where a contiguous source string becomes one span per syntax token. Ranges may
+ * span nodes, so matching over the concatenation and mapping the endpoints back
+ * finds those occurrences too.
+ */
+function buildRowText(row: Element): RowText {
+  const segments: RowTextSegment[] = [];
+  let text = "";
+  for (const node of collectTextNodes(row)) {
+    const content = node.textContent;
+    if (!content) {
       continue;
     }
-    let searchFrom = 0;
-    while (true) {
-      const foundAt = haystack.indexOf(needle, searchFrom);
-      if (foundAt < 0) {
-        break;
-      }
-      const range = document.createRange();
-      range.setStart(textNode, foundAt);
-      range.setEnd(textNode, foundAt + needle.length);
-      ranges.push(range);
-      searchFrom = foundAt + needle.length;
+    segments.push({ node, start: text.length, end: text.length + content.length });
+    text += content;
+  }
+  return { lowerCaseText: text.toLowerCase(), segments };
+}
+
+/** Maps a start offset in the concatenated text back to a node position. */
+function resolveStart(
+  segments: RowTextSegment[],
+  offset: number,
+): { node: Text; offset: number } | null {
+  const segment = segments.find((candidate) => offset >= candidate.start && offset < candidate.end);
+  return segment ? { node: segment.node, offset: offset - segment.start } : null;
+}
+
+/** Maps an exclusive end offset back to a node position. */
+function resolveEnd(
+  segments: RowTextSegment[],
+  offset: number,
+): { node: Text; offset: number } | null {
+  const segment = segments.find((candidate) => offset > candidate.start && offset <= candidate.end);
+  return segment ? { node: segment.node, offset: offset - segment.start } : null;
+}
+
+function collectRowRanges(row: Element, needle: string): Range[] {
+  const { lowerCaseText, segments } = buildRowText(row);
+  const ranges: Range[] = [];
+  let searchFrom = 0;
+  while (true) {
+    const foundAt = lowerCaseText.indexOf(needle, searchFrom);
+    if (foundAt < 0) {
+      break;
     }
+    searchFrom = foundAt + needle.length;
+    const start = resolveStart(segments, foundAt);
+    const end = resolveEnd(segments, foundAt + needle.length);
+    if (!start || !end) {
+      continue;
+    }
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    ranges.push(range);
   }
   return ranges;
 }
@@ -128,14 +182,15 @@ function collectRowRanges(row: Element, needle: string): Range[] {
  * Splits the active row's DOM ranges into active and non-active occurrences.
  *
  * The match model enumerates occurrences in an item's source text, while these
- * ranges are enumerated over rendered text nodes. Those two sequences agree for
- * ordinary prose but not always: a needle straddling an inline-formatting or
- * syntax-token boundary yields no DOM range, and rendered chrome inside a row
- * can contribute a range the model never saw. Indexing blindly would then
- * emphasize an unrelated occurrence, so the ordinal is trusted only when the
- * two enumerations demonstrably agree on the row's occurrence count. Otherwise
- * every occurrence in the row is emphasized — the row is where navigation
- * scrolled to, so "your match is one of these" stays true.
+ * ranges are enumerated over the row's rendered text. Those two sequences agree
+ * for ordinary prose but cannot be assumed to: the model sees markdown syntax
+ * the reader never does, rendered chrome inside a row can contribute a range the
+ * model never saw, and concatenating the row's text can join across a visual
+ * block boundary. Indexing blindly would then emphasize an unrelated occurrence,
+ * so the ordinal is trusted only when the two enumerations demonstrably agree on
+ * the row's occurrence count. Otherwise every occurrence in the row is
+ * emphasized — the row is where navigation scrolled to, so "your match is one of
+ * these" stays true.
  */
 function partitionActiveRowRanges(
   rowRanges: Range[],
