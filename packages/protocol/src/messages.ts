@@ -3337,6 +3337,8 @@ export const BuildInfoSchema = z
     commit: z.string().trim().min(1),
     /** ISO-8601 timestamp of the commit itself, not of the build. */
     commitDate: z.string().trim().min(1).nullish(),
+    /** Subject line of the commit, for display alongside the sha. */
+    commitMessage: z.string().trim().min(1).nullish(),
     /** Web root of the repository the commit is reachable from. */
     repoUrl: z.string().trim().min(1).nullish(),
   })
