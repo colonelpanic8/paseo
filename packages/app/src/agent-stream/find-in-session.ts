@@ -10,6 +10,12 @@ export interface SessionFindState {
   query: string;
   activeItemId: string | null;
   activeOccurrenceIndex: number;
+  /**
+   * How many occurrences the match model found in the active item. Renderers
+   * compare this against what they can enumerate to decide whether
+   * `activeOccurrenceIndex` identifies the same occurrence they see.
+   */
+  activeItemOccurrenceCount: number;
 }
 
 /**
