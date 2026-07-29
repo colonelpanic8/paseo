@@ -75,6 +75,7 @@ import {
 } from "@/navigation/host-runtime-bootstrap";
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { ThemedStack } from "@/navigation/themed-stack";
+import { WearBridgeListener } from "@/wear/wear-bridge-listener";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { AgentNavigationListener } from "@/desktop/agent-navigation";
 import { LegacyAgentSkillsMigration } from "@/agent-skills/legacy-migration";
@@ -941,6 +942,7 @@ function AppShell() {
       <HorizontalScrollProvider>
         <OpenProjectListener />
         <AgentNavigationListener />
+        <WearBridgeListener />
         <AppWithSidebar>
           <WorkspaceRouteNavigationBridge />
           <RootStack />
