@@ -42,6 +42,14 @@ describe("resolveBuildInfo", () => {
     const build = resolveBuildInfo({ commit: COMMIT, commitDate: "2026-07-28T12:34:56Z" });
     expect(build?.commitDate?.toISOString()).toBe("2026-07-28T12:34:56.000Z");
   });
+
+  it("carries the commit message through, dropping blank ones", () => {
+    expect(
+      resolveBuildInfo({ commit: COMMIT, commitMessage: "Fix the frobnicator" })?.commitMessage,
+    ).toBe("Fix the frobnicator");
+    expect(resolveBuildInfo({ commit: COMMIT, commitMessage: "   " })?.commitMessage).toBeNull();
+    expect(resolveBuildInfo({ commit: COMMIT })?.commitMessage).toBeNull();
+  });
 });
 
 describe("formatBuildStamp", () => {
