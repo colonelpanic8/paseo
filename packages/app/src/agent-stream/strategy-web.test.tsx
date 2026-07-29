@@ -245,10 +245,17 @@ describe("createWebStreamStrategy", () => {
     expect(onReadingPositionChange).toHaveBeenLastCalledWith("message-2");
   });
 
-  it("scrolls a mounted stream item into view via its anchor", () => {
-    const scrollIntoView = vi.fn();
+  // jsdom does not implement scrollIntoView at all, so it has to be supplied
+  // here. The assertion is about which row element the viewport resolved and
+  // targeted — the behavior find-in-session navigation depends on. The
+  // keystroke -> agent.find mapping is covered in keyboard-shortcuts.test.ts and
+  // the query -> item navigation in use-session-find.test.tsx.
+  it("resolves the requested stream item's anchor and scrolls that row into view", () => {
+    const scrolledElements: Element[] = [];
     const originalScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoViewStub(this: Element) {
+      scrolledElements.push(this);
+    };
     try {
       const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
       const viewportRef = React.createRef<StreamViewportHandle>();
@@ -288,13 +295,21 @@ describe("createWebStreamStrategy", () => {
         );
       });
 
-      expect(container.querySelector('[data-stream-item-id="message-2"]')).not.toBeNull();
+      const targetRow = container.querySelector('[data-stream-item-id="message-2"]');
+      expect(targetRow).not.toBeNull();
 
       act(() => {
         viewportRef.current?.scrollToItem?.("message-2");
       });
 
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+      expect(scrolledElements).toEqual([targetRow]);
+
+      // An id with no anchor must not scroll some other row into view.
+      scrolledElements.length = 0;
+      act(() => {
+        viewportRef.current?.scrollToItem?.("message-404");
+      });
+      expect(scrolledElements).toEqual([]);
     } finally {
       if (originalScrollIntoView) {
         Element.prototype.scrollIntoView = originalScrollIntoView;
