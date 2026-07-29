@@ -20,12 +20,18 @@
   # be known here at build time. See nix/build-info.nix.
   buildCommit ? null,
   buildCommitDate ? null,
+  buildCommitMessage ? null,
   buildRepoUrl ? null,
 }:
 
 let
   buildInfo = import ./build-info.nix { inherit lib; } {
-    inherit buildCommit buildCommitDate buildRepoUrl;
+    inherit
+      buildCommit
+      buildCommitDate
+      buildCommitMessage
+      buildRepoUrl
+      ;
   };
 in
 
