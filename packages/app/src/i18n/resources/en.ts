@@ -1473,6 +1473,9 @@ export const en = {
       mute: "Mute microphone",
       unmute: "Unmute microphone",
       enableAudio: "Tap to enable audio",
+      showTranscript: "Show transcript",
+      hideTranscript: "Hide transcript",
+      dismiss: "Dismiss",
     },
     status: {
       connecting: "Connecting...",

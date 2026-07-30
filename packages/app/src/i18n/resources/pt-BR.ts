@@ -1491,6 +1491,9 @@ export const ptBR: TranslationResources = {
       mute: "Silenciar microfone",
       unmute: "Ativar microfone",
       enableAudio: "Toque para ativar o áudio",
+      showTranscript: "Mostrar transcrição",
+      hideTranscript: "Ocultar transcrição",
+      dismiss: "Dispensar",
     },
     status: {
       connecting: "Conectando...",
