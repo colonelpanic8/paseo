@@ -1916,6 +1916,7 @@ export const ar: TranslationResources = {
         sendMessage: "أرسل رسالة",
         queueMessage: "رسالة قائمة الانتظار",
         muteUnmuteVoiceMode: "كتم وضع الصوت /unmute",
+        muteUnmuteLiveVoice: "كتم/إلغاء كتم الصوت المباشر",
         switchProject: "تبديل المشروع",
       },
       helpNotes: {
