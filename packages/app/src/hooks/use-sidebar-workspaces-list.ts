@@ -16,6 +16,7 @@ import {
   deriveSidebarLoadingState,
   resolveSidebarServerIds,
   type ProjectStatusSession,
+  resolveSidebarServerIds,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
