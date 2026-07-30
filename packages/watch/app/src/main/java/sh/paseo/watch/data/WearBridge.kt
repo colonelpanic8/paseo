@@ -6,6 +6,9 @@ import kotlinx.serialization.json.Json
 import sh.paseo.watch.model.ActivityState
 import sh.paseo.watch.model.AgentSession
 import sh.paseo.watch.model.PermissionRequest
+import sh.paseo.watch.model.Transcript
+import sh.paseo.watch.model.TranscriptEntry
+import sh.paseo.watch.model.TranscriptKind
 import sh.paseo.watch.model.Workspace
 
 /**
@@ -34,13 +37,26 @@ object WearBridge {
   /** DataClient path carrying the full snapshot. */
   const val SNAPSHOT_PATH = "/paseo/snapshot"
 
+  /**
+   * DataClient path prefix for per-agent transcripts: `/paseo/transcript/<agentId>`.
+   *
+   * One item per agent rather than one blob, because a transcript is fetched on
+   * demand for the agent you opened. Folding them into the snapshot would mean the
+   * phone republishing every transcript on every store change, and the snapshot
+   * covers every agent on every daemon.
+   */
+  const val TRANSCRIPT_PATH_PREFIX = "/paseo/transcript"
+
+  /** DataClient path for one agent's transcript. */
+  fun transcriptPath(agentId: String): String = "$TRANSCRIPT_PATH_PREFIX/$agentId"
+
   /** MessageClient path for watch -> phone commands. */
   const val COMMAND_PATH = "/paseo/command"
 
   /** MessageClient path asking the phone to republish immediately. */
   const val REFRESH_PATH = "/paseo/refresh"
 
-  /** DataItem key holding the JSON payload. */
+  /** DataItem key holding the JSON payload — same key for snapshots and transcripts. */
   const val SNAPSHOT_KEY = "payload"
 
   val json: Json = Json {
@@ -91,6 +107,35 @@ data class WirePermission(
 )
 
 // ---------------------------------------------------------------------------
+// Transcript: phone -> watch, on demand, one DataItem per agent
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class WireTranscript(
+  @SerialName("v") val version: Int = WearBridge.PROTOCOL_VERSION,
+  val agentId: String = "",
+  val serverId: String = "",
+  val updatedAt: Long = 0,
+  /** Oldest to newest, capped at 100 by the phone. */
+  val entries: List<WireTranscriptEntry> = emptyList(),
+  /** True when history exists before the first entry. */
+  val truncated: Boolean = false,
+)
+
+@Serializable
+data class WireTranscriptEntry(
+  /**
+   * "user" | "assistant" | "tool" | "error". Unknown kinds are NOT dropped — the
+   * phone may learn to emit a new one before the watch learns to render it, and
+   * losing the text entirely is worse than rendering it plainly. See
+   * [String.toTranscriptKind].
+   */
+  val kind: String = "",
+  /** Already trimmed, collapsed and capped by the phone; rendered verbatim. */
+  val text: String = "",
+)
+
+// ---------------------------------------------------------------------------
 // Commands: watch -> phone
 // ---------------------------------------------------------------------------
 
@@ -110,6 +155,14 @@ data class WireCommand(
     const val CREATE_AGENT = "createAgent"
     const val RESPOND_PERMISSION = "respondPermission"
     const val STOP_AGENT = "stopAgent"
+
+    /**
+     * Ask the phone to publish this agent's transcript to
+     * [WearBridge.transcriptPath]. A phone too old to know this kind drops it
+     * silently, so the watch must treat "no transcript ever arrives" as normal —
+     * it keeps showing the summary card — rather than as an error.
+     */
+    const val REQUEST_TRANSCRIPT = "requestTranscript"
   }
 }
 
@@ -159,9 +212,42 @@ fun WireSnapshot.toWorkspaces(): List<Workspace> =
     )
   }
 
+/**
+ * Unrecognised kinds degrade to [TranscriptKind.Unknown], which renders as muted
+ * plain text. Deliberately not dropped: the kind list is allowed to grow without a
+ * protocol bump, and an old watch showing the words without the styling is a much
+ * better failure than an old watch showing a hole in the conversation.
+ */
+private fun String.toTranscriptKind(): TranscriptKind =
+  when (this) {
+    "user" -> TranscriptKind.User
+    "assistant" -> TranscriptKind.Assistant
+    "tool" -> TranscriptKind.Tool
+    "error" -> TranscriptKind.Error
+    else -> TranscriptKind.Unknown
+  }
+
+fun WireTranscript.toTranscript(): Transcript =
+  Transcript(
+    agentId = agentId,
+    updatedAt = updatedAt,
+    truncated = truncated,
+    entries =
+      entries
+        // An entry with no text is a rendering artifact, not content.
+        .filter { it.text.isNotBlank() }
+        .map { TranscriptEntry(kind = it.kind.toTranscriptKind(), text = it.text) },
+  )
+
 fun decodeSnapshot(raw: String): WireSnapshot? =
   runCatching { WearBridge.json.decodeFromString<WireSnapshot>(raw) }
     .getOrNull()
     // A snapshot from a future protocol version is dropped rather than
     // partially rendered; the UI shows its "waiting for phone" state instead.
+    ?.takeIf { it.version == WearBridge.PROTOCOL_VERSION }
+
+/** Same version-gate discipline as [decodeSnapshot]: parse or drop, never guess. */
+fun decodeTranscript(raw: String): WireTranscript? =
+  runCatching { WearBridge.json.decodeFromString<WireTranscript>(raw) }
+    .getOrNull()
     ?.takeIf { it.version == WearBridge.PROTOCOL_VERSION }

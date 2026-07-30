@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.StateFlow
 import sh.paseo.watch.model.ActivityState
 import sh.paseo.watch.model.AgentSession
 import sh.paseo.watch.model.PermissionRequest
+import sh.paseo.watch.model.Transcript
+import sh.paseo.watch.model.TranscriptEntry
+import sh.paseo.watch.model.TranscriptKind
 import sh.paseo.watch.model.Workspace
 
 /**
@@ -17,9 +20,24 @@ import sh.paseo.watch.model.Workspace
 interface WatchRepository {
   val workspaces: StateFlow<List<Workspace>>
 
+  /**
+   * Transcripts by agent id, for agents whose transcript has actually arrived.
+   *
+   * A missing key is the normal case, not an error: transcripts are fetched on
+   * demand, and a phone too old to know [WireCommand.REQUEST_TRANSCRIPT] drops the
+   * request silently. The agent screen falls back to the summary card.
+   */
+  val transcripts: StateFlow<Map<String, Transcript>>
+
   fun workspace(id: String): Workspace?
 
   fun agent(id: String): AgentSession?
+
+  /**
+   * Ask the phone to publish this agent's transcript. Fire and forget — the answer
+   * arrives later through [transcripts], or never.
+   */
+  suspend fun requestTranscript(agentId: String)
 
   /** Send a prompt to an existing agent session. */
   suspend fun sendPrompt(agentId: String, text: String)
@@ -41,13 +59,23 @@ interface WatchRepository {
  */
 class MockWatchRepository : WatchRepository {
   private val state = MutableStateFlow(seed())
+  private val transcriptState = MutableStateFlow(seedTranscripts())
 
   override val workspaces: StateFlow<List<Workspace>> = state
+
+  override val transcripts: StateFlow<Map<String, Transcript>> = transcriptState
 
   override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
 
   override fun agent(id: String): AgentSession? =
     state.value.flatMap { it.agents }.firstOrNull { it.id == id }
+
+  /**
+   * The seeded transcripts are already present, so this is a no-op. `agent-main-copilot`
+   * is deliberately left without one so the summary-card fallback — what an old phone
+   * or a transcript-less agent looks like — is reachable on an emulator too.
+   */
+  override suspend fun requestTranscript(agentId: String) = Unit
 
   override suspend fun sendPrompt(agentId: String, text: String) {
     mutateAgent(agentId) {
@@ -113,6 +141,64 @@ class MockWatchRepository : WatchRepository {
 
   private companion object {
     const val MOCK_SERVER = "mock-daemon"
+
+    /**
+     * Covers every case the transcript screen has to render: all four known kinds,
+     * an unknown kind from a hypothetical newer phone, a truncated backlog long
+     * enough to actually scroll, and one agent with no transcript at all.
+     */
+    fun seedTranscripts(): Map<String, Transcript> =
+      mapOf(
+        "agent-jubilant" to
+          Transcript(
+            agentId = "agent-jubilant",
+            truncated = true,
+            entries =
+              listOf(
+                TranscriptEntry(TranscriptKind.Assistant, "Rebased onto main; no conflicts."),
+                TranscriptEntry(TranscriptKind.User, "Now push it and open the change request"),
+                TranscriptEntry(TranscriptKind.Tool, "Bash: git status --porcelain"),
+                TranscriptEntry(
+                  TranscriptKind.Assistant,
+                  "Working tree is clean and the branch is 3 commits ahead. Pushing next.",
+                ),
+                TranscriptEntry(TranscriptKind.Tool, "Bash: git push origin jubilant-wombat"),
+              ),
+          ),
+        "agent-crimson" to
+          Transcript(
+            agentId = "agent-crimson",
+            entries =
+              listOf(
+                TranscriptEntry(TranscriptKind.User, "The relay reconnect backoff looks wrong"),
+                TranscriptEntry(
+                  TranscriptKind.Assistant,
+                  "Agreed — it retries flat every 500ms. Rewriting it as exponential with jitter.",
+                ),
+                TranscriptEntry(TranscriptKind.Tool, "Edit: packages/relay/src/relay-transport.ts"),
+                TranscriptEntry(TranscriptKind.Error, "Turn failed: rate limited, retrying"),
+                TranscriptEntry(TranscriptKind.Tool, "Bash: npx vitest run relay-transport.test.ts"),
+                TranscriptEntry(
+                  TranscriptKind.Assistant,
+                  "Backoff now doubles from 500ms to a 30s ceiling. Running the transport tests.",
+                ),
+              ),
+          ),
+        "agent-main-claude" to
+          Transcript(
+            agentId = "agent-main-claude",
+            entries =
+              listOf(
+                TranscriptEntry(TranscriptKind.User, "Rewrite the landing page copy"),
+                // A kind this build doesn't know: it must still render, just plainly.
+                TranscriptEntry(TranscriptKind.Unknown, "thinking about the value proposition"),
+                TranscriptEntry(
+                  TranscriptKind.Assistant,
+                  "Restructured around the pocket metaphor. Rebuilding the site to check it.",
+                ),
+              ),
+          ),
+      )
 
     fun seed(): List<Workspace> =
       listOf(
