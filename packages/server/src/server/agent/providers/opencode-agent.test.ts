@@ -297,7 +297,16 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
         modeId: null,
       });
 
-      await collectTurnEvents(streamSession(session, "Observe the runtime model"));
+      const turn = await collectTurnEvents(streamSession(session, "Observe the runtime model"));
+
+      expect(turn.assistantMessages).toEqual([
+        {
+          type: "assistant_message",
+          text: "Hello from OpenCode",
+          messageId: "msg_assistant",
+          model: "runtime-provider/runtime-model",
+        },
+      ]);
 
       await expect(session.getRuntimeInfo()).resolves.toEqual({
         provider: "opencode",
@@ -305,6 +314,35 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
         model: "runtime-provider/runtime-model",
         modeId: null,
       });
+    } finally {
+      await session.close();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("does not fall back to the configured OpenCode model for turn attribution", async () => {
+    const cwd = tmpCwd();
+    const runtime = new TestOpenCodeHarness();
+    const openCode = new TestOpenCodeClient();
+    openCode.sessionPromptAsyncEvents = assistantTurnEvents();
+    runtime.enqueueClient(openCode);
+    const client = new OpenCodeAgentClient(logger, undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+    const session = await client.createSession(buildConfig(cwd));
+
+    try {
+      const turn = await collectTurnEvents(streamSession(session, "No observed runtime model"));
+
+      expect(turn.assistantMessages).toEqual([
+        {
+          type: "assistant_message",
+          text: "Hello from OpenCode",
+          messageId: "msg_assistant",
+        },
+      ]);
+      expect(turn.assistantMessages[0]).not.toHaveProperty("model");
     } finally {
       await session.close();
       rmSync(cwd, { recursive: true, force: true });
@@ -1634,6 +1672,8 @@ describe("OpenCode adapter startTurn error handling", () => {
                 id: "msg_assistant",
                 sessionID: "ses_unit_test",
                 role: "assistant",
+                providerID: "runtime-provider",
+                modelID: "runtime-model",
                 time: { created: 1778762475884, completed: 1778762489358 },
               },
               parts: [
@@ -1698,6 +1738,7 @@ describe("OpenCode adapter startTurn error handling", () => {
           type: "assistant_message",
           text: "probe ok",
           messageId: "msg_assistant",
+          model: "runtime-provider/runtime-model",
         },
       },
     ]);
@@ -3189,6 +3230,18 @@ describe("OpenCode provider subagent contract", () => {
             yield { type: "server.connected", properties: {} };
             await releaseChildEvent.promise;
             yield {
+              type: "message.updated",
+              properties: {
+                info: {
+                  id: "msg_parent_observed_model",
+                  sessionID: "ses_parent",
+                  role: "assistant",
+                  providerID: "parent-provider",
+                  modelID: "parent-model",
+                },
+              },
+            };
+            yield {
               type: "session.created",
               properties: {
                 info: {
@@ -3270,6 +3323,19 @@ describe("OpenCode provider subagent contract", () => {
         },
       },
     });
+    const childAssistantItem = events.find(
+      (event) =>
+        event.type === "provider_subagent" &&
+        event.event.type === "timeline" &&
+        event.event.id === "ses_child_background",
+    );
+    if (
+      childAssistantItem?.type !== "provider_subagent" ||
+      childAssistantItem.event.type !== "timeline"
+    ) {
+      throw new Error("Expected child assistant timeline item");
+    }
+    expect(childAssistantItem.event.item).not.toHaveProperty("model");
     expect(events.at(-1)).toEqual({
       type: "provider_subagent",
       provider: "opencode",

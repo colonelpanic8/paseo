@@ -1069,6 +1069,7 @@ interface TimelineMessageState {
   reasoningText: string;
   emittedAssistantLength: number;
   emittedReasoningLength: number;
+  model?: string;
   stopped: boolean;
 }
 
@@ -1108,6 +1109,7 @@ class TimelineAssembler {
       return [];
     }
     const state = this.ensureMessageState(messageId, runId);
+    this.captureMessageModel(state, message.message?.model);
     const fragments = this.extractFragments(message.message?.content);
     return this.applyAbsoluteFragments(state, fragments);
   }
@@ -1130,7 +1132,12 @@ class TimelineAssembler {
       if (!messageId) {
         return [];
       }
-      this.ensureMessageState(messageId, runId);
+      const state = this.ensureMessageState(messageId, runId);
+      const eventMessage = toObjectRecord(event.message);
+      this.captureMessageModel(
+        state,
+        typeof eventMessage?.model === "string" ? eventMessage.model : undefined,
+      );
       return [];
     }
 
@@ -1244,7 +1251,12 @@ class TimelineAssembler {
       !isClaudeTranscriptNoiseText(nextAssistantText)
     ) {
       state.emittedAssistantLength = state.assistantText.length;
-      items.push({ type: "assistant_message", text: nextAssistantText, messageId: state.id });
+      items.push({
+        type: "assistant_message",
+        text: nextAssistantText,
+        messageId: state.id,
+        ...(state.model ? { model: state.model } : {}),
+      });
     }
 
     const nextReasoningText = state.reasoningText.slice(state.emittedReasoningLength);
@@ -1277,6 +1289,16 @@ class TimelineAssembler {
       this.activeMessageByRun.set(runId, messageId);
     }
     return created;
+  }
+
+  private captureMessageModel(state: TimelineMessageState, runtimeModel: unknown): void {
+    if (typeof runtimeModel !== "string") {
+      return;
+    }
+    const model = normalizeClaudeRuntimeModelId(runtimeModel);
+    if (model) {
+      state.model = model;
+    }
   }
 
   private resolveMessageId(input: {
@@ -3741,21 +3763,12 @@ class ClaudeAgentSession implements AgentSession {
         this.appendUserMessageEvents(message, events);
         this.appendSidechainResultEvents(message, events);
         break;
-      case "assistant": {
-        if (message.message.model) {
-          this.captureRuntimeModel(message.message.model, "assistant message");
-        }
-        const timelineItems = this.mapBlocksToTimeline(message.message.content, {
-          suppressAssistantText: options?.suppressAssistantText ?? false,
-          suppressReasoning: options?.suppressReasoning ?? false,
-        });
-        for (const item of timelineItems) {
-          events.push({ type: "timeline", item, provider: "claude" });
-        }
+      case "assistant":
+        this.appendAssistantMessageEvents(message, events, options);
         this.appendSidechainResultEvents(message, events);
         break;
-      }
       case "stream_event":
+        this.captureStreamEventRuntimeModel(message);
         this.appendStreamEventEvents(message, events, options);
         break;
       case "result":
@@ -3766,6 +3779,41 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     return events;
+  }
+
+  private appendAssistantMessageEvents(
+    message: Extract<SDKMessage, { type: "assistant" }>,
+    events: AgentStreamEvent[],
+    options: { suppressAssistantText?: boolean; suppressReasoning?: boolean } | undefined,
+  ): void {
+    const observedModel = normalizeClaudeRuntimeModelId(message.message.model);
+    if (message.message.model) {
+      this.captureRuntimeModel(message.message.model, "assistant message");
+    }
+    const timelineItems = this.mapBlocksToTimeline(message.message.content, {
+      suppressAssistantText: options?.suppressAssistantText ?? false,
+      suppressReasoning: options?.suppressReasoning ?? false,
+    });
+    for (const item of timelineItems) {
+      events.push({
+        type: "timeline",
+        item:
+          item.type === "assistant_message" && observedModel
+            ? { ...item, model: observedModel }
+            : item,
+        provider: "claude",
+      });
+    }
+  }
+
+  private captureStreamEventRuntimeModel(
+    message: Extract<SDKMessage, { type: "stream_event" }>,
+  ): void {
+    const streamEvent = toObjectRecord(message.event);
+    const streamMessage = toObjectRecord(streamEvent?.message);
+    if (streamEvent?.type === "message_start" && typeof streamMessage?.model === "string") {
+      this.captureRuntimeModel(streamMessage.model, "stream message start");
+    }
   }
 
   private appendSidechainResultEvents(message: SDKMessage, events: AgentStreamEvent[]): void {
@@ -4116,7 +4164,7 @@ class ClaudeAgentSession implements AgentSession {
 
   private captureRuntimeModel(
     runtimeModel: string,
-    source: "SDK init" | "assistant message",
+    source: "SDK init" | "assistant message" | "stream message start",
   ): void {
     if (runtimeModel === this.lastRuntimeModel) {
       // Every assistant message repeats the model; only a change is worth the
@@ -5341,12 +5389,18 @@ function mapAssistantHistoryBlocksWithMessageId(
   const items = mapBlocks(content);
   const assistantMessageId =
     typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null;
-  if (!assistantMessageId) {
-    return items;
-  }
+  const model = normalizeClaudeRuntimeModelId(
+    typeof entry.message?.model === "string" ? entry.message.model : null,
+  );
   for (const item of items) {
-    if (item.type === "assistant_message" && !item.messageId) {
+    if (item.type !== "assistant_message") {
+      continue;
+    }
+    if (assistantMessageId && !item.messageId) {
       item.messageId = assistantMessageId;
+    }
+    if (model) {
+      item.model = model;
     }
   }
   return items;
@@ -5452,7 +5506,7 @@ export function convertClaudeHistoryEntry(
       );
       return timeline.length ? [...timeline, ...toolItems] : toolItems;
     }
-    return mapped;
+    return mapAssistantHistoryBlocksWithMessageId(entry, normalizedBlocks, () => mapped);
   }
 
   if (entry.type === "assistant" && contentValue) {

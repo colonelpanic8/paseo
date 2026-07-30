@@ -256,6 +256,15 @@ export class AgentStreamCoalescer {
         previous.turnId === entry.turnId
       ) {
         previous.text += entry.text;
+        if (previous.item.type === "assistant_message" && entry.item.type === "assistant_message") {
+          previous.item = {
+            ...previous.item,
+            ...(entry.item.model ? { model: entry.item.model } : {}),
+            ...(entry.item.thinkingOptionId
+              ? { thinkingOptionId: entry.item.thinkingOptionId }
+              : {}),
+          };
+        }
         continue;
       }
 
