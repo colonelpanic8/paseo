@@ -1435,6 +1435,9 @@ export const ar: TranslationResources = {
       mute: "كتم الميكروفون",
       unmute: "إلغاء كتم الميكروفون",
       enableAudio: "اضغط لتشغيل الصوت",
+      showTranscript: "عرض النص",
+      hideTranscript: "إخفاء النص",
+      dismiss: "تجاهل",
     },
     status: {
       connecting: "جارٍ الاتصال...",
