@@ -48,6 +48,8 @@ import {
 import { respondToAgentPermission } from "./agent/permission-response.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import type { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
+import type { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import type { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
@@ -400,6 +402,10 @@ const nodeSessionFileSystem: SessionFileSystem = {
   },
 };
 
+function optionalService<T>(value: T | undefined): T | null {
+  return value ?? null;
+}
+
 // Stub types for features under development (modules not yet available)
 type AgentMcpTransportFactory = () => Promise<unknown>;
 
@@ -461,8 +467,10 @@ export interface SessionOptions {
   voice?: {
     turnDetection?: Resolvable<TurnDetectionProvider | null>;
   };
-  /** Daemon-global; shared by every session so one call per agent is enforced. */
+  /** Daemon-global; shared by every session so call ownership is socket-exact. */
   liveVoiceCoordinator?: LiveVoiceCoordinator;
+  liveVoiceRouteBroker?: LiveVoiceRouteBroker;
+  liveVoiceToolExecutor?: LiveVoiceToolExecutor;
   voiceBridge?: {
     registerVoiceSpeakHandler?: (agentId: string, handler: VoiceSpeakHandler) => void;
     unregisterVoiceSpeakHandler?: (agentId: string) => void;
@@ -639,6 +647,8 @@ export class Session {
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly voiceSession: VoiceSession;
   private readonly liveVoice: LiveVoiceCoordinator | undefined;
+  private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker | null;
+  private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor | null;
   private readonly checkoutSession: CheckoutSession;
   private readonly chatScheduleLoopSession: ChatScheduleLoopSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
@@ -699,6 +709,8 @@ export class Session {
       voice,
       voiceBridge,
       liveVoiceCoordinator,
+      liveVoiceRouteBroker,
+      liveVoiceToolExecutor,
       dictation,
       serverId,
       daemonVersion,
@@ -1008,6 +1020,8 @@ export class Session {
       dictation,
     });
     this.liveVoice = liveVoiceCoordinator;
+    this.liveVoiceRouteBroker = optionalService(liveVoiceRouteBroker);
+    this.liveVoiceToolExecutor = optionalService(liveVoiceToolExecutor);
 
     this.subscribeToAgentEvents();
     this.subscribeToRegistryMutations();
@@ -1873,6 +1887,11 @@ export class Session {
       case "voice.live.stop.request":
         this.handleLiveVoiceStopRequest(msg, source);
         return undefined;
+      case "voice.live.route.response":
+        this.liveVoiceRouteBroker?.receiveResponse(msg, source ?? this);
+        return undefined;
+      case "voice.live.tool.execute.request":
+        return this.handleLiveVoiceToolExecuteRequest(msg, source);
       default:
         return undefined;
     }
@@ -1889,29 +1908,37 @@ export class Session {
     if (!coordinator) {
       respond({
         requestId: msg.requestId,
-        agentId: msg.agentId,
         accepted: false,
         errorCode: "unsupported",
         errorMessage: "This daemon does not support live voice.",
       });
       return;
     }
-    // The source socket owns the call: updates go only to it, and its detach
-    // tears the call down immediately.
     const ownerSourceKey = source ?? this;
+    const crossHostRoutingAvailable = this.supportsForSource(
+      CLIENT_CAPS.liveVoiceCrossHostRouter,
+      ownerSourceKey,
+    );
+    // The source socket owns the call: updates go only to it, its detach tears
+    // the call down immediately, and it may hold only one call at a time.
     const result = await coordinator.start({
-      agentId: msg.agentId,
       offerSdp: msg.offerSdp,
       ...(msg.voice ? { voice: msg.voice } : {}),
       owner: { sessionKey: this, sourceKey: ownerSourceKey },
       emit: (update) => {
         this.emitForSource({ type: "voice.live.update", payload: update }, source);
       },
+      ...(crossHostRoutingAvailable
+        ? {
+            sendRouteRequest: (request) => {
+              this.emitForSource(request, source);
+            },
+          }
+        : {}),
     });
     if (result.accepted) {
       respond({
         requestId: msg.requestId,
-        agentId: msg.agentId,
         accepted: true,
         liveSessionId: result.liveSessionId,
         answerSdp: result.answerSdp,
@@ -1920,7 +1947,6 @@ export class Session {
     }
     respond({
       requestId: msg.requestId,
-      agentId: msg.agentId,
       accepted: false,
       errorCode: result.errorCode,
       errorMessage: result.errorMessage,
@@ -1933,11 +1959,32 @@ export class Session {
   ): void {
     // Stop is idempotent: a stale or unknown liveSessionId is a no-op that still
     // gets a response.
-    this.liveVoice?.stop({ agentId: msg.agentId, liveSessionId: msg.liveSessionId });
+    this.liveVoice?.stop({ liveSessionId: msg.liveSessionId });
     this.emitForSource(
       { type: "voice.live.stop.response", payload: { requestId: msg.requestId } },
       source,
     );
+  }
+
+  private async handleLiveVoiceToolExecuteRequest(
+    msg: Extract<SessionInboundMessage, { type: "voice.live.tool.execute.request" }>,
+    source?: object,
+  ): Promise<void> {
+    const response = this.liveVoiceToolExecutor
+      ? await this.liveVoiceToolExecutor.execute(msg)
+      : {
+          type: "voice.live.tool.execute.response" as const,
+          payload: {
+            requestId: msg.requestId,
+            ok: false as const,
+            error: {
+              code: "unsupported",
+              message: "This daemon does not support routed Live Voice tool execution.",
+              retryable: false,
+            },
+          },
+        };
+    this.emitForSource(response, source);
   }
 
   /** Called at socket detach: a live voice call must not outlive its owner. */
