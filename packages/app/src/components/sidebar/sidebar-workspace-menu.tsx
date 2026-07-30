@@ -29,6 +29,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -282,14 +283,21 @@ function SidebarWorkspaceSnoozeItems({
 }) {
   if (snooze.isSnoozed) {
     return (
-      <WorkspaceMenuItem
-        surface={surface}
-        testID={`sidebar-workspace-menu-wake-${workspaceKey}`}
-        leading={wakeLeadingIcon}
-        onSelect={snooze.onWake}
-      >
-        {snooze.wakeLabel}
-      </WorkspaceMenuItem>
+      <>
+        {surface === "dropdown" && snooze.snoozedUntilLabel ? (
+          <DropdownMenuLabel testID={`sidebar-workspace-menu-snoozed-until-${workspaceKey}`}>
+            {snooze.snoozedUntilLabel}
+          </DropdownMenuLabel>
+        ) : null}
+        <WorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-wake-${workspaceKey}`}
+          leading={wakeLeadingIcon}
+          onSelect={snooze.onWake}
+        >
+          {snooze.wakeLabel}
+        </WorkspaceMenuItem>
+      </>
     );
   }
   return (

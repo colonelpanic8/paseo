@@ -300,6 +300,7 @@ interface WorkspaceRowInnerProps {
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onSubmitRename?: (value: string) => Promise<void>;
   onMarkAsRead?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
@@ -657,6 +658,7 @@ function WorkspaceRowRightGroup({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
     isSnoozed: workspace.statusBucket === "snoozed",
+    snoozeWakeAt: workspace.snoozeWakeAt,
   });
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const {
@@ -1061,6 +1063,7 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onSubmitRename,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -1151,6 +1154,7 @@ function WorkspaceRowInner({
                   shortcutNumber={shortcutNumber}
                   showShortcutBadge={showShortcutBadge}
                   reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+                  onSubmitRename={onSubmitRename}
                 >
                   <WorkspaceRowRightGroup
                     workspace={workspace}
@@ -1350,6 +1354,7 @@ function WorkspaceRowWithMenu({
         onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
+        onSubmitRename={handleSubmitRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
