@@ -2463,6 +2463,7 @@ export const fr: TranslationResources = {
         sendMessage: "Envoyer le message",
         queueMessage: "Mettre le message en file d’attente",
         muteUnmuteVoiceMode: "Couper/réactiver le micro en mode vocal",
+        muteUnmuteLiveVoice: "Couper/réactiver la voix en direct",
         switchProject: "Changer de projet",
       },
       helpNotes: {
