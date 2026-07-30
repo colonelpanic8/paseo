@@ -35,6 +35,7 @@ import { getStatusDotColor, isEmphasizedStatusDotBucket } from "@/utils/status-d
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
 
 // The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
 // SCRIM_SOLID_OFFSET rightward, which keeps the kebab itself off the gradient entirely.
@@ -158,6 +159,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   shortcutNumber = null,
   showShortcutBadge = false,
   reserveIdleStatusIndicatorSpace = true,
+  onSubmitRename,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -173,6 +175,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge?: boolean;
   /** Keep the empty leading slot when the workspace has no active status. */
   reserveIdleStatusIndicatorSpace?: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
   children?: ReactNode;
 }) {
   const {
@@ -224,9 +227,14 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
                   showLabel={hostBadge.showLabel}
                 />
               ) : null}
-              <Text style={workspaceBranchTextStyle} numberOfLines={1}>
-                {workspaceLabel}
-              </Text>
+              <SidebarWorkspaceInlineTitle
+                displayValue={workspaceLabel}
+                renameValue={workspace.title ?? workspace.name}
+                editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+                onSubmit={onSubmitRename}
+                style={workspaceBranchTextStyle}
+                testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+              />
               {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
             </View>
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
