@@ -32,9 +32,10 @@ Phone-tethered. The watch never speaks the Paseo WebSocket protocol:
 ```
 Wear app  ──Wearable Data Layer──▶  Phone app  ──WebSocket──▶  Daemon
    │                                    │
-   │  DataClient   /paseo/snapshot  ◀────┤  phone publishes state
-   └─ MessageClient /paseo/command  ────▶│  watch sends intents
-      MessageClient /paseo/refresh  ────▶│  watch asks for a republish
+   │  DataClient /paseo/snapshot          ◀────┤  phone publishes state
+   │  DataClient /paseo/transcript/<agentId> ◀─┤  phone answers a transcript request
+   └─ MessageClient /paseo/command  ──────────▶│  watch sends intents
+      MessageClient /paseo/refresh  ──────────▶│  watch asks for a republish
 ```
 
 The phone app owns the daemon connection, pairing, and relay E2EE. The watch
@@ -101,19 +102,54 @@ success, and `WearBridge.start()` drains the queue before its first publish so a
 queued approval isn't immediately overwritten by a snapshot that still shows it
 pending.
 
-### What the watch deliberately does not get
+### Transcripts are on demand, and the snapshot stays cheap
 
-`summary` on each agent is the daemon's **agent title**, not the transcript tail.
-Populating the real last assistant message would mean subscribing to every agent's
-timeline from a background bridge; the title is both cheaper and the right altitude
-for a wrist.
+`summary` on each agent is the daemon's **agent title**, not the transcript tail. It
+rides in the snapshot, which covers every agent on every connected daemon and
+republishes on every store change — so everything in it has to stay small.
+
+The conversation is a **separate, on-demand fetch for the one agent you opened**:
+
+1. Opening the agent screen sends `{"kind":"requestTranscript","agentId":…}` over
+   `COMMAND_PATH` (debounced, and re-sent when that agent's snapshot row moves).
+2. The phone answers with a DataItem at `/paseo/transcript/<agentId>` — a projected
+   view: user prompts and assistant prose kept, tool calls collapsed to one line,
+   each entry capped, at most 100 entries. Projection is the point; a raw Paseo
+   timeline carries diffs, file reads, and terminal output, and a single `Bash`
+   result can exceed the Data Layer's ~100 KB item limit on its own.
+3. It is a DataItem, not a message, so the watch's own cache renders it instantly on
+   a revisit while the fresh copy is still in flight.
+
+Three properties worth preserving:
+
+- **Two URI filters need two listener _objects_.** Play Services keys a live
+  `DataClient` listener registration by the listener object, not by the URI it was
+  registered with — so calling `addListener(this, …)` twice with different filters is
+  not two subscriptions, and one of snapshots or transcripts can silently stop
+  arriving. `DataLayerRepository` registers a separate `transcriptListener` and
+  removes both in `stop()`. This is the same failure mode as the applicationId trap
+  above: no error on either side, the stream just never comes.
+
+- **`entries[].kind` is an open set.** `user` / `assistant` / `tool` / `error` today.
+  An unrecognised kind renders as muted plain text rather than being dropped — the
+  phone may learn to emit a new one before the watch learns to style it, and a hole
+  in the conversation is a worse failure than unstyled text.
+- **"No transcript ever arrives" is a normal state, not an error.** A phone too old
+  to know the command drops it silently. The watch keeps showing the summary card,
+  which is why that card is a real fallback rather than a loading skeleton.
 
 ## Voice and typing
 
-Both come from Wear's system input sheet via `RecognizerIntent`
-(`ui/ReplyScreen.kt`), with `EXTRA_PREFER_OFFLINE` so it keeps working without a
-network. Google's on-device recognizer returns a finished string; no audio ever
-touches our code, and there is no `RECORD_AUDIO` permission.
+Two doors, both `ui/ReplyScreen.kt`, both returning a finished string — no audio or
+keystrokes ever touch our code, and there is no `RECORD_AUDIO` permission.
+
+- **Mic** → `RecognizerIntent` with `EXTRA_PREFER_OFFLINE`, so Google's on-device
+  recognizer keeps working with no network.
+- **Keyboard** → Wear's remote input activity via
+  `androidx.wear.input.RemoteInputIntentHelper`, which opens the system input
+  _picker_: keyboard, handwriting, emoji, voice, whatever the watch offers. This
+  previously launched `RecognizerIntent` with a keyboard hint, which buried text
+  entry a tap inside the voice sheet and relied on a hint the recognizer may ignore.
 
 Paseo's own daemon-side dictation pipeline (`dictation_stream_*` in
 `packages/protocol/src/messages.ts`) is deliberately **not** used. With a
@@ -189,8 +225,10 @@ of that surface; migrating is a deliberate later step, not a v1 risk.
 
 Verified:
 
-- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — 10 tests pinning the wire
-  format, version rejection, unknown-state degradation, and the navigation rule.
+- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — 27 tests pinning the wire
+  format for both snapshots and transcripts, version rejection, unknown-state and
+  unknown-transcript-kind degradation, the exact serialized command JSON, the
+  navigation rule, and the transcript cache's staleness and pruning rules.
 - **Phone unit tests** (`vitest run src/wear/wear-bridge.test.ts`) — 23 tests covering
   snapshot building, command parsing, permission routing, the killed-app drain, and
   failure handling.
