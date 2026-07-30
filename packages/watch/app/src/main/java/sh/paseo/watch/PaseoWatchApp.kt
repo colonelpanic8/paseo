@@ -3,6 +3,7 @@ package sh.paseo.watch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
@@ -21,6 +22,7 @@ import androidx.wear.compose.material.VignettePosition
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import sh.paseo.watch.data.WatchRepository
 import sh.paseo.watch.model.Workspace
@@ -34,6 +36,12 @@ import sh.paseo.watch.ui.PermissionScreen
 import sh.paseo.watch.ui.ReplyScreen
 import sh.paseo.watch.ui.WaitingScreen
 import sh.paseo.watch.ui.WorkspaceListScreen
+
+/**
+ * Long enough to coalesce a burst of snapshots into one transcript request, short
+ * enough that it is invisible when you open an agent screen.
+ */
+private const val TRANSCRIPT_REQUEST_DEBOUNCE_MS = 300L
 
 private object Routes {
   const val WORKSPACES = "workspaces"
@@ -69,6 +77,7 @@ fun PaseoWatchApp(
     val navController = rememberSwipeDismissableNavController()
     val scope = rememberCoroutineScope()
     val workspaces by repository.workspaces.collectAsState()
+    val transcripts by repository.transcripts.collectAsState()
 
     Scaffold(
       timeText = { TimeText() },
@@ -143,9 +152,19 @@ fun PaseoWatchApp(
               },
             )
           } else {
+            // Ask for the transcript on arrival, and again whenever this agent's row
+            // moves — a state change or a ticking age both mean the conversation has
+            // probably grown. The short delay makes this a trailing debounce:
+            // LaunchedEffect cancels the previous coroutine when the key changes, so
+            // a burst of snapshots collapses into one request instead of one each.
+            LaunchedEffect(agent.id, agent.state, agent.age) {
+              delay(TRANSCRIPT_REQUEST_DEBOUNCE_MS)
+              repository.requestTranscript(agent.id)
+            }
             AgentScreen(
               workspace = workspace,
               agent = agent,
+              transcript = transcripts[agent.id],
               onReply = { navController.navigate(Routes.reply(agent.id)) },
               onStop = { scope.launch { repository.stopAgent(agent.id) } },
             )
