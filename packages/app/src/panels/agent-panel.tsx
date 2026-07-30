@@ -118,6 +118,7 @@ interface ChatAgentStateShape {
 }
 
 interface ChatAgentSelectedState extends ChatAgentStateShape {
+  summary: string | null;
   archivedAt: Date | null;
   requiresAttention: boolean;
   attentionReason: Agent["attentionReason"] | null;
@@ -148,6 +149,7 @@ const EMPTY_CHAT_AGENT_STATE: ChatAgentSelectedState = {
   status: null,
   cwd: null,
   lastError: null,
+  summary: null,
   archivedAt: null,
   requiresAttention: false,
   attentionReason: null,
@@ -160,6 +162,7 @@ function selectChatAgentState(
 ): ChatAgentSelectedState {
   const agent = resolveChatAgentFromSession(state, serverId, agentId);
   if (!agent) return EMPTY_CHAT_AGENT_STATE;
+  const serverInfo = state.sessions[serverId]?.serverInfo;
   return {
     serverId: agent.serverId,
     id: agent.id,
@@ -174,6 +177,7 @@ function selectChatAgentState(
     runtimeInfo: agent.runtimeInfo,
     features: agent.features,
     lastError: agent.lastError ?? null,
+    summary: resolveAgentPurposeSummary({ summary: agent.summary, serverInfo }),
     archivedAt: agent.archivedAt ?? null,
     requiresAttention: agent.requiresAttention ?? false,
     attentionReason: agent.attentionReason ?? null,
@@ -1273,6 +1277,13 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
 
   const dockContent = (
     <View style={styles.contentContainer}>
+      {agentState.summary ? (
+        <View style={styles.purposeSummaryHeader} testID="agent-purpose-summary">
+          <Text style={styles.purposeSummaryText} numberOfLines={1}>
+            {agentState.summary}
+          </Text>
+        </View>
+      ) : null}
       {streamContent}
 
       {showHistorySyncError ? (
@@ -1741,6 +1752,19 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
+  },
+  purposeSummaryHeader: {
+    flexShrink: 0,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    backgroundColor: theme.colors.surface1,
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
+  },
+  purposeSummaryText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    textAlign: "center",
   },
   timelineSyncCalloutRail: {
     width: "100%",
