@@ -10,6 +10,10 @@ composeBom = "2026.06.01"
 # migration target; it renames most of this surface, so it is a deliberate
 # later step rather than a v1 risk.
 wearCompose = "1.6.2"
+# androidx.wear:wear-input, for RemoteInputIntentHelper — the system input picker
+# (keyboard, handwriting, voice, canned replies) that Wear expects a text field to
+# open. Separate version line from wear-compose; 1.1.0 is the current stable.
+wearInput = "1.1.0"
 activityCompose = "1.13.0"
 playServicesWearable = "20.0.1"
 kotlinxSerialization = "1.11.0"
@@ -29,6 +33,7 @@ activity-compose = { group = "androidx.activity", name = "activity-compose", ver
 wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearCompose" }
 wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
 wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
+wear-input = { group = "androidx.wear", name = "wear-input", version.ref = "wearInput" }
 
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }

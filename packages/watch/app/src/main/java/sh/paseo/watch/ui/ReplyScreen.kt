@@ -1,6 +1,7 @@
 package sh.paseo.watch.ui
 
 import android.app.Activity
+import android.app.RemoteInput
 import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,6 +29,7 @@ import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Text
+import androidx.wear.input.RemoteInputIntentHelper
 import sh.paseo.watch.theme.PaseoColors
 
 /**
@@ -44,13 +46,22 @@ private val CANNED_REPLIES =
     "Stop and explain first",
   )
 
+/** Extra key the system input activity hands the typed text back under. */
+private const val REMOTE_INPUT_RESULT_KEY = "sh.paseo.watch.reply"
+
 /**
- * Reply composer.
+ * Reply composer. Two doors into the same string, plus canned replies.
  *
- * Voice is Google's on-device recognizer via [RecognizerIntent], which is free,
- * works offline on Wear OS 3+, and returns a finished string — no audio ever
- * touches our code. Typing goes through the same system sheet's keyboard affordance
- * on watches that offer one, and falls back to the on-screen IME.
+ * **Mic** is Google's on-device recognizer via [RecognizerIntent], which is free,
+ * works offline on Wear OS 3+, and returns a finished string — no audio ever touches
+ * our code and there is no `RECORD_AUDIO` permission.
+ *
+ * **Keyboard** is Wear's remote input activity via [RemoteInputIntentHelper], which
+ * opens the system input *picker*: keyboard, handwriting, emoji, and voice, whichever
+ * the watch offers. This used to launch [RecognizerIntent] with a keyboard hint,
+ * which meant text entry was buried a tap inside the voice sheet and depended on a
+ * hint the recognizer is free to ignore. Remote input is the platform's actual
+ * answer for "let me type on a watch".
  *
  * Paseo's own daemon-side dictation (`dictation_stream_*`) is deliberately unused
  * here: with a phone-tethered transport, streaming PCM off the watch is a bad trade
@@ -79,7 +90,22 @@ fun ReplyScreen(
       }
     }
 
-  fun launchVoice(forceKeyboard: Boolean) {
+  val textLauncher =
+    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+      if (result.resultCode == Activity.RESULT_OK) {
+        val typed =
+          result.data
+            ?.let { RemoteInput.getResultsFromIntent(it) }
+            ?.getCharSequence(REMOTE_INPUT_RESULT_KEY)
+            ?.toString()
+            ?.trim()
+        if (!typed.isNullOrEmpty()) {
+          onSubmit(typed)
+        }
+      }
+    }
+
+  fun launchVoice() {
     val intent =
       Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(
@@ -90,14 +116,21 @@ fun ReplyScreen(
         // Prefer on-device recognition so this keeps working with no phone and no
         // network. The system falls back to network recognition when unavailable.
         putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-        if (forceKeyboard) {
-          // Wear's input sheet opens straight to the keyboard when the caller asks
-          // for it, which is what the keyboard affordance on this screen means.
-          putExtra("android.speech.extra.GET_AUDIO", false)
-          putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-        }
       }
     voiceLauncher.launch(intent)
+  }
+
+  fun launchTextEntry() {
+    // Exactly one RemoteInput: the system picker binds its result to this key, and
+    // a second field would give the user a form where they asked for a text box.
+    val remoteInputs =
+      listOf(RemoteInput.Builder(REMOTE_INPUT_RESULT_KEY).setLabel(title).build())
+    val intent =
+      RemoteInputIntentHelper.putRemoteInputsExtra(
+        RemoteInputIntentHelper.createActionRemoteInputIntent(),
+        remoteInputs,
+      )
+    textLauncher.launch(intent)
   }
 
   ScalingLazyColumn(
@@ -122,14 +155,14 @@ fun ReplyScreen(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
       ) {
         Button(
-          onClick = { launchVoice(forceKeyboard = false) },
+          onClick = { launchVoice() },
           colors = ButtonDefaults.buttonColors(backgroundColor = PaseoColors.accent),
           modifier = Modifier.size(46.dp),
         ) {
           MicGlyph(tint = Color.White, size = 19)
         }
         Button(
-          onClick = { launchVoice(forceKeyboard = true) },
+          onClick = { launchTextEntry() },
           colors = ButtonDefaults.buttonColors(backgroundColor = PaseoColors.surface2),
           modifier = Modifier.size(46.dp),
         ) {
