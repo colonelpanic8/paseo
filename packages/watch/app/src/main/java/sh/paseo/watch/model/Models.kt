@@ -35,9 +35,10 @@ data class AgentSession(
   /** Short intent line, e.g. "docs rewrite". Null when there's nothing useful to say. */
   val intent: String? = null,
   /**
-   * One-line description of what this session is doing, for the agent detail
-   * screen. The phone sends the daemon's own agent title — not the transcript tail,
-   * which would mean subscribing to every agent's timeline just to fill a wrist.
+   * One-line description of what this session is doing. The phone sends the
+   * daemon's own agent title — it rides in the snapshot, so it must stay cheap for
+   * every agent on every daemon. The actual conversation is a [Transcript], fetched
+   * on demand for the one agent you opened; this is the placeholder until it lands.
    */
   val summary: String? = null,
   val pendingPermission: PermissionRequest? = null,
@@ -60,6 +61,41 @@ data class Workspace(
   val pendingPermission: PermissionRequest?
     get() = agents.firstNotNullOfOrNull { it.pendingPermission }
 }
+
+/**
+ * How a transcript entry is rendered. [Unknown] exists so the phone can start
+ * emitting a new kind before the watch learns to style it — the text still shows,
+ * just plainly. Dropping it would leave a hole in the conversation.
+ */
+enum class TranscriptKind {
+  User,
+  Assistant,
+  Tool,
+  Error,
+  Unknown,
+}
+
+data class TranscriptEntry(
+  val kind: TranscriptKind,
+  /** Already trimmed, collapsed and capped by the phone; rendered verbatim. */
+  val text: String,
+)
+
+/**
+ * One agent's conversation scrollback, fetched on demand for the agent you opened.
+ *
+ * Deliberately not part of the snapshot: the snapshot covers every agent on every
+ * daemon and republishes on every store change, so carrying transcripts in it would
+ * mean subscribing to every timeline just to populate a wrist.
+ */
+data class Transcript(
+  val agentId: String,
+  /** Oldest to newest — the list is read bottom-up on the watch. */
+  val entries: List<TranscriptEntry>,
+  /** True when history exists before [entries]`.first()`. */
+  val truncated: Boolean = false,
+  val updatedAt: Long = 0,
+)
 
 data class PermissionRequest(
   val id: String,
