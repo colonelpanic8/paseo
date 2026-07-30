@@ -13,6 +13,7 @@ interface ExpoWearBridgeNativeModule {
   isAvailable(): Promise<boolean>;
   getConnectedNodes(): Promise<WearNode[]>;
   publishSnapshot(payload: string): Promise<boolean>;
+  publishTranscript(agentId: string, payload: string): Promise<boolean>;
   clearSnapshot(): Promise<boolean>;
   drainPendingCommands(): Promise<string[]>;
   addListener(
@@ -47,6 +48,16 @@ export async function publishWearSnapshot(payload: string): Promise<boolean> {
   return native.publishSnapshot(payload);
 }
 
+/**
+ * Publish one agent's transcript. Each agent gets its own DataItem path, so opening
+ * a second agent on the watch doesn't overwrite the first.
+ */
+export async function publishWearTranscript(agentId: string, payload: string): Promise<boolean> {
+  if (!native) return false;
+  return native.publishTranscript(agentId, payload);
+}
+
+/** Removes everything Paseo published — the snapshot and every agent transcript. */
 export async function clearWearSnapshot(): Promise<boolean> {
   if (!native) return false;
   return native.clearSnapshot();
