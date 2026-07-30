@@ -62,6 +62,7 @@ import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
 import { VoiceProvider } from "@/contexts/voice-context";
+import { LiveVoiceProvider } from "@/contexts/live-voice-context";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -668,11 +669,13 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   return (
     <AppearanceProvider>
       <VoiceProvider>
-        <DesktopWindowControlsSync />
-        <OfferLinkListener />
-        <HostSessionManager />
-        <FaviconStatusSync />
-        {children}
+        <LiveVoiceProvider>
+          <DesktopWindowControlsSync />
+          <OfferLinkListener />
+          <HostSessionManager />
+          <FaviconStatusSync />
+          {children}
+        </LiveVoiceProvider>
       </VoiceProvider>
     </AppearanceProvider>
   );
