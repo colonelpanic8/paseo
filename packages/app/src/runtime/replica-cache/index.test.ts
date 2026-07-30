@@ -192,6 +192,50 @@ describe("ReplicaCache", () => {
     expect(session?.agentTimelineHasOlder.get("agent-1")).toBe(true);
   });
 
+  it("round-trips the effective thinking option, keeping unset distinct from null", async () => {
+    // The cache persists only the focused agent, so each state round-trips
+    // through agent-1 rather than through additional agents in the session.
+    const cases: {
+      effectiveThinkingOptionId?: string | null;
+      expected: string | null | undefined;
+    }[] = [
+      { effectiveThinkingOptionId: "xhigh", expected: "xhigh" },
+      { effectiveThinkingOptionId: null, expected: null },
+      { expected: undefined },
+    ];
+    for (const testCase of cases) {
+      const storage = new MemoryStorage();
+      const writer = new ReplicaCache(storage);
+      writer.setHosts([SERVER_ID]);
+      seedSession();
+      useSessionStore.getState().setAgents(SERVER_ID, (agents) => {
+        const next = new Map(agents);
+        const stored = next.get("agent-1");
+        if (stored) {
+          next.set("agent-1", {
+            ...stored,
+            ...("effectiveThinkingOptionId" in testCase
+              ? { effectiveThinkingOptionId: testCase.effectiveThinkingOptionId }
+              : {}),
+          });
+        }
+        return next;
+      });
+      await writer.flush();
+
+      useSessionStore.getState().clearSession(SERVER_ID);
+
+      const reader = new ReplicaCache(storage);
+      reader.setHosts([SERVER_ID]);
+      await reader.restore();
+
+      const restored = useSessionStore.getState().sessions[SERVER_ID]?.agents.get("agent-1");
+      expect(restored?.id).toBe("agent-1");
+      expect(restored?.effectiveThinkingOptionId).toBe(testCase.expected);
+      useSessionStore.getState().clearSession(SERVER_ID);
+    }
+  });
+
   it("persists only the focused agent view with a short timeline tail", async () => {
     const storage = new MemoryStorage();
     const cache = new ReplicaCache(storage);
