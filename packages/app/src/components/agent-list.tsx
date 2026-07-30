@@ -11,16 +11,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useShallow } from "zustand/shallow";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { formatTimeAgo } from "@/utils/time";
 import { type AggregatedAgent } from "@/hooks/use-aggregated-agents";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, type DaemonServerInfo } from "@/stores/session-store";
 import { Archive, ChevronRight } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
+import { resolveAgentPurposeSummary } from "@/agents/purpose-summary";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -205,6 +207,7 @@ function SessionRow({
   agent,
   isMobile,
   selectedAgentId,
+  purposeSummary,
   showAttentionIndicator,
   showHostColumn,
   onPress,
@@ -213,6 +216,7 @@ function SessionRow({
   agent: AggregatedAgent;
   isMobile: boolean;
   selectedAgentId?: string;
+  purposeSummary: string | null;
   showAttentionIndicator: boolean;
   showHostColumn: boolean;
   onPress: (agent: AggregatedAgent) => void;
@@ -283,6 +287,15 @@ function SessionRow({
             showDesktopAttention={showDesktopAttention}
           />
         </View>
+        {purposeSummary ? (
+          <Text
+            style={styles.sessionSummary}
+            numberOfLines={1}
+            testID={`agent-row-summary-${agent.serverId}-${agent.id}`}
+          >
+            {purposeSummary}
+          </Text>
+        ) : null}
         {isMobile ? (
           <View style={styles.rowMetaRow}>
             <Text
@@ -372,6 +385,15 @@ export function AgentList({
   const [actionAgent, setActionAgent] = useState<AggregatedAgent | null>(null);
   const isMobile = useIsCompactFormFactor();
   const { archiveAgent } = useArchiveAgent();
+  const serverInfoById = useSessionStore(
+    useShallow((state) => {
+      const result: Record<string, DaemonServerInfo | null> = {};
+      for (const agent of agents) {
+        result[agent.serverId] = state.sessions[agent.serverId]?.serverInfo ?? null;
+      }
+      return result;
+    }),
+  );
 
   const actionClient = useSessionStore((state) =>
     actionAgent?.serverId ? (state.sessions[actionAgent.serverId]?.client ?? null) : null,
@@ -463,11 +485,16 @@ export function AgentList({
           </View>
         );
       }
+      const purposeSummary = resolveAgentPurposeSummary({
+        summary: item.agent.summary,
+        serverInfo: serverInfoById[item.agent.serverId],
+      });
       return (
         <SessionRow
           agent={item.agent}
           isMobile={isMobile}
           selectedAgentId={selectedAgentId}
+          purposeSummary={purposeSummary}
           showAttentionIndicator={showAttentionIndicator}
           showHostColumn={showHostColumn}
           onPress={handleAgentPress}
@@ -480,6 +507,7 @@ export function AgentList({
       handleAgentPress,
       isMobile,
       selectedAgentId,
+      serverInfoById,
       showAttentionIndicator,
       showHostColumn,
       t,
@@ -660,6 +688,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   sessionTitleHighlighted: {
     opacity: 1,
+  },
+  sessionSummary: {
+    marginLeft: theme.iconSize.md + theme.spacing[2],
+    marginTop: 1,
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   sessionMetaText: {
     maxWidth: "100%",
