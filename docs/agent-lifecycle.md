@@ -121,6 +121,7 @@ individually also clears its stamp, so a later workspace restore leaves it alone
 
 History navigation opens the selected agent without changing either archive state. Workspace
 **Restore** recovers only the workspace; the selected archived agent stays open with its callout.
+History navigation restores the selected archived conversation read-only.
 The agent's **Unarchive** runs the provider's native unarchive hook before interactive resume and
 history hydration. Other archived agents stay archived.
 
