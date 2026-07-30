@@ -29,6 +29,17 @@ interface WatchRepository {
    */
   val transcripts: StateFlow<Map<String, Transcript>>
 
+  /**
+   * Raw icon-file bytes by projectKey, for projects whose repo has an icon the
+   * phone could find and this watch can decode.
+   *
+   * A missing key is the normal case: most projects have no icon file at all, the
+   * phone may be too old to publish any, and SVG/ICO payloads are dropped on
+   * arrival. [sh.paseo.watch.ui.ProjectIcon] falls back to the colored initial,
+   * which is what every project looked like before this stream existed.
+   */
+  val icons: StateFlow<Map<String, ByteArray>>
+
   fun workspace(id: String): Workspace?
 
   fun agent(id: String): AgentSession?
@@ -64,6 +75,13 @@ class MockWatchRepository : WatchRepository {
   override val workspaces: StateFlow<List<Workspace>> = state
 
   override val transcripts: StateFlow<Map<String, Transcript>> = transcriptState
+
+  /**
+   * Always empty: the mock has no phone to fetch image bytes from, so it renders the
+   * colored-initial fallback — which is also what a project with no icon looks like
+   * in the real app.
+   */
+  override val icons: StateFlow<Map<String, ByteArray>> = MutableStateFlow(emptyMap())
 
   override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
 
