@@ -1586,6 +1586,8 @@ export const ar: TranslationResources = {
     used: "تم استخدام{{percentage}}%",
     tokens: "رموز{{used}}/{{max}}",
     sessionCost: "تكلفة الجلسة{{cost}}",
+    model: "النموذج {{model}}",
+    thinking: "التفكير {{thinking}}",
     accessibility: "تم استخدام نافذة السياق{{percentage}}%",
   },
   review: {

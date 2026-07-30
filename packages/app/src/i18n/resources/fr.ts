@@ -1633,6 +1633,8 @@ export const fr: TranslationResources = {
     used: "{{percentage}}% utilisé",
     tokens: "Jetons{{used}}/{{max}}",
     sessionCost: "Coût de la séance{{cost}}",
+    model: "Modèle {{model}}",
+    thinking: "Pensée {{thinking}}",
     accessibility: "Fenêtre contextuelle{{percentage}}% utilisé",
   },
   review: {
