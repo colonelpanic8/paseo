@@ -641,6 +641,7 @@ function StatusWorkspaceRowWithMenu({
         onCopyBranchName={workspace.projectKind === "git" ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
+        onSubmitRename={handleSubmitRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
@@ -679,6 +680,7 @@ function StatusWorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onSubmitRename,
   onMarkAsRead,
   archiveShortcutKeys,
   isPinned,
@@ -702,6 +704,7 @@ function StatusWorkspaceRowInner({
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onSubmitRename?: (value: string) => Promise<void>;
   onMarkAsRead?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
@@ -772,6 +775,7 @@ function StatusWorkspaceRowInner({
                     showShortcutBadge={showShortcutBadge}
                     showActions={showActions}
                     showSnoozedChip={showSnoozeChipOnly}
+                    onSubmitRename={onSubmitRename}
                   >
                     {showSnoozeChipOnly ? (
                       <StatusWorkspaceSnoozeChip workspace={workspace} />

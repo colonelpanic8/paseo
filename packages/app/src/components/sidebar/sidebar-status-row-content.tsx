@@ -26,6 +26,7 @@ import { formatTimeAgo } from "@/utils/time";
 import { getHostColorTextStyle } from "@/styles/host-color";
 import type { HostColor } from "@/types/host-connection";
 import { isNative, isWeb } from "@/constants/platform";
+import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
 
 const PROJECT_ICON_SIZE = 40;
 const STATUS_DOT_SIZE = 12;
@@ -85,6 +86,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   showShortcutBadge = false,
   showActions,
   showSnoozedChip = false,
+  onSubmitRename,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -103,6 +105,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
    * the time-ago text instead of staying empty.
    */
   showSnoozedChip?: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
   /** The quick-action cluster, or just the snooze chip when only it is shown. */
   children?: ReactNode;
 }) {
@@ -140,7 +143,13 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
           >
             {children}
           </StatusRowMetaLine>
-          <StatusRowTitleLine primaryLabel={primaryLabel} scriptIconKind={scriptIconKind} />
+          <StatusRowTitleLine
+            workspace={workspace}
+            primaryLabel={primaryLabel}
+            scriptIconKind={scriptIconKind}
+            editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+            onSubmitRename={onSubmitRename}
+          />
         </View>
       </View>
       <StatusRowDetailLine
@@ -192,17 +201,28 @@ function StatusRowMetaLine({
 }
 
 function StatusRowTitleLine({
+  workspace,
   primaryLabel,
   scriptIconKind,
+  editable,
+  onSubmitRename,
 }: {
+  workspace: SidebarWorkspaceEntry;
   primaryLabel: string;
   scriptIconKind: SidebarWorkspaceScriptIconKind | null;
+  editable: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
 }) {
   return (
     <View style={styles.titleRow}>
-      <Text style={styles.title} numberOfLines={1}>
-        {primaryLabel}
-      </Text>
+      <SidebarWorkspaceInlineTitle
+        displayValue={primaryLabel}
+        renameValue={workspace.title ?? workspace.name}
+        editable={editable}
+        onSubmit={onSubmitRename}
+        style={styles.title}
+        testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+      />
       {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
     </View>
   );
