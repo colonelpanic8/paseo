@@ -3350,6 +3350,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private observedModel: string | undefined;
   private observedThinkingOptionId: string | undefined;
+  private activeTurnObservedModel: string | undefined;
+  private activeTurnObservedThinkingOptionId: string | undefined;
   private serviceTier: "fast" | null = null;
   private planModeEnabled = false;
   private historyPending = false;
@@ -4223,6 +4225,7 @@ export class CodexAppServerAgentSession implements AgentSession {
 
       const turnStart = await this.buildTurnStartParams(effectivePrompt, options);
       const turnId = this.createTurnId();
+      this.resetActiveTurnObservedRuntimeInfo();
       this.activeForegroundTurnId = turnId;
       this.activeClientMessageId = options?.clientMessageId ?? null;
       this.currentTurnId = null;
@@ -4411,10 +4414,16 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
-  private captureObservedRuntimeInfo(runtimeInfo: CodexObservedRuntimeInfo): void {
+  private captureObservedRuntimeInfo(
+    runtimeInfo: CodexObservedRuntimeInfo,
+    options?: { activeTurn?: boolean },
+  ): void {
     let changed = false;
     if (Object.prototype.hasOwnProperty.call(runtimeInfo, "model")) {
       const model = normalizeCodexModelId(runtimeInfo.model);
+      if (options?.activeTurn) {
+        this.activeTurnObservedModel = model;
+      }
       if (model !== this.observedModel) {
         this.observedModel = model;
         changed = true;
@@ -4422,6 +4431,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     if (Object.prototype.hasOwnProperty.call(runtimeInfo, "reasoningEffort")) {
       const thinkingOptionId = normalizeCodexThinkingOptionId(runtimeInfo.reasoningEffort);
+      if (options?.activeTurn) {
+        this.activeTurnObservedThinkingOptionId = thinkingOptionId;
+      }
       if (thinkingOptionId !== this.observedThinkingOptionId) {
         this.observedThinkingOptionId = thinkingOptionId;
         changed = true;
@@ -4429,6 +4441,23 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     if (changed) {
       this.cachedRuntimeInfo = null;
+    }
+  }
+
+  private resetActiveTurnObservedRuntimeInfo(): void {
+    this.activeTurnObservedModel = undefined;
+    this.activeTurnObservedThinkingOptionId = undefined;
+  }
+
+  private stampActiveTurnAttribution(item: AgentTimelineItem): void {
+    if (item.type !== "assistant_message") {
+      return;
+    }
+    if (this.activeTurnObservedModel) {
+      item.model = this.activeTurnObservedModel;
+    }
+    if (this.activeTurnObservedThinkingOptionId) {
+      item.thinkingOptionId = this.activeTurnObservedThinkingOptionId;
     }
   }
 
@@ -5836,17 +5865,19 @@ export class CodexAppServerAgentSession implements AgentSession {
         return;
       }
       const isFirstDeltaForItem = prev.length === 0;
+      const timelineItem: AgentTimelineItem = {
+        type: "assistant_message",
+        messageId: parsed.itemId,
+        text:
+          isFirstDeltaForItem && this.pendingAssistantMessageBoundary
+            ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
+            : parsed.delta,
+      };
+      this.stampActiveTurnAttribution(timelineItem);
       this.emitEvent({
         type: "timeline",
         provider: CODEX_PROVIDER,
-        item: {
-          type: "assistant_message",
-          messageId: parsed.itemId,
-          text:
-            isFirstDeltaForItem && this.pendingAssistantMessageBoundary
-              ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
-              : parsed.delta,
-        },
+        item: timelineItem,
       });
       if (isFirstDeltaForItem) {
         this.pendingAssistantMessageBoundary = false;
@@ -5919,7 +5950,8 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitSubAgentActivityUpdate(subAgentCallId, "running", { reopen: true });
       return;
     }
-    this.captureObservedRuntimeInfo(parsed.runtimeInfo);
+    this.resetActiveTurnObservedRuntimeInfo();
+    this.captureObservedRuntimeInfo(parsed.runtimeInfo, { activeTurn: true });
     this.currentTurnId = parsed.turnId;
     const pendingIdentification = this.pendingForegroundTurnIdentification;
     if (
@@ -5948,7 +5980,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     this.completePendingRootCompactions();
-    this.captureObservedRuntimeInfo(parsed.runtimeInfo);
+    this.captureObservedRuntimeInfo(parsed.runtimeInfo, { activeTurn: true });
     if (parsed.status === "failed") {
       this.emitEvent({
         type: "turn_failed",
@@ -5974,6 +6006,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.pendingForegroundTurnIdentification = null;
     this.pendingSubAgentNotificationsByThreadId.clear();
     this.resetTurnTrackingState();
+    this.resetActiveTurnObservedRuntimeInfo();
   }
 
   private resetTurnTrackingState(): void {
@@ -6349,6 +6382,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.replayPendingSubAgentNotifications(registeredChildThreadIds);
       return;
     }
+    this.stampActiveTurnAttribution(timelineItem);
     const normalizedItemType = normalizeCodexThreadItemType(
       typeof parsed.item.type === "string" ? parsed.item.type : undefined,
     );
@@ -6385,6 +6419,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.pendingAssistantMessageBoundary = true;
     }
     for (const imageItem of imageItems) {
+      this.stampActiveTurnAttribution(imageItem);
       this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: imageItem });
       this.pendingAssistantMessageBoundary = true;
     }
@@ -6439,6 +6474,10 @@ export class CodexAppServerAgentSession implements AgentSession {
           type: timelineItem.type,
           text: suffix,
           ...(timelineItem.messageId ? { messageId: timelineItem.messageId } : {}),
+          ...(timelineItem.model ? { model: timelineItem.model } : {}),
+          ...(timelineItem.thinkingOptionId
+            ? { thinkingOptionId: timelineItem.thinkingOptionId }
+            : {}),
         }
       : { type: timelineItem.type, text: suffix };
   }
