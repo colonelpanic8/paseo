@@ -49,6 +49,8 @@ import type {
   AgentPermissionResponse,
 } from "@getpaseo/protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
+import { formatAgentModelDisplayMeta } from "@/composer/agent-controls/utils";
+import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
 import { useSessionStore } from "@/stores/session-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
@@ -313,6 +315,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
+    const runningTurnModelDisplay = useAgentModelDisplay({
+      serverId: resolvedServerId,
+      cwd: context.cwd,
+      provider: context.provider,
+      model: context.model,
+      runtimeModelId: context.runtimeInfo?.model ?? null,
+      thinkingOptionId: context.thinkingOptionId,
+      effectiveThinkingOptionId: context.effectiveThinkingOptionId,
+    });
 
     const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
     const sessionStreamHead = useSessionStore((state) =>
@@ -796,6 +807,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [pendingPermissions, agentId],
     );
 
+    const runningTurnMeta = formatAgentModelDisplayMeta(runningTurnModelDisplay);
     const pendingPermissionsNode = useMemo(
       () =>
         renderPendingPermissionsNode({
@@ -810,6 +822,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <TurnFooter
             isRunning={isTurnActive}
             inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
+            runningMeta={runningTurnMeta}
             host={bottomTurnFooterHost}
             strategy={streamRenderStrategy}
             supportsTimelineCursor={supportsAgentForkContextCursor}
@@ -822,6 +835,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         handleForkInFlightTurn,
         readOnly,
         isTurnActive,
+        runningTurnMeta,
         baseRenderModel.turnTiming.runningStartedAt,
         bottomTurnFooterHost,
         streamRenderStrategy,
@@ -1012,6 +1026,9 @@ function collectAgentSetupDiffs(left: AgentScreenAgent, right: AgentScreenAgent)
   if (left.model !== right.model) reasons.push("agent.model");
   if (left.thinkingOptionId !== right.thinkingOptionId) {
     reasons.push("agent.thinkingOptionId");
+  }
+  if (left.effectiveThinkingOptionId !== right.effectiveThinkingOptionId) {
+    reasons.push("agent.effectiveThinkingOptionId");
   }
   if (left.runtimeInfo?.modeId !== right.runtimeInfo?.modeId) {
     reasons.push("agent.runtimeInfo.modeId");
