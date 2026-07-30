@@ -143,7 +143,7 @@ produces both signed APKs).
 ## Done so far
 
 - Wear app: workspace list, agent picker, agent detail, permission approve/deny,
-  reply (voice + canned). Workspaces are the browsing unit; `Workspace.destination()`
+  one-tap voice reply. Workspaces are the browsing unit; `Workspace.destination()`
   in `model/Models.kt` is the **single** place the "1 agent skips the picker, 0 agents
   goes to voice" rule lives.
 - Voice/typing via Wear's system input sheet (`RecognizerIntent`,
@@ -158,25 +158,39 @@ produces both signed APKs).
   the newest turn with the actions at the end of the list.
 - **Text entry** via `RemoteInputIntentHelper` (`androidx.wear:wear-input`), so the
   keyboard button opens the system input picker instead of the recognizer sheet.
-- **Stop de-emphasised** to 38dp, 20dp clear of the 52dp Reply.
+- **Reply composes in place.** The reply route is deleted. Reply on the agent screen
+  launches `ACTION_RECOGNIZE_SPEECH` directly and sends the result; `Type` next to it
+  launches the remote-input picker directly. Both launchers come from
+  `rememberComposerLaunchers` in `ui/Composer.kt`, shared with `ui/NewAgentScreen.kt`
+  (the one composer screen left, since a new agent has no conversation to hang buttons
+  off). Canned replies are gone with the screen.
+- **Action row is Reply alone on top, `Type` and `Stop` as 38dp satellites below** —
+  three abreast does not fit inside a 450px round screen's insets without eating the
+  gaps that keep Stop away from Reply.
 - Watch APK built and signed by the F-Droid pipeline with the phone's key
   (`scripts/fdroid-build-watch.sh`); version code uses ABI slot 5 so it cannot
   collide with the phone's 1–4.
 - Launcher icon is the real Paseo butterfly, path copied byte-identical from
   `packages/app/assets/images/butterfly-white.svg`.
-- 27 phone-side tests, 27 watch unit tests, 1 on-device instrumented test.
+- 27 phone-side tests, 33 watch unit tests, 1 on-device instrumented test.
 
 ## Open work
 
-All three of the user's UI asks are built. What remains is verification on hardware:
+All of the user's UI asks are built. What remains is verification on hardware:
 
-1. **Nothing about the transcript has run on a real phone+watch pair.** The watch
+1. **The one-tap reply has never been tapped on a watch.** Reply now launches the
+   recognizer from inside the agent screen's `ScalingLazyColumn` rather than from a
+   dedicated screen, and that is the thing to check first: that the recognizer sheet
+   actually comes up on the first tap, that the spoken string lands in the
+   conversation, and that returning from the sheet leaves the list where it was
+   instead of re-anchoring. `Type` on the same row needs the same pass.
+2. **Nothing about the transcript has run on a real phone+watch pair.** The watch
    half is unit-tested against pinned JSON and the phone half against its own tests,
    but the hop carrying a `/paseo/transcript/<agentId>` DataItem has not been
    exercised. Worth watching for specifically: DataItem size against the ~100 KB
    Data Layer cap if the phone's projection ever stops capping entries, and whether
    the initial scroll actually lands at the bottom on a round 450×450 display.
-2. **`RemoteInputIntentHelper` is untested on device.** It resolves to a system
+3. **`RemoteInputIntentHelper` is untested on device.** It resolves to a system
    activity; if a watch has no input picker the launch would fail. The mic path is
    unchanged and still works.
 
