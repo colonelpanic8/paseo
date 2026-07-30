@@ -43,6 +43,20 @@ import sh.paseo.watch.ui.WorkspaceListScreen
  */
 private const val TRANSCRIPT_REQUEST_DEBOUNCE_MS = 300L
 
+/**
+ * How often an open agent screen re-asks for the transcript regardless of whether
+ * anything visible changed.
+ *
+ * A `requestTranscript` opens a ~150s lease on the phone, and while that lease is
+ * alive the phone pushes fresh transcripts within a couple of seconds of new
+ * activity. Renewing at 60s keeps it comfortably alive with room for a missed round
+ * trip. The reactive request below cannot carry this on its own: an agent that is
+ * continuously busy sits at `Running` / "now" indefinitely, so none of its keys ever
+ * change — the lease would expire at 150s precisely when the user is watching live
+ * output.
+ */
+private const val TRANSCRIPT_KEEPALIVE_MS = 60_000L
+
 private object Routes {
   const val WORKSPACES = "workspaces"
   const val PICKER = "picker/{workspaceId}"
@@ -75,6 +89,9 @@ fun PaseoWatchApp(
     val scope = rememberCoroutineScope()
     val workspaces by repository.workspaces.collectAsState()
     val transcripts by repository.transcripts.collectAsState()
+    // Keyed by projectKey, not workspace: several workspaces share one project, and
+    // the phone publishes one icon per project.
+    val icons by repository.icons.collectAsState()
 
     Scaffold(
       timeText = { TimeText() },
@@ -92,6 +109,7 @@ fun PaseoWatchApp(
           WorkspaceListScreen(
             workspaces = workspaces,
             listState = rememberScalingLazyListState(),
+            icons = icons,
             onWorkspaceClick = { workspace ->
               // The single place the "don't make me pick when there's nothing to
               // pick" rule is applied. Keep it that way.
@@ -123,6 +141,7 @@ fun PaseoWatchApp(
               listState = rememberScalingLazyListState(),
               onAgentClick = { agent -> navController.navigate(Routes.agent(agent.id)) },
               onNewAgent = { navController.navigate(Routes.newAgent(workspace.id)) },
+              icon = icons[workspace.projectKey],
             )
           }
         }
@@ -147,6 +166,7 @@ fun PaseoWatchApp(
               onRespond = { allow ->
                 scope.launch { repository.respondToPermission(pending.id, allow) }
               },
+              icon = icons[workspace.projectKey],
             )
           } else {
             // Ask for the transcript on arrival, and again whenever this agent's row
@@ -158,6 +178,15 @@ fun PaseoWatchApp(
               delay(TRANSCRIPT_REQUEST_DEBOUNCE_MS)
               repository.requestTranscript(agent.id)
             }
+            // Renew the phone's lease for as long as this screen is up. Keyed only on
+            // the agent, so it survives the snapshot churn that drives the request
+            // above and cancels itself when the screen leaves composition.
+            LaunchedEffect(agent.id) {
+              while (true) {
+                delay(TRANSCRIPT_KEEPALIVE_MS)
+                repository.requestTranscript(agent.id)
+              }
+            }
             AgentScreen(
               workspace = workspace,
               agent = agent,
@@ -166,6 +195,7 @@ fun PaseoWatchApp(
               // come back here.
               onSubmit = { text -> scope.launch { repository.sendPrompt(agent.id, text) } },
               onStop = { scope.launch { repository.stopAgent(agent.id) } },
+              icon = icons[workspace.projectKey],
             )
           }
         }
@@ -191,6 +221,7 @@ fun PaseoWatchApp(
                 scope.launch { repository.respondToPermission(request.id, allow) }
                 navController.popBackStack()
               },
+              icon = icons[workspace.projectKey],
             )
           }
         }
@@ -213,6 +244,7 @@ fun PaseoWatchApp(
                 scope.launch { repository.createAgent(workspace.id, text) }
                 navController.popBackStack()
               },
+              icon = icons[workspace.projectKey],
             )
           }
         }

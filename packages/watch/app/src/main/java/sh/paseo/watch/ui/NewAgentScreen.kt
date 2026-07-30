@@ -38,6 +38,8 @@ fun NewAgentScreen(
   projectName: String,
   listState: ScalingLazyListState,
   onSubmit: (String) -> Unit,
+  /** This workspace's project icon, if the phone published one. */
+  icon: ByteArray? = null,
 ) {
   val composer = rememberComposerLaunchers(prompt = "New agent in $workspaceName", onText = onSubmit)
 
@@ -55,6 +57,7 @@ fun NewAgentScreen(
         projectName = projectName,
         workspaceName = workspaceName,
         muted = true,
+        icon = icon,
       )
     }
     item {

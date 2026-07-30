@@ -35,6 +35,8 @@ fun WorkspaceListScreen(
   workspaces: List<Workspace>,
   listState: ScalingLazyListState,
   onWorkspaceClick: (Workspace) -> Unit,
+  /** Raw icon bytes by projectKey; a missing key means the colored initial. */
+  icons: Map<String, ByteArray> = emptyMap(),
 ) {
   ScalingLazyColumn(
     modifier = Modifier.fillMaxWidth(),
@@ -55,14 +57,18 @@ fun WorkspaceListScreen(
       )
     }
     items(workspaces.sortedForWrist(), key = { it.id }) { workspace ->
-      WorkspaceChip(workspace = workspace, onClick = { onWorkspaceClick(workspace) })
+      WorkspaceChip(
+        workspace = workspace,
+        icon = icons[workspace.projectKey],
+        onClick = { onWorkspaceClick(workspace) },
+      )
       Spacer(Modifier.height(4.dp))
     }
   }
 }
 
 @Composable
-private fun WorkspaceChip(workspace: Workspace, onClick: () -> Unit) {
+private fun WorkspaceChip(workspace: Workspace, icon: ByteArray?, onClick: () -> Unit) {
   val needsAttention = workspace.state == ActivityState.NeedsInput
   val background = if (needsAttention) PaseoColors.attentionSurface else PaseoColors.surface2
 
@@ -87,6 +93,7 @@ private fun WorkspaceChip(workspace: Workspace, onClick: () -> Unit) {
         size = 26,
         state = workspace.state,
         ringColor = background,
+        icon = icon,
       )
     },
     label = {

@@ -39,6 +39,8 @@ fun PermissionScreen(
   agent: AgentSession,
   request: PermissionRequest,
   onRespond: (Boolean) -> Unit,
+  /** This workspace's project icon, if the phone published one. */
+  icon: ByteArray? = null,
 ) {
   Column(
     modifier =
@@ -67,6 +69,7 @@ fun PermissionScreen(
         projectName = workspace.projectName,
         size = 16,
         ringColor = PaseoColors.surface0,
+        icon = icon,
       )
       Spacer(Modifier.width(4.dp))
       Text(

@@ -1,10 +1,13 @@
 package sh.paseo.watch.data
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
+import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataItem
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
@@ -61,6 +64,9 @@ class DataLayerRepository(
   private val transcriptState = MutableStateFlow<Map<String, Transcript>>(emptyMap())
   override val transcripts: StateFlow<Map<String, Transcript>> = transcriptState
 
+  private val iconState = MutableStateFlow<Map<String, ByteArray>>(emptyMap())
+  override val icons: StateFlow<Map<String, ByteArray>> = iconState
+
   private val link = MutableStateFlow(LinkState.Waiting)
   val linkState: StateFlow<LinkState> = link.asStateFlow()
 
@@ -82,6 +88,12 @@ class DataLayerRepository(
       override fun onDataChanged(events: DataEventBuffer) = handleEvents(events)
     }
 
+  /** A third filter, so — per the rule above — a third listener object. */
+  private val iconListener =
+    object : DataClient.OnDataChangedListener {
+      override fun onDataChanged(events: DataEventBuffer) = handleEvents(events)
+    }
+
   fun start() {
     dataClient.addListener(this, android.net.Uri.parse("wear://*$SNAPSHOT_PATH_SUFFIX"), DataClient.FILTER_PREFIX)
     // Transcripts live one-per-agent under a prefix, so this filter is a prefix
@@ -89,6 +101,12 @@ class DataLayerRepository(
     dataClient.addListener(
       transcriptListener,
       android.net.Uri.parse("wear://*$TRANSCRIPT_PATH_PREFIX/"),
+      DataClient.FILTER_PREFIX,
+    )
+    // Icons are one-per-project under their own prefix, same shape as transcripts.
+    dataClient.addListener(
+      iconListener,
+      android.net.Uri.parse("wear://*$ICON_PATH_PREFIX/"),
       DataClient.FILTER_PREFIX,
     )
     // Read whatever is already cached before asking for anything new: this is what
@@ -102,6 +120,7 @@ class DataLayerRepository(
   fun stop() {
     dataClient.removeListener(this)
     dataClient.removeListener(transcriptListener)
+    dataClient.removeListener(iconListener)
   }
 
   override fun onDataChanged(events: DataEventBuffer) = handleEvents(events)
@@ -112,8 +131,15 @@ class DataLayerRepository(
    */
   private fun handleEvents(events: DataEventBuffer) {
     for (event in events) {
-      if (event.type != DataEvent.TYPE_CHANGED) continue
       val path = event.dataItem.uri.path.orEmpty()
+      // Icons are the only stream that cares about deletion: an item that goes away
+      // means the project lost its icon, and keeping the last one we saw would show
+      // a glyph the phone no longer believes in.
+      if (path.contains(ICON_PATH_MARKER)) {
+        if (event.type == DataEvent.TYPE_DELETED) dropIcon(path) else applyIconItem(path, event.dataItem)
+        continue
+      }
+      if (event.type != DataEvent.TYPE_CHANGED) continue
       val raw = DataMapItem.fromDataItem(event.dataItem).dataMap.getString(WearBridge.SNAPSHOT_KEY)
       when {
         path.endsWith(SNAPSHOT_PATH_SUFFIX) -> applySnapshot(raw)
@@ -131,6 +157,10 @@ class DataLayerRepository(
     try {
       for (item in items) {
         val path = item.uri.path.orEmpty()
+        if (path.contains(ICON_PATH_MARKER)) {
+          applyIconItem(path, item)
+          continue
+        }
         val raw = DataMapItem.fromDataItem(item).dataMap.getString(WearBridge.SNAPSHOT_KEY)
         when {
           path.endsWith(SNAPSHOT_PATH_SUFFIX) -> applySnapshot(raw)
@@ -141,6 +171,70 @@ class DataLayerRepository(
       items.release()
     }
   }
+
+  /**
+   * Pull the icon [Asset] off the item and read it asynchronously.
+   *
+   * The Asset reference has to be taken **now**, while the buffer that owns the item
+   * is still alive — `freeze()` detaches it from the buffer, which both the event
+   * loop and the cached-item scan release as soon as they finish iterating. The
+   * bytes themselves need a round trip through [DataClient.getFdForAsset], so that
+   * part is off the main thread and necessarily lands after this returns.
+   */
+  private fun applyIconItem(path: String, item: DataItem) {
+    val projectKey = projectKeyOf(path) ?: return
+    val asset = DataMapItem.fromDataItem(item.freeze()).dataMap.getAsset(WearBridge.ICON_PAYLOAD_KEY)
+    if (asset == null) {
+      Log.w(TAG, "Icon item carried no asset")
+      removeIcon(projectKey)
+      return
+    }
+    scope.launch { applyIconAsset(projectKey, asset) }
+  }
+
+  private suspend fun applyIconAsset(projectKey: String, asset: Asset) {
+    val bytes =
+      withContext(Dispatchers.IO) {
+        runCatching {
+          val response = dataClient.getFdForAsset(asset).await()
+          try {
+            response.inputStream.use { it.readBytes() }
+          } finally {
+            response.release()
+          }
+        }
+          .onFailure { Log.w(TAG, "Failed to read icon asset", it) }
+          .getOrNull()
+      }
+    if (!isRenderableIconPayload(bytes)) {
+      // An SVG, an ICO, or something that isn't an image at all. Not an error worth
+      // surfacing: the colored initial is a complete fallback, and the phone is
+      // allowed to publish icon formats this watch can't draw.
+      Log.w(TAG, "Icon payload for $projectKey is not a decodable bitmap")
+      removeIcon(projectKey)
+      return
+    }
+    iconState.value = iconState.value + (projectKey to bytes!!)
+  }
+
+  private fun dropIcon(path: String) {
+    val projectKey = projectKeyOf(path) ?: return
+    removeIcon(projectKey)
+  }
+
+  private fun removeIcon(projectKey: String) {
+    val current = iconState.value
+    if (projectKey !in current) return
+    iconState.value = current - projectKey
+  }
+
+  /**
+   * `Uri.decode` is the exact inverse of the phone's `Uri.encode`; the split between
+   * this and [encodedProjectKeyFromIconPath] is what keeps the path parsing itself
+   * unit-testable without Android.
+   */
+  private fun projectKeyOf(path: String): String? =
+    encodedProjectKeyFromIconPath(path)?.let { Uri.decode(it) }?.ifEmpty { null }
 
   private fun applyTranscript(raw: String?) {
     if (raw == null) return
@@ -172,6 +266,7 @@ class DataLayerRepository(
     state.value = workspaces
     link.value = LinkState.Linked
     pruneTranscripts(workspaces)
+    pruneIcons(workspaces)
   }
 
   /** Keeps watch memory tracking the live agent set. See [retainingAgentsIn]. */
@@ -181,6 +276,13 @@ class DataLayerRepository(
     // Only publish when something actually went, so an unchanged agent set doesn't
     // wake every collector on each snapshot.
     if (kept.size != current.size) transcriptState.value = kept
+  }
+
+  /** Same rationale, keyed on project instead of agent. See [retainingProjectsIn]. */
+  private fun pruneIcons(workspaces: List<Workspace>) {
+    val current = iconState.value
+    val kept = current.retainingProjectsIn(workspaces)
+    if (kept.size != current.size) iconState.value = kept
   }
 
   override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
@@ -324,5 +426,11 @@ class DataLayerRepository(
      * keeps `/paseo/transcripts-v2` (or any other future sibling) from matching.
      */
     const val TRANSCRIPT_PATH_MARKER = "$TRANSCRIPT_PATH_PREFIX/"
+
+    /** Prefix for the per-project icon directory, minus the node id. */
+    const val ICON_PATH_PREFIX = WearBridge.ICON_PATH_PREFIX
+
+    /** Same shape as [TRANSCRIPT_PATH_MARKER]: the path ends in an encoded key. */
+    const val ICON_PATH_MARKER = "$ICON_PATH_PREFIX/"
   }
 }

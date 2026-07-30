@@ -96,6 +96,8 @@ fun AgentScreen(
   onSubmit: (String) -> Unit,
   onStop: () -> Unit,
   listState: ScalingLazyListState = rememberScalingLazyListState(),
+  /** This workspace's project icon, if the phone published one. */
+  icon: ByteArray? = null,
 ) {
   val composer =
     rememberComposerLaunchers(prompt = "Reply to ${agent.provider}", onText = onSubmit)
@@ -133,6 +135,7 @@ fun AgentScreen(
             projectKey = workspace.projectKey,
             projectName = workspace.projectName,
             workspaceName = workspace.name,
+            icon = icon,
           )
 
         AgentRow.Status ->

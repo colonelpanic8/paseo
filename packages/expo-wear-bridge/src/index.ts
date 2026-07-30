@@ -14,6 +14,7 @@ interface ExpoWearBridgeNativeModule {
   getConnectedNodes(): Promise<WearNode[]>;
   publishSnapshot(payload: string): Promise<boolean>;
   publishTranscript(agentId: string, payload: string): Promise<boolean>;
+  publishProjectIcon(projectKey: string, dataBase64: string, mimeType: string): Promise<boolean>;
   clearSnapshot(): Promise<boolean>;
   drainPendingCommands(): Promise<string[]>;
   addListener(
@@ -57,7 +58,25 @@ export async function publishWearTranscript(agentId: string, payload: string): P
   return native.publishTranscript(agentId, payload);
 }
 
-/** Removes everything Paseo published — the snapshot and every agent transcript. */
+/**
+ * Publish one project's icon, keyed by projectKey so every workspace of that project
+ * shares it. `dataBase64` is the raw file the daemon found in the repo; the watch
+ * screens the format itself and falls back to a colored initial for anything it
+ * can't decode, so any mime the daemon returns is safe to send.
+ */
+export async function publishWearProjectIcon(
+  projectKey: string,
+  dataBase64: string,
+  mimeType: string,
+): Promise<boolean> {
+  if (!native) return false;
+  return native.publishProjectIcon(projectKey, dataBase64, mimeType);
+}
+
+/**
+ * Removes everything Paseo published — the snapshot, every agent transcript, and
+ * every project icon.
+ */
 export async function clearWearSnapshot(): Promise<boolean> {
   if (!native) return false;
   return native.clearSnapshot();
