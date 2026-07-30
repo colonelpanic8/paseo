@@ -119,13 +119,19 @@ Requires JDK 17+ and an Android SDK with API 36 and build-tools 35+.
 
 ```bash
 cd packages/watch
-echo "sdk.dir=/path/to/android-sdk" > local.properties
-gradle :app:assembleDebug
+echo "sdk.dir=/path/to/android-sdk" > local.properties   # or set ANDROID_HOME
+./gradlew :app:testDebugUnitTest :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`gradle` here is any Gradle 8.13+; the repo pins AGP 8.13.2 and Kotlin 2.3.21 in
-`gradle/libs.versions.toml`.
+Use `./gradlew`, not a system `gradle`. The wrapper pins Gradle 8.14.4, which is
+what AGP 8.13.2 in `gradle/libs.versions.toml` expects, and it is what CI runs —
+a system Gradle is whatever the machine happens to have.
+
+For a Nix-provided toolchain matching CI exactly, the assembled flake carries an
+Android dev shell (`nix develop .#android` from the repository root on
+x86_64-linux): pinned SDK 35/36, build-tools 36, JDK 21, and the `aapt2` override
+AGP needs.
 
 ### Running on a Wear emulator
 
