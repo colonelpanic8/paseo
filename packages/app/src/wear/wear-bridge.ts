@@ -23,6 +23,37 @@ export interface WearBridgeTransport {
 const TRANSCRIPT_PAGE_SIZE = 40;
 const MAX_TRANSCRIPT_REQUESTS = 4;
 
+/**
+ * How long a transcript request keeps the phone pushing updates for that agent.
+ *
+ * The watch re-requests roughly once a minute while an agent screen is open, so this
+ * is set well above that cadence: an open screen renews long before the lease lapses,
+ * and a screen the user left stops costing timeline fetches within ~2.5 minutes.
+ */
+const LEASE_MS = 150_000;
+
+/**
+ * Trailing delay before a leased agent's transcript is refetched.
+ *
+ * A single agent turn produces a burst of store changes, and each transcript refresh
+ * is several daemon round-trips plus a Data Layer write. Coalescing turns the burst
+ * into one fetch while still landing on the wrist within a couple of seconds.
+ */
+const COALESCE_MS = 2_000;
+
+/** A watch is currently reading this agent's transcript. */
+interface TranscriptLease {
+  serverId: string;
+  expiresAt: number;
+  /**
+   * `lastActivityAt` as of the most recent fetch we started, which is what a later
+   * sweep compares against. Recorded before the fetch rather than after, so activity
+   * that happens while the fetch is in flight still triggers a follow-up. Null means
+   * the agent wasn't in state at that moment, which counts as "unknown", not "quiet".
+   */
+  lastActivityAt: number | null;
+}
+
 export interface NewAgentConfig {
   provider: string;
   cwd: string;
@@ -60,6 +91,10 @@ export class WearBridge {
   private lastPublished: string | null = null;
   /** Per-agent request counter, so a slow fetch can't overwrite a newer transcript. */
   private readonly transcriptGenerations = new Map<string, number>();
+  /** Agents a watch is currently reading, keyed by agent id. */
+  private readonly transcriptLeases = new Map<string, TranscriptLease>();
+  /** At most one pending refresh per agent; the handle is what makes it coalesce. */
+  private readonly transcriptTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private disposed = false;
 
   constructor(deps: WearBridgeDeps) {
@@ -84,6 +119,11 @@ export class WearBridge {
     this.disposed = true;
     this.subscription?.remove();
     this.subscription = null;
+    for (const timer of this.transcriptTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.transcriptTimers.clear();
+    this.transcriptLeases.clear();
   }
 
   private async drainQueued(): Promise<void> {
@@ -104,7 +144,15 @@ export class WearBridge {
   async publish(options?: { force?: boolean }): Promise<void> {
     if (this.disposed) return;
     const now = this.deps.now?.() ?? Date.now();
-    const snapshot = buildWearSnapshot(this.deps.readState(), now);
+    const state = this.deps.readState();
+
+    // Ahead of the unchanged-payload short-circuit below, because most new activity
+    // does not change the snapshot at all: the only agent field it moves is `age`,
+    // which is minute-granular. Sweeping after the early return would leave open
+    // transcripts stale for up to a minute, which is the bug this exists to fix.
+    this.sweepTranscriptLeases(state, now);
+
+    const snapshot = buildWearSnapshot(state, now);
     const payload = stableSnapshotKey(snapshot);
 
     if (!options?.force && payload === this.lastPublished) return;
@@ -118,6 +166,79 @@ export class WearBridge {
     if (ok) {
       this.lastPublished = payload;
     }
+  }
+
+  /**
+   * Push transcript updates to whichever agents a watch currently has open.
+   *
+   * Runs on every store change, so it must stay cheap when nothing is leased — which
+   * is the normal case, since a lease only exists while a watch screen is open.
+   */
+  private sweepTranscriptLeases(state: WearSnapshotInput[], now: number): void {
+    if (this.transcriptLeases.size === 0) return;
+
+    const activity = lastActivityIndex(state);
+    for (const [agentId, lease] of this.transcriptLeases) {
+      if (lease.expiresAt <= now) {
+        this.dropTranscriptLease(agentId);
+        continue;
+      }
+
+      const lastActivityAt = activity.get(activityKey(lease.serverId, agentId));
+      if (lastActivityAt === undefined) {
+        // The agent is gone from state — disconnected server, or archived away. The
+        // watch has nothing to show either way, so stop fetching for it.
+        this.dropTranscriptLease(agentId);
+        continue;
+      }
+
+      if (lastActivityAt === lease.lastActivityAt) continue;
+      this.scheduleTranscriptRefresh(lease.serverId, agentId);
+    }
+  }
+
+  private scheduleTranscriptRefresh(serverId: string, agentId: string): void {
+    // One timer per agent is what coalesces the burst; the generation guard only
+    // protects the content that lands, it doesn't stop redundant fetches.
+    if (this.transcriptTimers.has(agentId)) return;
+
+    const timer = setTimeout(() => {
+      this.transcriptTimers.delete(agentId);
+      if (this.disposed) return;
+      void this.publishTranscript(serverId, agentId);
+    }, COALESCE_MS);
+    this.transcriptTimers.set(agentId, timer);
+  }
+
+  private dropTranscriptLease(agentId: string): void {
+    this.transcriptLeases.delete(agentId);
+    this.cancelTranscriptRefresh(agentId);
+  }
+
+  private cancelTranscriptRefresh(agentId: string): void {
+    const timer = this.transcriptTimers.get(agentId);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    this.transcriptTimers.delete(agentId);
+  }
+
+  /**
+   * Start or extend the watch's lease on an agent's transcript.
+   *
+   * Renewal is just a new expiry: the recorded activity marker stays, so a re-request
+   * that arrives mid-burst doesn't hide activity from the next sweep.
+   */
+  private renewTranscriptLease(serverId: string, agentId: string, now: number): void {
+    const existing = this.transcriptLeases.get(agentId);
+    if (existing && existing.serverId === serverId) {
+      existing.expiresAt = now + LEASE_MS;
+      return;
+    }
+    this.transcriptLeases.set(agentId, {
+      serverId,
+      expiresAt: now + LEASE_MS,
+      lastActivityAt: null,
+    });
   }
 
   private async handleCommandPayload(payload: string): Promise<void> {
@@ -136,6 +257,18 @@ export class WearBridge {
    * the screen to read; older pages are prepended so the result stays oldest-first.
    */
   private async publishTranscript(serverId: string, agentId: string): Promise<void> {
+    // Whatever a pending refresh was going to fetch, this fetch covers.
+    this.cancelTranscriptRefresh(agentId);
+
+    // Read before the fetch, not after: activity that lands while we are paging must
+    // still look like movement to the next sweep, or the last turn of a burst is the
+    // one the watch never sees.
+    const lease = this.transcriptLeases.get(agentId);
+    if (lease) {
+      lease.lastActivityAt =
+        lastActivityIndex(this.deps.readState()).get(activityKey(serverId, agentId)) ?? null;
+    }
+
     const client = this.deps.getClient(serverId);
     if (!client) {
       this.deps.logger?.warn(`No client for server ${serverId}; dropping wear transcript request`);
@@ -190,6 +323,10 @@ export class WearBridge {
     }
 
     if (command.kind === "requestTranscript") {
+      // The request is also the watch saying "I am looking at this now". Holding a
+      // lease is what turns the next minute of activity into pushed updates instead
+      // of the watch waiting for its own next poll.
+      this.renewTranscriptLease(command.serverId, command.agentId, this.deps.now?.() ?? Date.now());
       // Returns without the forced republish below: reading a transcript changes
       // nothing about the agent, so there is no new state for the snapshot to carry.
       await this.publishTranscript(command.serverId, command.agentId);
@@ -245,6 +382,21 @@ export class WearBridge {
     // so the wrist reflects the action it just took.
     await this.publish({ force: true });
   }
+}
+
+/** Agent ids are only unique within a server, so leases are compared per server. */
+function activityKey(serverId: string, agentId: string): string {
+  return `${serverId} ${agentId}`;
+}
+
+function lastActivityIndex(state: WearSnapshotInput[]): Map<string, number> {
+  const index = new Map<string, number>();
+  for (const input of state) {
+    for (const agent of input.agents) {
+      index.set(activityKey(input.serverId, agent.id), agent.lastActivityAt.getTime());
+    }
+  }
+  return index;
 }
 
 type TimelineClient = Pick<DaemonClient, "fetchAgentTimeline">;
