@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,7 +114,12 @@ fun AgentScreen(
     // Same reason as every other list here: autoCentering would spend the top third
     // of a 450px screen before the header renders.
     autoCentering = null,
-    contentPadding = PaddingValues(start = 12.dp, top = 28.dp, end = 12.dp, bottom = 14.dp),
+    // The side inset is round-screen geometry, not taste. A 450px circle is only
+    // ~164px wide a third of the way up from centre, so prose set 12dp from the
+    // edge loses its first and last characters there — verified on a Pixel Watch 3,
+    // where an assistant message rendered "builds" as "ouilds". 22dp is Wear's ~10%
+    // margin and keeps the readable band inside the glass.
+    contentPadding = PaddingValues(start = 22.dp, top = 28.dp, end = 22.dp, bottom = 14.dp),
   ) {
     items(rows.size) { index ->
       when (val row = rows[index]) {
@@ -145,18 +151,29 @@ fun AgentScreen(
     }
   }
 
-  // Land at the newest turn on entry. Afterwards a refreshed transcript re-anchors
-  // only when the user is already at the bottom: the screen re-requests on every
-  // snapshot tick, so following every update unconditionally would yank a reader
-  // out of the backlog once a minute. Scrolling to the last row (the actions)
-  // clamps to the end when the content is shorter than the screen, which is
-  // exactly the no-transcript case.
-  var anchoredAgentId by remember { mutableStateOf<String?>(null) }
+  // Follow the newest turn, the way a chat log does, until the user scrolls away
+  // from it — the screen re-requests on every snapshot tick, so following every
+  // update unconditionally would yank a reader out of the backlog once a minute.
+  //
+  // "Are we at the bottom" is sampled only while a scroll is actually in progress,
+  // which is the whole trick: growing the list also makes `canScrollForward` true,
+  // so reading it after an update cannot tell "the user scrolled up" apart from
+  // "new content arrived". Only a real gesture changes the intent. Reading it
+  // after the update is what left the first device build parked at the top of the
+  // conversation instead of the newest turn.
+  var followTail by remember(agent.id) { mutableStateOf(true) }
+  LaunchedEffect(listState) {
+    snapshotFlow { listState.isScrollInProgress to listState.canScrollForward }
+      .collect { (scrolling, canScrollForward) ->
+        if (scrolling) followTail = !canScrollForward
+      }
+  }
+
+  // Scrolling to the last row clamps to the end of the list, so this lands at the
+  // bottom rather than putting the actions under the bezel — and it is a no-op when
+  // the content already fits, which is exactly the no-transcript case.
   LaunchedEffect(agent.id, rows.size, transcript?.updatedAt) {
-    if (anchoredAgentId != agent.id || !listState.canScrollForward) {
-      listState.scrollToItem(rows.lastIndex)
-      anchoredAgentId = agent.id
-    }
+    if (followTail) listState.scrollToItem(rows.lastIndex)
   }
 }
 
@@ -221,7 +238,7 @@ private fun TranscriptRow(entry: TranscriptEntry) {
         color = PaseoColors.foreground,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+        modifier = Modifier.fillMaxWidth(),
       )
 
     TranscriptKind.User ->
@@ -231,7 +248,10 @@ private fun TranscriptRow(entry: TranscriptEntry) {
             .fillMaxWidth()
             // Inset from the left so the bubble reads as "mine" against the
             // full-bleed assistant prose.
-            .padding(start = 22.dp)
+            // Inset against the full-bleed assistant prose so the bubble reads as
+            // "mine". Smaller than it looks: the list already insets 22dp for the
+            // round screen, so this is 34dp of real margin.
+            .padding(start = 12.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(PaseoColors.surface2)
             .padding(horizontal = 10.dp, vertical = 7.dp),
@@ -254,7 +274,7 @@ private fun TranscriptRow(entry: TranscriptEntry) {
         // to be worth reading.
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+        modifier = Modifier.fillMaxWidth(),
       )
 
     TranscriptKind.Error ->
@@ -283,7 +303,7 @@ private fun TranscriptRow(entry: TranscriptEntry) {
         color = PaseoColors.foregroundMuted,
         fontSize = 11.5.sp,
         lineHeight = 15.sp,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+        modifier = Modifier.fillMaxWidth(),
       )
   }
 }
