@@ -4038,11 +4038,18 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (item.type !== "assistant_message") {
       return;
     }
-    if (this.activeTurnObservedModel) {
-      item.model = this.activeTurnObservedModel;
+    // Turn notifications carry model/effort only sometimes; the thread-level
+    // observation is the usual source. Both are things Codex reported, so
+    // falling back keeps attribution honest — prefer the turn's own value when
+    // it exists so a mid-session change is attributed to the right turn.
+    const model = this.activeTurnObservedModel ?? this.observedModel;
+    const thinkingOptionId =
+      this.activeTurnObservedThinkingOptionId ?? this.observedThinkingOptionId;
+    if (model) {
+      item.model = model;
     }
-    if (this.activeTurnObservedThinkingOptionId) {
-      item.thinkingOptionId = this.activeTurnObservedThinkingOptionId;
+    if (thinkingOptionId) {
+      item.thinkingOptionId = thinkingOptionId;
     }
   }
 
