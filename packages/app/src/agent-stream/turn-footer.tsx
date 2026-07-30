@@ -18,6 +18,7 @@ import {
 } from "@/components/message";
 import type { TurnFooterHost } from "./layout";
 import { AssistantForkMenu } from "@/components/assistant-fork-menu";
+import { resolveTurnAttribution, type TurnAttribution } from "./turn-attribution";
 import { SyncedLoader } from "@/components/synced-loader";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 
@@ -50,6 +51,7 @@ export const TurnFooter = memo(function TurnFooter({
   isRunning,
   inFlightTurnStartedAt,
   runningMeta = null,
+  formatTurnMeta,
   host,
   strategy,
   supportsTimelineCursor,
@@ -60,6 +62,8 @@ export const TurnFooter = memo(function TurnFooter({
   inFlightTurnStartedAt: Date | null;
   /** "Model · Thinking" for the running turn; omitted when unknown. */
   runningMeta?: string | null;
+  /** Labels a completed turn's own recorded model; omitted when unknown. */
+  formatTurnMeta?: (attribution: TurnAttribution) => string | null;
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
   supportsTimelineCursor: boolean;
@@ -88,6 +92,7 @@ export const TurnFooter = memo(function TurnFooter({
       startIndex={host.startIndex}
       supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
+      formatTurnMeta={formatTurnMeta}
     />
   );
 });
@@ -99,6 +104,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   startIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
+  formatTurnMeta,
 }: {
   strategy: TurnContentStrategy;
   items: StreamItem[];
@@ -106,6 +112,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   startIndex: number;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
+  formatTurnMeta?: (attribution: TurnAttribution) => string | null;
 }) {
   return (
     <TurnFooterRow>
@@ -116,6 +123,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         startIndex={startIndex}
         supportsTimelineCursor={supportsTimelineCursor}
         onForkAssistantTurn={onForkAssistantTurn}
+        formatTurnMeta={formatTurnMeta}
       />
     </TurnFooterRow>
   );
@@ -188,6 +196,7 @@ function CompletedTurnFooter({
   startIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
+  formatTurnMeta,
 }: {
   strategy: TurnContentStrategy;
   items: StreamItem[];
@@ -195,7 +204,13 @@ function CompletedTurnFooter({
   startIndex: number;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
+  formatTurnMeta?: (attribution: TurnAttribution) => string | null;
 }) {
+  const meta = useMemo(() => {
+    if (!formatTurnMeta) return null;
+    const attribution = resolveTurnAttribution(items, startIndex);
+    return attribution ? formatTurnMeta(attribution) : null;
+  }, [formatTurnMeta, items, startIndex]);
   const getContent = useCallback(
     () =>
       collectAssistantTurnContentForStreamRenderStrategy({
@@ -225,6 +240,7 @@ function CompletedTurnFooter({
         getContent={getContent}
         completedAt={timing?.completedAt}
         durationMs={timing?.durationMs}
+        meta={meta}
         onFork={boundary && onForkAssistantTurn ? handleFork : undefined}
       />
     </View>
