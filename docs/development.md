@@ -478,6 +478,43 @@ npx expo-doctor
 
 Diagnoses version mismatches and native module issues.
 
+## Security overrides in package.json
+
+Most of the `overrides` block exists to pull transitive dependencies of Expo,
+React Native and the Electron build tooling above a published advisory. We
+cannot bump those directly — they are three to five levels down — and upgrading
+the owning tool usually means a major SDK jump. `package.json` is JSON and
+cannot carry comments, so the rules live here.
+
+- **Pin to the lowest patched release inside the same major.** Crossing a major
+  to silence an advisory trades a known vulnerability for an unknown breakage.
+- **Version-scope the key when two majors coexist** — `"undici@6"` and
+  `"undici@7"`, not a bare `"undici"`. An unscoped override collapses every
+  copy onto one major. That is how `body-parser` 2.x silently got dragged back
+  to 1.x during this work, and how `ajv` 6 (not vulnerable) got forced to 8.
+- **Verify no unintended major moved.** Diff the set of majors per package
+  against the previous lockfile. A shrunk set is only acceptable when the old
+  major has no patched release at all, and CJS consumers still resolve — check
+  for a `require` condition in the new package's `exports`.
+- **An override cannot contradict a direct dependency.** npm fails with
+  `EOVERRIDE`. Raise the declared range in the owning `package.json` instead.
+- **Overrides do not apply on their own.** `npm install --package-lock-only`
+  leaves already-satisfied entries alone, so a new override appears to do
+  nothing. Follow it with `npm update --package-lock-only <names>` to force
+  re-resolution, then confirm against `npm audit`.
+
+Any lockfile change also needs `./scripts/update-nix.sh`; CI runs it with
+`--check`. Note that a no-op regeneration already rewrites several hundred
+lines, because the committed lockfile predates npm 11.16's deduplication —
+confirm the real impact with `npm ci --dry-run`, which reports the actual
+package delta.
+
+Some advisories have no fix and should stay unfixed rather than be forced:
+`markdown-it` and `linkify-it` (every published version is affected) and
+`inflight` (reachable only through `glob@7`; glob 8 still depends on it, and
+glob 9 drops the callback API that `rimraf@3`, `@babel/cli`, `@electron/asar`,
+`@react-native/codegen` and `test-exclude` all call).
+
 ## Typecheck
 
 Always run typecheck after changes:
