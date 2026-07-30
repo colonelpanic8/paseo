@@ -5703,6 +5703,61 @@ describe("Codex app-server provider", () => {
     expect(item).not.toHaveProperty("thinkingOptionId");
   });
 
+  test("attributes turns from the thread observation when turn notifications omit it", () => {
+    // The real app-server reports model/effort on the thread response and often
+    // sends turn/started without them; the thread observation is still something
+    // Codex reported, so the turn is attributable.
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: { id: "test-thread", model: "gpt-thread-observed", reasoningEffort: "high" },
+    });
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "turn-without-runtime" },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "thread-observed-message",
+      delta: "Thread-observed output.",
+    });
+
+    const item = events.at(-1)?.type === "timeline" ? events.at(-1)?.item : undefined;
+    expect(item).toMatchObject({
+      type: "assistant_message",
+      model: "gpt-thread-observed",
+      thinkingOptionId: "high",
+    });
+  });
+
+  test("prefers the turn's own observation over the thread observation", () => {
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: { id: "test-thread", model: "gpt-thread-observed", reasoningEffort: "high" },
+    });
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "turn-with-runtime", model: "gpt-turn-observed", reasoningEffort: "low" },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "turn-observed-message",
+      delta: "Turn-observed output.",
+    });
+
+    const item = events.at(-1)?.type === "timeline" ? events.at(-1)?.item : undefined;
+    expect(item).toMatchObject({
+      type: "assistant_message",
+      model: "gpt-turn-observed",
+      thinkingOptionId: "low",
+    });
+  });
+
   test("does not stamp Codex child messages with the parent turn runtime", () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
