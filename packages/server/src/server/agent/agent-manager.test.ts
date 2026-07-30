@@ -40,6 +40,10 @@ import type {
 } from "./agent-sdk-types.js";
 import type { PaseoToolCatalog } from "./tools/types.js";
 import type { ProviderDefinition } from "./provider-registry.js";
+import {
+  archiveWorkspaceContents,
+  unarchiveWorkspaceContents,
+} from "../workspace-archive-service.js";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -8878,4 +8882,107 @@ test("onWorkspaceStateMayHaveChanged is not called for running shell tool calls"
   await manager.runAgent(snapshot.id, { text: "merge it" });
 
   expect(onWorkspaceStateMayHaveChanged).not.toHaveBeenCalled();
+});
+
+test("workspace archive stamps its agents and workspace unarchive restores exactly those", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-workspace-unarchive-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const client = new NativeArchiveRecordingClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+  });
+
+  const workspaceId = "ws-cascade";
+  const agentA = await manager.createAgent(
+    { provider: "codex", cwd: workdir, title: "Cascade A" },
+    undefined,
+    { workspaceId },
+  );
+  const agentB = await manager.createAgent(
+    { provider: "codex", cwd: workdir, title: "Cascade B" },
+    undefined,
+    { workspaceId },
+  );
+  const individuallyArchived = await manager.createAgent(
+    { provider: "codex", cwd: workdir, title: "Archived by hand" },
+    undefined,
+    { workspaceId },
+  );
+  const otherWorkspaceAgent = await manager.createAgent(
+    { provider: "codex", cwd: workdir, title: "Other workspace" },
+    undefined,
+    { workspaceId: "ws-other" },
+  );
+
+  // The user archived this agent before the workspace archive gesture: a later
+  // workspace restore must leave it archived.
+  await manager.archiveAgent(individuallyArchived.id);
+  const individuallyArchivedAt = (await storage.get(individuallyArchived.id))?.archivedAt;
+  expect(individuallyArchivedAt).toEqual(expect.any(String));
+
+  await archiveWorkspaceContents(
+    {
+      agentManager: manager,
+      agentStorage: storage,
+      killTerminalsForWorkspace: async () => {},
+      sessionLogger: logger,
+    },
+    workspaceId,
+  );
+
+  const storedA = await storage.get(agentA.id);
+  const storedB = await storage.get(agentB.id);
+  const storedIndividual = await storage.get(individuallyArchived.id);
+  const storedOther = await storage.get(otherWorkspaceAgent.id);
+  expect(storedA?.archivedAt).toEqual(expect.any(String));
+  expect(storedA?.archivedWithWorkspaceId).toBe(workspaceId);
+  expect(storedB?.archivedAt).toEqual(expect.any(String));
+  expect(storedB?.archivedWithWorkspaceId).toBe(workspaceId);
+  expect(storedIndividual?.archivedAt).toBe(individuallyArchivedAt);
+  expect(storedIndividual?.archivedWithWorkspaceId ?? null).toBeNull();
+  expect(storedOther?.archivedAt ?? null).toBeNull();
+
+  const dispatchedAgentIds: string[] = [];
+  const unsubscribe = manager.subscribe(
+    (event) => {
+      if (event.type === "agent_state") {
+        dispatchedAgentIds.push(event.agent.id);
+      }
+    },
+    { replayState: false },
+  );
+  const unarchivedNativeCountBefore = client.unarchivedHandles.length;
+
+  const restored = await unarchiveWorkspaceContents(
+    {
+      agentManager: manager,
+      agentStorage: storage,
+      sessionLogger: logger,
+    },
+    workspaceId,
+  );
+  unsubscribe();
+
+  expect(new Set(restored.map((record) => record.id))).toEqual(new Set([agentA.id, agentB.id]));
+  const restoredA = await storage.get(agentA.id);
+  const restoredB = await storage.get(agentB.id);
+  expect(restoredA?.archivedAt).toBeNull();
+  expect(restoredA?.archivedWithWorkspaceId).toBeNull();
+  expect(restoredB?.archivedAt).toBeNull();
+  expect(restoredB?.archivedWithWorkspaceId).toBeNull();
+
+  // The individually archived agent stays where the user put it.
+  const untouchedIndividual = await storage.get(individuallyArchived.id);
+  expect(untouchedIndividual?.archivedAt).toBe(individuallyArchivedAt);
+
+  // Provider-native unarchive ran for exactly the restored agents.
+  expect(client.unarchivedHandles.length - unarchivedNativeCountBefore).toBe(2);
+
+  // Restored stored agents are dispatched so connected clients see them return.
+  expect(dispatchedAgentIds).toContain(agentA.id);
+  expect(dispatchedAgentIds).toContain(agentB.id);
+  expect(dispatchedAgentIds).not.toContain(individuallyArchived.id);
 });
