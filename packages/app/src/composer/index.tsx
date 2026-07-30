@@ -83,6 +83,8 @@ import {
 } from "@/composer/actions";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
+import { LiveVoiceButton } from "@/live-voice/live-voice-button";
+import { LiveVoicePanel } from "@/live-voice/live-voice-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -2029,16 +2031,19 @@ function ComposerContentImpl({
   const beforeVoiceContent = useMemo(
     () =>
       hasAgent ? (
-        <View style={styles.contextWindowMeterSlot}>
-          <ContextWindowMeter
-            serverId={serverId}
-            agentId={agentId}
-            maxTokens={agentState.contextWindowMaxTokens}
-            usedTokens={agentState.contextWindowUsedTokens}
-            totalCostUsd={agentState.totalCostUsd}
-            glyphSize={contextWindowMeterGlyphSize}
-          />
-        </View>
+        <>
+          <View style={styles.contextWindowMeterSlot}>
+            <ContextWindowMeter
+              serverId={serverId}
+              agentId={agentId}
+              maxTokens={agentState.contextWindowMaxTokens}
+              usedTokens={agentState.contextWindowUsedTokens}
+              totalCostUsd={agentState.totalCostUsd}
+              glyphSize={contextWindowMeterGlyphSize}
+            />
+          </View>
+          <LiveVoiceButton serverId={serverId} agentId={agentId} />
+        </>
       ) : null,
     [
       hasAgent,
@@ -2365,6 +2370,7 @@ function ComposerContentImpl({
           <View style={styles.inputAreaContent}>
             {queueList}
             {sendErrorNode}
+            <LiveVoicePanel serverId={serverId} agentId={agentId} />
 
             <View ref={messageInputContainerRef} style={styles.messageInputContainer}>
               <ComposerAutocompleteBinding
