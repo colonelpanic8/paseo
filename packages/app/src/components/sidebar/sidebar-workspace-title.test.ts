@@ -77,8 +77,8 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
     }
   });
 
-  it("falls back to the workspace name when the directory is blank", () => {
-    for (const workspaceDirectory of ["", "   ", "/"]) {
+  it("falls back to the workspace name when the directory is missing or blank", () => {
+    for (const workspaceDirectory of [undefined, "", "   ", "/"]) {
       const label = resolveSidebarWorkspacePrimaryLabel({
         workspace: { ...worktree, workspaceDirectory, name: "Unresolved" },
         workspaceTitleSource: "worktree",

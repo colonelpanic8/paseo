@@ -2966,10 +2966,10 @@ export const ServerInfoStatusPayloadSchema = z
         providerSubagents: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: z.boolean().optional(),
-        // COMPAT(workspaceSnooze): added in v0.2.4, drop the gate when floor >= v0.2.4.
-        workspaceSnooze: z.boolean().optional(),
         // COMPAT(archivedWorkspacesList): added in v0.2.0, remove gate after 2027-01-28.
         archivedWorkspacesList: z.boolean().optional(),
+        // COMPAT(workspaceSnooze): added in v0.2.4, drop the gate when floor >= v0.2.4.
+        workspaceSnooze: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.

@@ -22,6 +22,7 @@ import { deriveRemoteSlug } from "@/utils/remote-slug";
 import { formatClockTime, formatCompactTimeAgo } from "@/utils/time";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isNative, isWeb } from "@/constants/platform";
+import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
 
 const PROJECT_ICON_SIZE = 40;
 const STATUS_DOT_SIZE = 12;
@@ -80,6 +81,8 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   shortcutNumber = null,
   showShortcutBadge = false,
   showActions,
+  showSnoozedChip = false,
+  onSubmitRename,
   children,
 }: {
   activityNow: Date;
@@ -92,7 +95,14 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   showShortcutBadge?: boolean;
   /** Hover (web) reveals the quick actions in place of the activity timestamp. */
   showActions: boolean;
-  /** The hover-revealed quick-action cluster. */
+  /**
+   * A snoozed workspace states its wake time without waiting for hover, so the
+   * trailing slot renders `children` — carrying the snooze chip alone — beside
+   * the time-ago text instead of staying empty.
+   */
+  showSnoozedChip?: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
+  /** The quick-action cluster, or just the snooze chip when only it is shown. */
   children?: ReactNode;
 }) {
   const {
@@ -110,6 +120,9 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   // so it sits beside the activity label instead of covering it.
   const showOverlayActions = showActions && !showShortcut && !isNative;
   const showInlineActions = showActions && !showShortcut && isNative;
+  // Not hovered but snoozed: the chip sits beside the time-ago text, the same
+  // place the inline actions occupy on touch.
+  const showSnoozeChipOnly = !showActions && showSnoozedChip && !showShortcut;
 
   return (
     <View style={styles.rowContent}>
@@ -121,12 +134,16 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
             isArchiving={isArchiving}
             activityLabel={activityLabel}
             showTimestamp={!showOverlayActions && !showShortcut}
-            showOverlayActions={showOverlayActions}
-            showInlineActions={showInlineActions}
+            showTrailingActions={showOverlayActions || showInlineActions || showSnoozeChipOnly}
           >
             {children}
           </StatusRowMetaLine>
-          <StatusRowTitleLine primaryLabel={primaryLabel} />
+          <StatusRowTitleLine
+            workspace={workspace}
+            primaryLabel={primaryLabel}
+            editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+            onSubmitRename={onSubmitRename}
+          />
         </View>
       </View>
       <StatusRowDetailLine
@@ -151,16 +168,14 @@ function StatusRowMetaLine({
   isArchiving,
   activityLabel,
   showTimestamp,
-  showOverlayActions,
-  showInlineActions,
+  showTrailingActions,
   children,
 }: {
   repoSlug: string;
   isArchiving: boolean;
   activityLabel: string | null;
   showTimestamp: boolean;
-  showOverlayActions: boolean;
-  showInlineActions: boolean;
+  showTrailingActions: boolean;
   children?: ReactNode;
 }) {
   // The quick actions sit in flow, not in an absolute overlay: they claim real
@@ -175,18 +190,33 @@ function StatusRowMetaLine({
         {showTimestamp ? (
           <StatusRowTimestamp isArchiving={isArchiving} activityLabel={activityLabel} />
         ) : null}
-        {showOverlayActions || showInlineActions ? children : null}
+        {showTrailingActions ? children : null}
       </View>
     </View>
   );
 }
 
-function StatusRowTitleLine({ primaryLabel }: { primaryLabel: string }) {
+function StatusRowTitleLine({
+  workspace,
+  primaryLabel,
+  editable,
+  onSubmitRename,
+}: {
+  workspace: SidebarWorkspaceEntry;
+  primaryLabel: string;
+  editable: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
+}) {
   return (
     <View style={styles.titleRow}>
-      <Text style={styles.title} numberOfLines={1}>
-        {primaryLabel}
-      </Text>
+      <SidebarWorkspaceInlineTitle
+        displayValue={primaryLabel}
+        renameValue={workspace.title ?? workspace.name}
+        editable={editable}
+        onSubmit={onSubmitRename}
+        style={styles.title}
+        testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+      />
     </View>
   );
 }
