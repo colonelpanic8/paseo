@@ -3779,6 +3779,7 @@ class ClaudeAgentSession implements AgentSession {
         this.appendSidechainResultEvents(message, events);
         break;
       case "assistant": {
+        const observedModel = normalizeClaudeRuntimeModelId(message.message.model);
         if (message.message.model) {
           this.captureRuntimeModel(message.message.model, "assistant message");
         }
@@ -3787,14 +3788,27 @@ class ClaudeAgentSession implements AgentSession {
           suppressReasoning: options?.suppressReasoning ?? false,
         });
         for (const item of timelineItems) {
-          events.push({ type: "timeline", item, provider: "claude" });
+          events.push({
+            type: "timeline",
+            item:
+              item.type === "assistant_message" && observedModel
+                ? { ...item, model: observedModel }
+                : item,
+            provider: "claude",
+          });
         }
         this.appendSidechainResultEvents(message, events);
         break;
       }
-      case "stream_event":
+      case "stream_event": {
+        const streamEvent = toObjectRecord(message.event);
+        const streamMessage = toObjectRecord(streamEvent?.message);
+        if (streamEvent?.type === "message_start" && typeof streamMessage?.model === "string") {
+          this.captureRuntimeModel(streamMessage.model, "stream message start");
+        }
         this.appendStreamEventEvents(message, events, options);
         break;
+      }
       case "result":
         this.appendResultEvents(message, events);
         break;
