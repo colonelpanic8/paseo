@@ -27,6 +27,9 @@ import type { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.
 import { createPersistedProjectRecord } from "./workspace-registry.js";
 import { deriveProjectKey } from "./project-key.js";
 import type { SessionOptions } from "./session.js";
+import type { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
+import type { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import type { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "./messages.js";
 import {
   asSessionInternals as asSessionInternalsHelper,
@@ -316,6 +319,10 @@ interface SessionForTestOptions {
   serverId?: SessionOptions["serverId"];
   daemonVersion?: SessionOptions["daemonVersion"];
   daemonRuntimeConfig?: SessionOptions["daemonRuntimeConfig"];
+  clientCapabilities?: SessionOptions["clientCapabilities"];
+  liveVoiceCoordinator?: LiveVoiceCoordinator;
+  liveVoiceRouteBroker?: LiveVoiceRouteBroker;
+  liveVoiceToolExecutor?: LiveVoiceToolExecutor;
   downloadTokenStore?: SessionOptions["downloadTokenStore"];
   messages?: unknown[];
   targetedMessages?: Array<{ source: object; message: SessionOutboundMessage }>;
@@ -356,6 +363,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
 
   const sessionOptions: SessionOptions = {
     clientId: "test-client",
+    clientCapabilities: options.clientCapabilities,
     onMessage: (message) => messages.push(message),
     ...(options.targetedMessages
       ? {
@@ -417,6 +425,9 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     getDaemonTcpPort: options.getDaemonTcpPort,
     getDaemonTcpHost: options.getDaemonTcpHost,
     voice: options.voice,
+    liveVoiceCoordinator: options.liveVoiceCoordinator,
+    liveVoiceRouteBroker: options.liveVoiceRouteBroker,
+    liveVoiceToolExecutor: options.liveVoiceToolExecutor,
     serverId: options.serverId,
     daemonVersion: options.daemonVersion,
     daemonRuntimeConfig: options.daemonRuntimeConfig,
@@ -424,6 +435,140 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
   };
   return new Session(sessionOptions);
 }
+
+describe("Live Voice routing session boundary", () => {
+  test("a legacy owner starts local-only Live Voice without receiving route messages", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const start = vi.fn().mockResolvedValue({
+      accepted: true,
+      liveSessionId: "live-session-1",
+      answerSdp: "answer-sdp",
+    });
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.start.request",
+        requestId: "start-request-1",
+        offerSdp: "offer-sdp",
+      },
+      source,
+    );
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start.mock.calls[0]?.[0]).not.toHaveProperty("sendRouteRequest");
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.start.response",
+          payload: {
+            requestId: "start-request-1",
+            accepted: true,
+            liveSessionId: "live-session-1",
+            answerSdp: "answer-sdp",
+          },
+        },
+      },
+    ]);
+  });
+
+  test("only a capable owner's exact source receives reverse route requests", async () => {
+    const source = {};
+    const otherSource = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const start = vi.fn().mockImplementation(async (request) => {
+      await request.sendRouteRequest({
+        type: "voice.live.route.request",
+        requestId: "route-request-1",
+        liveSessionId: "live-session-1",
+        operation: { kind: "list_hosts" },
+      });
+      return {
+        accepted: true,
+        liveSessionId: "live-session-1",
+        answerSdp: "answer-sdp",
+      };
+    });
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
+    });
+    session.updateClientCapabilities({ [CLIENT_CAPS.liveVoiceCrossHostRouter]: true }, source);
+    session.updateClientCapabilities({}, otherSource);
+
+    await session.handleMessage(
+      {
+        type: "voice.live.start.request",
+        requestId: "start-request-1",
+        offerSdp: "offer-sdp",
+      },
+      source,
+    );
+
+    expect(targetedMessages[0]).toEqual({
+      source,
+      message: {
+        type: "voice.live.route.request",
+        requestId: "route-request-1",
+        liveSessionId: "live-session-1",
+        operation: { kind: "list_hosts" },
+      },
+    });
+    expect(targetedMessages.some((entry) => entry.source === otherSource)).toBe(false);
+  });
+
+  test("target tool execution responds only to the requesting source", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const execute = vi.fn().mockResolvedValue({
+      type: "voice.live.tool.execute.response",
+      payload: {
+        requestId: "execute-request-1",
+        ok: true,
+        toolResult: { content: [], structuredContent: { agents: [] } },
+      },
+    });
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceToolExecutor: { execute } as unknown as LiveVoiceToolExecutor,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.tool.execute.request",
+        requestId: "execute-request-1",
+        toolName: "list_agents",
+        arguments: {},
+      },
+      source,
+    );
+
+    expect(execute).toHaveBeenCalledWith({
+      type: "voice.live.tool.execute.request",
+      requestId: "execute-request-1",
+      toolName: "list_agents",
+      arguments: {},
+    });
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.tool.execute.response",
+          payload: {
+            requestId: "execute-request-1",
+            ok: true,
+            toolResult: { content: [], structuredContent: { agents: [] } },
+          },
+        },
+      },
+    ]);
+  });
+});
 
 describe("session authorization scopes", () => {
   test("rejects an RPC outside an exact grant with the generic RPC error", async () => {
