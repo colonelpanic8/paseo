@@ -2307,6 +2307,7 @@ export const ptBR: TranslationResources = {
         sendMessage: "Enviar mensagem",
         queueMessage: "Enfileirar mensagem",
         muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
+        muteUnmuteLiveVoice: "Silenciar/ativar voz ao vivo",
         switchProject: "Trocar projeto",
       },
       helpNotes: {
