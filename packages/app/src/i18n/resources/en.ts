@@ -1894,6 +1894,7 @@ export const en = {
         sendMessage: "Send message",
         queueMessage: "Queue message",
         muteUnmuteVoiceMode: "Mute/unmute voice mode",
+        muteUnmuteLiveVoice: "Mute/unmute live voice",
         switchProject: "Switch project",
       },
       helpNotes: {
