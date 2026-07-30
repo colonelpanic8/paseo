@@ -34,7 +34,7 @@ export interface ArchiveDependencies {
   github: ForgeService;
   workspaceGitService: Pick<WorkspaceGitService, "getSnapshot">;
   agentManager: Pick<AgentManager, "listAgents" | "getAgent" | "archiveAgent" | "archiveSnapshot">;
-  agentStorage: Pick<AgentStorage, "listByWorkspace">;
+  agentStorage: Pick<AgentStorage, "listByWorkspace" | "get" | "updateRecord">;
   // Resolves the worktree at a path to its workspaceId for archive-by-path. The
   // path uniquely identifies a worktree workspace; this is a directory lookup for
   // the archive target, not status/ownership.
@@ -481,10 +481,25 @@ export async function archiveWorkspaceContents(
       "Failed to list stored agents during workspace archive; continuing",
     );
   }
+  const liveAgentIds = new Set(liveAgents.map((agent) => agent.id));
+  const storedRecordsById = new Map(storedRecords.map((record) => [record.id, record]));
   const matchingStoredRecords = storedRecords;
   for (const record of matchingStoredRecords) {
     archivedAgents.add(record.id);
   }
+
+  const snapshotsToArchive = matchingStoredRecords.filter(
+    (record) => !liveAgentIds.has(record.id) && !record.archivedAt,
+  );
+  // Exactly the agents this gesture takes from unarchived to archived. Agents the
+  // user archived individually beforehand are excluded so workspace restore leaves
+  // them where the user put them.
+  const cascadedAgentIds = [
+    ...liveAgents
+      .filter((agent) => !storedRecordsById.get(agent.id)?.archivedAt)
+      .map((agent) => agent.id),
+    ...snapshotsToArchive.map((record) => record.id),
+  ];
 
   const archivedAt = new Date().toISOString();
   const agentIdsToArchive = new Set([
@@ -509,7 +524,103 @@ export async function archiveWorkspaceContents(
     }
   }
 
+  await stampCascadeArchivedAgents(dependencies, cascadedAgentIds, workspaceId);
+
   return archivedAgents;
+}
+
+// Marks the records this gesture archived so `unarchiveWorkspaceContents` can find
+// them again. Runs AFTER the archive fan-out on purpose: `archiveAgent` rebuilds the
+// record (and cascade-archives children concurrently), so a stamp written inline
+// would be overwritten by the archive projection.
+async function stampCascadeArchivedAgents(
+  dependencies: ArchiveWorkspaceContentsDependencies,
+  agentIds: readonly string[],
+  workspaceId: string,
+): Promise<void> {
+  const results = await Promise.allSettled(
+    agentIds.map(async (agentId) =>
+      // Read-modify-write inside the storage write queue: `archiveAgent` closes the
+      // agent, which fires an un-awaited background persist, so reading the record
+      // out here could hand us a stale copy and clobber that persist on write-back.
+      dependencies.agentStorage.updateRecord(agentId, (record) => {
+        // Only stamp what actually ended up archived; a failed archive step must not
+        // leave a stamp that a later restore would act on.
+        if (!record.archivedAt || record.archivedWithWorkspaceId === workspaceId) {
+          return null;
+        }
+        return { ...record, archivedWithWorkspaceId: workspaceId };
+      }),
+    ),
+  );
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      dependencies.sessionLogger?.warn(
+        { err: result.reason, workspaceId },
+        "Failed to stamp workspace-archived agent; workspace restore will skip it",
+      );
+    }
+  }
+}
+
+export interface UnarchiveWorkspaceContentsDependencies {
+  agentManager: Pick<AgentManager, "unarchiveSnapshot">;
+  agentStorage: Pick<AgentStorage, "list" | "get">;
+  sessionLogger?: Logger;
+}
+
+// Inverse of `archiveWorkspaceContents`: restores exactly the agents that were
+// archived as part of archiving this workspace (stamped with
+// `archivedWithWorkspaceId`). Agents archived individually before the workspace was
+// archived carry no stamp and stay archived. Goes through
+// `AgentManager.unarchiveSnapshot` so the provider's native unarchive hook (e.g.
+// Codex `thread/unarchive`) runs, and so the stamp is cleared.
+// Returns the restored records so the caller can publish them to clients.
+export async function unarchiveWorkspaceContents(
+  dependencies: UnarchiveWorkspaceContentsDependencies,
+  workspaceId: string,
+): Promise<StoredAgentRecord[]> {
+  let storedRecords: StoredAgentRecord[] = [];
+  try {
+    storedRecords = await dependencies.agentStorage.list();
+  } catch (error) {
+    dependencies.sessionLogger?.warn(
+      { err: error, workspaceId },
+      "Failed to list stored agents during workspace unarchive; skipping agent restore",
+    );
+    return [];
+  }
+
+  const candidates = storedRecords.filter(
+    (record) => record.archivedAt && record.archivedWithWorkspaceId === workspaceId,
+  );
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const results = await Promise.allSettled(
+    candidates.map(async (candidate) => {
+      const unarchived = await dependencies.agentManager.unarchiveSnapshot(candidate.id);
+      return unarchived ? await dependencies.agentStorage.get(candidate.id) : null;
+    }),
+  );
+
+  const restored: StoredAgentRecord[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      if (result.value) {
+        restored.push(result.value);
+      }
+    } else {
+      dependencies.sessionLogger?.warn(
+        { err: result.reason, workspaceId },
+        "Failed to unarchive agent during workspace restore; continuing",
+      );
+    }
+  }
+
+  return restored;
 }
 
 // True when, after archiving

@@ -187,6 +187,8 @@ import type { PushNotifications } from "./push/index.js";
 import {
   archivePersistedWorkspaceRecord,
   archiveWorkspaceContents,
+  requireActiveWorkspaceForArchive,
+  unarchiveWorkspaceContents,
 } from "./workspace-archive-service.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import { renameCurrentBranch as renameCurrentBranchDefault } from "../utils/checkout-git.js";
@@ -868,6 +870,16 @@ export class Session {
       isDirectory: (path) => this.filesystem.isDirectory(path),
       unarchiveWorkspace: async (workspace) => {
         await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
+        // Bring back the agents this workspace's archive gesture took down.
+        // Agents archived individually beforehand carry no stamp and stay put.
+        await unarchiveWorkspaceContents(
+          {
+            agentManager: this.agentManager,
+            agentStorage: this.agentStorage,
+            sessionLogger: this.sessionLogger,
+          },
+          workspace.workspaceId,
+        );
       },
     });
     this.checkoutSession = new CheckoutSession({
