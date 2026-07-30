@@ -74,6 +74,11 @@ const STORED_AGENT_SCHEMA = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   internal: z.boolean().optional(),
   archivedAt: z.string().nullable().optional(),
+  // Set when this agent was archived as part of archiving its workspace (the
+  // workspace-archive cascade), so restoring that workspace can bring back
+  // exactly those agents and leave individually-archived ones alone.
+  // Storage-only; never crosses the wire.
+  archivedWithWorkspaceId: z.string().nullable().optional(),
   owner: AgentOwnerSchema.optional(),
 });
 
@@ -159,9 +164,29 @@ export class AgentStorage {
     return this.queueRecordMutation(record.id, () => record);
   }
 
+  /**
+   * Read-modify-write inside the per-agent queue so the mutator sees the record
+   * after any in-flight write has landed.
+   */
+  async updateRecord(
+    agentId: string,
+    mutate: (record: StoredAgentRecord) => StoredAgentRecord | null,
+  ): Promise<StoredAgentRecord | null> {
+    await this.load();
+    let written: StoredAgentRecord | null = null;
+    await this.queueRecordMutation(agentId, (existing) => {
+      if (!existing) {
+        return null;
+      }
+      written = mutate(existing);
+      return written;
+    });
+    return written;
+  }
+
   private queueRecordMutation(
     agentId: string,
-    mutate: (existing: StoredAgentRecord | null) => StoredAgentRecord,
+    mutate: (existing: StoredAgentRecord | null) => StoredAgentRecord | null,
   ): Promise<void> {
     const prev = this.pendingWrites.get(agentId) ?? Promise.resolve();
     const next = prev.then(async () => {
@@ -170,6 +195,9 @@ export class AgentStorage {
       }
 
       const record = mutate(this.cache.get(agentId) ?? null);
+      if (!record) {
+        return undefined;
+      }
       await this.writeRecord(record);
       return undefined;
     });
@@ -258,6 +286,9 @@ export class AgentStorage {
       // stale pre-archive record after the archive mutation.
       if (existing && existing.archivedAt !== undefined) {
         record.archivedAt = existing.archivedAt;
+      }
+      if (existing && existing.archivedWithWorkspaceId !== undefined) {
+        record.archivedWithWorkspaceId = existing.archivedWithWorkspaceId;
       }
       return record;
     });
