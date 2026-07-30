@@ -8,6 +8,8 @@ export interface WearBridgeTransport {
   publishSnapshot(payload: string): Promise<boolean>;
   /** Publishes to a per-agent path, so open transcripts don't clobber each other. */
   publishTranscript(agentId: string, payload: string): Promise<boolean>;
+  /** Publishes one project's icon bytes, keyed by the snapshot's projectKey. */
+  publishProjectIcon(projectKey: string, dataBase64: string, mimeType: string): Promise<boolean>;
   addCommandListener(listener: (payload: string) => void): { remove(): void };
   drainPendingCommands(): Promise<string[]>;
 }
@@ -44,6 +46,7 @@ const COALESCE_MS = 2_000;
 /** A watch is currently reading this agent's transcript. */
 interface TranscriptLease {
   serverId: string;
+  agentId: string;
   expiresAt: number;
   /**
    * `lastActivityAt` as of the most recent fetch we started, which is what a later
@@ -89,12 +92,29 @@ export class WearBridge {
   private readonly deps: WearBridgeDeps;
   private subscription: { remove(): void } | null = null;
   private lastPublished: string | null = null;
+  // All three are keyed by serverScopedKey(), not by agent id: ids are only unique within a
+  // server, so two daemons running the same id would otherwise share a lease, cancel
+  // each other's timers, and have one fetch discarded by the other's generation.
   /** Per-agent request counter, so a slow fetch can't overwrite a newer transcript. */
   private readonly transcriptGenerations = new Map<string, number>();
-  /** Agents a watch is currently reading, keyed by agent id. */
+  /** Agents a watch is currently reading. */
   private readonly transcriptLeases = new Map<string, TranscriptLease>();
   /** At most one pending refresh per agent; the handle is what makes it coalesce. */
   private readonly transcriptTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /**
+   * In-flight or settled icon lookups, keyed by server+directory.
+   *
+   * A project's icon is a file on disk that we scan for once and then treat as fixed
+   * for the life of the bridge — the same lifetime the phone UI's query cache gives
+   * it. A resolved null is cached too: "this repo has no icon" is the common answer
+   * and re-asking on every publish would be a daemon round-trip per project per
+   * store change. Only a *failed* lookup is evicted, so a disconnect can retry.
+   */
+  private readonly iconLookups = new Map<string, Promise<WearProjectIcon | null>>();
+  /** Icon bytes currently on the wrist, per projectKey, so we don't republish them. */
+  private readonly publishedIcons = new Map<string, string>();
+  /** Icon syncs are serial: two overlapping runs would race on publishedIcons. */
+  private iconSyncRunning = false;
   private disposed = false;
 
   constructor(deps: WearBridgeDeps) {
@@ -165,7 +185,76 @@ export class WearBridge {
       });
     if (ok) {
       this.lastPublished = payload;
+      // Only after a payload that actually landed: the set of projects can only have
+      // changed if the snapshot did. Deliberately not awaited — an icon is decoration,
+      // and a slow daemon must never hold up the next snapshot.
+      void this.syncProjectIcons();
     }
+  }
+
+  /**
+   * Publish an icon for every project currently on the watch.
+   *
+   * Ordered fetch-then-publish per project rather than a fan-out: this runs off a
+   * store change, and a burst of parallel daemon requests plus Data Layer writes is
+   * exactly what we don't want competing with the transcript path. Every failure is
+   * a warning and a skip — the watch draws a colored initial for any project whose
+   * icon never arrives, which is a perfectly good outcome.
+   */
+  private async syncProjectIcons(): Promise<void> {
+    // A publish that arrives mid-run is dropped rather than queued: state is read at
+    // the top of the run, and the next changed snapshot will sweep anything new.
+    if (this.iconSyncRunning || this.disposed) return;
+    this.iconSyncRunning = true;
+    try {
+      for (const target of collectIconTargets(this.deps.readState())) {
+        if (this.disposed) return;
+
+        const icon = await this.lookupProjectIcon(target.serverId, target.iconDir);
+        if (!icon) continue;
+        if (this.publishedIcons.get(target.projectKey) === icon.data) continue;
+
+        const ok = await this.deps.transport
+          .publishProjectIcon(target.projectKey, icon.data, icon.mimeType)
+          .catch((error: unknown) => {
+            this.deps.logger?.warn(`Failed to publish wear icon for ${target.projectKey}`, error);
+            return false;
+          });
+        if (ok) {
+          this.publishedIcons.set(target.projectKey, icon.data);
+        }
+      }
+    } finally {
+      this.iconSyncRunning = false;
+    }
+  }
+
+  private lookupProjectIcon(serverId: string, iconDir: string): Promise<WearProjectIcon | null> {
+    const key = serverScopedKey(serverId, iconDir);
+    const cached = this.iconLookups.get(key);
+    if (cached) return cached;
+
+    const client = this.deps.getClient(serverId);
+    if (!client) {
+      // Not cached: the server may simply not be connected yet, and "no client right
+      // now" is not an answer about whether this project has an icon.
+      return Promise.resolve(null);
+    }
+
+    // Deferred rather than called inline, so that a synchronous throw still evicts
+    // *after* the set() below — otherwise the failure would cache itself as a
+    // permanent "no icon" and never retry.
+    const lookup = Promise.resolve()
+      .then(() => client.requestProjectIcon(iconDir))
+      .then((result): WearProjectIcon | null => result.icon)
+      .catch((error: unknown) => {
+        this.iconLookups.delete(key);
+        this.deps.logger?.warn(`Failed to fetch project icon for ${iconDir}`, error);
+        return null;
+      });
+
+    this.iconLookups.set(key, lookup);
+    return lookup;
   }
 
   /**
@@ -178,48 +267,58 @@ export class WearBridge {
     if (this.transcriptLeases.size === 0) return;
 
     const activity = lastActivityIndex(state);
-    for (const [agentId, lease] of this.transcriptLeases) {
+    for (const [key, lease] of this.transcriptLeases) {
       if (lease.expiresAt <= now) {
-        this.dropTranscriptLease(agentId);
+        this.dropTranscriptLease(key);
         continue;
       }
 
-      const lastActivityAt = activity.get(activityKey(lease.serverId, agentId));
+      const lastActivityAt = activity.get(key);
       if (lastActivityAt === undefined) {
         // The agent is gone from state — disconnected server, or archived away. The
         // watch has nothing to show either way, so stop fetching for it.
-        this.dropTranscriptLease(agentId);
+        this.dropTranscriptLease(key);
         continue;
       }
 
       if (lastActivityAt === lease.lastActivityAt) continue;
-      this.scheduleTranscriptRefresh(lease.serverId, agentId);
+      this.scheduleTranscriptRefresh(key);
     }
   }
 
-  private scheduleTranscriptRefresh(serverId: string, agentId: string): void {
+  private scheduleTranscriptRefresh(key: string): void {
     // One timer per agent is what coalesces the burst; the generation guard only
     // protects the content that lands, it doesn't stop redundant fetches.
-    if (this.transcriptTimers.has(agentId)) return;
+    if (this.transcriptTimers.has(key)) return;
 
     const timer = setTimeout(() => {
-      this.transcriptTimers.delete(agentId);
+      this.transcriptTimers.delete(key);
       if (this.disposed) return;
-      void this.publishTranscript(serverId, agentId);
+
+      // Recheck at fire time: a change arriving just before expiry would otherwise
+      // fetch and publish for a watch that has already stopped renewing.
+      const lease = this.transcriptLeases.get(key);
+      if (!lease) return;
+      if (lease.expiresAt <= (this.deps.now?.() ?? Date.now())) {
+        this.transcriptLeases.delete(key);
+        return;
+      }
+
+      void this.publishTranscript(lease.serverId, lease.agentId);
     }, COALESCE_MS);
-    this.transcriptTimers.set(agentId, timer);
+    this.transcriptTimers.set(key, timer);
   }
 
-  private dropTranscriptLease(agentId: string): void {
-    this.transcriptLeases.delete(agentId);
-    this.cancelTranscriptRefresh(agentId);
+  private dropTranscriptLease(key: string): void {
+    this.transcriptLeases.delete(key);
+    this.cancelTranscriptRefresh(key);
   }
 
-  private cancelTranscriptRefresh(agentId: string): void {
-    const timer = this.transcriptTimers.get(agentId);
+  private cancelTranscriptRefresh(key: string): void {
+    const timer = this.transcriptTimers.get(key);
     if (timer === undefined) return;
     clearTimeout(timer);
-    this.transcriptTimers.delete(agentId);
+    this.transcriptTimers.delete(key);
   }
 
   /**
@@ -229,13 +328,14 @@ export class WearBridge {
    * that arrives mid-burst doesn't hide activity from the next sweep.
    */
   private renewTranscriptLease(serverId: string, agentId: string, now: number): void {
-    const existing = this.transcriptLeases.get(agentId);
-    if (existing && existing.serverId === serverId) {
+    const existing = this.transcriptLeases.get(serverScopedKey(serverId, agentId));
+    if (existing) {
       existing.expiresAt = now + LEASE_MS;
       return;
     }
-    this.transcriptLeases.set(agentId, {
+    this.transcriptLeases.set(serverScopedKey(serverId, agentId), {
       serverId,
+      agentId,
       expiresAt: now + LEASE_MS,
       lastActivityAt: null,
     });
@@ -257,16 +357,18 @@ export class WearBridge {
    * the screen to read; older pages are prepended so the result stays oldest-first.
    */
   private async publishTranscript(serverId: string, agentId: string): Promise<void> {
+    if (this.disposed) return;
+    const key = serverScopedKey(serverId, agentId);
+
     // Whatever a pending refresh was going to fetch, this fetch covers.
-    this.cancelTranscriptRefresh(agentId);
+    this.cancelTranscriptRefresh(key);
 
     // Read before the fetch, not after: activity that lands while we are paging must
     // still look like movement to the next sweep, or the last turn of a burst is the
     // one the watch never sees.
-    const lease = this.transcriptLeases.get(agentId);
+    const lease = this.transcriptLeases.get(key);
     if (lease) {
-      lease.lastActivityAt =
-        lastActivityIndex(this.deps.readState()).get(activityKey(serverId, agentId)) ?? null;
+      lease.lastActivityAt = lastActivityIndex(this.deps.readState()).get(key) ?? null;
     }
 
     const client = this.deps.getClient(serverId);
@@ -278,8 +380,8 @@ export class WearBridge {
     // Commands run concurrently, so two requests for the same agent race. Without a
     // generation the winner is whichever fetch finishes last, which means a slow
     // older fetch can overwrite a newer transcript with staler content.
-    const generation = (this.transcriptGenerations.get(agentId) ?? 0) + 1;
-    this.transcriptGenerations.set(agentId, generation);
+    const generation = (this.transcriptGenerations.get(key) ?? 0) + 1;
+    this.transcriptGenerations.set(key, generation);
 
     let pages: TimelinePage[];
     try {
@@ -302,12 +404,18 @@ export class WearBridge {
       this.deps.now?.() ?? Date.now(),
     );
 
-    if (this.transcriptGenerations.get(agentId) !== generation) {
+    if (this.transcriptGenerations.get(key) !== generation) {
       // A newer request for this agent already published; this result is older than
       // what the watch is showing, so landing it would be a visible regression.
       return;
     }
 
+    // stop() can land mid-fetch, leaving no timer to cancel. Publishing now would
+    // write over whatever a replacement bridge has already put on the wrist.
+    if (this.disposed) return;
+
+    // The DataItem path stays keyed by agent id alone — that is the wire contract the
+    // watch reads, and it only ever talks to one phone.
     await this.deps.transport
       .publishTranscript(agentId, JSON.stringify(transcript))
       .catch((error: unknown) => {
@@ -384,16 +492,60 @@ export class WearBridge {
   }
 }
 
-/** Agent ids are only unique within a server, so leases are compared per server. */
-function activityKey(serverId: string, agentId: string): string {
-  return `${serverId} ${agentId}`;
+/**
+ * Join a server id to something only unique within that server — an agent id, or a
+ * directory path. NUL as the separator because it can appear in neither half, so
+ * distinct pairs can never collapse into the same key.
+ */
+function serverScopedKey(serverId: string, agentId: string): string {
+  return `${serverId}\u0000${agentId}`;
+}
+
+/** One project's icon as the daemon serves it: base64 bytes plus their mime type. */
+type WearProjectIcon = NonNullable<Awaited<ReturnType<DaemonClient["requestProjectIcon"]>>["icon"]>;
+
+interface IconTarget {
+  serverId: string;
+  /** Exactly what the snapshot publishes, because that is what the watch looks up. */
+  projectKey: string;
+  /** Directory the daemon scans for an icon file. */
+  iconDir: string;
+}
+
+/**
+ * One icon target per distinct project in the snapshot.
+ *
+ * Deduped by projectKey rather than by workspace: ten worktrees of the same repo are
+ * one icon on the wrist, and the watch keys its cache the same way. The scan
+ * directory mirrors the phone sidebar's `iconWorkingDir` — the project root, which
+ * for a Paseo worktree is the main checkout rather than the throwaway worktree, so
+ * every workspace of a project resolves the same file.
+ */
+function collectIconTargets(state: WearSnapshotInput[]): IconTarget[] {
+  const targets = new Map<string, IconTarget>();
+  for (const input of state) {
+    for (const descriptor of input.workspaces.values()) {
+      // Same exclusion the snapshot makes: a workspace on its way out isn't on the
+      // watch, so its project doesn't need an icon there either.
+      if (descriptor.archivingAt) continue;
+
+      const projectKey = descriptor.project?.projectKey ?? descriptor.projectId;
+      if (!projectKey || targets.has(projectKey)) continue;
+
+      const iconDir = descriptor.projectRootPath?.trim() || descriptor.workspaceDirectory?.trim();
+      if (!iconDir) continue;
+
+      targets.set(projectKey, { serverId: input.serverId, projectKey, iconDir });
+    }
+  }
+  return Array.from(targets.values());
 }
 
 function lastActivityIndex(state: WearSnapshotInput[]): Map<string, number> {
   const index = new Map<string, number>();
   for (const input of state) {
     for (const agent of input.agents) {
-      index.set(activityKey(input.serverId, agent.id), agent.lastActivityAt.getTime());
+      index.set(serverScopedKey(input.serverId, agent.id), agent.lastActivityAt.getTime());
     }
   }
   return index;

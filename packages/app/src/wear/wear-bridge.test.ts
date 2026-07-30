@@ -343,14 +343,17 @@ describe("parseWearCommand", () => {
 function makeTransport(): WearBridgeTransport & {
   published: string[];
   transcripts: Array<{ agentId: string; payload: string }>;
+  icons: Array<{ projectKey: string; data: string; mimeType: string }>;
   emit: (payload: string) => void;
 } {
   const published: string[] = [];
   const transcripts: Array<{ agentId: string; payload: string }> = [];
+  const icons: Array<{ projectKey: string; data: string; mimeType: string }> = [];
   let listener: ((payload: string) => void) | null = null;
   return {
     published,
     transcripts,
+    icons,
     emit: (payload) => listener?.(payload),
     publishSnapshot: async (payload) => {
       published.push(payload);
@@ -358,6 +361,10 @@ function makeTransport(): WearBridgeTransport & {
     },
     publishTranscript: async (agentId, payload) => {
       transcripts.push({ agentId, payload });
+      return true;
+    },
+    publishProjectIcon: async (projectKey, data, mimeType) => {
+      icons.push({ projectKey, data, mimeType });
       return true;
     },
     addCommandListener: (next) => {
@@ -1122,5 +1129,321 @@ describe("WearBridge live transcript updates", () => {
     expect(live.transport.transcripts).toHaveLength(0);
     expect(live.fetchAgentTimeline).not.toHaveBeenCalled();
     live.bridge.stop();
+  });
+
+  it("keeps independent leases for the same agent id on two servers", async () => {
+    // Agent ids are only unique within a server. Keyed by id alone, the second
+    // request would overwrite the first server's lease and cancel its timer.
+    const transport = makeTransport();
+    const clock = { now: NOW };
+    const state = {
+      one: [agent({ lastActivityAt: new Date(NOW - 720_000) })],
+      two: [agent({ serverId: "srv-2", lastActivityAt: new Date(NOW - 720_000) })],
+    };
+    const fetchOne = vi.fn().mockResolvedValue(timelinePage(["from one"]));
+    const fetchTwo = vi.fn().mockResolvedValue(timelinePage(["from two"]));
+
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: state.one, workspaces: workspaceMap(workspace()) },
+        { serverId: "srv-2", agents: state.two, workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: (serverId) =>
+        ({ fetchAgentTimeline: serverId === "srv-1" ? fetchOne : fetchTwo }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => clock.now,
+      logger: { warn: vi.fn() },
+    });
+    await bridge.start();
+
+    await bridge.execute({ kind: "requestTranscript", serverId: "srv-1", agentId: "a-1" });
+    await bridge.execute({ kind: "requestTranscript", serverId: "srv-2", agentId: "a-1" });
+    expect(transport.transcripts).toHaveLength(2);
+
+    // Activity on each server must refresh through that server's own client.
+    state.one = [agent({ lastActivityAt: new Date(clock.now) })];
+    await bridge.publish();
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    expect(fetchOne).toHaveBeenCalledTimes(2);
+    expect(fetchTwo).toHaveBeenCalledTimes(1);
+
+    state.two = [agent({ serverId: "srv-2", lastActivityAt: new Date(clock.now) })];
+    await bridge.publish();
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    expect(fetchTwo).toHaveBeenCalledTimes(2);
+    expect(transport.transcripts).toHaveLength(4);
+    bridge.stop();
+  });
+
+  it("does not publish a refresh that fires after the lease expired", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    // Activity lands just inside the lease, so the coalescing timer is scheduled —
+    // but by the time it fires, the lease is past its expiry.
+    live.clock.now += LEASE_MS - 1_000;
+    live.moveActivity(0);
+    await live.bridge.publish();
+    live.clock.now += COALESCE_MS;
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+
+    expect(live.transport.transcripts).toHaveLength(1);
+    live.bridge.stop();
+  });
+
+  it("does not publish a fetch that was in flight when the bridge stopped", async () => {
+    // stop() has no timer left to cancel once the fetch has started; without the
+    // disposed recheck the stale instance would publish over its replacement.
+    const resolvers: PageResolver[] = [];
+    const transport = makeTransport();
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [agent()], workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: () => ({ fetchAgentTimeline: () => deferredPage(resolvers) }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+    await bridge.start();
+
+    const inFlight = bridge.execute(request);
+    await vi.waitFor(() => expect(resolvers).toHaveLength(1));
+    bridge.stop();
+    resolvers[0]?.(timelinePage(["too late"]));
+    await inFlight;
+
+    expect(transport.transcripts).toHaveLength(0);
+  });
+});
+
+describe("WearBridge project icons", () => {
+  /**
+   * Icon sync is deliberately not awaited by publish(), so tests have to let the
+   * fetch/publish chain drain. A handful of microtask turns covers it: every step is
+   * a resolved promise, nothing here is on a timer.
+   */
+  async function flushIconSync(): Promise<void> {
+    // A macrotask rather than a fixed number of microtask turns: everything the sync
+    // awaits is an already-resolved promise, so the whole chain drains before a
+    // setTimeout(0) fires however many hops long it happens to be.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  function iconClient(icon: { data: string; mimeType: string } | null) {
+    return vi.fn().mockResolvedValue({ cwd: "", icon, error: null, requestId: "r" });
+  }
+
+  const PNG = { data: "aWNvbi1ieXRlcw==", mimeType: "image/png" };
+
+  it("fetches an icon once and publishes it under the snapshot's projectKey", async () => {
+    const transport = makeTransport();
+    const requestProjectIcon = iconClient(PNG);
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [agent()], workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: () => ({ requestProjectIcon }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+
+    await bridge.start();
+    await flushIconSync();
+
+    // The project root, not the worktree: that is the directory the phone sidebar
+    // scans, so both halves resolve the same file.
+    expect(requestProjectIcon).toHaveBeenCalledExactlyOnceWith("/home/dev/paseo");
+    expect(transport.icons).toEqual([
+      { projectKey: "github.com/getpaseo/paseo", data: PNG.data, mimeType: PNG.mimeType },
+    ]);
+    bridge.stop();
+  });
+
+  it("does not republish an unchanged icon on a later snapshot", async () => {
+    const transport = makeTransport();
+    const requestProjectIcon = iconClient(PNG);
+    let status: Agent["status"] = "running";
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [agent({ status })], workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: () => ({ requestProjectIcon }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+
+    await bridge.start();
+    await flushIconSync();
+
+    status = "idle";
+    await bridge.publish();
+    await flushIconSync();
+
+    expect(transport.published).toHaveLength(2);
+    expect(requestProjectIcon).toHaveBeenCalledOnce();
+    expect(transport.icons).toHaveLength(1);
+    bridge.stop();
+  });
+
+  it("caches a null icon so a repo without one is asked about once", async () => {
+    const transport = makeTransport();
+    const requestProjectIcon = iconClient(null);
+    let status: Agent["status"] = "running";
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [agent({ status })], workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: () => ({ requestProjectIcon }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+
+    await bridge.start();
+    await flushIconSync();
+    status = "idle";
+    await bridge.publish();
+    await flushIconSync();
+
+    expect(requestProjectIcon).toHaveBeenCalledOnce();
+    expect(transport.icons).toHaveLength(0);
+    bridge.stop();
+  });
+
+  it("fetches per project and routes each to its own server", async () => {
+    const transport = makeTransport();
+    const first = iconClient(PNG);
+    const second = iconClient({ data: "b3RoZXI=", mimeType: "image/svg+xml" });
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [], workspaces: workspaceMap(workspace()) },
+        {
+          serverId: "srv-2",
+          agents: [],
+          workspaces: workspaceMap(
+            workspace({
+              id: "ws-2",
+              name: "other",
+              projectRootPath: "/srv/other",
+              project: {
+                projectKey: "github.com/getpaseo/other",
+                projectName: "other",
+                workspaceName: "other",
+                checkout: {} as NonNullable<WorkspaceDescriptor["project"]>["checkout"],
+              },
+            }),
+          ),
+        },
+      ],
+      getClient: (serverId) =>
+        ({ requestProjectIcon: serverId === "srv-1" ? first : second }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+
+    await bridge.start();
+    await flushIconSync();
+
+    expect(first).toHaveBeenCalledExactlyOnceWith("/home/dev/paseo");
+    expect(second).toHaveBeenCalledExactlyOnceWith("/srv/other");
+    expect(transport.icons.map((entry) => entry.projectKey)).toEqual([
+      "github.com/getpaseo/paseo",
+      "github.com/getpaseo/other",
+    ]);
+    bridge.stop();
+  });
+
+  it("asks once per project no matter how many workspaces it has", async () => {
+    const transport = makeTransport();
+    const requestProjectIcon = iconClient(PNG);
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        {
+          serverId: "srv-1",
+          agents: [],
+          // Two worktrees of the same repo: one icon, one lookup.
+          workspaces: workspaceMap(workspace(), workspace({ id: "ws-2", name: "second" })),
+        },
+      ],
+      getClient: () => ({ requestProjectIcon }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+
+    await bridge.start();
+    await flushIconSync();
+
+    expect(requestProjectIcon).toHaveBeenCalledOnce();
+    expect(transport.icons).toHaveLength(1);
+    bridge.stop();
+  });
+
+  it("survives a failed fetch and retries it on the next sync", async () => {
+    const transport = makeTransport();
+    const warn = vi.fn();
+    const requestProjectIcon = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("daemon busy"))
+      .mockResolvedValue({ cwd: "", icon: PNG, error: null, requestId: "r" });
+    let status: Agent["status"] = "running";
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [agent({ status })], workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: () => ({ requestProjectIcon }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn },
+    });
+
+    // The failure must not surface as a rejected publish(): icons are decoration and
+    // the snapshot is the thing that matters.
+    await expect(bridge.start()).resolves.toBeUndefined();
+    await flushIconSync();
+    expect(transport.published).toHaveLength(1);
+    expect(transport.icons).toHaveLength(0);
+    expect(warn).toHaveBeenCalled();
+
+    status = "idle";
+    await bridge.publish();
+    await flushIconSync();
+
+    expect(requestProjectIcon).toHaveBeenCalledTimes(2);
+    expect(transport.icons).toHaveLength(1);
+    bridge.stop();
+  });
+
+  it("skips icons entirely while no daemon client is available", async () => {
+    const transport = makeTransport();
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [agent()], workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: () => null,
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+
+    await bridge.start();
+    await flushIconSync();
+
+    expect(transport.icons).toHaveLength(0);
+    bridge.stop();
   });
 });

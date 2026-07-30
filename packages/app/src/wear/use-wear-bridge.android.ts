@@ -3,6 +3,7 @@ import {
   addWearCommandListener,
   drainPendingWearCommands,
   isWearBridgeSupported,
+  publishWearProjectIcon,
   publishWearSnapshot,
   publishWearTranscript,
 } from "@getpaseo/expo-wear-bridge";
@@ -65,6 +66,7 @@ export function useWearBridge(): void {
       transport: {
         publishSnapshot: publishWearSnapshot,
         publishTranscript: publishWearTranscript,
+        publishProjectIcon: publishWearProjectIcon,
         addCommandListener: addWearCommandListener,
         drainPendingCommands: drainPendingWearCommands,
       },
