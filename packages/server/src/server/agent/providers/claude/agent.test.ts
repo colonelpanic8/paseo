@@ -2186,6 +2186,41 @@ describe("ClaudeAgentSession context window usage", () => {
     }
   });
 
+  test("attributes a turn with an unrecognized model rather than leaving it blank", async () => {
+    const unknownRuntimeModel = "claude-experimental-9-9-20991231";
+    const session = await createSessionForTurns([
+      [
+        createInitMessage(),
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-offcatalog",
+            role: "assistant",
+            model: unknownRuntimeModel,
+            content: [{ type: "text", text: "Off-catalog output." }],
+            usage: { input_tokens: 10, output_tokens: 4 },
+          },
+          uuid: "assistant-offcatalog-event",
+          session_id: "session-1",
+        },
+        createSuccessResult(),
+      ],
+    ]);
+
+    try {
+      const result = await session.run("turn");
+
+      expect(result.timeline).toContainEqual({
+        type: "assistant_message",
+        text: "Off-catalog output.",
+        messageId: "assistant-offcatalog",
+        model: unknownRuntimeModel,
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
   test("reports an unrecognized runtime model verbatim instead of a stale known one", async () => {
     // Claude falling back to a model outside our catalog must not leave the
     // previously recognized model in place — that asserts the agent is running
