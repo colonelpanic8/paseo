@@ -153,55 +153,46 @@ produces both signed APKs).
   Snapshots over `DataClient`, commands over `MessageClient`.
 - `use-wear-bridge.android.ts` + a no-op base keeps the Android-only native module
   out of non-Android bundles (Metro platform split, per CLAUDE.md).
+- **Conversation scrollback** on the agent screen: `requestTranscript` command,
+  `/paseo/transcript/<agentId>` DataItems, and a `ScalingLazyColumn` that opens at
+  the newest turn with the actions at the end of the list.
+- **Text entry** via `RemoteInputIntentHelper` (`androidx.wear:wear-input`), so the
+  keyboard button opens the system input picker instead of the recognizer sheet.
+- **Stop de-emphasised** to 38dp, 20dp clear of the 52dp Reply.
 - Watch APK built and signed by the F-Droid pipeline with the phone's key
   (`scripts/fdroid-build-watch.sh`); version code uses ABI slot 5 so it cannot
   collide with the phone's 1–4.
 - Launcher icon is the real Paseo butterfly, path copied byte-identical from
   `packages/app/assets/images/butterfly-white.svg`.
-- 27 phone-side tests, 10 watch unit tests, 1 on-device instrumented test.
+- 27 phone-side tests, 27 watch unit tests, 1 on-device instrumented test.
 
 ## Open work
 
-Three UI asks from the user, in their priority order:
+All three of the user's UI asks are built. What remains is verification on hardware:
 
-1. **Conversation scrollback on the agent screen.** Today it shows only
-   `summary`, which is the daemon's _agent title_, capped at 3 lines — not a
-   transcript. This is the substantial one; design sketch below.
-2. **A text reply path.** The reply screen's keyboard button currently launches
-   `RecognizerIntent` with a keyboard hint, so text entry is buried behind the voice
-   sheet. Wear's `RemoteInputIntent.ACTION_REMOTE_INPUT` opens the system input
-   picker directly (keyboard + handwriting + voice + canned) and is probably the
-   right call.
-3. **De-emphasize Stop** on the agent screen — smaller and less prominent than
-   Reply. Currently both are 52dp `ActionButton`s about 10dp apart.
+1. **Nothing about the transcript has run on a real phone+watch pair.** The watch
+   half is unit-tested against pinned JSON and the phone half against its own tests,
+   but the hop carrying a `/paseo/transcript/<agentId>` DataItem has not been
+   exercised. Worth watching for specifically: DataItem size against the ~100 KB
+   Data Layer cap if the phone's projection ever stops capping entries, and whether
+   the initial scroll actually lands at the bottom on a round 450×450 display.
+2. **`RemoteInputIntentHelper` is untested on device.** It resolves to a system
+   activity; if a watch has no input picker the launch would fail. The mic path is
+   unchanged and still works.
 
-### Transcript design sketch (undecided, needs the user's call)
+### Transcript shape as built
 
-The worry was never size in the abstract — it is that a Paseo timeline is **not just
-text**. It is tool calls, file reads, diffs, terminal output, reasoning blocks.
-DataItem and MessageClient payloads cap around **100 KB**, and one `Bash` result or
-file read can blow that alone. A _projected_ tail (assistant prose + user prompts,
-tool calls collapsed to one line) is a few KB for dozens of turns.
+Projection, not transport, was the whole problem — a Paseo timeline is tool calls,
+file reads, diffs, and terminal output, and one `Bash` result can exceed the ~100 KB
+DataItem cap alone. The resolved answers to what were open questions:
 
-So the work is projection, not transport. Proposed shape, an extension of the
-existing protocol rather than a new one:
-
-- **New command kind** `requestTranscript` in the `WireCommand` union (both
-  `data/WearBridge.kt` and `wear-protocol.ts` — hand-mirrored, no codegen; the
-  watch's `WearBridgeTest` pins the JSON).
-- **New DataItem path** `/paseo/transcript/<agentId>`, kept out of the snapshot,
-  which republishes on every store change and must stay small. On-demand, per agent.
-- **Source**: `client.fetchAgentTimeline(agentId, {limit, direction, projection})`
-  already exists, is paged, and is authoritative per `docs/timeline-sync.md`.
-  `projection: "projected"` is the daemon's own collapsed view — prefer it over
-  re-deriving on the phone.
-
-Open questions for the user:
-
-- **What is an "entry"?** Leaning: one assistant message or one user prompt, each
-  truncated (~300 chars), with tool calls either collapsed to a single line
-  (`Bash: git push origin …`) or dropped entirely. **Text-only would genuinely
-  simplify this** — it removes per-kind rendering on the watch and makes the cap
-  trivially safe.
-- **How far back?** ~20 entries in one round trip, or crown-paged for older?
-  Paging costs work on both sides.
+- **An entry** is `{kind, text}` with `kind` ∈ `user` | `assistant` | `tool` |
+  `error`. Tool calls collapse to a single line (`Bash: git push origin …`) rather
+  than being dropped, so the watch can show that work is happening. The kind set is
+  open: the watch renders an unknown kind as muted plain text.
+- **How far back**: up to 100 entries in one round trip, no paging. `truncated: true`
+  tells the watch to say "earlier history on your phone" instead of pretending it can
+  fetch more.
+- **Source** on the phone is `client.fetchAgentTimeline(agentId, {…, projection})`
+  with `projection: "projected"` — the daemon's own collapsed view, per
+  `docs/timeline-sync.md`. Prefer it over re-deriving.
