@@ -124,9 +124,16 @@ function rank(state: WearAgentState): number {
 /**
  * Flatten one daemon's agents and workspaces into the watch's view.
  *
- * Agents whose workspace we don't know about are dropped rather than shown under a
- * synthetic parent: the watch's whole model is workspace-first, and a workspace with
- * a made-up name would be worse than an absent row.
+ * Iterates WORKSPACES, not agents. Grouping by agent silently dropped every
+ * workspace that had none, which broke two things: the design's empty-workspace
+ * row ("no agents · tap to start") and its whole 0-agents-goes-straight-to-voice
+ * navigation rule. Worse, with no agents running anywhere the snapshot came out
+ * completely empty and the watch sat on its "open Paseo on your phone" screen as
+ * though the bridge were down.
+ *
+ * Agents whose workspace we don't know about are still dropped rather than shown
+ * under a synthetic parent: the watch's whole model is workspace-first, and a
+ * workspace with a made-up name would be worse than an absent row.
  */
 export function buildWearWorkspaces(input: WearSnapshotInput, now: number): WearWorkspace[] {
   const byWorkspace = new Map<string, WearAgent[]>();
@@ -158,10 +165,12 @@ export function buildWearWorkspaces(input: WearSnapshotInput, now: number): Wear
   }
 
   const workspaces: WearWorkspace[] = [];
-  for (const [workspaceId, agents] of byWorkspace) {
-    const descriptor = input.workspaces.get(workspaceId);
-    if (!descriptor) continue;
+  for (const [workspaceId, descriptor] of input.workspaces) {
+    // A workspace mid-archive is on its way out; showing it invites a reply to an
+    // agent whose cwd is about to disappear.
+    if (descriptor.archivingAt) continue;
 
+    const agents = byWorkspace.get(workspaceId) ?? [];
     agents.sort((left, right) => rank(left.state) - rank(right.state));
 
     workspaces.push({

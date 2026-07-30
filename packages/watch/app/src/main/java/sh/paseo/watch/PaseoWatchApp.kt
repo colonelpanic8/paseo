@@ -55,7 +55,16 @@ private object Routes {
 }
 
 @Composable
-fun PaseoWatchApp(repository: WatchRepository, waitingMessage: String? = null) {
+fun PaseoWatchApp(
+  repository: WatchRepository,
+  waitingMessage: String? = null,
+  /**
+   * True once a snapshot has actually arrived from the phone. Distinguishes "the
+   * phone reported no workspaces" from "no snapshot has ever arrived", which need
+   * different copy — see [WaitingScreen].
+   */
+  linked: Boolean = true,
+) {
   PaseoWatchTheme {
     val navController = rememberSwipeDismissableNavController()
     val scope = rememberCoroutineScope()
@@ -71,11 +80,7 @@ fun PaseoWatchApp(repository: WatchRepository, waitingMessage: String? = null) {
       ) {
         composable(Routes.WORKSPACES) {
           if (workspaces.isEmpty()) {
-            // No snapshot yet. Distinct from "you have no workspaces", which the
-            // phone would report as an empty list only after it had connected —
-            // but from the wrist both look the same, and the actionable advice is
-            // identical, so one screen covers both.
-            WaitingScreen(message = waitingMessage)
+            WaitingScreen(linked = linked, message = waitingMessage)
             return@composable
           }
           WorkspaceListScreen(
