@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { PaseoSubagentRow, SubagentRow } from "./select";
+import type { AgentModelDisplay } from "@/composer/agent-controls/utils";
+import type { PaseoSubagentRow, ProviderSubagentRow, SubagentRow } from "./select";
 import {
   buildSubagentRowPresentationData,
   countFinishedSubagents,
   formatHeaderLabel,
   resolveRowLabel,
+  resolveSubagentRowLabel,
 } from "./track-presentation";
 
 function row(
@@ -18,6 +20,39 @@ function row(
     status: overrides.status ?? "idle",
     requiresAttention: overrides.requiresAttention ?? false,
     createdAt: overrides.createdAt ?? new Date("2026-04-20T00:00:00.000Z"),
+    model: overrides.model ?? null,
+    runtimeModelId: overrides.runtimeModelId ?? null,
+    thinkingOptionId: overrides.thinkingOptionId ?? null,
+    effectiveThinkingOptionId: overrides.effectiveThinkingOptionId,
+  };
+}
+
+function providerRow(
+  overrides: Partial<ProviderSubagentRow> & Pick<ProviderSubagentRow, "id">,
+): ProviderSubagentRow {
+  return {
+    kind: "provider",
+    id: overrides.id,
+    parentAgentId: overrides.parentAgentId ?? "parent",
+    provider: overrides.provider ?? "claude",
+    title: overrides.title ?? null,
+    description: overrides.description ?? null,
+    status: overrides.status ?? "running",
+    requiresAttention: overrides.requiresAttention ?? false,
+    createdAt: overrides.createdAt ?? new Date("2026-04-20T00:00:00.000Z"),
+    model: overrides.model ?? null,
+    runtimeModelId: overrides.runtimeModelId ?? null,
+    thinkingOptionId: overrides.thinkingOptionId ?? null,
+    effectiveThinkingOptionId: overrides.effectiveThinkingOptionId,
+  };
+}
+
+function modelDisplay(overrides: Partial<AgentModelDisplay> = {}): AgentModelDisplay {
+  return {
+    modelId: overrides.modelId ?? null,
+    modelLabel: overrides.modelLabel ?? null,
+    thinkingOptionId: overrides.thinkingOptionId ?? null,
+    thinkingLabel: overrides.thinkingLabel ?? null,
   };
 }
 
@@ -76,26 +111,14 @@ describe("formatHeaderLabel", () => {
 describe("countFinishedSubagents", () => {
   it("counts only terminal provider-owned children", () => {
     const providerRows: SubagentRow[] = [
-      {
-        kind: "provider",
-        id: "native-running",
-        parentAgentId: "parent",
-        provider: "claude",
-        title: "running",
-        status: "running",
-        requiresAttention: false,
-        createdAt: new Date("2026-04-20T00:00:00.000Z"),
-      },
-      {
-        kind: "provider",
+      providerRow({ id: "native-running", title: "running", status: "running" }),
+      providerRow({
         id: "native-failed",
-        parentAgentId: "parent",
-        provider: "claude",
         title: "failed",
         status: "failed",
         requiresAttention: true,
         createdAt: new Date("2026-04-20T00:00:01.000Z"),
-      },
+      }),
     ];
 
     expect(
@@ -164,5 +187,86 @@ describe("buildSubagentRowPresentationData", () => {
       buildSubagentRowPresentationData(row({ id: "a", status: "idle", requiresAttention: true }))
         .statusBucket,
     ).toBe("done");
+  });
+
+  it("renders no meta when no model display is supplied", () => {
+    expect(buildSubagentRowPresentationData(row({ id: "a" })).meta).toBe(null);
+  });
+
+  it("renders no meta when the model display resolved nothing", () => {
+    expect(buildSubagentRowPresentationData(row({ id: "a" }), modelDisplay()).meta).toBe(null);
+  });
+
+  it("joins the model and thinking labels into the trailing meta", () => {
+    expect(
+      buildSubagentRowPresentationData(
+        row({ id: "a" }),
+        modelDisplay({ modelLabel: "Opus 4.5", thinkingLabel: "High" }),
+      ).meta,
+    ).toBe("Opus 4.5 · High");
+  });
+
+  it("renders the model alone when no thinking level is known", () => {
+    expect(
+      buildSubagentRowPresentationData(row({ id: "a" }), modelDisplay({ modelLabel: "Opus 4.5" }))
+        .meta,
+    ).toBe("Opus 4.5");
+  });
+
+  it("uses the title as the tooltip for paseo rows", () => {
+    expect(buildSubagentRowPresentationData(row({ id: "a", title: "Build it" })).tooltip).toBe(
+      "Build it",
+    );
+  });
+
+  it("prefers the description over the subagent type for provider row labels", () => {
+    const presentation = buildSubagentRowPresentationData(
+      providerRow({ id: "a", title: "general-purpose", description: "Find hover bugs" }),
+    );
+
+    expect(presentation.label).toBe("Find hover bugs");
+    expect(presentation.titleState).toBe("ready");
+  });
+
+  it("keeps the subagent type available in the provider row tooltip", () => {
+    expect(
+      buildSubagentRowPresentationData(
+        providerRow({ id: "a", title: "general-purpose", description: "Find hover bugs" }),
+      ).tooltip,
+    ).toBe("Find hover bugs (general-purpose)");
+  });
+
+  it("does not repeat the type in the tooltip when it is the only label", () => {
+    expect(
+      buildSubagentRowPresentationData(
+        providerRow({ id: "a", title: "general-purpose", description: null }),
+      ).tooltip,
+    ).toBe("general-purpose");
+  });
+
+  it("falls back to the subagent type when the provider sent no description", () => {
+    expect(
+      buildSubagentRowPresentationData(
+        providerRow({ id: "a", title: "general-purpose", description: "   " }),
+      ).label,
+    ).toBe("general-purpose");
+  });
+});
+
+describe("resolveSubagentRowLabel", () => {
+  it("reads paseo rows from the title", () => {
+    expect(resolveSubagentRowLabel(row({ id: "a", title: "Review child" }))).toBe("Review child");
+  });
+
+  it("reads provider rows from the description first", () => {
+    expect(
+      resolveSubagentRowLabel(
+        providerRow({ id: "a", title: "code-reviewer", description: "Review the diff" }),
+      ),
+    ).toBe("Review the diff");
+  });
+
+  it("returns null when a provider row carries neither", () => {
+    expect(resolveSubagentRowLabel(providerRow({ id: "a" }))).toBe(null);
   });
 });

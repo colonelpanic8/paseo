@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import type { Theme } from "@/styles/theme";
@@ -37,6 +37,7 @@ export type AssistantTurnForkHandler = (input: {
 export const TurnFooter = memo(function TurnFooter({
   isRunning,
   inFlightTurnStartedAt,
+  runningMeta = null,
   host,
   strategy,
   supportsTimelineCursor,
@@ -44,6 +45,8 @@ export const TurnFooter = memo(function TurnFooter({
 }: {
   isRunning: boolean;
   inFlightTurnStartedAt: Date | null;
+  /** "Model · Thinking" for the running turn; omitted when unknown. */
+  runningMeta?: string | null;
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
   supportsTimelineCursor: boolean;
@@ -52,7 +55,7 @@ export const TurnFooter = memo(function TurnFooter({
   if (isRunning) {
     return (
       <TurnFooterRow>
-        <RunningTurnFooter inFlightTurnStartedAt={inFlightTurnStartedAt} />
+        <RunningTurnFooter inFlightTurnStartedAt={inFlightTurnStartedAt} meta={runningMeta} />
       </TurnFooterRow>
     );
   }
@@ -102,8 +105,10 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
 
 const WorkingIndicator = memo(function WorkingIndicator({
   inFlightTurnStartedAt = null,
+  meta = null,
 }: {
   inFlightTurnStartedAt?: Date | null;
+  meta?: string | null;
 }) {
   const active = useRetainedPanelActive();
   return (
@@ -111,22 +116,39 @@ const WorkingIndicator = memo(function WorkingIndicator({
       <View style={stylesheet.workingLoader}>
         <ThemedSyncedLoader size={14} uniProps={workingIndicatorColorMapping} />
       </View>
-      {inFlightTurnStartedAt ? (
-        <LiveElapsed
-          startedAt={inFlightTurnStartedAt}
-          active={active}
-          style={stylesheet.workingElapsed}
-          testID="turn-working-elapsed"
-        />
+      {inFlightTurnStartedAt || meta ? (
+        // Elapsed and meta share a tighter inner gap than the loader spacing, so
+        // "1m 4s · Opus 4.5 · High" reads as one run of metadata.
+        <View style={stylesheet.workingDetail}>
+          {inFlightTurnStartedAt ? (
+            <LiveElapsed
+              startedAt={inFlightTurnStartedAt}
+              active={active}
+              style={stylesheet.workingElapsed}
+              testID="turn-working-elapsed"
+            />
+          ) : null}
+          {meta ? (
+            <Text style={stylesheet.workingMeta} numberOfLines={1} testID="turn-working-meta">
+              {inFlightTurnStartedAt ? `· ${meta}` : meta}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
 });
 
-function RunningTurnFooter({ inFlightTurnStartedAt }: { inFlightTurnStartedAt: Date | null }) {
+function RunningTurnFooter({
+  inFlightTurnStartedAt,
+  meta,
+}: {
+  inFlightTurnStartedAt: Date | null;
+  meta: string | null;
+}) {
   return (
     <View style={stylesheet.turnFooterSlot} testID="turn-working-indicator">
-      <WorkingIndicator inFlightTurnStartedAt={inFlightTurnStartedAt} />
+      <WorkingIndicator inFlightTurnStartedAt={inFlightTurnStartedAt} meta={meta} />
     </View>
   );
 }
@@ -214,6 +236,19 @@ const stylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
     fontVariant: ["tabular-nums"],
+  },
+  workingDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    minWidth: 0,
+    gap: theme.spacing[1.5],
+  },
+  workingMeta: {
+    flexShrink: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: STREAM_METADATA_FONT_SIZE,
   },
   workingLoader: {
     marginLeft: -2,

@@ -11,6 +11,10 @@ import {
   WorkspaceTabIcon,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
+import {
+  useAgentModelDisplayResolver,
+  type AgentModelDisplayResolver,
+} from "@/hooks/use-agent-model-display";
 import type { Theme } from "@/styles/theme";
 import type { SubagentRow } from "./select";
 import {
@@ -31,6 +35,9 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 
 export interface SubagentsTrackProps {
   rows: SubagentRow[];
+  /** Host and directory the model labels are resolved against. */
+  serverId: string;
+  cwd: string | null;
   onOpenSubagent: (id: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   onArchiveSubagent: (id: string) => void;
@@ -40,18 +47,40 @@ export interface SubagentsTrackProps {
 
 const SUBAGENTS_LIST_MAX_HEIGHT = 200;
 
-function buildRowPresentation(row: SubagentRow): WorkspaceTabPresentation {
-  const data = buildSubagentRowPresentationData(row);
+interface SubagentRowView {
+  presentation: WorkspaceTabPresentation;
+  /** Trailing muted "Model · Thinking", or null when the row reports neither. */
+  meta: string | null;
+}
+
+function buildRowView(
+  row: SubagentRow,
+  resolveModelDisplay: AgentModelDisplayResolver,
+): SubagentRowView {
+  const data = buildSubagentRowPresentationData(
+    row,
+    resolveModelDisplay({ provider: row.provider, source: row }),
+  );
   return {
-    ...data,
-    tooltip: data.label,
-    modified: false,
-    icon: getProviderIcon(row.provider),
+    meta: data.meta,
+    presentation: {
+      key: data.key,
+      kind: data.kind,
+      label: data.label,
+      subtitle: "",
+      tooltip: data.tooltip,
+      titleState: data.titleState,
+      statusBucket: data.statusBucket,
+      modified: false,
+      icon: getProviderIcon(row.provider),
+    },
   };
 }
 
 export function SubagentsTrack({
   rows,
+  serverId,
+  cwd,
   onOpenSubagent,
   onOpenProviderSubagent,
   onArchiveSubagent,
@@ -60,6 +89,7 @@ export function SubagentsTrack({
 }: SubagentsTrackProps): ReactElement | null {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const resolveModelDisplay = useAgentModelDisplayResolver(serverId, cwd);
 
   const toggleExpanded = useCallback(() => {
     setExpanded((current) => !current);
@@ -134,6 +164,7 @@ export function SubagentsTrack({
                 <SubagentsTrackRow
                   key={row.id}
                   row={row}
+                  resolveModelDisplay={resolveModelDisplay}
                   onOpenSubagent={onOpenSubagent}
                   onOpenProviderSubagent={onOpenProviderSubagent}
                   onArchiveSubagent={onArchiveSubagent}
@@ -150,6 +181,7 @@ export function SubagentsTrack({
 
 interface SubagentsTrackRowProps {
   row: SubagentRow;
+  resolveModelDisplay: AgentModelDisplayResolver;
   onOpenSubagent: (id: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   onArchiveSubagent: (id: string) => void;
@@ -158,6 +190,7 @@ interface SubagentsTrackRowProps {
 
 function SubagentsTrackRow({
   row,
+  resolveModelDisplay,
   onOpenSubagent,
   onOpenProviderSubagent,
   onArchiveSubagent,
@@ -166,7 +199,10 @@ function SubagentsTrackRow({
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const [hovered, setHovered] = useState(false);
-  const presentation = useMemo(() => buildRowPresentation(row), [row]);
+  const { presentation, meta } = useMemo(
+    () => buildRowView(row, resolveModelDisplay),
+    [resolveModelDisplay, row],
+  );
   const displayLabel =
     presentation.titleState === "loading" ? t("common.states.loading") : presentation.label;
   const handlePress = useCallback(() => {
@@ -204,6 +240,17 @@ function SubagentsTrackRow({
             <Text style={styles.rowLabel} numberOfLines={1}>
               {displayLabel}
             </Text>
+            {meta ? (
+              // Capped width so the meta truncates before it can crowd the title,
+              // including on compact where the action cluster is always visible.
+              <Text
+                style={styles.rowMeta}
+                numberOfLines={1}
+                testID={`subagents-track-row-meta-${row.id}`}
+              >
+                {meta}
+              </Text>
+            ) : null}
             {row.kind === "paseo" ? (
               <SubagentRowActions
                 rowId={row.id}
@@ -390,6 +437,13 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
+  },
+  rowMeta: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: "40%",
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   actionClusterVisible: {
     flexDirection: "row",
