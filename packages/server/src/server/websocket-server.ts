@@ -40,6 +40,7 @@ import {
   type SessionOptions,
   type SessionRuntimeMetrics,
 } from "./session.js";
+import { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import type { HubExecutionAgents } from "./hub/daemon-executions.js";
@@ -535,6 +536,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly daemonVersion: string;
   private readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   private readonly agentManager: AgentManager;
+  private readonly liveVoiceCoordinator: LiveVoiceCoordinator;
   private readonly agentStorage: AgentStorage;
   private readonly messageReceipts: MessageReceipts;
   private readonly creationService: CreationService;
@@ -755,6 +757,12 @@ export class VoiceAssistantWebSocketServer {
     });
 
     this.providerUsageService = new ProviderUsageService({
+      logger: this.logger,
+    });
+
+    // Daemon-global: one Live Voice call per agent across every client session.
+    this.liveVoiceCoordinator = new LiveVoiceCoordinator({
+      agents: this.agentManager,
       logger: this.logger,
     });
 
@@ -1066,6 +1074,7 @@ export class VoiceAssistantWebSocketServer {
     this.unsubscribeDaemonConfigChange = null;
     this.unsubscribeTerminalActivity?.();
     this.unsubscribeTerminalActivity = null;
+    this.liveVoiceCoordinator.dispose();
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
       this.runtimeMetricsInterval = null;
@@ -1512,6 +1521,7 @@ export class VoiceAssistantWebSocketServer {
       voice: {
         turnDetection: () => this.speech?.resolveTurnDetection() ?? null,
       },
+      liveVoiceCoordinator: this.liveVoiceCoordinator,
       voiceBridge: {
         registerVoiceSpeakHandler: (agentId, handler) => {
           if (this.voiceSpeakHandlers.has(agentId))
@@ -1923,6 +1933,8 @@ export class VoiceAssistantWebSocketServer {
         canonicalSubmittedPrompts: true,
         // COMPAT(stableProjectIdentity): added in v0.1.109, remove gate after 2027-01-15.
         stableProjectIdentity: true,
+        // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
+        liveVoice: true,
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: true,
         // COMPAT(projectCustomIcon): added in v0.2.0, remove after 2027-01-20.
@@ -2061,6 +2073,9 @@ export class VoiceAssistantWebSocketServer {
     this.sessions.delete(ws);
     connection.sockets.delete(ws);
     connection.session.clearAgentTimelineSubscription(ws);
+    // Live voice must die with its socket, not after the reconnect grace below:
+    // the WebRTC media path is already gone.
+    connection.session.releaseLiveVoiceForSource(ws);
     this.socketIdentities.delete(ws);
 
     if (connection.sockets.size === 0) {

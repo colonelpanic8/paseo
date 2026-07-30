@@ -67,6 +67,8 @@ const sessionMock = vi.hoisted(() => {
     clearAgentTimelineSubscription = vi.fn((source: object) => {
       void this.delivery.detach(source);
     });
+    clearAgentTimelineSubscription = vi.fn();
+    releaseLiveVoiceForSource = vi.fn();
     getClientActivity = vi.fn(() => null);
     wantsSourceEvent = (source: object) => !this.delivery.isModern(source);
     getSessionId = vi.fn(() => "mock-session-id");
@@ -257,6 +259,7 @@ function createServer(options?: {
     createStub<AgentManager>({
       subscribe: vi.fn(() => () => {}),
       setAgentAttentionCallback: vi.fn(),
+      onAgentClosing: vi.fn(() => () => {}),
       getAgent: vi.fn(() => null),
       getMetricsSnapshot: vi.fn(() => ({
         totalAgents: 0,
