@@ -11371,6 +11371,7 @@ test("failed startup history closes the session without registering an agent", a
   }
 });
 
+// eslint-disable-next-line complexity
 test("workspace archive stamps its agents and workspace unarchive restores exactly those", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-workspace-unarchive-"));
   const storagePath = join(workdir, "agents");
