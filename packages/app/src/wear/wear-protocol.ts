@@ -61,6 +61,38 @@ export interface WearSnapshot {
   workspaces: WearWorkspace[];
 }
 
+/**
+ * Transcript entry kinds the phone emits.
+ *
+ * The watch tolerates kinds it doesn't know so this list can grow without a
+ * version bump; the phone must still only emit these four.
+ */
+export type WearTranscriptEntryKind = "user" | "assistant" | "tool" | "error";
+
+export interface WearTranscriptEntry {
+  kind: WearTranscriptEntryKind;
+  /** Already trimmed, collapsed and capped — the watch renders it verbatim. */
+  text: string;
+}
+
+/**
+ * One agent's conversation, published on demand to `/paseo/transcript/<agentId>`.
+ *
+ * Deliberately not part of the snapshot: the snapshot covers every agent on every
+ * daemon, and carrying transcripts for all of them would mean subscribing to every
+ * timeline just to populate a wrist. The watch asks for exactly the one it opened.
+ */
+export interface WearTranscript {
+  v: number;
+  agentId: string;
+  serverId: string;
+  updatedAt: number;
+  /** Oldest to newest. */
+  entries: WearTranscriptEntry[];
+  /** True when history exists before the first entry, so the watch can say so. */
+  truncated: boolean;
+}
+
 export type WearCommand =
   | { kind: "sendPrompt"; serverId: string; agentId: string; text: string }
   | { kind: "createAgent"; serverId: string; workspaceId: string; text: string }
@@ -72,6 +104,7 @@ export type WearCommand =
       allow: boolean;
     }
   | { kind: "stopAgent"; serverId: string; agentId: string }
+  | { kind: "requestTranscript"; serverId: string; agentId: string }
   | { kind: "refresh" };
 
 function str(record: Record<string, unknown>, key: string): string | null {
@@ -103,6 +136,8 @@ function buildCommand(
     }
     case "stopAgent":
       return agentId ? { kind: "stopAgent", serverId, agentId } : null;
+    case "requestTranscript":
+      return agentId ? { kind: "requestTranscript", serverId, agentId } : null;
     default:
       return null;
   }

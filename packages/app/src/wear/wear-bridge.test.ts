@@ -304,6 +304,18 @@ describe("parseWearCommand", () => {
     });
 
     expect(parseWearCommand(JSON.stringify({ kind: "refresh" }))).toEqual({ kind: "refresh" });
+
+    expect(
+      parseWearCommand(
+        JSON.stringify({ v: 1, kind: "requestTranscript", serverId: "s", agentId: "a" }),
+      ),
+    ).toEqual({ kind: "requestTranscript", serverId: "s", agentId: "a" });
+  });
+
+  it("rejects a transcript request with no agent to fetch", () => {
+    expect(
+      parseWearCommand(JSON.stringify({ v: 1, kind: "requestTranscript", serverId: "s" })),
+    ).toBeNull();
   });
 
   it("rejects malformed, incomplete, and wrong-version commands", () => {
@@ -330,15 +342,22 @@ describe("parseWearCommand", () => {
 
 function makeTransport(): WearBridgeTransport & {
   published: string[];
+  transcripts: Array<{ agentId: string; payload: string }>;
   emit: (payload: string) => void;
 } {
   const published: string[] = [];
+  const transcripts: Array<{ agentId: string; payload: string }> = [];
   let listener: ((payload: string) => void) | null = null;
   return {
     published,
+    transcripts,
     emit: (payload) => listener?.(payload),
     publishSnapshot: async (payload) => {
       published.push(payload);
+      return true;
+    },
+    publishTranscript: async (agentId, payload) => {
+      transcripts.push({ agentId, payload });
       return true;
     },
     addCommandListener: (next) => {
@@ -605,6 +624,320 @@ describe("WearBridge", () => {
 
     expect(createAgent).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
+    bridge.stop();
+  });
+});
+
+interface PageOptions {
+  hasOlder?: boolean;
+  seq?: number;
+  epoch?: string;
+  reset?: boolean;
+  staleCursor?: boolean;
+}
+
+/** A daemon timeline page, shaped loosely — only the fields the bridge reads. */
+function itemsPage(items: unknown[], options: PageOptions = {}) {
+  const seq = options.seq ?? 1;
+  const epoch = options.epoch ?? "e1";
+  return {
+    entries: items.map((item) => ({ item })),
+    startCursor: { epoch, seq },
+    endCursor: { epoch, seq: seq + items.length },
+    epoch,
+    reset: options.reset ?? false,
+    staleCursor: options.staleCursor ?? false,
+    hasOlder: options.hasOlder ?? false,
+    hasNewer: false,
+  };
+}
+
+function timelinePage(texts: string[], options: PageOptions = {}) {
+  return itemsPage(
+    texts.map((text) => ({ type: "user_message", text })),
+    options,
+  );
+}
+
+/** A full page of distinctly labelled entries, so page ordering shows in the result. */
+function pageTexts(page: number): string[] {
+  return Array.from({ length: 40 }, (_, index) => `page${page}-${index}`);
+}
+
+/**
+ * A full page carrying only five visible entries; the rest is reasoning, which the
+ * projection drops. Counting raw entries would badly overcount such a page.
+ */
+function reasoningHeavyPage(page: number) {
+  const items = Array.from({ length: 40 }, (_, index) =>
+    index < 5
+      ? { type: "user_message", text: `page${page}-${index}` }
+      : { type: "reasoning", text: "thinking" },
+  );
+  return itemsPage(items, { hasOlder: true, seq: 100 - page });
+}
+
+type PageResolver = (page: unknown) => void;
+
+/** A fetch the test completes by hand, so two requests can be interleaved. */
+function deferredPage(resolvers: PageResolver[]): Promise<unknown> {
+  return new Promise<unknown>((resolve) => {
+    resolvers.push(resolve);
+  });
+}
+
+describe("WearBridge transcript requests", () => {
+  const baseState = () => [
+    { serverId: "srv-1", agents: [agent()], workspaces: workspaceMap(workspace()) },
+  ];
+
+  function makeBridge(
+    fetchAgentTimeline: ReturnType<typeof vi.fn> | null,
+    warn = vi.fn(),
+  ): { bridge: WearBridge; transport: ReturnType<typeof makeTransport>; warn: typeof warn } {
+    const transport = makeTransport();
+    const bridge = new WearBridge({
+      transport,
+      readState: baseState,
+      getClient: () => (fetchAgentTimeline ? ({ fetchAgentTimeline } as never) : null),
+      resolveNewAgentConfig: () => null,
+      now: () => NOW,
+      logger: { warn },
+    });
+    return { bridge, transport, warn };
+  }
+
+  const request = { kind: "requestTranscript", serverId: "srv-1", agentId: "a-1" } as const;
+
+  it("fetches the tail page and publishes the projected transcript", async () => {
+    const fetchAgentTimeline = vi.fn().mockResolvedValue(timelinePage(["Fix the tests"]));
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await bridge.execute(request);
+
+    // No cursor and no direction: that is what asks for the latest tail page.
+    expect(fetchAgentTimeline).toHaveBeenCalledTimes(1);
+    expect(fetchAgentTimeline).toHaveBeenCalledWith("a-1", { projection: "projected", limit: 40 });
+
+    expect(transport.transcripts).toHaveLength(1);
+    expect(transport.transcripts[0].agentId).toBe("a-1");
+    expect(JSON.parse(transport.transcripts[0].payload)).toEqual({
+      v: WEAR_PROTOCOL_VERSION,
+      agentId: "a-1",
+      serverId: "srv-1",
+      updatedAt: NOW,
+      entries: [{ kind: "user", text: "Fix the tests" }],
+      truncated: false,
+    });
+    bridge.stop();
+  });
+
+  it("does not republish the snapshot", async () => {
+    const fetchAgentTimeline = vi.fn().mockResolvedValue(timelinePage(["hi"]));
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+    expect(transport.published).toHaveLength(1);
+
+    await bridge.execute(request);
+
+    // Reading a transcript changes nothing about the agent, so the forced republish
+    // that every other command does would be pure Data Layer traffic.
+    expect(transport.published).toHaveLength(1);
+    bridge.stop();
+  });
+
+  it("pages backwards until it has enough entries, oldest page first", async () => {
+    let call = 0;
+    const fetchAgentTimeline = vi.fn().mockImplementation(async () => {
+      call += 1;
+      return timelinePage(pageTexts(call), { hasOlder: true, seq: 100 - call });
+    });
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await bridge.execute(request);
+
+    // 40 + 40 + 40 clears the 100-entry target, so it stops without a fourth request.
+    expect(fetchAgentTimeline).toHaveBeenCalledTimes(3);
+    expect(fetchAgentTimeline).toHaveBeenNthCalledWith(2, "a-1", {
+      projection: "projected",
+      direction: "before",
+      cursor: { epoch: "e1", seq: 99 },
+      limit: 40,
+    });
+
+    const transcript = JSON.parse(transport.transcripts[0].payload);
+    expect(transcript.entries).toHaveLength(100);
+    // Oldest page leads, newest entry is last, and the 20 oldest were trimmed.
+    expect(transcript.entries[0].text).toBe("page3-20");
+    expect(transcript.entries.at(-1).text).toBe("page1-39");
+    expect(transcript.truncated).toBe(true);
+    bridge.stop();
+  });
+
+  it("stops at the request cap when the daemon returns small pages", async () => {
+    const fetchAgentTimeline = vi
+      .fn()
+      .mockImplementation(async () => timelinePage(["a", "b", "c"], { hasOlder: true, seq: 5 }));
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await bridge.execute(request);
+
+    // An agent with a long history must not turn into an unbounded walk backwards.
+    expect(fetchAgentTimeline).toHaveBeenCalledTimes(4);
+    expect(JSON.parse(transport.transcripts[0].payload).truncated).toBe(true);
+    bridge.stop();
+  });
+
+  it("stops as soon as the daemon reports no older history", async () => {
+    const fetchAgentTimeline = vi
+      .fn()
+      .mockResolvedValue(timelinePage(["only"], { hasOlder: false }));
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await bridge.execute(request);
+
+    expect(fetchAgentTimeline).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(transport.transcripts[0].payload).truncated).toBe(false);
+    bridge.stop();
+  });
+
+  it("drops the request when that server is not connected", async () => {
+    const { bridge, transport, warn } = makeBridge(null);
+    await bridge.start();
+
+    await expect(bridge.execute(request)).resolves.toBeUndefined();
+
+    expect(transport.transcripts).toHaveLength(0);
+    expect(warn).toHaveBeenCalled();
+    bridge.stop();
+  });
+
+  it("publishes nothing when the fetch fails", async () => {
+    const fetchAgentTimeline = vi.fn().mockRejectedValue(new Error("timeline unavailable"));
+    const { bridge, transport, warn } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await expect(bridge.execute(request)).resolves.toBeUndefined();
+
+    // An empty transcript would read as "this agent has said nothing"; leaving the
+    // watch on its loading state is the honest outcome.
+    expect(transport.transcripts).toHaveLength(0);
+    expect(warn).toHaveBeenCalled();
+    bridge.stop();
+  });
+
+  it("budgets paging in visible entries, not raw daemon entries", async () => {
+    let call = 0;
+    const fetchAgentTimeline = vi.fn().mockImplementation(async () => {
+      call += 1;
+      return reasoningHeavyPage(call);
+    });
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await bridge.execute(request);
+
+    // 40 raw entries a page would have stopped this at three requests, with just 15
+    // lines to show. Only five entries a page survive projection, so the walk keeps
+    // spending the budget it has.
+    expect(fetchAgentTimeline).toHaveBeenCalledTimes(4);
+    expect(JSON.parse(transport.transcripts[0].payload).entries).toHaveLength(20);
+    bridge.stop();
+  });
+
+  it("stops paging when the timeline epoch changes mid-walk", async () => {
+    let call = 0;
+    const fetchAgentTimeline = vi.fn().mockImplementation(async () => {
+      call += 1;
+      return call === 1
+        ? timelinePage(["kept one", "kept two"], { hasOlder: true, seq: 99, epoch: "e1" })
+        : timelinePage(["from a rewound timeline"], { hasOlder: true, seq: 40, epoch: "e2" });
+    });
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await bridge.execute(request);
+
+    // It asks once more, sees a different epoch, and keeps the consistent prefix
+    // rather than splicing two histories into one duplicated conversation.
+    expect(fetchAgentTimeline).toHaveBeenCalledTimes(2);
+    const transcript = JSON.parse(transport.transcripts[0].payload);
+    expect(transcript.entries.map((entry: { text: string }) => entry.text)).toEqual([
+      "kept one",
+      "kept two",
+    ]);
+    bridge.stop();
+  });
+
+  it("discards a page the daemon flagged as a stale-cursor reset", async () => {
+    let call = 0;
+    const fetchAgentTimeline = vi.fn().mockImplementation(async () => {
+      call += 1;
+      return call === 1
+        ? timelinePage(["kept"], { hasOlder: true, seq: 99 })
+        : timelinePage(["refetched tail"], { hasOlder: true, seq: 40, staleCursor: true });
+    });
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    await bridge.execute(request);
+
+    expect(fetchAgentTimeline).toHaveBeenCalledTimes(2);
+    const transcript = JSON.parse(transport.transcripts[0].payload);
+    expect(transcript.entries.map((entry: { text: string }) => entry.text)).toEqual(["kept"]);
+    bridge.stop();
+  });
+
+  it("skips a stale publish when a newer request for the same agent already landed", async () => {
+    const resolvers: PageResolver[] = [];
+    const fetchAgentTimeline = vi.fn().mockImplementation(() => deferredPage(resolvers));
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    const older = bridge.execute(request);
+    const newer = bridge.execute(request);
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+
+    // The newer request wins the race...
+    resolvers[1](timelinePage(["newer"]));
+    await newer;
+    // ...so the older one, finishing late, must not overwrite it.
+    resolvers[0](timelinePage(["older"]));
+    await older;
+
+    expect(transport.transcripts).toHaveLength(1);
+    expect(JSON.parse(transport.transcripts[0].payload).entries[0].text).toBe("newer");
+    bridge.stop();
+  });
+
+  it("still publishes a later request for the same agent", async () => {
+    const fetchAgentTimeline = vi.fn().mockResolvedValue(timelinePage(["hi"]));
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    // The generation guard must only suppress out-of-order results, not sequential
+    // re-requests of the same agent.
+    await bridge.execute(request);
+    await bridge.execute(request);
+
+    expect(transport.transcripts).toHaveLength(2);
+    bridge.stop();
+  });
+
+  it("handles a transcript request delivered over the native command listener", async () => {
+    const fetchAgentTimeline = vi.fn().mockResolvedValue(timelinePage(["from the watch"]));
+    const { bridge, transport } = makeBridge(fetchAgentTimeline);
+    await bridge.start();
+
+    transport.emit(
+      JSON.stringify({ v: 1, kind: "requestTranscript", serverId: "srv-1", agentId: "a-1" }),
+    );
+
+    await vi.waitFor(() => expect(transport.transcripts).toHaveLength(1));
     bridge.stop();
   });
 });
