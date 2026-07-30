@@ -119,6 +119,12 @@ The conversation is a **separate, on-demand fetch for the one agent you opened**
    result can exceed the Data Layer's ~100 KB item limit on its own.
 3. It is a DataItem, not a message, so the watch's own cache renders it instantly on
    a revisit while the fresh copy is still in flight.
+4. The request also opens a short **lease** on the phone (`wear-bridge.ts`): while a
+   watch is looking at an agent, the phone pushes a fresh transcript within a couple
+   of seconds of new activity, coalesced per agent. The lease outlives the watch's
+   ~60s re-request cadence and lapses ~2.5 minutes after the screen closes, so an
+   open screen follows the conversation live and a closed one stops costing timeline
+   fetches. The watch needs no code for this — updated DataItems already flow.
 
 Three properties worth preserving:
 
@@ -140,8 +146,19 @@ Three properties worth preserving:
 
 ## Voice and typing
 
-Two doors, both `ui/ReplyScreen.kt`, both returning a finished string — no audio or
+Two doors, both `ui/Composer.kt`, both returning a finished string — no audio or
 keystrokes ever touch our code, and there is no `RECORD_AUDIO` permission.
+
+`rememberComposerLaunchers(prompt, onText)` owns the intent configuration for both and
+is the only place it exists. It has two callers: the agent screen's action row, and
+`ui/NewAgentScreen.kt`.
+
+**Reply is the recognizer.** Tapping Reply on the agent screen launches speech
+recognition immediately and sends what you said — there is no composer screen in
+between. There was one, and it cost every spoken reply an extra tap plus a screen of
+canned answers; both are gone. `Type` next to it launches the system input picker just
+as directly. A brand-new agent still gets a composer screen, because there is no
+conversation to hang buttons off, but it too is mic + keyboard only.
 
 - **Mic** → `RecognizerIntent` with `EXTRA_PREFER_OFFLINE`, so Google's on-device
   recognizer keeps working with no network.
@@ -173,6 +190,8 @@ Two invariants worth not breaking:
   `PaseoWatchApp.kt`. One agent goes straight to the agent; zero agents go straight
   to a voice prompt; the picker is only for genuinely ambiguous workspaces. Don't
   re-derive this at call sites.
+- **Replying is not a navigation.** The agent screen composes in place via
+  `rememberComposerLaunchers`; there is no reply route and nothing should add one.
 - **The project-icon color hash is a port, not an invention** — it mirrors
   `packages/app/src/utils/project-icon-color.ts` so a project is the same color on
   wrist and phone. Change both or neither.
