@@ -19,6 +19,10 @@ interface ContextWindowMeterProps {
   usedTokens: number | null;
   totalCostUsd?: number | null;
   showPercentage?: boolean;
+  /** Model the agent is actually running; omitted when unknown. */
+  modelLabel?: string | null;
+  /** Thinking level the agent is actually running; omitted when unknown. */
+  thinkingLabel?: string | null;
   /** Optional glyph envelope for icon-toolbar alignment. */
   glyphSize?: number;
 }
@@ -148,6 +152,8 @@ export function ContextWindowMeter({
   usedTokens,
   totalCostUsd,
   showPercentage = false,
+  modelLabel,
+  thinkingLabel,
   glyphSize,
 }: ContextWindowMeterProps) {
   const { t } = useTranslation();
@@ -197,6 +203,20 @@ export function ContextWindowMeter({
   const accessibilityLabel = context
     ? t("contextWindow.accessibility", { percentage: context.percentage })
     : t("contextWindow.accessibilityNoData");
+  const runtimeDetails = (
+    <>
+      {modelLabel ? (
+        <Text style={styles.runtimeDetail} testID="context-window-meter-model">
+          {t("contextWindow.model", { model: modelLabel })}
+        </Text>
+      ) : null}
+      {thinkingLabel ? (
+        <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
+          {t("contextWindow.thinking", { thinking: thinkingLabel })}
+        </Text>
+      ) : null}
+    </>
+  );
 
   if (isCompact) {
     return (
@@ -220,6 +240,7 @@ export function ContextWindowMeter({
             showTitle={false}
             refreshable
           />
+          {runtimeDetails}
         </ContextWindowSheet>
       </>
     );
@@ -261,6 +282,7 @@ export function ContextWindowMeter({
             showTitle
             refreshable={false}
           />
+          {runtimeDetails}
         </TooltipContent>
       </Tooltip>
     );
@@ -295,6 +317,7 @@ export function ContextWindowMeter({
           showTitle
           refreshable
         />
+        {runtimeDetails}
       </HoverCardContent>
     </HoverCard>
   );
@@ -320,6 +343,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
+  },
+  runtimeDetail: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.4,
   },
   // Plain details use a small inset; account usage cards have their own content density.
   plainPopover: { paddingVertical: theme.spacing[1], paddingHorizontal: theme.spacing[2] },
