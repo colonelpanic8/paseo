@@ -20,6 +20,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -190,13 +191,20 @@ function SidebarWorkspaceSnoozeItems({
 }) {
   if (snooze.isSnoozed) {
     return (
-      <DropdownMenuItem
-        testID={`sidebar-workspace-menu-wake-${workspaceKey}`}
-        leading={wakeLeadingIcon}
-        onSelect={snooze.onWake}
-      >
-        {snooze.wakeLabel}
-      </DropdownMenuItem>
+      <>
+        {snooze.snoozedUntilLabel ? (
+          <DropdownMenuLabel testID={`sidebar-workspace-menu-snoozed-until-${workspaceKey}`}>
+            {snooze.snoozedUntilLabel}
+          </DropdownMenuLabel>
+        ) : null}
+        <DropdownMenuItem
+          testID={`sidebar-workspace-menu-wake-${workspaceKey}`}
+          leading={wakeLeadingIcon}
+          onSelect={snooze.onWake}
+        >
+          {snooze.wakeLabel}
+        </DropdownMenuItem>
+      </>
     );
   }
   return (
