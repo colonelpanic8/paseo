@@ -11448,6 +11448,7 @@ test("usage session is a pure read of the live adapter and disappears on close",
   expect(manager.usageSession(agent.id)).toBeNull();
 });
 
+// eslint-disable-next-line complexity
 test("workspace archive stamps its agents and workspace unarchive restores exactly those", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-workspace-unarchive-"));
   const storagePath = join(workdir, "agents");
