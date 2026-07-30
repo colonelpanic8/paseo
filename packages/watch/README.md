@@ -46,6 +46,34 @@ into range — so the list is never blank just because the link blipped. Command
 over `MessageClient` because it fails fast: silently queueing "approve this
 permission" for delivery an hour later would be worse than an honest failure.
 
+### App identity is load-bearing — the watch must BE the phone app
+
+The Data Layer only routes between a phone app and a watch app that share **both
+the same `applicationId` and the same signing certificate**. Get either wrong and
+nothing crosses: puts succeed, listeners register, node discovery works, and Play
+Services silently delivers nothing to the mismatched peer. There is no error on
+either side — the watch just waits forever. This was learned the hard way; the
+first shipped build used a dedicated `sh.paseo.watch` package and could never have
+received a snapshot from any phone build.
+
+So the watch's identity mirrors the phone variant it pairs with
+(`packages/app/app.config.js`):
+
+| Phone variant | applicationId       | Watch build                                            |
+| ------------- | ------------------- | ------------------------------------------------------ |
+| development   | `sh.paseo.debug`    | the default — debug builds just work locally           |
+| assembly      | `sh.paseo.assembly` | `-PpaseoApplicationId=sh.paseo.assembly` + F-Droid key |
+| production    | `sh.paseo`          | `-PpaseoApplicationId=sh.paseo` + release key          |
+
+The debug default works because a debug watch build and a locally-built dev phone
+app on the same machine share `~/.android/debug.keystore`. Distribution builds
+must be signed by the same pipeline that signs the phone APK — a debug-signed
+watch build can never talk to a release-signed phone app.
+
+The Kotlin `namespace` stays `sh.paseo.watch` regardless; only the install
+identity varies. The launch component is therefore
+`<applicationId>/sh.paseo.watch.MainActivity`.
+
 ### The pieces
 
 | Where                                    | What                                                          |
@@ -141,7 +169,7 @@ A Wear OS AVD with a round 450×450 display:
 avdmanager create avd -n paseo-wear -k "system-images;android-35;android-wear;x86_64"
 emulator @paseo-wear -no-window -gpu swiftshader_indirect
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n sh.paseo.watch/.MainActivity
+adb shell am start -n sh.paseo.debug/sh.paseo.watch.MainActivity
 adb exec-out screencap -p > /tmp/watch.png
 ```
 
@@ -183,8 +211,8 @@ To exercise the watch against real JSON without a paired phone:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am instrument -w -e class sh.paseo.watch.data.SeedSnapshotTool \
-  sh.paseo.watch.test/androidx.test.runner.AndroidJUnitRunner
-adb shell am start -n sh.paseo.watch/.MainActivity
+  sh.paseo.debug.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am start -n sh.paseo.debug/sh.paseo.watch.MainActivity
 ```
 
 Use `am instrument` rather than `gradle connectedDebugAndroidTest`, which uninstalls
