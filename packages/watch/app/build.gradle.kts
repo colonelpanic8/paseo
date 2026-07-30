@@ -72,6 +72,7 @@ dependencies {
   implementation(libs.wear.compose.material)
   implementation(libs.wear.compose.foundation)
   implementation(libs.wear.compose.navigation)
+  implementation(libs.wear.input)
 
   implementation(libs.play.services.wearable)
   implementation(libs.kotlinx.serialization.json)
