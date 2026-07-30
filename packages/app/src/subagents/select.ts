@@ -2,7 +2,8 @@ import { useEffect, useMemo } from "react";
 import { usePendingArchiveAgentIds } from "@/hooks/use-archive-agent";
 import equal from "fast-deep-equal";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { useSessionStore, type Agent } from "@/stores/session-store";
+import { useSessionStore, type Agent, type DaemonServerInfo } from "@/stores/session-store";
+import { resolveAgentPurposeSummary } from "@/agents/purpose-summary";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@getpaseo/protocol/messages";
 
@@ -11,6 +12,7 @@ export interface PaseoSubagentRow {
   id: Agent["id"];
   provider: Agent["provider"];
   title: Agent["title"];
+  summary: string | null;
   status: Agent["status"];
   requiresAttention: Agent["requiresAttention"];
   createdAt: Agent["createdAt"];
@@ -22,6 +24,7 @@ export interface ProviderSubagentRow {
   parentAgentId: string;
   provider: ProviderSubagentDescriptorPayload["provider"];
   title: string | null;
+  summary: null;
   status: ProviderSubagentDescriptorPayload["status"];
   requiresAttention: boolean;
   createdAt: Date;
@@ -40,12 +43,13 @@ interface SelectSubagentsParams {
 const EMPTY_SUBAGENT_ROWS: SubagentRow[] = [];
 const EMPTY_PROVIDER_SUBAGENT_ROWS: ProviderSubagentRow[] = [];
 
-function toSubagentRow(agent: Agent): SubagentRow {
+function toSubagentRow(agent: Agent, serverInfo: DaemonServerInfo | null | undefined): SubagentRow {
   return {
     kind: "paseo",
     id: agent.id,
     provider: agent.provider,
     title: agent.title,
+    summary: resolveAgentPurposeSummary({ summary: agent.summary, serverInfo }),
     status: agent.status,
     requiresAttention: agent.requiresAttention,
     createdAt: agent.createdAt,
@@ -58,6 +62,7 @@ export function selectSubagentsForParent(
   pendingArchiveIds: ReadonlySet<string>,
 ): SubagentRow[] {
   const agents = state.sessions[params.serverId]?.agents;
+  const serverInfo = state.sessions[params.serverId]?.serverInfo;
   if (!agents || agents.size === 0) {
     return EMPTY_SUBAGENT_ROWS;
   }
@@ -71,7 +76,7 @@ export function selectSubagentsForParent(
     ) {
       continue;
     }
-    rows.push(toSubagentRow(agent));
+    rows.push(toSubagentRow(agent, serverInfo));
   }
 
   if (rows.length === 0) {
@@ -98,6 +103,7 @@ export function selectProviderSubagentsForParent(
       parentAgentId: subagent.parentAgentId,
       provider: subagent.provider,
       title: subagent.title ?? subagent.description,
+      summary: null,
       status: subagent.status,
       requiresAttention: subagent.status === "failed",
       createdAt: new Date(subagent.createdAt),

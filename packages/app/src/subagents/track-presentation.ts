@@ -24,7 +24,7 @@ export function buildSubagentRowPresentationData(row: SubagentRow): SubagentRowP
     key: `${row.kind}_subagent_${row.id}`,
     kind: "agent",
     label: label ?? "",
-    subtitle: "",
+    subtitle: row.summary ?? "",
     titleState: label ? "ready" : "loading",
     statusBucket: deriveSidebarStateBucket({
       status,
