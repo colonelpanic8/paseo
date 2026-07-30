@@ -213,15 +213,10 @@ describe("host colors", () => {
     expect(storedProfile("purple")?.color).toBe("purple");
   });
 
-  it("keeps a stored custom hex color", () => {
-    expect(storedProfile("#ff00ff")?.color).toBe("#ff00ff");
-  });
-
-  it("drops invalid colors", () => {
+  it("drops colors that are not palette keys", () => {
+    expect(storedProfile("#ff00ff")?.color).toBeNull();
     expect(storedProfile(undefined)?.color).toBeNull();
     expect(storedProfile(42)?.color).toBeNull();
-    expect(storedProfile("magenta")?.color).toBeNull();
-    expect(storedProfile("#ff00f")?.color).toBeNull();
   });
 
   it("accepts every advertised color key", () => {

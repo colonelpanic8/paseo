@@ -41,6 +41,7 @@ import {
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import { isStatusGroupCollapsed } from "@/stores/sidebar-collapsed-sections-store/state";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
+import { SidebarStatusRowSnoozeAction } from "@/components/sidebar/sidebar-status-row-snooze-action";
 import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
@@ -79,7 +80,7 @@ interface StatusWorkspaceListProps {
   groups: StatusGroup[];
   archivedWorkspaces: ArchivedWorkspaceEntry[];
   pinnedWorkspaces: SidebarWorkspaceEntry[];
-  /** Project icon data URIs keyed by project view key. */
+  /** Project icon data URIs keyed by project view key; null when the project has no icon. */
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
   showShortcutBadges: boolean;
@@ -640,6 +641,7 @@ function StatusWorkspaceRowWithMenu({
         onCopyBranchName={workspace.projectKind === "git" ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
+        onSubmitRename={handleSubmitRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
@@ -678,6 +680,7 @@ function StatusWorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onSubmitRename,
   onMarkAsRead,
   archiveShortcutKeys,
   isPinned,
@@ -701,6 +704,7 @@ function StatusWorkspaceRowInner({
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onSubmitRename?: (value: string) => Promise<void>;
   onMarkAsRead?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
@@ -710,6 +714,9 @@ function StatusWorkspaceRowInner({
 }) {
   const isTouchPlatform = platformIsNative;
   const archiveCollapse = useArchiveCollapse(isArchiving);
+  // The snoozed bucket already ticks via the sidebar's wake clock, so the row
+  // needs no timer of its own: it pops out of the bucket when the snooze ends.
+  const isSnoozed = workspace.statusBucket === "snoozed";
 
   const isDesktop = !isTouchPlatform;
   const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
@@ -737,6 +744,9 @@ function StatusWorkspaceRowInner({
           // Touch platforms have no hover, so the kebab is permanent there and the
           // inline archive text button never appears.
           const showActions = Boolean(onArchive && (isHovered || isTouchPlatform));
+          // The full cluster already contains the snooze chip, so the standalone
+          // one only fills the gap when the cluster is hidden.
+          const showSnoozeChipOnly = !showActions && isSnoozed;
           const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
           return (
             <View style={styles.workspaceRowContainer} {...hoverHandlers}>
@@ -764,7 +774,12 @@ function StatusWorkspaceRowInner({
                     shortcutNumber={shortcutNumber}
                     showShortcutBadge={showShortcutBadge}
                     showActions={showActions}
+                    showSnoozedChip={showSnoozeChipOnly}
+                    onSubmitRename={onSubmitRename}
                   >
+                    {showSnoozeChipOnly ? (
+                      <StatusWorkspaceSnoozeChip workspace={workspace} />
+                    ) : null}
                     {showActions && onArchive ? (
                       <StatusWorkspaceQuickActions
                         workspace={workspace}
@@ -793,7 +808,26 @@ function StatusWorkspaceRowInner({
   );
 }
 
-/** Hover-revealed cluster: inline archive (web) plus the row kebab. */
+/**
+ * The snooze trigger, which renders both inside the hover cluster and on its
+ * own for a snoozed row that is not hovered. The menu hook is deliberately
+ * mounted here rather than in the row: it is per-render work the row should
+ * only pay when the trigger is actually on screen.
+ */
+function StatusWorkspaceSnoozeChip({ workspace }: { workspace: SidebarWorkspaceEntry }) {
+  const snooze = useWorkspaceSnoozeMenu({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+    isSnoozed: workspace.statusBucket === "snoozed",
+    snoozeWakeAt: workspace.snoozeWakeAt,
+  });
+  if (!snooze) {
+    return null;
+  }
+  return <SidebarStatusRowSnoozeAction workspaceKey={workspace.workspaceKey} snooze={snooze} />;
+}
+
+/** Hover-revealed cluster: snooze, inline archive (web), plus the row kebab. */
 function StatusWorkspaceQuickActions({
   workspace,
   showInlineArchive,
@@ -827,9 +861,14 @@ function StatusWorkspaceQuickActions({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
     isSnoozed: workspace.statusBucket === "snoozed",
+    snoozeWakeAt: workspace.snoozeWakeAt,
   });
+
   return (
     <View style={styles.workspaceQuickActions}>
+      {snooze ? (
+        <SidebarStatusRowSnoozeAction workspaceKey={workspace.workspaceKey} snooze={snooze} />
+      ) : null}
       {showInlineArchive ? (
         <SidebarStatusRowArchiveAction label={archiveLabel} onArchive={onArchive} />
       ) : null}
