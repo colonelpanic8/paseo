@@ -4,6 +4,7 @@ import {
   Text,
   Pressable,
   ScrollView,
+  type ViewStyle,
   type GestureResponderEvent,
   type PressableStateCallbackType,
 } from "react-native";
@@ -279,6 +280,7 @@ interface WorkspaceRowInnerProps {
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onSubmitRename?: (value: string) => Promise<void>;
   onMarkAsRead?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
@@ -581,6 +583,7 @@ function WorkspaceRowRightGroup({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
     isSnoozed: workspace.statusBucket === "snoozed",
+    snoozeWakeAt: workspace.snoozeWakeAt,
   });
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
@@ -950,6 +953,7 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onSubmitRename,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -1027,6 +1031,7 @@ function WorkspaceRowInner({
                   shortcutNumber={shortcutNumber}
                   showShortcutBadge={showShortcutBadge}
                   reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+                  onSubmitRename={onSubmitRename}
                 >
                   <WorkspaceRowRightGroup
                     workspace={workspace}
@@ -1220,6 +1225,7 @@ function WorkspaceRowWithMenu({
         onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
+        onSubmitRename={handleSubmitRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
@@ -1750,6 +1756,7 @@ export function SidebarWorkspaceList({
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
+  projectNamesByViewKey,
   collapsedProjectKeys,
   onToggleProjectCollapsed,
   shortcutIndexByWorkspaceKey,
@@ -1803,7 +1810,9 @@ export function SidebarWorkspaceList({
         statusGroups={statusGroups}
         allServerIds={serverIds}
         pinnedGroups={pinnedGroups}
+        projects={projects}
         workspaceEntriesByKey={workspaceEntriesByKey}
+        projectNamesByViewKey={projectNamesByViewKey}
         projectIconByProjectViewKey={statusProjectIconByProjectViewKey}
         shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
         onWorkspacePress={onWorkspacePress}
@@ -1844,7 +1853,9 @@ function SidebarStatusModeWrapper({
   statusGroups,
   allServerIds,
   pinnedGroups,
+  projects,
   workspaceEntriesByKey,
+  projectNamesByViewKey,
   projectIconByProjectViewKey,
   shortcutIndexByWorkspaceKey: _projectShortcutIndex,
   onWorkspacePress,
@@ -1858,7 +1869,9 @@ function SidebarStatusModeWrapper({
   statusGroups: StatusGroup[];
   allServerIds: string[];
   pinnedGroups: PinnedSidebarGroups;
+  projects: SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
+  projectNamesByViewKey: Map<string, string>;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
   onWorkspacePress?: () => void;
@@ -2596,4 +2609,36 @@ const styles = StyleSheet.create((theme) => ({
   kebabButtonHovered: {
     backgroundColor: theme.colors.surface2,
   },
+  statusDotNeedsInput: {
+    backgroundColor: theme.colors.palette.amber[500],
+    borderColor: theme.colors.surface0,
+  },
+  statusDotFailed: {
+    backgroundColor: theme.colors.palette.red[500],
+    borderColor: theme.colors.surface0,
+  },
+  statusDotRunning: {
+    backgroundColor: theme.colors.palette.blue[500],
+    borderColor: theme.colors.surface0,
+  },
+  statusDotAttention: {
+    backgroundColor: theme.colors.palette.green[500],
+    borderColor: theme.colors.surface0,
+  },
 }));
+
+function getStatusDotColorStyle(bucket: SidebarStateBucket): ViewStyle | null {
+  switch (bucket) {
+    case "needs_input":
+      return styles.statusDotNeedsInput;
+    case "failed":
+      return styles.statusDotFailed;
+    case "running":
+      return styles.statusDotRunning;
+    case "attention":
+      return styles.statusDotAttention;
+    case "done":
+    case "snoozed":
+      return null;
+  }
+}
