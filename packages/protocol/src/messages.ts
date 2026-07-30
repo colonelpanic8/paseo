@@ -59,6 +59,12 @@ import {
 } from "./browser-automation/rpc-schemas.js";
 import { BrowserAutomationHostCapabilitySchema } from "./browser-automation/capabilities.js";
 import {
+  VoiceLiveRouteRequestSchema,
+  VoiceLiveRouteResponseSchema,
+  VoiceLiveToolExecuteRequestSchema,
+  VoiceLiveToolExecuteResponseSchema,
+} from "./live-voice-routing.js";
+import {
   PaseoConfigRawSchema,
   PaseoLifecycleCommandRawSchema,
   PaseoMetadataGenerationEntrySchema,
@@ -916,14 +922,15 @@ export const SetVoiceModeMessageSchema = z.object({
   requestId: z.string().optional(),
 });
 
-// Live Voice: a realtime speech-to-speech call attached to a single agent.
+// Live Voice: a realtime speech-to-speech call with the daemon itself. The call
+// is daemon-global, not attached to an agent session: the daemon hosts it on a
+// hidden session of its own, so no agentId appears anywhere in this protocol.
 // Audio rides a direct WebRTC media track; the daemon only relays SDP and
 // control. `voice.live.start.response` carries the answer SDP, so the client
 // never has to correlate a separate push for the handshake.
 export const VoiceLiveStartRequestSchema = z.object({
   type: z.literal("voice.live.start.request"),
   requestId: z.string(),
-  agentId: z.string(),
   offerSdp: z.string(),
   voice: z.string().optional(),
 });
@@ -933,7 +940,6 @@ export const VoiceLiveStartRequestSchema = z.object({
 export const VoiceLiveStopRequestSchema = z.object({
   type: z.literal("voice.live.stop.request"),
   requestId: z.string(),
-  agentId: z.string(),
   liveSessionId: z.string(),
 });
 
@@ -1705,7 +1711,6 @@ export const VoiceLiveStartResponseSchema = z.object({
   type: z.literal("voice.live.start.response"),
   payload: z.object({
     requestId: z.string(),
-    agentId: z.string(),
     accepted: z.boolean(),
     liveSessionId: z.string().optional(),
     answerSdp: z.string().optional(),
@@ -1752,7 +1757,6 @@ export const VoiceLiveEventSchema = z.discriminatedUnion("kind", [
 export const VoiceLiveUpdateSchema = z.object({
   type: z.literal("voice.live.update"),
   payload: z.object({
-    agentId: z.string(),
     liveSessionId: z.string(),
     seq: z.number().int().nonnegative(),
     event: VoiceLiveEventSchema,
@@ -2635,6 +2639,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetVoiceModeMessageSchema,
   VoiceLiveStartRequestSchema,
   VoiceLiveStopRequestSchema,
+  VoiceLiveRouteResponseSchema,
+  VoiceLiveToolExecuteRequestSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
   DaemonGetStatusRequestSchema,
@@ -3030,6 +3036,8 @@ export const ServerInfoStatusPayloadSchema = z
         projectCustomIcon: z.boolean().optional(),
         // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
         liveVoice: z.boolean().optional(),
+        // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
+        liveVoiceToolExecution: z.boolean().optional(),
       })
       .optional(),
   })
@@ -5486,6 +5494,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   VoiceLiveStartResponseSchema,
   VoiceLiveStopResponseSchema,
   VoiceLiveUpdateSchema,
+  VoiceLiveRouteRequestSchema,
+  VoiceLiveToolExecuteResponseSchema,
   DaemonGetStatusResponseSchema,
   DaemonGetPairingOfferResponseSchema,
   HubManagementDaemonConnectResponseSchema,
@@ -6065,6 +6075,7 @@ export const WSHelloMessageSchema = z.object({
       [CLIENT_CAPS.projectUpdates]: z.boolean().optional(),
       [CLIENT_CAPS.compactProviderSnapshots]: z.boolean().optional(),
       [CLIENT_CAPS.browserHost]: BrowserAutomationHostCapabilitySchema.optional(),
+      [CLIENT_CAPS.liveVoiceCrossHostRouter]: z.boolean().optional(),
     })
     .passthrough()
     .optional(),
