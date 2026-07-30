@@ -2053,6 +2053,8 @@ export const fr: TranslationResources = {
     used: "{{percentage}} % utilisés",
     tokens: "{{used}} / {{max}} tokens",
     sessionCost: "Coût de la session : {{cost}}",
+    model: "Modèle {{model}}",
+    thinking: "Réflexion {{thinking}}",
     accessibility: "Fenêtre de contexte : {{percentage}} % utilisés",
   },
   review: {
