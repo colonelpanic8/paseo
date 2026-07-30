@@ -106,6 +106,67 @@ describe("buildWearSnapshot", () => {
     });
   });
 
+  it("includes a workspace that has no agents", () => {
+    // Regression: the builder used to group by agent, so an agent-less workspace
+    // vanished. That broke the empty-workspace row and its go-straight-to-voice
+    // navigation rule.
+    const snapshot = buildWearSnapshot(
+      [{ serverId: "srv-1", agents: [], workspaces: workspaceMap(workspace()) }],
+      NOW,
+    );
+    expect(snapshot.workspaces).toHaveLength(1);
+    expect(snapshot.workspaces[0].agents).toEqual([]);
+  });
+
+  it("still emits workspaces when nothing is running anywhere", () => {
+    // The failure this caused was worse than a missing row: with no agents at all
+    // the snapshot came out empty and the watch showed "open Paseo on your phone"
+    // as though the bridge were down.
+    const snapshot = buildWearSnapshot(
+      [
+        {
+          serverId: "srv-1",
+          agents: [],
+          workspaces: workspaceMap(workspace(), workspace({ id: "ws-2", name: "other" })),
+        },
+      ],
+      NOW,
+    );
+    expect(snapshot.workspaces.map((entry) => entry.name)).toEqual(["jubilant-wombat", "other"]);
+  });
+
+  it("omits a workspace that is being archived", () => {
+    const snapshot = buildWearSnapshot(
+      [
+        {
+          serverId: "srv-1",
+          agents: [agent()],
+          workspaces: workspaceMap(workspace({ archivingAt: "2026-07-29T00:00:00Z" })),
+        },
+      ],
+      NOW,
+    );
+    expect(snapshot.workspaces).toHaveLength(0);
+  });
+
+  it("sorts agent-less workspaces after idle ones", () => {
+    const snapshot = buildWearSnapshot(
+      [
+        {
+          serverId: "srv-1",
+          agents: [agent({ id: "a-idle", workspaceId: "ws-idle", status: "idle" })],
+          workspaces: workspaceMap(
+            workspace({ id: "ws-empty", name: "aaa-empty" }),
+            workspace({ id: "ws-idle", name: "zzz-idle" }),
+          ),
+        },
+      ],
+      NOW,
+    );
+    // Name ordering would put the empty one first; urgency must win.
+    expect(snapshot.workspaces.map((entry) => entry.name)).toEqual(["zzz-idle", "aaa-empty"]);
+  });
+
   it("drops agents whose workspace is unknown rather than inventing a parent", () => {
     const snapshot = buildWearSnapshot(
       [
@@ -117,10 +178,13 @@ describe("buildWearSnapshot", () => {
       ],
       NOW,
     );
-    expect(snapshot.workspaces).toHaveLength(0);
+    // The agent is dropped — no synthetic parent workspace is invented for it —
+    // but the known workspace is still listed, now with nothing in it.
+    expect(snapshot.workspaces.map((entry) => entry.id)).toEqual(["ws-1"]);
+    expect(snapshot.workspaces[0].agents).toEqual([]);
   });
 
-  it("omits archived agents", () => {
+  it("omits archived agents but keeps their workspace", () => {
     const snapshot = buildWearSnapshot(
       [
         {
@@ -131,7 +195,8 @@ describe("buildWearSnapshot", () => {
       ],
       NOW,
     );
-    expect(snapshot.workspaces).toHaveLength(0);
+    expect(snapshot.workspaces).toHaveLength(1);
+    expect(snapshot.workspaces[0].agents).toEqual([]);
   });
 
   it("marks an agent with a pending permission as needsInput and extracts the command", () => {

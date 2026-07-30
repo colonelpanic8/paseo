@@ -7,6 +7,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import sh.paseo.watch.data.DataLayerRepository
+import sh.paseo.watch.data.LinkState
 import sh.paseo.watch.data.MockWatchRepository
 import sh.paseo.watch.data.WatchRepository
 
@@ -27,7 +28,12 @@ class MainActivity : ComponentActivity() {
     dataLayer = repository
     setContent {
       val error by repository.error.collectAsState()
-      PaseoWatchApp(repository = repository, waitingMessage = error)
+      val link by repository.linkState.collectAsState()
+      PaseoWatchApp(
+        repository = repository,
+        waitingMessage = error,
+        linked = link == LinkState.Linked,
+      )
     }
   }
 
