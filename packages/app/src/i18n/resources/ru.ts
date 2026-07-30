@@ -1995,6 +1995,7 @@ export const ru: TranslationResources = {
         sendMessage: "Отправить сообщение",
         queueMessage: "Сообщение в очереди",
         muteUnmuteVoiceMode: "Отключить голосовой режим /unmute",
+        muteUnmuteLiveVoice: "Выключить/включить микрофон живого голоса",
         switchProject: "Сменить проект",
       },
       helpNotes: {
