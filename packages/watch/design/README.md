@@ -58,11 +58,53 @@ workspace (needs-input > running > idle). One glyph carries project, identity, a
 Needs-attention first, then running, then idle. On a 450px screen the top two rows are all
 most users will read, so they have to be the ones that matter.
 
-## Voice
+## Agent detail: a conversation, read from the bottom
 
-Google's system input sheet (`RemoteInput` / `ACTION_RECOGNIZE_SPEECH`) — on-device, offline,
-free, and it bundles voice + keyboard + canned replies in one flow. Mic gets the accent color
-and the biggest tap target; typing is the fallback inside the same sheet.
+The agent screen is a `ScalingLazyColumn` laid out as a chat log:
+
+```
+   project icon · workspace name        ← compact header
+   ● Claude · running 12m               ← status line
+   ─────────────────────────────
+   earlier history on your phone        ← only when truncated
+   …oldest transcript entry…
+   …
+   …newest transcript entry…
+   ─────────────────────────────
+        (Reply 52dp)   (Stop 38dp)      ← actions live at the END of the list
+```
+
+**It opens at the bottom.** That is the whole design. The newest turn and the Reply button
+are what you get without touching the crown; the crown scrolls _up_ into the backlog only
+when you want it. Anchoring at the top — the obvious thing — would put the oldest turn under
+your eyes and the actions off-screen, which is exactly backwards for a triage surface. The
+list is built as a row list before it is emitted so the "scroll to the last index" call can't
+drift out of sync with what was actually rendered.
+
+Kinds are separated by **weight, not labels**. A `You:` prefix on every other row spends a
+line of a 450px screen restating what the styling already says:
+
+| Kind        | Treatment                                                                      |
+| ----------- | ------------------------------------------------------------------------------ |
+| `assistant` | Bare, full-bleed, `foreground` at 12sp — the thing you are actually reading    |
+| `user`      | Inset 22dp in a `surface2` bubble at 11.5sp — context, not news                |
+| `tool`      | One line, monospace, 10sp `foregroundExtraMuted`, ellipsised, never wraps      |
+| `error`     | `surface1` card with a `destructive`-tinted border, `destructive` text at 11sp |
+| unknown     | Muted plain text — never dropped; see the parent README                        |
+
+A tool line that wraps is a tool line pretending to be worth reading, so it is hard-capped at
+`maxLines = 1`. Before any transcript arrives, the old 3-line summary card stands in its
+place — with no spinner, because against a phone too old to answer a transcript request that
+card is the permanent state, not a loading step.
+
+## Voice and typing
+
+**Mic** is `ACTION_RECOGNIZE_SPEECH` — on-device, offline, free. It gets the accent color and
+the biggest tap target.
+
+**Typing** is Wear's remote input activity (`RemoteInputIntentHelper`), which opens the system
+input picker: keyboard, handwriting, emoji, voice. It used to be the recognizer sheet with a
+keyboard hint, which made typing a tap _inside_ the voice flow rather than a peer to it.
 
 Paseo's own daemon-side dictation (`dictation_stream_*`, see `packages/protocol/src/messages.ts`)
 is deliberately **not** used in v1 — the phone-tethered transport makes streaming PCM from the
@@ -75,15 +117,23 @@ Wearable Data Layer, and the phone app owns the daemon connection, pairing, and 
 to design around, not ignore: **the phone must be reachable**, and Data Layer wakeups have to
 survive the phone app being backgrounded or killed.
 
+## Settled
+
+- **Agent detail needed the scrollable transcript, not a bigger tail.** Answered by building
+  it: the summary card was the agent _title_, so no amount of extra lines would have turned it
+  into a conversation. See "Agent detail" above.
+- **`Stop` next to `Reply` was not safe at 52dp/52dp/10dp apart.** Stop is now 38dp and 20dp
+  away, keeping its muted surface. Reply is unchanged. The asymmetry is the safety: two equal
+  circles side by side invite a thumb to split the difference.
+
 ## Open questions
 
-1. Agent detail shows only the last assistant message tail, capped at 3 lines — enough to reply
-   from, or does it need a scrollable tail?
-2. Canned replies — user-configurable from the phone, or hardcoded? Currently hardcoded in
+1. Canned replies — user-configurable from the phone, or hardcoded? Currently hardcoded in
    `ui/ReplyScreen.kt`.
-3. Is `Stop` safe next to `Reply` at watch tap-target sizes? Both are 52dp; on device they sit
-   about 10dp apart.
-4. "New agent from a voice prompt" is built (empty workspaces route straight to it). Keep it in
+2. "New agent from a voice prompt" is built (empty workspaces route straight to it). Keep it in
    v1, or cut it back to react-to-existing-agents only?
-5. On the multi-agent workspace row, is `3 agents · 1 running` the right summary, or should it
+3. On the multi-agent workspace row, is `3 agents · 1 running` the right summary, or should it
    surface the most-urgent agent's actual status?
+4. `truncated` currently just says "earlier history on your phone". Is crown-paging older
+   entries worth the round trip on both sides, or is deferring to the phone the right answer
+   for a wrist?
