@@ -2186,6 +2186,54 @@ describe("ClaudeAgentSession context window usage", () => {
     }
   });
 
+  test("reports an unrecognized runtime model verbatim instead of a stale known one", async () => {
+    // Claude falling back to a model outside our catalog must not leave the
+    // previously recognized model in place — that asserts the agent is running
+    // something it isn't.
+    const unknownRuntimeModel = "claude-experimental-9-9-20991231";
+    const session = await createSessionForTurns([
+      [
+        createInitMessage(),
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-known-model",
+            role: "assistant",
+            model: "claude-opus-4-6-20260101",
+            content: [{ type: "text", text: "Known model." }],
+            usage: { input_tokens: 10, output_tokens: 4 },
+          },
+          uuid: "assistant-known-model-event",
+          session_id: "session-1",
+        },
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-unknown-model",
+            role: "assistant",
+            model: unknownRuntimeModel,
+            content: [{ type: "text", text: "Unknown model." }],
+            usage: { input_tokens: 10, output_tokens: 4 },
+          },
+          uuid: "assistant-unknown-model-event",
+          session_id: "session-1",
+        },
+        createSuccessResult(),
+      ],
+    ]);
+
+    try {
+      await session.run("turn");
+
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: unknownRuntimeModel,
+        extra: { runtimeModel: unknownRuntimeModel },
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
   test("passes persistSession through to the Claude SDK query options", async () => {
     const createResultTurn = (sessionId: string) => [
       {
