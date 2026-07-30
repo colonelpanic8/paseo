@@ -252,6 +252,20 @@ adb emu gsm call 5551234
 
 Expected result: Paseo does not throw `RuntimeException: Audio focus request failed`; native audio reports an interruption and voice mode stops or pauses coherently.
 
+### Live Voice foreground support
+
+Live Voice uses `react-native-webrtc` directly on iOS and Android. It is
+foreground-only: moving Paseo to the background stops the call and releases the
+microphone and peer connection. The transient iOS `inactive` state does not stop
+the call because the system microphone permission prompt can produce that state.
+
+On a physical device, verify:
+
+- the first microphone permission prompt can be accepted without cancelling startup
+- remote speech plays and mute disables only the outgoing microphone track
+- pressing Home ends the call, releases the microphone indicator, and leaves the UI idle
+- returning to Paseo requires starting a new call; phase 1 does not reconnect or resume
+
 ## Unistyles + Reanimated
 
 ### The crash
