@@ -2,12 +2,26 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 
 import { parseWearCommand, type WearCommand, type WearSnapshot } from "./wear-protocol";
 import { buildWearSnapshot, type WearSnapshotInput } from "./wear-snapshot";
+import { buildWearTranscript, isTranscriptEntry, MAX_TRANSCRIPT_ENTRIES } from "./wear-transcript";
 
 export interface WearBridgeTransport {
   publishSnapshot(payload: string): Promise<boolean>;
+  /** Publishes to a per-agent path, so open transcripts don't clobber each other. */
+  publishTranscript(agentId: string, payload: string): Promise<boolean>;
   addCommandListener(listener: (payload: string) => void): { remove(): void };
   drainPendingCommands(): Promise<string[]>;
 }
+
+/**
+ * Paging for a transcript request.
+ *
+ * The daemon's tail page is sized for a phone screen, so reaching a wrist-sized
+ * transcript usually takes more than one. The request cap is a hard stop: a watch
+ * asking for an agent with a very long history must not turn into an unbounded
+ * walk backwards through its timeline.
+ */
+const TRANSCRIPT_PAGE_SIZE = 40;
+const MAX_TRANSCRIPT_REQUESTS = 4;
 
 export interface NewAgentConfig {
   provider: string;
@@ -44,6 +58,8 @@ export class WearBridge {
   private readonly deps: WearBridgeDeps;
   private subscription: { remove(): void } | null = null;
   private lastPublished: string | null = null;
+  /** Per-agent request counter, so a slow fetch can't overwrite a newer transcript. */
+  private readonly transcriptGenerations = new Map<string, number>();
   private disposed = false;
 
   constructor(deps: WearBridgeDeps) {
@@ -113,9 +129,70 @@ export class WearBridge {
     await this.execute(command);
   }
 
+  /**
+   * Fetch enough of an agent's timeline to fill a wrist and publish it.
+   *
+   * Pages backwards from the tail, because the newest turn is what the watch opened
+   * the screen to read; older pages are prepended so the result stays oldest-first.
+   */
+  private async publishTranscript(serverId: string, agentId: string): Promise<void> {
+    const client = this.deps.getClient(serverId);
+    if (!client) {
+      this.deps.logger?.warn(`No client for server ${serverId}; dropping wear transcript request`);
+      return;
+    }
+
+    // Commands run concurrently, so two requests for the same agent race. Without a
+    // generation the winner is whichever fetch finishes last, which means a slow
+    // older fetch can overwrite a newer transcript with staler content.
+    const generation = (this.transcriptGenerations.get(agentId) ?? 0) + 1;
+    this.transcriptGenerations.set(agentId, generation);
+
+    let pages: TimelinePage[];
+    try {
+      pages = await fetchTranscriptPages(client, agentId);
+    } catch (error) {
+      // Publishing nothing leaves the watch on its loading state, which is honest —
+      // an empty transcript would read as "this agent has said nothing".
+      this.deps.logger?.warn(`Failed to fetch transcript for agent ${agentId}`, error);
+      return;
+    }
+
+    const transcript = buildWearTranscript(
+      {
+        agentId,
+        serverId,
+        items: pages.flatMap((page) => page.entries.map((entry) => entry.item)),
+        // The oldest page we reached decides whether anything is still behind us.
+        hasOlder: pages[0]?.hasOlder ?? false,
+      },
+      this.deps.now?.() ?? Date.now(),
+    );
+
+    if (this.transcriptGenerations.get(agentId) !== generation) {
+      // A newer request for this agent already published; this result is older than
+      // what the watch is showing, so landing it would be a visible regression.
+      return;
+    }
+
+    await this.deps.transport
+      .publishTranscript(agentId, JSON.stringify(transcript))
+      .catch((error: unknown) => {
+        this.deps.logger?.warn(`Failed to publish wear transcript for agent ${agentId}`, error);
+        return false;
+      });
+  }
+
   async execute(command: WearCommand): Promise<void> {
     if (command.kind === "refresh") {
       await this.publish({ force: true });
+      return;
+    }
+
+    if (command.kind === "requestTranscript") {
+      // Returns without the forced republish below: reading a transcript changes
+      // nothing about the agent, so there is no new state for the snapshot to carry.
+      await this.publishTranscript(command.serverId, command.agentId);
       return;
     }
 
@@ -168,6 +245,55 @@ export class WearBridge {
     // so the wrist reflects the action it just took.
     await this.publish({ force: true });
   }
+}
+
+type TimelineClient = Pick<DaemonClient, "fetchAgentTimeline">;
+type TimelinePage = Awaited<ReturnType<TimelineClient["fetchAgentTimeline"]>>;
+
+/**
+ * Walk backwards from the tail until we have enough entries, run out of history, or
+ * hit the request cap. Returned oldest page first.
+ *
+ * Counts only entries that survive projection. Raw daemon entries would overcount a
+ * reasoning-heavy history badly — a page can be almost entirely reasoning and todos,
+ * none of which reaches the watch — and the walk would stop with a nearly empty
+ * transcript while it still had requests left to spend.
+ */
+async function fetchTranscriptPages(
+  client: TimelineClient,
+  agentId: string,
+): Promise<TimelinePage[]> {
+  const pages: TimelinePage[] = [];
+  let total = 0;
+  let epoch: string | null = null;
+
+  for (let request = 0; request < MAX_TRANSCRIPT_REQUESTS; request += 1) {
+    // The first request omits the cursor entirely: that is what asks for the tail.
+    const cursor = pages[0]?.startCursor;
+    const page = await client.fetchAgentTimeline(
+      agentId,
+      cursor
+        ? { projection: "projected", direction: "before", cursor, limit: TRANSCRIPT_PAGE_SIZE }
+        : { projection: "projected", limit: TRANSCRIPT_PAGE_SIZE },
+    );
+
+    if (epoch === null) {
+      epoch = page.epoch;
+    } else if (page.reset || page.staleCursor || page.epoch !== epoch) {
+      // The timeline was rewound or rehydrated mid-walk, so our cursor is pointing
+      // into a history that no longer exists and the daemon answered with a fresh
+      // tail instead. Splicing that onto what we already have would duplicate turns
+      // and resurrect rewound-away content, so stop and keep the consistent prefix.
+      break;
+    }
+
+    pages.unshift(page);
+    total += page.entries.filter((entry) => isTranscriptEntry(entry.item)).length;
+
+    if (total >= MAX_TRANSCRIPT_ENTRIES || !page.hasOlder || !page.startCursor) break;
+  }
+
+  return pages;
 }
 
 /**

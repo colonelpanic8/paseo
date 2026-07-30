@@ -2,6 +2,7 @@ package expo.modules.wearbridge
 
 import android.content.Context
 import android.util.Log
+import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import expo.modules.kotlin.modules.Module
@@ -95,7 +96,27 @@ class ExpoWearBridgeModule : Module() {
       }
     }
 
-    /** Remove the snapshot — used on sign-out so a stale list can't linger on the wrist. */
+    /**
+     * Publish one agent's transcript, on the watch's request.
+     *
+     * Each agent gets its own path so opening a second agent doesn't overwrite the
+     * first, and so the watch can observe just the one it is showing.
+     */
+    AsyncFunction("publishTranscript").SuspendBody<Boolean, String, String> { agentId, payload ->
+      val context = appContext.reactContext
+      if (context == null) {
+        false
+      } else {
+        runCatching { putTranscript(context, agentId, payload) }
+          .onFailure { Log.w(TAG, "publishTranscript failed", it) }
+          .getOrDefault(false)
+      }
+    }
+
+    /**
+     * Remove everything we published — used on sign-out so a stale list or
+     * conversation can't linger on the wrist.
+     */
     AsyncFunction("clearSnapshot").SuspendBody<Boolean> {
       val context = appContext.reactContext
       if (context == null) {
@@ -129,16 +150,41 @@ class ExpoWearBridgeModule : Module() {
     return true
   }
 
+  private suspend fun putTranscript(context: Context, agentId: String, payload: String): Boolean {
+    val request =
+      PutDataMapRequest.create("$TRANSCRIPT_PATH_PREFIX/$agentId").apply {
+        dataMap.putString(SNAPSHOT_KEY, payload)
+        // Same reason as putSnapshot: DataClient drops a byte-identical put, and
+        // re-requesting an unchanged transcript must still reach the watch.
+        dataMap.putLong("stamp", System.currentTimeMillis())
+      }
+    Wearable.getDataClient(context)
+      .putDataItem(request.asPutDataRequest().setUrgent())
+      .await()
+    return true
+  }
+
   private suspend fun deleteSnapshot(context: Context): Boolean {
     val local = Wearable.getNodeClient(context).localNode.await()
-    val uri = android.net.Uri.parse("wear://${local.id}$SNAPSHOT_PATH")
-    Wearable.getDataClient(context).deleteDataItems(uri).await()
+    val dataClient = Wearable.getDataClient(context)
+    dataClient.deleteDataItems(android.net.Uri.parse("wear://${local.id}$SNAPSHOT_PATH")).await()
+    // Transcripts are one DataItem per agent, so there is no single path to delete;
+    // a prefix filter clears however many the user happened to open. The trailing
+    // slash keeps the prefix from also matching a future sibling path such as
+    // /paseo/transcript-settings.
+    dataClient
+      .deleteDataItems(
+        android.net.Uri.parse("wear://${local.id}$TRANSCRIPT_PATH_PREFIX/"),
+        DataClient.FILTER_PREFIX,
+      )
+      .await()
     return true
   }
 
   companion object {
     const val EVENT_COMMAND = "onWearCommand"
     const val SNAPSHOT_PATH = "/paseo/snapshot"
+    const val TRANSCRIPT_PATH_PREFIX = "/paseo/transcript"
     const val SNAPSHOT_KEY = "payload"
   }
 }
