@@ -331,7 +331,6 @@ export function deriveProjectStatusBucket(input: {
   sessions: Record<string, ProjectStatusSession | undefined>;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
 }): SidebarStateBucket {
-  const nowMs = Date.now();
   const workspaceIdsByServer = new Map<string, string[]>();
   for (const placement of input.workspaces) {
     const existing = workspaceIdsByServer.get(placement.serverId);
@@ -359,7 +358,7 @@ export function deriveProjectStatusBucket(input: {
           workspace,
           pendingCreateAttempts: input.pendingCreateAttempts,
           workspaceAgentActivity: session.workspaceAgentActivity,
-          nowMs,
+          nowMs: Date.now(),
         }).status,
       );
     }

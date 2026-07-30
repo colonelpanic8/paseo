@@ -3,6 +3,8 @@ import {
   formatClockTime,
   formatCompactRelativeTime,
   formatDuration,
+  formatDurationCoarse,
+  formatFutureTimestamp,
   formatMessageTimestamp,
   formatTimeAgo,
 } from "./time";
@@ -71,6 +73,53 @@ describe("formatDuration", () => {
   });
 });
 
+describe("formatDurationCoarse", () => {
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  it("floors at one minute instead of showing seconds", () => {
+    expect(formatDurationCoarse(1)).toBe("1m");
+    expect(formatDurationCoarse(30_000)).toBe("1m");
+    expect(formatDurationCoarse(minute)).toBe("1m");
+  });
+
+  it("renders bare minutes below an hour", () => {
+    expect(formatDurationCoarse(45 * minute)).toBe("45m");
+    expect(formatDurationCoarse(59 * minute)).toBe("59m");
+  });
+
+  it("rounds partial minutes up so the countdown never reads short", () => {
+    expect(formatDurationCoarse(44 * minute + 1)).toBe("45m");
+  });
+
+  it("renders hours with remainder minutes, dropping a zero remainder", () => {
+    expect(formatDurationCoarse(hour)).toBe("1h");
+    expect(formatDurationCoarse(2 * hour + 15 * minute)).toBe("2h 15m");
+    expect(formatDurationCoarse(3 * hour)).toBe("3h");
+    expect(formatDurationCoarse(23 * hour + 59 * minute)).toBe("23h 59m");
+  });
+
+  it("renders days with remainder hours, dropping a zero remainder", () => {
+    expect(formatDurationCoarse(day)).toBe("1d");
+    expect(formatDurationCoarse(3 * day + 4 * hour)).toBe("3d 4h");
+    // A week out is the far end of the snooze presets, and must not read "168h".
+    expect(formatDurationCoarse(7 * day)).toBe("7d");
+  });
+
+  it("drops sub-hour remainders once past a day", () => {
+    expect(formatDurationCoarse(2 * day + 30 * minute)).toBe("2d");
+    expect(formatDurationCoarse(2 * day + hour + 30 * minute)).toBe("2d 1h");
+  });
+
+  it("clamps past deadlines and non-finite input to the floor", () => {
+    expect(formatDurationCoarse(0)).toBe("1m");
+    expect(formatDurationCoarse(-1)).toBe("1m");
+    expect(formatDurationCoarse(-5 * hour)).toBe("1m");
+    expect(formatDurationCoarse(Number.NaN)).toBe("1m");
+  });
+});
+
 describe("formatMessageTimestamp", () => {
   it("shows only time for same-day timestamps", () => {
     const now = new Date(2026, 4, 14, 17, 30);
@@ -94,6 +143,50 @@ describe("formatMessageTimestamp", () => {
     const date = new Date(2026, 3, 1, 9, 5);
     const formatted = formatMessageTimestamp(date, now);
     expect(formatted).toMatch(/Apr|April/);
+    expect(formatted).toMatch(/2026/);
+  });
+});
+
+describe("formatFutureTimestamp", () => {
+  // 2026-05-14 is a Thursday.
+  const now = new Date(2026, 4, 14, 17, 30);
+
+  it("shows only time for a deadline later the same day", () => {
+    const formatted = formatFutureTimestamp(new Date(2026, 4, 14, 18, 0), now);
+    expect(formatted).toMatch(/6:00 PM|18:00/);
+    expect(formatted).not.toMatch(/Thursday|May/);
+  });
+
+  it("names the weekday for a deadline within the coming week", () => {
+    const formatted = formatFutureTimestamp(new Date(2026, 4, 15, 9, 0), now);
+    expect(formatted).toMatch(/Friday/);
+    expect(formatted).toMatch(/9:00 AM|09:00/);
+  });
+
+  it("names the weekday six calendar days out", () => {
+    expect(formatFutureTimestamp(new Date(2026, 4, 20, 9, 0), now)).toMatch(/Wednesday/);
+  });
+
+  it("falls back to a full date once the weekday would come around again", () => {
+    // Seven calendar days out is another Thursday, so the weekday alone lies.
+    const formatted = formatFutureTimestamp(new Date(2026, 4, 21, 9, 0), now);
+    expect(formatted).not.toMatch(/Thursday/);
+    expect(formatted).toMatch(/May/);
+    expect(formatted).toMatch(/2026/);
+  });
+
+  it("counts calendar days rather than elapsed hours", () => {
+    // Under 7 * 24 hours away, but already the next Thursday.
+    const formatted = formatFutureTimestamp(
+      new Date(2026, 4, 21, 9, 0),
+      new Date(2026, 4, 14, 17, 30),
+    );
+    expect(formatted).not.toMatch(/Thursday/);
+  });
+
+  it("includes the full date for a deadline far ahead", () => {
+    const formatted = formatFutureTimestamp(new Date(2026, 6, 1, 9, 5), now);
+    expect(formatted).toMatch(/Jul|July/);
     expect(formatted).toMatch(/2026/);
   });
 });
