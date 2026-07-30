@@ -63,6 +63,7 @@ import {
   type SessionRuntimeMetrics,
 } from "./session.js";
 import { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
+import { LiveVoiceDaemonContextProvider } from "./live-voice/live-voice-daemon-context.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
 import { WorkspaceSetupObservation } from "./workspace-setup-observation.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
@@ -835,6 +836,14 @@ export class VoiceAssistantWebSocketServer {
     this.liveVoiceCoordinator = new LiveVoiceCoordinator({
       agents: this.agentManager,
       logger: this.logger,
+      // Teaches the voice model what Paseo is and what is currently running. The
+      // attached agent session already carries Paseo's MCP tools, so this is what
+      // turns "can talk" into "can act on Paseo".
+      context: new LiveVoiceDaemonContextProvider({
+        agents: this.agentManager,
+        workspaces: this.workspaceRegistry,
+        logger: this.logger,
+      }),
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
