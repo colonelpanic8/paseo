@@ -106,6 +106,8 @@ import {
 } from "../../worktree/commands.js";
 import { registerBrowserTools } from "../../browser-tools/tools.js";
 import type { BrowserToolsBroker } from "../../browser-tools/broker.js";
+import { registerLiveVoiceRoutingTools } from "../../live-voice/live-voice-routing-tools.js";
+import type { LiveVoiceRouteBroker } from "../../live-voice/live-voice-route-broker.js";
 import {
   PaseoToolInputError,
   type PaseoToolCatalog,
@@ -159,6 +161,7 @@ export interface PaseoToolHostDependencies {
   browserToolsEnabled?: boolean;
   browserToolsBroker?: BrowserToolsBroker | null;
   paseoToolPolicy?: ProviderPaseoToolsPolicy;
+  liveVoiceRouteBroker?: LiveVoiceRouteBroker | null;
   paseoHome?: string;
   worktreesRoot?: string;
   /**
@@ -1327,6 +1330,19 @@ function createToolCatalog(
   type LegacyAgentToAgentCreateAgentArgs = z.infer<typeof legacyAgentToAgentCreateAgentArgsSchema>;
   type TopLevelCreateAgentArgs = z.infer<typeof canonicalTopLevelCreateAgentArgsSchema>;
   type LegacyTopLevelCreateAgentArgs = z.infer<typeof legacyTopLevelCreateAgentArgsSchema>;
+
+  // A hidden Live Voice host is a router, not a privileged local agent. Its
+  // exact pre-registered agent id is the authority for exposing only these two
+  // client-routed tools. This check precedes every other optional tool group so
+  // an unrelated voice/browser setting can never expand the host's catalog.
+  if (callerAgentId && options.liveVoiceRouteBroker?.isRegisteredHost(callerAgentId)) {
+    registerLiveVoiceRoutingTools({
+      hostAgentId: callerAgentId,
+      broker: options.liveVoiceRouteBroker,
+      registerTool,
+    });
+    return toCatalog();
+  }
 
   if (options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools) {
     registerTool(

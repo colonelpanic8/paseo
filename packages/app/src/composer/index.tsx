@@ -106,7 +106,6 @@ import {
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
 import { LiveVoiceButton } from "@/live-voice/live-voice-button";
-import { LiveVoicePanel } from "@/live-voice/live-voice-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -2109,7 +2108,7 @@ function ComposerContentImpl({
               toolbarRing={TOOLBAR_RINGS[controlSizing]}
             />
           </View>
-          <LiveVoiceButton serverId={serverId} agentId={agentId} />
+          <LiveVoiceButton serverId={serverId} />
         </>
       ) : null,
     [
@@ -2456,7 +2455,6 @@ function ComposerContentImpl({
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
-            <LiveVoicePanel serverId={serverId} agentId={agentId} />
 
             <ComposerAutocompleteBinding
               text={textSource}
