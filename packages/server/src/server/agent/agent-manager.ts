@@ -67,6 +67,7 @@ import {
   type SeedAgentTimelineOptions,
 } from "./agent-timeline-store.js";
 import type {
+  AgentTimelineCursor,
   AgentTimelineFetchOptions,
   AgentTimelineFetchResult,
   AgentTimelineRow,
@@ -481,6 +482,9 @@ interface ManagedAgentBase {
   lastUserMessageAt: Date | null;
   activeTurnId: string | null;
   activeTurnStartedAt: Date | null;
+  summary?: string | null;
+  summaryUpdatedAt?: Date;
+  summaryCursor?: AgentTimelineCursor;
   lastUsage?: AgentUsage;
   lastError?: string;
   attention: AttentionState;
@@ -2303,6 +2307,9 @@ export class AgentManager {
         persistence: record.persistence ?? null,
         historyPrimed: true,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
+        summary: record.summary ?? null,
+        summaryUpdatedAt: record.summaryUpdatedAt ? new Date(record.summaryUpdatedAt) : undefined,
+        summaryCursor: record.summaryCursor,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
         attention,
@@ -2414,6 +2421,36 @@ export class AgentManager {
     this.touchUpdatedAt(agent);
     await this.persistSnapshot(agent, { title: normalizedTitle });
     this.emitState(agent, { persist: false });
+  }
+
+  async setAgentSummary(
+    agentId: string,
+    summary: string,
+    options?: {
+      expectedPreviousSummary?: string | null;
+      summaryCursor?: AgentTimelineCursor;
+    },
+  ): Promise<boolean> {
+    const agent = this.requireAgent(agentId);
+    const normalizedSummary = summary.replace(/\s+/g, " ").trim();
+    if (!normalizedSummary) {
+      return false;
+    }
+    if (
+      options &&
+      Object.prototype.hasOwnProperty.call(options, "expectedPreviousSummary") &&
+      (agent.summary ?? null) !== options.expectedPreviousSummary
+    ) {
+      return false;
+    }
+
+    agent.summary = normalizedSummary;
+    agent.summaryUpdatedAt = new Date();
+    agent.summaryCursor = options?.summaryCursor;
+    this.touchUpdatedAt(agent);
+    await this.persistSnapshot(agent);
+    this.emitState(agent, { persist: false });
+    return true;
   }
 
   async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
@@ -3992,6 +4029,7 @@ export class AgentManager {
         config,
         options?.initialTitle ?? null,
       );
+      const existingRecord = await this.registry?.get(resolvedAgentId);
 
       const now = new Date();
       const { durableTimelineHasRows } = await this.initializeAgentTimelineForRegister({
@@ -4007,6 +4045,11 @@ export class AgentManager {
         now,
         durableTimelineHasRows,
         background: options?.background === true,
+        summary: existingRecord?.summary ?? null,
+        summaryUpdatedAt: existingRecord?.summaryUpdatedAt
+          ? new Date(existingRecord.summaryUpdatedAt)
+          : undefined,
+        summaryCursor: existingRecord?.summaryCursor,
         options,
       });
 
@@ -4152,6 +4195,9 @@ export class AgentManager {
     now: Date;
     durableTimelineHasRows: boolean;
     background: boolean;
+    summary: string | null;
+    summaryUpdatedAt?: Date;
+    summaryCursor?: AgentTimelineCursor;
     options:
       | {
           createdAt?: Date;
@@ -4169,7 +4215,17 @@ export class AgentManager {
         }
       | undefined;
   }): ActiveManagedAgent {
-    const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
+    const {
+      resolvedAgentId,
+      session,
+      config,
+      now,
+      durableTimelineHasRows,
+      summary,
+      summaryUpdatedAt,
+      summaryCursor,
+      options,
+    } = params;
     return {
       id: resolvedAgentId,
       provider: config.provider,
@@ -4202,6 +4258,9 @@ export class AgentManager {
       ),
       historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
       lastUserMessageAt: options?.lastUserMessageAt ?? null,
+      summary,
+      summaryUpdatedAt,
+      summaryCursor,
       lastUsage: options?.lastUsage,
       lastError: options?.lastError,
       attention: resolveInitialAttention(options?.attention),

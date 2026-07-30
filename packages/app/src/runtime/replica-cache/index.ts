@@ -247,6 +247,7 @@ const StoredAgentSnapshotSchema = z.strictObject({
   persistence: z.null(),
   lastError: z.string().optional(),
   title: z.string().nullable(),
+  summary: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()),
   // Optional: clients without background_agents never received a background agent to cache.
   background: z.boolean().optional(),
@@ -671,6 +672,7 @@ function serializeAgent(agent: Agent): StoredAgent {
     persistence: null,
     ...(agent.lastError ? { lastError: agent.lastError } : {}),
     title: agent.title,
+    summary: agent.summary ?? null,
     labels: agent.labels,
     ...(agent.background ? { background: true } : {}),
     requiresAttention: agent.requiresAttention ?? false,
