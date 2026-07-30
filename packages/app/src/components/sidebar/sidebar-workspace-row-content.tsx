@@ -27,6 +27,7 @@ import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
 
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
@@ -103,6 +104,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   shortcutNumber = null,
   showShortcutBadge = false,
   reserveIdleStatusIndicatorSpace = true,
+  onSubmitRename,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -118,6 +120,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge?: boolean;
   /** Keep the empty leading slot when the workspace has no active status. */
   reserveIdleStatusIndicatorSpace?: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
   children?: ReactNode;
 }) {
   const {
@@ -146,9 +149,14 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
             <View style={styles.workspaceTitleLeft}>
-              <Text style={workspaceBranchTextStyle} numberOfLines={1}>
-                {workspaceLabel}
-              </Text>
+              <SidebarWorkspaceInlineTitle
+                displayValue={workspaceLabel}
+                renameValue={workspace.title ?? workspace.name}
+                editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+                onSubmit={onSubmitRename}
+                style={workspaceBranchTextStyle}
+                testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+              />
               {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
             </View>
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
