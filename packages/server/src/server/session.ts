@@ -767,7 +767,6 @@ export class Session {
       getProject: (projectId) => this.projectRegistry.get(projectId),
       isDirectory: (path) => this.filesystem.isDirectory(path),
       unarchiveWorkspace: async (workspace) => {
-        await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
         // Bring back the agents this workspace's archive gesture took down.
         // Agents archived individually beforehand carry no stamp and stay put.
         await unarchiveWorkspaceContents(
@@ -778,6 +777,10 @@ export class Session {
           },
           workspace.workspaceId,
         );
+        // Keep the workspace archived until every stamped agent has restored
+        // successfully. A failed provider hook must leave the recovery action
+        // available so the user can retry the remaining agents.
+        await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
       },
     });
     this.checkoutSession = new CheckoutSession({
