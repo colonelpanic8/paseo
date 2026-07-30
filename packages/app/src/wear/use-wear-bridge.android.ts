@@ -4,6 +4,7 @@ import {
   drainPendingWearCommands,
   isWearBridgeSupported,
   publishWearSnapshot,
+  publishWearTranscript,
 } from "@getpaseo/expo-wear-bridge";
 
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -63,6 +64,7 @@ export function useWearBridge(): void {
     const bridge = new WearBridge({
       transport: {
         publishSnapshot: publishWearSnapshot,
+        publishTranscript: publishWearTranscript,
         addCommandListener: addWearCommandListener,
         drainPendingCommands: drainPendingWearCommands,
       },
