@@ -32,8 +32,8 @@ import sh.paseo.watch.theme.PaseoColors
 import sh.paseo.watch.theme.PaseoWatchTheme
 import sh.paseo.watch.ui.AgentPickerScreen
 import sh.paseo.watch.ui.AgentScreen
+import sh.paseo.watch.ui.NewAgentScreen
 import sh.paseo.watch.ui.PermissionScreen
-import sh.paseo.watch.ui.ReplyScreen
 import sh.paseo.watch.ui.WaitingScreen
 import sh.paseo.watch.ui.WorkspaceListScreen
 
@@ -48,7 +48,6 @@ private object Routes {
   const val PICKER = "picker/{workspaceId}"
   const val AGENT = "agent/{agentId}"
   const val PERMISSION = "permission/{agentId}"
-  const val REPLY = "reply/{agentId}"
   const val NEW_AGENT = "newAgent/{workspaceId}"
 
   fun picker(workspaceId: String) = "picker/$workspaceId"
@@ -56,8 +55,6 @@ private object Routes {
   fun agent(agentId: String) = "agent/$agentId"
 
   fun permission(agentId: String) = "permission/$agentId"
-
-  fun reply(agentId: String) = "reply/$agentId"
 
   fun newAgent(workspaceId: String) = "newAgent/$workspaceId"
 }
@@ -165,7 +162,9 @@ fun PaseoWatchApp(
               workspace = workspace,
               agent = agent,
               transcript = transcripts[agent.id],
-              onReply = { navController.navigate(Routes.reply(agent.id)) },
+              // No reply screen: Reply opens the recognizer in place and the words
+              // come back here.
+              onSubmit = { text -> scope.launch { repository.sendPrompt(agent.id, text) } },
               onStop = { scope.launch { repository.stopAgent(agent.id) } },
             )
           }
@@ -197,30 +196,6 @@ fun PaseoWatchApp(
         }
 
         composable(
-          Routes.REPLY,
-          arguments = listOf(navArgument("agentId") { type = NavType.StringType }),
-        ) { entry ->
-          val agentId = entry.arguments?.getString("agentId")
-          val workspace = workspaces.workspaceOfAgent(agentId)
-          val agent = workspace?.agents?.firstOrNull { it.id == agentId }
-          if (workspace == null || agent == null) {
-            Missing("Agent is gone")
-          } else {
-            ReplyScreen(
-              title = "Reply to ${agent.provider}",
-              projectKey = workspace.projectKey,
-              projectName = workspace.projectName,
-              workspaceName = workspace.name,
-              listState = rememberScalingLazyListState(),
-              onSubmit = { text ->
-                scope.launch { repository.sendPrompt(agent.id, text) }
-                navController.popBackStack()
-              },
-            )
-          }
-        }
-
-        composable(
           Routes.NEW_AGENT,
           arguments = listOf(navArgument("workspaceId") { type = NavType.StringType }),
         ) { entry ->
@@ -229,11 +204,10 @@ fun PaseoWatchApp(
           if (workspace == null) {
             Missing("Workspace is gone")
           } else {
-            ReplyScreen(
-              title = "New agent in ${workspace.name}",
+            NewAgentScreen(
+              workspaceName = workspace.name,
               projectKey = workspace.projectKey,
               projectName = workspace.projectName,
-              workspaceName = workspace.name,
               listState = rememberScalingLazyListState(),
               onSubmit = { text ->
                 scope.launch { repository.createAgent(workspace.id, text) }

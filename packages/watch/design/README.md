@@ -71,7 +71,8 @@ The agent screen is a `ScalingLazyColumn` laid out as a chat log:
    …
    …newest transcript entry…
    ─────────────────────────────
-        (Reply 52dp)   (Stop 38dp)      ← actions live at the END of the list
+             (Reply 52dp)               ← actions live at the END of the list
+         (Type 38dp) (Stop 38dp)        ← satellites, second row
 ```
 
 **It opens at the bottom.** That is the whole design. The newest turn and the Reply button
@@ -99,12 +100,24 @@ card is the permanent state, not a loading step.
 
 ## Voice and typing
 
+**Reply _is_ the mic.** One tap on the agent screen and you are talking; the recognized string
+goes straight to the agent. There was a composer screen in between — mic, keyboard, and three
+canned replies — and it made the common case two taps to reach a button that was already on the
+previous screen. Removing a screen is the fix; making the first tap do the likely thing is the
+principle.
+
 **Mic** is `ACTION_RECOGNIZE_SPEECH` — on-device, offline, free. It gets the accent color and
 the biggest tap target.
 
 **Typing** is Wear's remote input activity (`RemoteInputIntentHelper`), which opens the system
 input picker: keyboard, handwriting, emoji, voice. It used to be the recognizer sheet with a
-keyboard hint, which made typing a tap _inside_ the voice flow rather than a peer to it.
+keyboard hint, which made typing a tap _inside_ the voice flow rather than a peer to it. It is
+a peer now in the literal sense too: `Type` sits on the agent screen beside `Stop` and opens
+the picker in one tap, so neither door costs more than the other.
+
+The only screen that still asks "how do you want to enter this" is the new-agent composer
+(`ui/NewAgentScreen.kt`), which has no conversation to anchor buttons to. Mic and keyboard,
+nothing else.
 
 Paseo's own daemon-side dictation (`dictation_stream_*`, see `packages/protocol/src/messages.ts`)
 is deliberately **not** used in v1 — the phone-tethered transport makes streaming PCM from the
@@ -122,18 +135,24 @@ survive the phone app being backgrounded or killed.
 - **Agent detail needed the scrollable transcript, not a bigger tail.** Answered by building
   it: the summary card was the agent _title_, so no amount of extra lines would have turned it
   into a conversation. See "Agent detail" above.
-- **`Stop` next to `Reply` was not safe at 52dp/52dp/10dp apart.** Stop is now 38dp and 20dp
-  away, keeping its muted surface. Reply is unchanged. The asymmetry is the safety: two equal
-  circles side by side invite a thumb to split the difference.
+- **`Stop` next to `Reply` was not safe at 52dp/52dp/10dp apart.** Stop is 38dp and muted, and
+  now sits on a second row below Reply, offset sideways — separated on both axes rather than
+  one. The asymmetry is the safety: two equal circles side by side invite a thumb to split the
+  difference. Three abreast was never an option; 52 + 38 + 38 plus safe gaps is wider than the
+  ~148dp a 450px round screen leaves inside its 22dp insets, and closing the gaps to fit would
+  give back exactly what the sizes were bought with. `Type` shares the satellite row and is the
+  nearer of the two to Reply on purpose — mis-tapping into a keyboard is recoverable, killing
+  a run is not.
+- **Canned replies are gone.** They were three chips on a screen the user had to pass through
+  to speak, and the tap they saved was smaller than the tap they cost. Whether they should have
+  been phone-configurable stopped being a question when the screen did.
 
 ## Open questions
 
-1. Canned replies — user-configurable from the phone, or hardcoded? Currently hardcoded in
-   `ui/ReplyScreen.kt`.
-2. "New agent from a voice prompt" is built (empty workspaces route straight to it). Keep it in
+1. "New agent from a voice prompt" is built (empty workspaces route straight to it). Keep it in
    v1, or cut it back to react-to-existing-agents only?
-3. On the multi-agent workspace row, is `3 agents · 1 running` the right summary, or should it
+2. On the multi-agent workspace row, is `3 agents · 1 running` the right summary, or should it
    surface the most-urgent agent's actual status?
-4. `truncated` currently just says "earlier history on your phone". Is crown-paging older
+3. `truncated` currently just says "earlier history on your phone". Is crown-paging older
    entries worth the round trip on both sides, or is deferring to the phone the right answer
    for a wrist?

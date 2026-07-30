@@ -81,19 +81,24 @@ private sealed interface AgentRow {
  * never sends one — the screen falls back to the snapshot's one-line summary. That
  * is a normal state, not an error, so it gets no error treatment.
  *
- * Reply is the 52dp accent primary. Stop is deliberately smaller and muted: it ends
- * work, it is rarely what you came for, and on a wrist the cost of a mis-tap is what
- * sizes a button.
+ * Reply is the 52dp accent primary, and it *is* the composer: tapping it opens
+ * speech recognition immediately. There used to be a screen in between offering a
+ * choice of input method, which meant every spoken reply cost two taps and a screen
+ * full of canned answers nobody wanted. Type and Stop are deliberately smaller and
+ * muted — they are rarely what you came for, and on a wrist the cost of a mis-tap is
+ * what sizes a button.
  */
 @Composable
 fun AgentScreen(
   workspace: Workspace,
   agent: AgentSession,
   transcript: Transcript?,
-  onReply: () -> Unit,
+  onSubmit: (String) -> Unit,
   onStop: () -> Unit,
   listState: ScalingLazyListState = rememberScalingLazyListState(),
 ) {
+  val composer =
+    rememberComposerLaunchers(prompt = "Reply to ${agent.provider}", onText = onSubmit)
   val entries = transcript?.entries.orEmpty()
   val rows =
     buildList {
@@ -146,7 +151,13 @@ fun AgentScreen(
           Spacer(Modifier.height(6.dp))
         }
 
-        AgentRow.Actions -> AgentActions(agent = agent, onReply = onReply, onStop = onStop)
+        AgentRow.Actions ->
+          AgentActions(
+            agent = agent,
+            onReply = composer.launchVoice,
+            onType = composer.launchText,
+            onStop = onStop,
+          )
       }
     }
   }
@@ -309,19 +320,32 @@ private fun TranscriptRow(entry: TranscriptEntry) {
 }
 
 /**
- * Reply and, when there is something to stop, Stop.
+ * Reply on its own line, with Type and — when there is something to stop — Stop as
+ * 38dp satellites beneath it.
  *
- * Stop is 38dp against Reply's 52dp and sits 20dp away — far enough that a thumb
- * aimed at Reply cannot land on it, where the old side-by-side 52dp pair left about
- * 10dp between two equally-weighted targets. Stop keeps the muted surface it always
- * had; the size and the distance are what changed.
+ * Reply is the only thing on its row, so it stays centred whether or not the agent is
+ * running and whatever else is on screen. The satellites go on a second row because
+ * three buttons abreast do not fit: 52 + 38 + 38 plus gaps is wider than the ~148dp
+ * of usable width left inside a 450px round screen's 22dp insets, and squeezing them
+ * would mean shrinking the gaps, which is exactly the thing the sizes are protecting.
+ *
+ * That protection is the point of the arrangement. Reply is a target a thumb aims at
+ * without looking; Stop ends work. The two are now separated on both axes — a full
+ * button height below and offset sideways — where the original side-by-side 52dp pair
+ * left about 10dp between two equally-weighted targets. Type sits on the same row as
+ * Stop and is the closer of the two to Reply, which is the right way round: mis-tapping
+ * Reply into Type costs you a keyboard you can dismiss.
  */
 @Composable
-private fun AgentActions(agent: AgentSession, onReply: () -> Unit, onStop: () -> Unit) {
-  Row(
+private fun AgentActions(
+  agent: AgentSession,
+  onReply: () -> Unit,
+  onType: () -> Unit,
+  onStop: () -> Unit,
+) {
+  Column(
     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-    horizontalArrangement = Arrangement.Center,
-    verticalAlignment = Alignment.Top,
+    horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     ActionButton(
       label = "Reply",
@@ -329,17 +353,25 @@ private fun AgentActions(agent: AgentSession, onReply: () -> Unit, onStop: () ->
       onClick = onReply,
       content = { MicGlyph(tint = Color.White) },
     )
-    if (agent.state == ActivityState.Running) {
-      Spacer(Modifier.width(20.dp))
+    Spacer(Modifier.height(10.dp))
+    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Top) {
       ActionButton(
-        label = "Stop",
+        label = "Type",
         primary = false,
-        onClick = onStop,
+        onClick = onType,
         size = 38,
-        // Centers the smaller face against Reply's: (52 - 38) / 2.
-        modifier = Modifier.padding(top = 7.dp),
-        content = { StopGlyph(tint = PaseoColors.foregroundMuted, size = 15) },
+        content = { KeyboardGlyph(tint = PaseoColors.foregroundMuted, size = 16) },
       )
+      if (agent.state == ActivityState.Running) {
+        Spacer(Modifier.width(24.dp))
+        ActionButton(
+          label = "Stop",
+          primary = false,
+          onClick = onStop,
+          size = 38,
+          content = { StopGlyph(tint = PaseoColors.foregroundMuted, size = 15) },
+        )
+      }
     }
   }
 }
