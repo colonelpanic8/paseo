@@ -1,10 +1,12 @@
 package sh.paseo.watch.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.paseo.watch.model.ActivityState
+import sh.paseo.watch.model.TranscriptKind
 import sh.paseo.watch.model.WorkspaceDestination
 import sh.paseo.watch.model.destination
 import sh.paseo.watch.model.sortedForWrist
@@ -153,6 +155,117 @@ class WearBridgeTest {
   fun `sort puts needs-attention first and idle last`() {
     val sorted = decodeSnapshot(phoneJson)!!.toWorkspaces().sortedForWrist()
     assertEquals(listOf("jubilant-wombat", "main", "relay-tls"), sorted.map { it.name })
+  }
+
+  // -------------------------------------------------------------------------
+  // Transcript
+  // -------------------------------------------------------------------------
+
+  private val transcriptJson =
+    """
+    {
+      "v": 1,
+      "agentId": "agent-1",
+      "serverId": "srv-1",
+      "updatedAt": 1738000000000,
+      "entries": [
+        {"kind": "user", "text": "Fix the tests"},
+        {"kind": "tool", "text": "Bash: git push origin main"},
+        {"kind": "assistant", "text": "Pushed. CI is running."},
+        {"kind": "error", "text": "Turn failed: rate limited"}
+      ],
+      "truncated": false
+    }
+    """.trimIndent()
+
+  @Test
+  fun `decodes a transcript with every known entry kind`() {
+    val wire = decodeTranscript(transcriptJson)
+    requireNotNull(wire)
+    assertEquals("agent-1", wire.agentId)
+    assertEquals("srv-1", wire.serverId)
+    assertEquals(1738000000000L, wire.updatedAt)
+
+    val transcript = wire.toTranscript()
+    assertEquals("agent-1", transcript.agentId)
+    assertFalse(transcript.truncated)
+    // Order is load-bearing: the screen renders oldest to newest and opens at the end.
+    assertEquals(
+      listOf(
+        TranscriptKind.User,
+        TranscriptKind.Tool,
+        TranscriptKind.Assistant,
+        TranscriptKind.Error,
+      ),
+      transcript.entries.map { it.kind },
+    )
+    assertEquals("Bash: git push origin main", transcript.entries[1].text)
+  }
+
+  @Test
+  fun `an unknown entry kind degrades to Unknown rather than vanishing`() {
+    val json = transcriptJson.replace("\"kind\": \"tool\"", "\"kind\": \"reasoning\"")
+    val transcript = decodeTranscript(json)!!.toTranscript()
+    // Still four entries: losing the text would leave a hole in the conversation.
+    assertEquals(4, transcript.entries.size)
+    assertEquals(TranscriptKind.Unknown, transcript.entries[1].kind)
+    assertEquals("Bash: git push origin main", transcript.entries[1].text)
+  }
+
+  @Test
+  fun `rejects a transcript from a protocol version we do not speak`() {
+    assertNull(decodeTranscript(transcriptJson.replace("\"v\": 1", "\"v\": 2")))
+  }
+
+  @Test
+  fun `rejects malformed transcript json instead of throwing`() {
+    assertNull(decodeTranscript("{ not json"))
+    assertNull(decodeTranscript(""))
+    assertNull(decodeTranscript("[]"))
+  }
+
+  @Test
+  fun `an empty transcript is valid, not an error`() {
+    val json = transcriptJson.replace(Regex("\"entries\": \\[[^]]*]"), "\"entries\": []")
+    val transcript = decodeTranscript(json)!!.toTranscript()
+    assertTrue(transcript.entries.isEmpty())
+    assertEquals("agent-1", transcript.agentId)
+  }
+
+  @Test
+  fun `truncated marks that history exists before the first entry`() {
+    val json = transcriptJson.replace("\"truncated\": false", "\"truncated\": true")
+    assertTrue(decodeTranscript(json)!!.toTranscript().truncated)
+  }
+
+  @Test
+  fun `blank entries are dropped as rendering artifacts`() {
+    val json = transcriptJson.replace("\"text\": \"Pushed. CI is running.\"", "\"text\": \"   \"")
+    assertEquals(3, decodeTranscript(json)!!.toTranscript().entries.size)
+  }
+
+  @Test
+  fun `transcript path is per agent under the shared prefix`() {
+    assertEquals("/paseo/transcript/agent-1", WearBridge.transcriptPath("agent-1"))
+    assertTrue(WearBridge.transcriptPath("agent-1").startsWith(WearBridge.TRANSCRIPT_PATH_PREFIX))
+  }
+
+  @Test
+  fun `requestTranscript encodes to exactly what the phone parses`() {
+    val command =
+      WireCommand(
+        kind = WireCommand.REQUEST_TRANSCRIPT,
+        serverId = "srv-1",
+        agentId = "agent-1",
+      )
+    // encodeDefaults = true, so the unused optionals go out as explicit nulls. That
+    // is already what every other command emits, and the phone's parser reads fields
+    // by name with a type check — a null is simply "absent" to it.
+    assertEquals(
+      """{"v":1,"kind":"requestTranscript","serverId":"srv-1","agentId":"agent-1",""" +
+        """"workspaceId":null,"requestId":null,"text":null,"allow":null}""",
+      WearBridge.json.encodeToString(WireCommand.serializer(), command),
+    )
   }
 
   @Test

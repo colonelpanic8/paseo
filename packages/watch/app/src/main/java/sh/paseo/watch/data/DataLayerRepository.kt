@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import sh.paseo.watch.model.AgentSession
+import sh.paseo.watch.model.Transcript
 import sh.paseo.watch.model.Workspace
 
 private const val TAG = "PaseoWear"
@@ -57,47 +58,103 @@ class DataLayerRepository(
   private val state = MutableStateFlow<List<Workspace>>(emptyList())
   override val workspaces: StateFlow<List<Workspace>> = state
 
+  private val transcriptState = MutableStateFlow<Map<String, Transcript>>(emptyMap())
+  override val transcripts: StateFlow<Map<String, Transcript>> = transcriptState
+
   private val link = MutableStateFlow(LinkState.Waiting)
   val linkState: StateFlow<LinkState> = link.asStateFlow()
 
   private val lastError = MutableStateFlow<String?>(null)
   val error: StateFlow<String?> = lastError.asStateFlow()
 
+  /**
+   * A second, distinct listener object for the transcript prefix.
+   *
+   * Play Services keys a live listener registration by the listener **object**, not
+   * by the URI filter it was registered with. Registering `this` twice with two
+   * different filters is therefore not two subscriptions: the second registration
+   * can replace the first, and we would silently lose one of the two streams —
+   * either snapshots or transcripts, with no error on either side. Two filters means
+   * two objects.
+   */
+  private val transcriptListener =
+    object : DataClient.OnDataChangedListener {
+      override fun onDataChanged(events: DataEventBuffer) = handleEvents(events)
+    }
+
   fun start() {
     dataClient.addListener(this, android.net.Uri.parse("wear://*$SNAPSHOT_PATH_SUFFIX"), DataClient.FILTER_PREFIX)
+    // Transcripts live one-per-agent under a prefix, so this filter is a prefix
+    // match on the directory rather than a single path.
+    dataClient.addListener(
+      transcriptListener,
+      android.net.Uri.parse("wear://*$TRANSCRIPT_PATH_PREFIX/"),
+      DataClient.FILTER_PREFIX,
+    )
     // Read whatever is already cached before asking for anything new: this is what
-    // makes the list appear instantly on launch instead of after a round trip.
-    scope.launch { loadCachedSnapshot() }
+    // makes the list appear instantly on launch instead of after a round trip. The
+    // same pass picks up transcripts, so reopening an agent renders its scrollback
+    // immediately while the fresh copy is still in flight.
+    scope.launch { loadCachedDataItems() }
     scope.launch { requestRefresh() }
   }
 
   fun stop() {
     dataClient.removeListener(this)
+    dataClient.removeListener(transcriptListener)
   }
 
-  override fun onDataChanged(events: DataEventBuffer) {
+  override fun onDataChanged(events: DataEventBuffer) = handleEvents(events)
+
+  /**
+   * Shared by both listeners. Dispatch is by path rather than by which listener
+   * fired, so a filter that delivers more than we asked for still routes correctly.
+   */
+  private fun handleEvents(events: DataEventBuffer) {
     for (event in events) {
       if (event.type != DataEvent.TYPE_CHANGED) continue
-      if (!event.dataItem.uri.path.orEmpty().endsWith(SNAPSHOT_PATH_SUFFIX)) continue
+      val path = event.dataItem.uri.path.orEmpty()
       val raw = DataMapItem.fromDataItem(event.dataItem).dataMap.getString(WearBridge.SNAPSHOT_KEY)
-      applySnapshot(raw)
+      when {
+        path.endsWith(SNAPSHOT_PATH_SUFFIX) -> applySnapshot(raw)
+        path.contains(TRANSCRIPT_PATH_MARKER) -> applyTranscript(raw)
+      }
     }
     events.release()
   }
 
-  private suspend fun loadCachedSnapshot() {
+  private suspend fun loadCachedDataItems() {
     val items =
       runCatching { dataClient.dataItems.await() }
-        .onFailure { Log.w(TAG, "Failed to read cached snapshot", it) }
+        .onFailure { Log.w(TAG, "Failed to read cached data items", it) }
         .getOrNull() ?: return
     try {
-      val item = items.firstOrNull { it.uri.path.orEmpty().endsWith(SNAPSHOT_PATH_SUFFIX) }
-      if (item != null) {
-        applySnapshot(DataMapItem.fromDataItem(item).dataMap.getString(WearBridge.SNAPSHOT_KEY))
+      for (item in items) {
+        val path = item.uri.path.orEmpty()
+        val raw = DataMapItem.fromDataItem(item).dataMap.getString(WearBridge.SNAPSHOT_KEY)
+        when {
+          path.endsWith(SNAPSHOT_PATH_SUFFIX) -> applySnapshot(raw)
+          path.contains(TRANSCRIPT_PATH_MARKER) -> applyTranscript(raw)
+        }
       }
     } finally {
       items.release()
     }
+  }
+
+  private fun applyTranscript(raw: String?) {
+    if (raw == null) return
+    val wire = decodeTranscript(raw)
+    if (wire == null || wire.agentId.isEmpty()) {
+      // Malformed, or a protocol version we don't speak. Unlike a snapshot this is
+      // not worth surfacing: a missing transcript already has a good fallback (the
+      // summary card), and the snapshot path will raise the version complaint.
+      Log.w(TAG, "Dropped unparseable or version-mismatched transcript")
+      return
+    }
+    val incoming = wire.toTranscript()
+    if (!shouldApplyTranscript(transcriptState.value[wire.agentId], incoming)) return
+    transcriptState.value = transcriptState.value + (wire.agentId to incoming)
   }
 
   private fun applySnapshot(raw: String?) {
@@ -111,8 +168,19 @@ class DataLayerRepository(
       return
     }
     lastError.value = null
-    state.value = snapshot.toWorkspaces()
+    val workspaces = snapshot.toWorkspaces()
+    state.value = workspaces
     link.value = LinkState.Linked
+    pruneTranscripts(workspaces)
+  }
+
+  /** Keeps watch memory tracking the live agent set. See [retainingAgentsIn]. */
+  private fun pruneTranscripts(workspaces: List<Workspace>) {
+    val current = transcriptState.value
+    val kept = current.retainingAgentsIn(workspaces)
+    // Only publish when something actually went, so an unchanged agent set doesn't
+    // wake every collector on each snapshot.
+    if (kept.size != current.size) transcriptState.value = kept
   }
 
   override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
@@ -168,6 +236,17 @@ class DataLayerRepository(
             },
         )
       }
+  }
+
+  override suspend fun requestTranscript(agentId: String) {
+    val agent = agent(agentId) ?: return
+    send(
+      WireCommand(
+        kind = WireCommand.REQUEST_TRANSCRIPT,
+        serverId = agent.serverId,
+        agentId = agentId,
+      ),
+    )
   }
 
   override suspend fun stopAgent(agentId: String) {
@@ -234,6 +313,16 @@ class DataLayerRepository(
      * DataItem URIs are `wear://<nodeId><path>`, so matching on the suffix avoids
      * hardcoding a node id.
      */
-    const val SNAPSHOT_PATH_SUFFIX = "/paseo/snapshot"
+    const val SNAPSHOT_PATH_SUFFIX = WearBridge.SNAPSHOT_PATH
+
+    /** Prefix for the per-agent transcript directory, minus the node id. */
+    const val TRANSCRIPT_PATH_PREFIX = WearBridge.TRANSCRIPT_PATH_PREFIX
+
+    /**
+     * Transcript paths end in an agent id, so they can only be matched by looking
+     * for the directory inside the URI rather than by suffix. The trailing slash
+     * keeps `/paseo/transcripts-v2` (or any other future sibling) from matching.
+     */
+    const val TRANSCRIPT_PATH_MARKER = "$TRANSCRIPT_PATH_PREFIX/"
   }
 }
