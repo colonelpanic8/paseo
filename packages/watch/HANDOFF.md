@@ -155,7 +155,11 @@ produces both signed APKs).
   out of non-Android bundles (Metro platform split, per CLAUDE.md).
 - **Conversation scrollback** on the agent screen: `requestTranscript` command,
   `/paseo/transcript/<agentId>` DataItems, and a `ScalingLazyColumn` that opens at
-  the newest turn with the actions at the end of the list.
+  the newest turn with the actions at the end of the list. An open agent screen
+  re-sends `requestTranscript` every 60s to renew the phone's ~150s push lease —
+  the reactive re-request is keyed on the snapshot row, and a continuously busy
+  agent's row never changes, so without the keepalive live output would stop after
+  150s.
 - **Text entry** via `RemoteInputIntentHelper` (`androidx.wear:wear-input`), so the
   keyboard button opens the system input picker instead of the recognizer sheet.
 - **Reply composes in place.** The reply route is deleted. Reply on the agent screen
@@ -172,7 +176,14 @@ produces both signed APKs).
   collide with the phone's 1–4.
 - Launcher icon is the real Paseo butterfly, path copied byte-identical from
   `packages/app/assets/images/butterfly-white.svg`.
-- 27 phone-side tests, 33 watch unit tests, 1 on-device instrumented test.
+- **Real project icons.** The phone publishes each project's icon file as a
+  `DataClient` Asset at `/paseo/icon/<Uri.encode(projectKey)>`; the watch reads it
+  with `getFdForAsset`, screens out formats `BitmapFactory` can't decode (SVG, ICO),
+  and draws it clipped to the same rounded square the initial used. No icon or an
+  undecodable one falls back to the colored initial, so the pre-existing look is the
+  failure mode. A third DataItem prefix means a third listener object — see the
+  README; that gotcha now applies three times.
+- 27 phone-side tests, 46 watch unit tests, 1 on-device instrumented test.
 
 ## Open work
 
@@ -193,6 +204,13 @@ All of the user's UI asks are built. What remains is verification on hardware:
 3. **`RemoteInputIntentHelper` is untested on device.** It resolves to a system
    activity; if a watch has no input picker the launch would fail. The mic path is
    unchanged and still works.
+4. **No project icon has crossed the hop.** The watch half is unit-tested and the
+   phone half publishes, but nothing has confirmed a real icon rendering on a wrist.
+   Check specifically: that the projectKey survives `Uri.encode`/`Uri.decode` intact
+   (a wrong key silently shows the initial forever — indistinguishable from "this
+   project has no icon"), that assets actually sync over Bluetooth rather than
+   waiting on WiFi, that a 32 KB PNG scaled into a 26dp square is still legible, and
+   that a project whose icon is an SVG falls back cleanly rather than drawing blank.
 
 ### Transcript shape as built
 

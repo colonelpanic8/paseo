@@ -34,6 +34,7 @@ Wear app  ──Wearable Data Layer──▶  Phone app  ──WebSocket──�
    │                                    │
    │  DataClient /paseo/snapshot          ◀────┤  phone publishes state
    │  DataClient /paseo/transcript/<agentId> ◀─┤  phone answers a transcript request
+   │  DataClient /paseo/icon/<projectKey> ◀────┤  phone publishes project icon files
    └─ MessageClient /paseo/command  ──────────▶│  watch sends intents
       MessageClient /paseo/refresh  ──────────▶│  watch asks for a republish
 ```
@@ -81,6 +82,8 @@ identity varies. The launch component is therefore
 | ---------------------------------------- | ------------------------------------------------------------- |
 | `data/WearBridge.kt`                     | Wire contract + codec (watch side)                            |
 | `data/DataLayerRepository.kt`            | `WatchRepository` over DataClient/MessageClient               |
+| `data/TranscriptCache.kt`                | Transcript staleness + pruning rules (pure)                   |
+| `data/IconCache.kt`                      | Icon path parsing, format screening, pruning (pure)           |
 | `packages/expo-wear-bridge`              | Expo native module exposing the Data Layer to JS              |
 | `packages/app/src/wear/wear-protocol.ts` | Wire contract (phone side) — mirror of `WearBridge.kt`        |
 | `packages/app/src/wear/wear-snapshot.ts` | Flattens session-store state into the snapshot                |
@@ -112,6 +115,9 @@ The conversation is a **separate, on-demand fetch for the one agent you opened**
 
 1. Opening the agent screen sends `{"kind":"requestTranscript","agentId":…}` over
    `COMMAND_PATH` (debounced, and re-sent when that agent's snapshot row moves).
+   An open screen also re-sends it every 60s regardless — see step 4; a continuously
+   busy agent's row never moves, so the reactive trigger alone would go quiet exactly
+   when there is the most to see.
 2. The phone answers with a DataItem at `/paseo/transcript/<agentId>` — a projected
    view: user prompts and assistant prose kept, tool calls collapsed to one line,
    each entry capped, at most 100 entries. Projection is the point; a raw Paseo
@@ -121,20 +127,23 @@ The conversation is a **separate, on-demand fetch for the one agent you opened**
    a revisit while the fresh copy is still in flight.
 4. The request also opens a short **lease** on the phone (`wear-bridge.ts`): while a
    watch is looking at an agent, the phone pushes a fresh transcript within a couple
-   of seconds of new activity, coalesced per agent. The lease outlives the watch's
-   ~60s re-request cadence and lapses ~2.5 minutes after the screen closes, so an
-   open screen follows the conversation live and a closed one stops costing timeline
-   fetches. The watch needs no code for this — updated DataItems already flow.
+   of seconds of new activity, coalesced per agent. The ~150s lease outlives the
+   watch's 60s keepalive with room for a missed round trip, and lapses ~2.5 minutes
+   after the screen closes, so an open screen follows the conversation live and a
+   closed one stops costing timeline fetches. Rendering the pushes needs no watch
+   code — updated DataItems already flow — but **keeping the lease alive does**:
+   `TRANSCRIPT_KEEPALIVE_MS` in `PaseoWatchApp.kt` is what makes the cadence real.
 
 Three properties worth preserving:
 
-- **Two URI filters need two listener _objects_.** Play Services keys a live
+- **Each URI filter needs its own listener _object_.** Play Services keys a live
   `DataClient` listener registration by the listener object, not by the URI it was
   registered with — so calling `addListener(this, …)` twice with different filters is
-  not two subscriptions, and one of snapshots or transcripts can silently stop
-  arriving. `DataLayerRepository` registers a separate `transcriptListener` and
-  removes both in `stop()`. This is the same failure mode as the applicationId trap
-  above: no error on either side, the stream just never comes.
+  not two subscriptions, and one of the streams can silently stop arriving.
+  `DataLayerRepository` registers `this` for snapshots plus a separate
+  `transcriptListener` and `iconListener`, and removes all three in `stop()`. A
+  fourth prefix means a fourth object. This is the same failure mode as the
+  applicationId trap above: no error on either side, the stream just never comes.
 
 - **`entries[].kind` is an open set.** `user` / `assistant` / `tool` / `error` today.
   An unrecognised kind renders as muted plain text rather than being dropped — the
@@ -143,6 +152,38 @@ Three properties worth preserving:
 - **"No transcript ever arrives" is a normal state, not an error.** A phone too old
   to know the command drops it silently. The watch keeps showing the summary card,
   which is why that card is a real fallback rather than a loading skeleton.
+
+### Project icons ride as Assets, one DataItem per project
+
+The daemon finds a real icon file in each project repo (favicon/icon/logo, ≤32 KB),
+and the phone publishes it at `/paseo/icon/<Uri.encode(projectKey)>` with the raw
+bytes in an `Asset` under `payload` and the mime type under `mimeType`. Encoding the
+key matters: a projectKey is `github.com/getpaseo/paseo`, and a DataItem path is a
+URI path, so raw slashes would invent directories.
+
+An `Asset` rather than a byte field because that is what the Data Layer's ~100 KB
+item budget is for — assets are fetched out of band via `DataClient.getFdForAsset`,
+which is why reading one is async and lands after the event that announced it.
+
+Four things hold this together:
+
+- **`data/IconCache.kt` is where the policy lives**, for the same reason
+  `TranscriptCache.kt` does: `DataLayerRepository` needs Play Services to exist, so
+  anything inside it is only reachable from an on-device test. Path parsing,
+  format screening and pruning are pure functions with unit tests.
+- **A payload that can't become a bitmap is dropped on arrival, not at draw time.**
+  The daemon accepts SVG and ICO, and `BitmapFactory` decodes neither, so
+  `isRenderableIconPayload` screens on magic bytes (not the declared mime type — a
+  `.png` that is really an SVG is a real thing to find in a repo). What reaches the
+  UI is either drawable bytes or nothing, so there is exactly one fallback path.
+- **The fallback is the old behaviour, unchanged.** No icon, an undecodable payload,
+  or a phone too old to publish any all render the colored initial — which is what
+  every project looked like before this stream existed. `BitmapFactory` returning
+  null instead of throwing is load-bearing; keep it that way.
+- **Icons are pruned against the snapshot**, keyed on projectKey rather than agent
+  id, and a `TYPE_DELETED` event drops one immediately — the icon stream is the only
+  one that reads deletions, because a project that loses its icon should lose the
+  glyph rather than keep the last one we saw.
 
 ## Voice and typing
 
@@ -194,7 +235,8 @@ Two invariants worth not breaking:
   `rememberComposerLaunchers`; there is no reply route and nothing should add one.
 - **The project-icon color hash is a port, not an invention** — it mirrors
   `packages/app/src/utils/project-icon-color.ts` so a project is the same color on
-  wrist and phone. Change both or neither.
+  wrist and phone. Change both or neither. It is now the _fallback_: a project whose
+  repo has a real icon file shows that instead, exactly as `<ProjectIconView>` does.
 
 ## Build
 
@@ -244,10 +286,11 @@ of that surface; migrating is a deliberate later step, not a v1 risk.
 
 Verified:
 
-- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — 27 tests pinning the wire
+- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — 46 tests pinning the wire
   format for both snapshots and transcripts, version rejection, unknown-state and
   unknown-transcript-kind degradation, the exact serialized command JSON, the
-  navigation rule, and the transcript cache's staleness and pruning rules.
+  navigation rule, the transcript cache's staleness and pruning rules, and the icon
+  cache's path parsing, format screening and pruning.
 - **Phone unit tests** (`vitest run src/wear/wear-bridge.test.ts`) — 23 tests covering
   snapshot building, command parsing, permission routing, the killed-app drain, and
   failure handling.

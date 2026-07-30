@@ -1,7 +1,10 @@
 package expo.modules.wearbridge
 
 import android.content.Context
+import android.net.Uri
+import android.util.Base64
 import android.util.Log
+import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
@@ -114,6 +117,24 @@ class ExpoWearBridgeModule : Module() {
     }
 
     /**
+     * Publish one project's icon as an Asset the watch renders next to the project
+     * name. `dataBase64` is the raw file exactly as the daemon read it off disk —
+     * we do not decode the image here, because the watch is the only thing that has
+     * to understand the format and it screens by magic bytes.
+     */
+    AsyncFunction("publishProjectIcon")
+      .SuspendBody<Boolean, String, String, String> { projectKey, dataBase64, mimeType ->
+        val context = appContext.reactContext
+        if (context == null) {
+          false
+        } else {
+          runCatching { putProjectIcon(context, projectKey, dataBase64, mimeType) }
+            .onFailure { Log.w(TAG, "publishProjectIcon failed", it) }
+            .getOrDefault(false)
+        }
+      }
+
+    /**
      * Remove everything we published — used on sign-out so a stale list or
      * conversation can't linger on the wrist.
      */
@@ -164,6 +185,30 @@ class ExpoWearBridgeModule : Module() {
     return true
   }
 
+  private suspend fun putProjectIcon(
+    context: Context,
+    projectKey: String,
+    dataBase64: String,
+    mimeType: String,
+  ): Boolean {
+    val bytes = Base64.decode(dataBase64, Base64.DEFAULT)
+    // A projectKey is repo-ish ("github.com/getpaseo/paseo") and this is a URI path,
+    // so the slashes have to be encoded or they invent path segments the watch's
+    // prefix listener would then have to reassemble.
+    val request =
+      PutDataMapRequest.create("$ICON_PATH_PREFIX/${Uri.encode(projectKey)}").apply {
+        dataMap.putAsset(ICON_PAYLOAD_KEY, Asset.createFromBytes(bytes))
+        dataMap.putString(ICON_MIME_KEY, mimeType)
+      }
+    // No stamp here, unlike snapshots and transcripts: an unchanged icon SHOULD be
+    // dropped by DataClient. Re-putting identical bytes would otherwise resend an
+    // asset over Bluetooth for no visible change.
+    Wearable.getDataClient(context)
+      .putDataItem(request.asPutDataRequest().setUrgent())
+      .await()
+    return true
+  }
+
   private suspend fun deleteSnapshot(context: Context): Boolean {
     val local = Wearable.getNodeClient(context).localNode.await()
     val dataClient = Wearable.getDataClient(context)
@@ -178,6 +223,15 @@ class ExpoWearBridgeModule : Module() {
         DataClient.FILTER_PREFIX,
       )
       .await()
+    // Same shape for icons: one item per project, cleared by prefix. The JS side
+    // remembers what it published per bridge instance, so a clear must be followed by
+    // a fresh bridge (which is what sign-out does) for icons to be republished.
+    dataClient
+      .deleteDataItems(
+        android.net.Uri.parse("wear://${local.id}$ICON_PATH_PREFIX/"),
+        DataClient.FILTER_PREFIX,
+      )
+      .await()
     return true
   }
 
@@ -185,6 +239,11 @@ class ExpoWearBridgeModule : Module() {
     const val EVENT_COMMAND = "onWearCommand"
     const val SNAPSHOT_PATH = "/paseo/snapshot"
     const val TRANSCRIPT_PATH_PREFIX = "/paseo/transcript"
+    // Mirrors WearBridge.ICON_PATH_PREFIX / ICON_PAYLOAD_KEY / ICON_MIME_KEY in the
+    // watch app (packages/watch/.../data/WearBridge.kt). Change both or neither.
+    const val ICON_PATH_PREFIX = "/paseo/icon"
+    const val ICON_PAYLOAD_KEY = "payload"
+    const val ICON_MIME_KEY = "mimeType"
     const val SNAPSHOT_KEY = "payload"
   }
 }

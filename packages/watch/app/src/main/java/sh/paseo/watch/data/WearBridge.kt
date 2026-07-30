@@ -50,6 +50,30 @@ object WearBridge {
   /** DataClient path for one agent's transcript. */
   fun transcriptPath(agentId: String): String = "$TRANSCRIPT_PATH_PREFIX/$agentId"
 
+  /**
+   * DataClient path prefix for per-project icons: `/paseo/icon/<Uri.encode(projectKey)>`.
+   *
+   * The phone publishes one item per project whose repo actually has an icon file
+   * (favicon/icon/logo, <= 32 KB), carrying the raw file bytes as an [Asset] under
+   * [ICON_PAYLOAD_KEY] and its mime type under [ICON_MIME_KEY]. The key is encoded
+   * because a projectKey is a repo-ish string (`github.com/getpaseo/paseo`) and a
+   * DataItem path is a URI path — the slashes would otherwise invent directories.
+   *
+   * The watch never publishes these, so there is no `iconPath()` here: encoding
+   * lives on the phone (`packages/app/src/wear/`), decoding in
+   * [encodedProjectKeyFromIconPath] plus `Uri.decode`.
+   *
+   * A missing item is the normal case, not an error — the project simply has no
+   * icon, and [sh.paseo.watch.ui.ProjectIcon] falls back to the colored initial.
+   */
+  const val ICON_PATH_PREFIX = "/paseo/icon"
+
+  /** DataMap key holding the icon's raw bytes as a Wearable `Asset`. */
+  const val ICON_PAYLOAD_KEY = "payload"
+
+  /** DataMap key holding the icon's mime type, for diagnostics only. */
+  const val ICON_MIME_KEY = "mimeType"
+
   /** MessageClient path for watch -> phone commands. */
   const val COMMAND_PATH = "/paseo/command"
 
