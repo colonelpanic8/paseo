@@ -200,10 +200,12 @@ function assistantMessageEvents({
   sessionId = "session-1",
   messageId = "msg_assistant",
   text = "Hello from OpenCode",
+  model,
 }: {
   sessionId?: string;
   messageId?: string;
   text?: string;
+  model?: { providerID: string; modelID: string };
 } = {}): unknown[] {
   return [
     {
@@ -213,6 +215,7 @@ function assistantMessageEvents({
           id: messageId,
           sessionID: sessionId,
           role: "assistant",
+          ...model,
         },
       },
     },
@@ -425,6 +428,78 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       expect(runtime.acquisitions.at(-1)?.releaseCount).toBe(1);
     } finally {
       vi.useRealTimers();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("prefers the assistant-observed model after initially reporting configuration", async () => {
+    const cwd = tmpCwd();
+    const runtime = new TestOpenCodeHarness();
+    const openCode = new TestOpenCodeClient();
+    openCode.sessionPromptAsyncEvents = assistantTurnEvents({
+      model: {
+        providerID: "runtime-provider",
+        modelID: "runtime-model",
+      },
+    });
+    runtime.enqueueClient(openCode);
+    const client = new OpenCodeAgentClient(logger, undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+    const session = await client.createSession(buildConfig(cwd));
+
+    try {
+      await expect(session.getRuntimeInfo()).resolves.toEqual({
+        provider: "opencode",
+        sessionId: "session-1",
+        model: TEST_MODEL,
+        modeId: null,
+      });
+
+      await collectTurnEvents(streamSession(session, "Observe the runtime model"));
+
+      await expect(session.getRuntimeInfo()).resolves.toEqual({
+        provider: "opencode",
+        sessionId: "session-1",
+        model: "runtime-provider/runtime-model",
+        modeId: null,
+      });
+    } finally {
+      await session.close();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("setModel clears the stale observed model", async () => {
+    const cwd = tmpCwd();
+    const runtime = new TestOpenCodeHarness();
+    const openCode = new TestOpenCodeClient();
+    openCode.sessionPromptAsyncEvents = assistantTurnEvents({
+      model: {
+        providerID: "runtime-provider",
+        modelID: "runtime-model",
+      },
+    });
+    runtime.enqueueClient(openCode);
+    const client = new OpenCodeAgentClient(logger, undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+    const session = await client.createSession(buildConfig(cwd));
+
+    try {
+      await collectTurnEvents(streamSession(session, "Observe the runtime model"));
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: "runtime-provider/runtime-model",
+      });
+
+      await session.setModel?.("selected-provider/selected-model");
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: "selected-provider/selected-model",
+      });
+    } finally {
+      await session.close();
       rmSync(cwd, { recursive: true, force: true });
     }
   });

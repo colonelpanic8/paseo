@@ -2151,11 +2151,8 @@ class ClaudeAgentSession implements AgentSession {
     });
   }
 
-  async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
-    if (this.cachedRuntimeInfo) {
-      return { ...this.cachedRuntimeInfo };
-    }
-    const info: AgentRuntimeInfo = {
+  private buildRuntimeInfo(): AgentRuntimeInfo {
+    return {
       provider: "claude",
       sessionId: this.claudeSessionId,
       model: this.lastOptionsModel,
@@ -2168,6 +2165,13 @@ class ClaudeAgentSession implements AgentSession {
           }
         : {}),
     };
+  }
+
+  async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
+    if (this.cachedRuntimeInfo) {
+      return { ...this.cachedRuntimeInfo };
+    }
+    const info = this.buildRuntimeInfo();
     this.cachedRuntimeInfo = info;
     return { ...info };
   }
@@ -2182,12 +2186,7 @@ class ClaudeAgentSession implements AgentSession {
       reduceFinalText: appendOrReplaceGrowingAssistantMessage,
     });
 
-    this.cachedRuntimeInfo = {
-      provider: "claude",
-      sessionId: this.claudeSessionId,
-      model: this.lastOptionsModel,
-      modeId: this.currentMode ?? null,
-    };
+    this.cachedRuntimeInfo = this.buildRuntimeInfo();
 
     if (!this.claudeSessionId) {
       throw new Error("Session ID not set after run completed");
@@ -4086,6 +4085,9 @@ class ClaudeAgentSession implements AgentSession {
         this.appendSidechainResultEvents(message, events);
         break;
       case "assistant": {
+        if (message.message.model) {
+          this.captureRuntimeModel(message.message.model, "assistant message");
+        }
         const timelineItems = this.mapBlocksToTimeline(message.message.content, {
           suppressAssistantText: options?.suppressAssistantText ?? false,
           suppressReasoning: options?.suppressReasoning ?? false,
@@ -4532,20 +4534,32 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.persistence = null;
     if (message.model) {
-      const normalizedRuntimeModel = normalizeClaudeRuntimeModelId(message.model);
-      this.logger.debug(
-        { runtimeModel: message.model, normalizedRuntimeModel },
-        "Captured runtime model from SDK init",
-      );
-      if (normalizedRuntimeModel) {
-        this.lastOptionsModel = normalizedRuntimeModel;
-      } else if (!this.lastOptionsModel) {
-        this.lastOptionsModel = this.config.model ?? null;
-      }
-      this.lastRuntimeModel = message.model;
-      this.cachedRuntimeInfo = null;
+      this.captureRuntimeModel(message.model, "SDK init");
     }
     return { threadStartedSessionId, notice };
+  }
+
+  private captureRuntimeModel(
+    runtimeModel: string,
+    source: "SDK init" | "assistant message",
+  ): void {
+    if (runtimeModel === this.lastRuntimeModel) {
+      // Every assistant message repeats the model; only a change is worth the
+      // log line and the cache invalidation.
+      return;
+    }
+    const normalizedRuntimeModel = normalizeClaudeRuntimeModelId(runtimeModel);
+    this.logger.debug(
+      { runtimeModel, normalizedRuntimeModel, source },
+      "Captured runtime model from Claude",
+    );
+    if (normalizedRuntimeModel) {
+      this.lastOptionsModel = normalizedRuntimeModel;
+    } else if (!this.lastOptionsModel) {
+      this.lastOptionsModel = this.config.model ?? null;
+    }
+    this.lastRuntimeModel = runtimeModel;
+    this.cachedRuntimeInfo = null;
   }
 
   private readMissingResumedConversationError(message: SDKMessage): string | null {

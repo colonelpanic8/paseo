@@ -6,31 +6,40 @@ import { useSessionStore, type Agent } from "@/stores/session-store";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@getpaseo/protocol/messages";
 
-export interface PaseoSubagentRow {
+/**
+ * What a row needs to say which model and thinking level it is running. Provider
+ * subagents carry no model data on the wire yet, so their fields are null today;
+ * the shape exists so they light up the moment the descriptor grows them.
+ */
+export interface SubagentRowRuntime {
+  /** Configured model id. */
+  model: string | null;
+  /** Runtime-reported model id. */
+  runtimeModelId: string | null;
+  thinkingOptionId: string | null;
+  /** `undefined` when the daemon never sent it — see `Agent.effectiveThinkingOptionId`. */
+  effectiveThinkingOptionId: string | null | undefined;
+}
+
+export interface PaseoSubagentRow extends SubagentRowRuntime {
   kind: "paseo";
   id: Agent["id"];
   provider: Agent["provider"];
   title: Agent["title"];
-  /** Managed agents have a real title, so the union's task line is always absent for them. */
-  description: null;
-  subtitle: null;
   status: Agent["status"];
   requiresAttention: Agent["requiresAttention"];
   createdAt: Agent["createdAt"];
 }
 
-export interface ProviderSubagentRow {
+export interface ProviderSubagentRow extends SubagentRowRuntime {
   kind: "provider";
   id: string;
   parentAgentId: string;
   provider: ProviderSubagentDescriptorPayload["provider"];
-  // `title` is the subagent type ("Explore", "general-purpose") and repeats across a fan-out;
-  // `description` is the task it was given. Both are carried so presentation can choose which
-  // one names the row — collapsing them here is what makes every row read alike.
+  /** Provider-supplied name. Claude descriptors put the subagent *type* here. */
   title: string | null;
+  /** Provider-supplied task summary. Preferred over `title` as the row label. */
   description: string | null;
-  /** Compact provider-owned context. The app displays it without interpreting its contents. */
-  subtitle: string | null;
   status: ProviderSubagentDescriptorPayload["status"];
   requiresAttention: boolean;
   createdAt: Date;
@@ -55,11 +64,13 @@ function toSubagentRow(agent: Agent): SubagentRow {
     id: agent.id,
     provider: agent.provider,
     title: agent.title,
-    description: null,
-    subtitle: null,
     status: agent.status,
     requiresAttention: agent.requiresAttention,
     createdAt: agent.createdAt,
+    model: agent.model,
+    runtimeModelId: agent.runtimeInfo?.model ?? null,
+    thinkingOptionId: agent.thinkingOptionId ?? null,
+    effectiveThinkingOptionId: agent.effectiveThinkingOptionId,
   };
 }
 
@@ -110,10 +121,13 @@ export function selectProviderSubagentsForParent(
       provider: subagent.provider,
       title: subagent.title,
       description: subagent.description,
-      subtitle: subagent.subtitle ?? null,
       status: subagent.status,
       requiresAttention: subagent.status === "failed",
       createdAt: new Date(subagent.createdAt),
+      model: null,
+      runtimeModelId: null,
+      thinkingOptionId: null,
+      effectiveThinkingOptionId: undefined,
     });
   }
   rows.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
