@@ -4567,11 +4567,10 @@ class ClaudeAgentSession implements AgentSession {
       { runtimeModel, normalizedRuntimeModel, source },
       "Captured runtime model from Claude",
     );
-    if (normalizedRuntimeModel) {
-      this.lastOptionsModel = normalizedRuntimeModel;
-    } else if (!this.lastOptionsModel) {
-      this.lastOptionsModel = this.config.model ?? null;
-    }
+    // An id we cannot map to the catalog is still what Claude said it is
+    // running, so report it verbatim rather than leaving a previously
+    // recognized (now wrong) model in place. Clients render an unknown id as-is.
+    this.lastOptionsModel = normalizedRuntimeModel ?? runtimeModel;
     this.lastRuntimeModel = runtimeModel;
     this.cachedRuntimeInfo = null;
   }
