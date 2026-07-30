@@ -709,6 +709,13 @@ export interface AssistantMessageItem {
   timestamp: Date;
   blockGroupId?: string;
   blockIndex?: number;
+  /**
+   * What the provider actually ran for this message. Absent on turns recorded
+   * before the daemon reported it, and on providers that never report it, so
+   * every consumer has to treat "unknown" as a normal case.
+   */
+  model?: string;
+  thinkingOptionId?: string;
 }
 
 export interface TimelinePosition {
@@ -905,6 +912,28 @@ function appendUserMessage(
   return upsertUserMessage(state, nextItem);
 }
 
+interface AssistantMessageAttribution {
+  model?: string;
+  thinkingOptionId?: string;
+}
+
+/**
+ * Only ever produces keys that are actually known, so spreading the result over
+ * an existing item adds attribution without erasing it — a later chunk of the
+ * same message often arrives with nothing attached.
+ */
+function toAttributionFields(
+  attribution: AssistantMessageAttribution | undefined,
+): AssistantMessageAttribution {
+  if (!attribution) {
+    return {};
+  }
+  return {
+    ...(attribution.model ? { model: attribution.model } : {}),
+    ...(attribution.thinkingOptionId ? { thinkingOptionId: attribution.thinkingOptionId } : {}),
+  };
+}
+
 function appendAssistantMessage(
   state: StreamItem[],
   text: string,
@@ -913,7 +942,9 @@ function appendAssistantMessage(
   messageId?: string,
   reservedItemIds?: ReadonlySet<string>,
   timelineCursor?: TimelinePosition,
+  attribution?: AssistantMessageAttribution,
 ): StreamItem[] {
+  const attributionFields = toAttributionFields(attribution);
   const { chunk, hasContent } = normalizeChunk(text);
   if (!chunk) {
     return state;
@@ -930,6 +961,7 @@ function appendAssistantMessage(
       text: `${last.text}${chunk}`,
       timestamp,
       ...(timelineCursor ? { timelineCursor } : {}),
+      ...attributionFields,
     };
     return [...state.slice(0, -1), updated];
   }
@@ -948,6 +980,7 @@ function appendAssistantMessage(
       text: `${secondLast.text}${chunk}`,
       timestamp,
       ...(timelineCursor ? { timelineCursor } : {}),
+      ...attributionFields,
     };
     return [...state.slice(0, -2), updated, last];
   }
@@ -965,6 +998,7 @@ function appendAssistantMessage(
     ...(timelineCursor ? { timelineCursor } : {}),
     text: chunk,
     timestamp,
+    ...attributionFields,
   };
   return [...state, item];
 }
@@ -1502,6 +1536,7 @@ function reduceTimelineEvent(
           item.messageId,
           reservedItemIds,
           timelineCursor,
+          { model: item.model, thinkingOptionId: item.thinkingOptionId },
         ),
       );
     case "reasoning":
