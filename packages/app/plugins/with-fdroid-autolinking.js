@@ -9,6 +9,9 @@ const EXCLUDED_ANDROID_MODULES = [
   "expo-dev-launcher",
   "expo-dev-menu",
   "expo-dev-menu-interface",
+  // The native terminal vendors platform binaries. F-Droid builds keep using
+  // the xterm WebView fallback until libghostty is built from source there.
+  "@getpaseo/mobile-terminal-native",
 ];
 
 const FDROID_ABI_VERSION_CODE_BLOCK = `// Paseo F-Droid single-ABI version codes

@@ -190,6 +190,10 @@ export default {
             // Allow HTTP connections for local network hosts in release builds
             usesCleartextTraffic: true,
           },
+          ios: {
+            // The vendored custom-I/O GhosttyKit build targets iOS 16.1.
+            deploymentTarget: "16.1",
+          },
         },
       ],
       ...buildProfile.fdroidPlugins,

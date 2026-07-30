@@ -1,0 +1,2 @@
+Vendor/** whitespace=-trailing-space
+*.patch whitespace=-trailing-space

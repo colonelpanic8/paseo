@@ -12,7 +12,7 @@ pty (node-pty, forked worker process)
   → TerminalOutputCoalescer (per client stream, terminal-session-controller.ts)
   → binary ws frame (2-byte header + raw bytes)
   → client decode (daemon-client.ts) → stream router → emulator runtime
-  → xterm.write (back-to-back; xterm batches internally)
+  → xterm.write (web/Electron and native fallback) or libghostty feed (native builds)
 ```
 
 Terminal frames share the daemon main event loop with all agent traffic. The `eventLoopDelay` block in the `ws_runtime_metrics` log line (every 30s in `daemon.log`) is the ground truth for "the daemon is busy" — p99/max there directly bound worst-case terminal frame delay.
@@ -25,6 +25,24 @@ Terminal frames share the daemon main event loop with all agent traffic. The `ev
 - **The input-mode tracker runs once per process boundary, not per hop.** The worker owns the authoritative tracker; the daemon caches the replay preamble from `getTerminalState` responses and `snapshotReady` messages. Do not reintroduce a per-chunk `feed()` on the daemon main loop.
 - **Snapshot catch-up is backpressure-gated.** A stream falls back to a full snapshot only when `outputBytesSinceSnapshot > MAX_TERMINAL_OUTPUT_FRAME_BYTES` (256KB) **and** the client transport reports `bufferedAmount > MAX_CLIENT_BUFFERED_BYTES` (4MB). A client that keeps draining streams continuously, no matter how much output is produced. Before this gate existed, every 256KB of build output dropped a frame and forced a full JSON cell-grid snapshot (~200k objects across IPC) — the historical source of spiky lag and GC hitches.
 - **Client output writes are not serialized per frame.** The emulator runtime drains contiguous plain writes straight into xterm (which buffers internally). Only barrier ops (`clear`, `snapshot`, `suppressInput` writes) wait — behind a zero-length sentinel write — so resets can't interleave with in-flight output.
+- **The daemon owns terminal-query replies.** The native libghostty renderers discard replies
+  generated while parsing remote output. Sending those replies back through `onInput` would
+  duplicate the worker's authoritative response and corrupt the PTY input stream.
+
+## Mobile native renderer
+
+Custom iOS and Android builds autolink `packages/app/modules/paseo-terminal` and use its Ghostty
+renderer. The React Native bridge sends incremental output through native view functions; snapshot
+restore replaces the native replay buffer. Builds without that native view manager (including Expo
+Go and F-Droid) automatically retain the xterm WebView renderer.
+
+- iOS uses a vendored custom-I/O `GhosttyKit.xcframework`.
+- The iOS deployment floor is 16.1, matching that GhosttyKit build.
+- Android uses vendored `libghostty-vt` libraries plus a small JNI bridge and Canvas renderer.
+- The Android libraries and JNI output are aligned for 16 KB memory pages.
+- F-Droid excludes the module because its checked-in platform binaries are not source-built in that
+  profile. Remove the exclusion only when the F-Droid pipeline builds both Ghostty artifacts from
+  source.
 
 ## Measuring
 

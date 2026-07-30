@@ -1,259 +1,156 @@
+import { requireNativeViewManager } from "expo-modules-core";
 import {
   useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
-  useState,
-  type ComponentProps,
-  type Ref,
+  type ComponentType,
 } from "react";
-import {
-  Keyboard,
-  StyleSheet,
-  View,
-  type GestureResponderEvent,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import { Keyboard, NativeModules, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import type { ITheme } from "@xterm/xterm";
-import type { TerminalState } from "@getpaseo/protocol/messages";
-import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-mode";
-import type { TerminalOutputData } from "../terminal/runtime/terminal-emulator-runtime";
-import type {
-  TerminalLocalFileLinkSource,
-  TerminalLocalFileLinkTarget,
-} from "../terminal/local-links/terminal-local-link-provider";
-import { terminalEmulatorWebViewHtml } from "../terminal/webview/terminal-emulator-webview-html";
-import type { PendingTerminalModifiers } from "../utils/terminal-keys";
-import type { TerminalRendererReadyChange } from "../utils/terminal-renderer-readiness";
-import { openExternalUrl } from "../utils/open-external-url";
+import {
+  TerminalInputModeTracker,
+  terminalInputModeStatesEqual,
+  type TerminalInputModeState,
+} from "@getpaseo/protocol/terminal-input-mode";
+import { renderTerminalSnapshotToAnsi } from "../terminal/runtime/terminal-snapshot";
+import WebViewTerminalEmulator, {
+  type TerminalEmulatorHandle,
+  type TerminalEmulatorProps,
+} from "./terminal-emulator-webview.native";
 
-export interface TerminalEmulatorHandle {
-  writeOutput: (data: TerminalOutputData) => void;
-  restoreOutput: (data: TerminalOutputData) => void;
-  renderSnapshot: (state: TerminalState | null) => void;
-  clear: () => void;
-  blur: () => void;
+export type { TerminalEmulatorHandle };
+
+interface NativeTerminalSurfaceRef {
+  write(data: string): Promise<void>;
+  replaceBuffer(data: string): Promise<void>;
+  clear(): Promise<void>;
+  focus(): Promise<void>;
+  blur(): Promise<void>;
+  refresh(): Promise<void>;
 }
 
-interface TerminalEmulatorProps {
-  dom?: unknown;
-  ref: Ref<TerminalEmulatorHandle>;
-  streamKey: string;
-  testId?: string;
-  xtermTheme?: ITheme;
-  scrollbackLines: number;
-  fontFamily?: string;
-  fontSize?: number;
-  swipeGesturesEnabled?: boolean;
-  onSwipeLeft?: () => void;
-  onSwipeRight?: () => void;
-  initialSnapshot?: TerminalState | null;
-  onInput?: (data: string) => Promise<void> | void;
-  onFocus?: () => Promise<void> | void;
-  onResize?: (input: { rows: number; cols: number; shouldClaim: boolean }) => Promise<void> | void;
-  onTerminalKey?: (input: {
-    key: string;
-    ctrl: boolean;
-    shift: boolean;
-    alt: boolean;
-    meta: boolean;
-  }) => Promise<void> | void;
-  onPendingModifiersConsumed?: () => Promise<void> | void;
-  onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
-  onResolveLocalFileLink?: (
-    source: TerminalLocalFileLinkSource,
-  ) => Promise<TerminalLocalFileLinkTarget | null> | TerminalLocalFileLinkTarget | null;
-  onOpenLocalFileLink?: (
-    target: TerminalLocalFileLinkTarget,
-    disposition: "main" | "side",
-  ) => Promise<void> | void;
-  onRendererReadyChange?: (change: TerminalRendererReadyChange) => void;
-  pendingModifiers?: PendingTerminalModifiers;
-  focusRequestToken?: number;
-  resizeRequestToken?: number;
-}
-
-type BridgeInboundMessage =
-  | {
-      type: "mount";
-      streamKey: string;
-      initialSnapshot: TerminalState | null;
-      scrollbackLines: number;
-      theme: ITheme;
-      fontFamily?: string;
-      fontSize?: number;
-      pendingModifiers: PendingTerminalModifiers;
-      swipeGesturesEnabled: boolean;
-    }
-  | { type: "unmount"; streamKey: string }
-  | { type: "writeOutput"; streamKey: string; text: string }
-  | { type: "restoreOutput"; streamKey: string; text: string }
-  | { type: "renderSnapshot"; streamKey: string; state: TerminalState | null }
-  | { type: "clear"; streamKey: string }
-  | { type: "focus"; streamKey: string; forceRefocus?: boolean }
-  | { type: "resize"; streamKey: string; shouldClaim?: boolean }
-  | { type: "setTheme"; streamKey: string; theme: ITheme }
-  | { type: "setScrollback"; streamKey: string; lines: number }
-  | { type: "setFont"; streamKey: string; fontFamily?: string; fontSize?: number }
-  | { type: "setPendingModifiers"; streamKey: string; pendingModifiers: PendingTerminalModifiers }
-  | { type: "setSwipeGesturesEnabled"; streamKey: string; enabled: boolean }
-  | {
-      type: "resolveLocalFileLinkResponse";
-      streamKey: string;
-      requestId: number;
-      target: TerminalLocalFileLinkTarget | null;
-    };
-
-type BridgeOutboundMessage =
-  | { type: "bridgeReady" }
-  | { type: "rendererReady"; streamKey: string; isReady: boolean }
-  | { type: "input"; streamKey: string; data: string }
-  | { type: "resize"; streamKey: string; rows: number; cols: number; shouldClaim?: boolean }
-  | {
-      type: "terminalKey";
-      streamKey: string;
-      key: string;
-      ctrl: boolean;
-      shift: boolean;
-      alt: boolean;
-      meta: boolean;
-    }
-  | { type: "pendingModifiersConsumed"; streamKey: string }
-  | { type: "inputModeChange"; streamKey: string; state: TerminalInputModeState }
-  | { type: "openExternalUrl"; streamKey: string; url: string }
-  | {
-      type: "resolveLocalFileLink";
-      streamKey: string;
-      requestId: number;
-      source: TerminalLocalFileLinkSource;
-    }
-  | {
-      type: "openLocalFileLink";
-      streamKey: string;
-      target: TerminalLocalFileLinkTarget;
-      disposition: "main" | "side";
-    }
-  | { type: "swipeLeft"; streamKey: string }
-  | { type: "swipeRight"; streamKey: string }
-  | { type: "debug"; message: string; details?: unknown };
-
-const TERMINAL_WEBVIEW_SOURCE = { html: terminalEmulatorWebViewHtml };
-const TERMINAL_WEBVIEW_ORIGIN_WHITELIST = ["*"];
-const BRIDGE_READY_TIMEOUT_MS = 2_500;
-const RENDERER_READY_TIMEOUT_MS = 2_500;
-const TERMINAL_TAP_MOVE_TOLERANCE_PX = 8;
-type WebViewProps = ComponentProps<typeof WebView>;
-interface PendingTerminalTap {
-  startX: number;
-  startY: number;
-  moved: boolean;
-}
-
-function buildThemeKey(theme: ITheme): string {
-  return JSON.stringify(theme);
-}
-
-function serializeForInjectedJavaScript(message: BridgeInboundMessage): string {
-  return JSON.stringify(message).replace(/<\/script/gi, "<\\/script");
-}
-
-function createMountMessage(input: {
-  streamKey: string;
-  initialSnapshot: TerminalState | null;
-  scrollbackLines: number;
-  theme: ITheme;
-  fontFamily?: string;
-  fontSize?: number;
-  pendingModifiers: PendingTerminalModifiers;
+interface NativeTerminalSurfaceProps {
+  ref?: (value: NativeTerminalSurfaceRef | null) => void;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+  terminalKey: string;
+  initialBuffer: string;
+  fontSize: number;
+  focusRequest: number;
+  autoFocus: boolean;
   swipeGesturesEnabled: boolean;
-}): BridgeInboundMessage {
-  return {
-    type: "mount",
-    streamKey: input.streamKey,
-    initialSnapshot: input.initialSnapshot,
-    scrollbackLines: input.scrollbackLines,
-    theme: input.theme,
-    fontFamily: input.fontFamily,
-    fontSize: input.fontSize,
-    pendingModifiers: input.pendingModifiers,
-    swipeGesturesEnabled: input.swipeGesturesEnabled,
-  };
+  appearanceScheme: "dark" | "light";
+  themeConfig: string;
+  backgroundColor: string;
+  foregroundColor: string;
+  mutedForegroundColor: string;
+  onInput: (event: { nativeEvent: { data: string } }) => void;
+  onResize: (event: { nativeEvent: { cols: number; rows: number } }) => void;
+  onFocus: () => void;
+  onSwipeLeft: () => void;
+  onSwipeRight: () => void;
 }
 
-export default function TerminalEmulator({
+type NativeOperation = (surface: NativeTerminalSurfaceRef) => Promise<void>;
+
+const DEFAULT_THEME: ITheme = {
+  background: "#0b0b0b",
+  foreground: "#e6e6e6",
+  cursor: "#e6e6e6",
+};
+
+const PALETTE_KEYS = [
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
+  "brightBlack",
+  "brightRed",
+  "brightGreen",
+  "brightYellow",
+  "brightBlue",
+  "brightMagenta",
+  "brightCyan",
+  "brightWhite",
+] as const;
+
+function hasNativeTerminalSurface(): boolean {
+  const proxy = NativeModules.NativeUnimoduleProxy as
+    | { viewManagersMetadata?: Record<string, unknown> }
+    | undefined;
+  return Boolean(proxy?.viewManagersMetadata?.PaseoTerminalSurface);
+}
+
+const NativeTerminalSurface = hasNativeTerminalSurface()
+  ? (requireNativeViewManager<NativeTerminalSurfaceProps>(
+      "PaseoTerminalSurface",
+    ) as ComponentType<NativeTerminalSurfaceProps>)
+  : null;
+const NativeTerminalSurfaceComponent =
+  NativeTerminalSurface as ComponentType<NativeTerminalSurfaceProps>;
+
+function terminalThemeConfig(theme: ITheme): string {
+  const lines = [
+    `background = ${theme.background ?? DEFAULT_THEME.background}`,
+    `foreground = ${theme.foreground ?? DEFAULT_THEME.foreground}`,
+    `cursor-color = ${theme.cursor ?? theme.foreground ?? DEFAULT_THEME.cursor}`,
+    `cursor-text = ${theme.cursorAccent ?? theme.background ?? DEFAULT_THEME.background}`,
+  ];
+  PALETTE_KEYS.forEach((key, index) => {
+    const color = theme[key];
+    if (color) lines.push(`palette = ${index}=${color}`);
+  });
+  return lines.join("\n");
+}
+
+function isLightColor(color: string): boolean {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return false;
+  const value = Number.parseInt(match[1], 16);
+  const red = (value >> 16) & 0xff;
+  const green = (value >> 8) & 0xff;
+  const blue = value & 0xff;
+  return red * 0.299 + green * 0.587 + blue * 0.114 > 160;
+}
+
+function NativeTerminalEmulator({
   ref,
   streamKey,
   testId = "terminal-surface",
-  xtermTheme = {
-    background: "#0b0b0b",
-    foreground: "#e6e6e6",
-    cursor: "#e6e6e6",
-  },
-  scrollbackLines,
-  fontFamily,
-  fontSize,
-  swipeGesturesEnabled = false,
-  onSwipeLeft,
-  onSwipeRight,
+  xtermTheme = DEFAULT_THEME,
+  fontSize = 12,
   initialSnapshot = null,
   onInput,
   onFocus,
   onResize,
-  onTerminalKey,
-  onPendingModifiersConsumed,
   onInputModeChange,
-  onResolveLocalFileLink,
-  onOpenLocalFileLink,
   onRendererReadyChange,
-  pendingModifiers = { ctrl: false, shift: false, alt: false },
+  swipeGesturesEnabled = false,
+  onSwipeLeft,
+  onSwipeRight,
   focusRequestToken = 0,
   resizeRequestToken = 0,
 }: TerminalEmulatorProps) {
-  const webViewRef = useRef<WebView>(null);
-  const [webViewEpoch, setWebViewEpoch] = useState(0);
-  const [bridgeReadyVersion, setBridgeReadyVersion] = useState(0);
-  const bridgeReadyRef = useRef(false);
-  const bridgeReadyVersionRef = useRef(0);
-  const rendererReadyVersionRef = useRef(0);
-  const pendingMessagesRef = useRef<BridgeInboundMessage[]>([]);
+  const surfaceRef = useRef<NativeTerminalSurfaceRef | null>(null);
   const outputDecoderRef = useRef(new TextDecoder());
-  const mountedStreamKeyRef = useRef<string | null>(null);
-  const bridgeReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rendererReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingTapRef = useRef<PendingTerminalTap | null>(null);
-  const mountConfigRef = useRef({
-    streamKey,
-    initialSnapshot,
-    scrollbackLines,
-    theme: xtermTheme,
-    fontFamily,
-    fontSize,
-    pendingModifiers,
-    swipeGesturesEnabled,
-  });
-  mountConfigRef.current = {
-    streamKey,
-    initialSnapshot,
-    scrollbackLines,
-    theme: xtermTheme,
-    fontFamily,
-    fontSize,
-    pendingModifiers,
-    swipeGesturesEnabled,
-  };
+  const readyRef = useRef(false);
+  const pendingOperationsRef = useRef<NativeOperation[]>([]);
+  const operationChainRef = useRef(Promise.resolve());
+  const inputModeTrackerRef = useRef(new TerminalInputModeTracker());
+  const lastInputModeRef = useRef<TerminalInputModeState>(inputModeTrackerRef.current.getState());
+  const initialBufferRef = useRef("");
   const callbacksRef = useRef({
     onInput,
     onFocus,
     onResize,
-    onTerminalKey,
-    onPendingModifiersConsumed,
     onInputModeChange,
     onRendererReadyChange,
-    onResolveLocalFileLink,
-    onOpenLocalFileLink,
     onSwipeLeft,
     onSwipeRight,
   });
@@ -261,433 +158,185 @@ export default function TerminalEmulator({
     onInput,
     onFocus,
     onResize,
-    onTerminalKey,
-    onPendingModifiersConsumed,
     onInputModeChange,
     onRendererReadyChange,
-    onResolveLocalFileLink,
-    onOpenLocalFileLink,
     onSwipeLeft,
     onSwipeRight,
   };
 
-  const clearBridgeReadyTimeout = useCallback(() => {
-    if (bridgeReadyTimeoutRef.current === null) return;
-    clearTimeout(bridgeReadyTimeoutRef.current);
-    bridgeReadyTimeoutRef.current = null;
+  const initialBuffer = useMemo(
+    () => (initialSnapshot ? renderTerminalSnapshotToAnsi(initialSnapshot) : ""),
+    [initialSnapshot],
+  );
+  initialBufferRef.current = initialBuffer;
+  const backgroundColor = xtermTheme.background ?? DEFAULT_THEME.background!;
+  const foregroundColor = xtermTheme.foreground ?? DEFAULT_THEME.foreground!;
+  const mutedForegroundColor = xtermTheme.brightBlack ?? "#808080";
+  const themeConfig = useMemo(() => terminalThemeConfig(xtermTheme), [xtermTheme]);
+
+  const runOperation = useCallback((operation: NativeOperation) => {
+    operationChainRef.current = operationChainRef.current
+      .then(async () => {
+        const surface = surfaceRef.current;
+        if (surface) await operation(surface);
+        return undefined;
+      })
+      .catch(() => undefined);
   }, []);
 
-  const clearRendererReadyTimeout = useCallback(() => {
-    if (rendererReadyTimeoutRef.current === null) return;
-    clearTimeout(rendererReadyTimeoutRef.current);
-    rendererReadyTimeoutRef.current = null;
-  }, []);
-
-  const resetWebViewDocument = useCallback(() => {
-    clearBridgeReadyTimeout();
-    clearRendererReadyTimeout();
-    bridgeReadyRef.current = false;
-    pendingMessagesRef.current = [];
-    mountedStreamKeyRef.current = null;
-    callbacksRef.current.onRendererReadyChange?.({ streamKey, isReady: false });
-    setWebViewEpoch((value) => value + 1);
-  }, [clearBridgeReadyTimeout, clearRendererReadyTimeout, streamKey]);
-
-  const scheduleBridgeReadyWatchdog = useCallback(() => {
-    clearBridgeReadyTimeout();
-    const expectedBridgeReadyVersion = bridgeReadyVersionRef.current;
-    bridgeReadyTimeoutRef.current = setTimeout(() => {
-      bridgeReadyTimeoutRef.current = null;
-      if (bridgeReadyVersionRef.current !== expectedBridgeReadyVersion || bridgeReadyRef.current) {
+  const enqueueOperation = useCallback(
+    (operation: NativeOperation) => {
+      if (!readyRef.current || !surfaceRef.current) {
+        pendingOperationsRef.current.push(operation);
         return;
       }
-      resetWebViewDocument();
-    }, BRIDGE_READY_TIMEOUT_MS);
-  }, [clearBridgeReadyTimeout, resetWebViewDocument]);
+      runOperation(operation);
+    },
+    [runOperation],
+  );
 
-  const scheduleRendererReadyWatchdog = useCallback(() => {
-    clearRendererReadyTimeout();
-    const expectedRendererReadyVersion = rendererReadyVersionRef.current;
-    rendererReadyTimeoutRef.current = setTimeout(() => {
-      rendererReadyTimeoutRef.current = null;
-      if (
-        rendererReadyVersionRef.current !== expectedRendererReadyVersion ||
-        mountedStreamKeyRef.current === streamKey
-      ) {
-        return;
-      }
-      resetWebViewDocument();
-    }, RENDERER_READY_TIMEOUT_MS);
-  }, [clearRendererReadyTimeout, resetWebViewDocument, streamKey]);
-
-  const flushPendingMessages = useCallback(() => {
-    if (!bridgeReadyRef.current || !webViewRef.current) return;
-    const pending = pendingMessagesRef.current.splice(0);
-    for (const message of pending) {
-      const payload = serializeForInjectedJavaScript(message);
-      webViewRef.current.injectJavaScript(
-        `window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ && window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
-      );
-    }
+  const emitInputMode = useCallback(() => {
+    const next = inputModeTrackerRef.current.getState();
+    if (terminalInputModeStatesEqual(next, lastInputModeRef.current)) return;
+    lastInputModeRef.current = next;
+    callbacksRef.current.onInputModeChange?.(next);
   }, []);
 
-  const sendToWebView = useCallback((message: BridgeInboundMessage) => {
-    if (!bridgeReadyRef.current || !webViewRef.current) {
-      pendingMessagesRef.current.push(message);
-      return;
-    }
-    const payload = serializeForInjectedJavaScript(message);
-    webViewRef.current.injectJavaScript(
-      `window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ && window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
-    );
-  }, []);
+  const resetInputMode = useCallback(
+    (replacement = "") => {
+      inputModeTrackerRef.current.reset();
+      inputModeTrackerRef.current.feed(replacement);
+      emitInputMode();
+    },
+    [emitInputMode],
+  );
 
   useImperativeHandle(
     ref,
     (): TerminalEmulatorHandle => ({
-      writeOutput: (data: TerminalOutputData) => {
+      writeOutput: (data) => {
         const output = outputDecoderRef.current.decode(data, { stream: true });
-        if (output.length === 0) {
-          return;
-        }
-        sendToWebView({ type: "writeOutput", streamKey, text: output });
+        if (!output) return;
+        if (inputModeTrackerRef.current.feed(output).changed) emitInputMode();
+        enqueueOperation((surface) => surface.write(output));
       },
-      restoreOutput: (data: TerminalOutputData) => {
+      restoreOutput: (data) => {
         outputDecoderRef.current.decode();
-        const text = outputDecoderRef.current.decode(data, { stream: false });
-        if (text.length === 0) {
-          return;
-        }
-        sendToWebView({ type: "restoreOutput", streamKey, text });
+        const output = outputDecoderRef.current.decode(data);
+        resetInputMode(output);
+        enqueueOperation((surface) => surface.replaceBuffer(output));
       },
-      renderSnapshot: (state: TerminalState | null) => {
+      renderSnapshot: (state) => {
         outputDecoderRef.current.decode();
-        sendToWebView({ type: "renderSnapshot", streamKey, state });
+        const output = state ? renderTerminalSnapshotToAnsi(state) : "";
+        resetInputMode(output);
+        enqueueOperation((surface) => surface.replaceBuffer(output));
       },
       clear: () => {
         outputDecoderRef.current.decode();
-        sendToWebView({ type: "clear", streamKey });
+        resetInputMode();
+        enqueueOperation((surface) => surface.clear());
       },
       blur: () => {
-        webViewRef.current?.injectJavaScript(
-          "window.__PASEO_TERMINAL_WEBVIEW_BLUR__ && window.__PASEO_TERMINAL_WEBVIEW_BLUR__(); true;",
-        );
+        enqueueOperation((surface) => surface.blur());
         Keyboard.dismiss();
       },
     }),
-    [sendToWebView, streamKey],
+    [emitInputMode, enqueueOperation, resetInputMode],
   );
 
   useEffect(() => {
     outputDecoderRef.current.decode();
-  }, [streamKey]);
+    readyRef.current = false;
+    pendingOperationsRef.current = [];
+    resetInputMode(initialBufferRef.current);
+    return () => {
+      callbacksRef.current.onRendererReadyChange?.({ streamKey, isReady: false });
+    };
+  }, [resetInputMode, streamKey]);
 
   useEffect(() => {
-    if (bridgeReadyVersion <= 0) return;
-    const mountMessage = createMountMessage(mountConfigRef.current);
-    mountedStreamKeyRef.current = streamKey;
-    sendToWebView(mountMessage);
-    flushPendingMessages();
-    scheduleRendererReadyWatchdog();
-  }, [
-    bridgeReadyVersion,
-    flushPendingMessages,
-    scheduleRendererReadyWatchdog,
-    sendToWebView,
-    streamKey,
-  ]);
-
-  const themeKey = useMemo(() => buildThemeKey(xtermTheme), [xtermTheme]);
-  useEffect(() => {
-    if (!mountedStreamKeyRef.current) return;
-    sendToWebView({ type: "setTheme", streamKey, theme: xtermTheme });
-  }, [sendToWebView, streamKey, themeKey, xtermTheme]);
-
-  useEffect(() => {
-    if (!mountedStreamKeyRef.current) return;
-    sendToWebView({ type: "setScrollback", streamKey, lines: scrollbackLines });
-  }, [scrollbackLines, sendToWebView, streamKey]);
-
-  useEffect(() => {
-    if (!mountedStreamKeyRef.current) return;
-    sendToWebView({ type: "setFont", streamKey, fontFamily, fontSize });
-  }, [fontFamily, fontSize, sendToWebView, streamKey]);
-
-  useEffect(() => {
-    if (!mountedStreamKeyRef.current) return;
-    sendToWebView({ type: "setPendingModifiers", streamKey, pendingModifiers });
-  }, [pendingModifiers, sendToWebView, streamKey]);
-
-  useEffect(() => {
-    if (!mountedStreamKeyRef.current) return;
-    sendToWebView({ type: "setSwipeGesturesEnabled", streamKey, enabled: swipeGesturesEnabled });
-  }, [sendToWebView, streamKey, swipeGesturesEnabled]);
+    resetInputMode(initialBuffer);
+  }, [initialBuffer, resetInputMode]);
 
   useEffect(() => {
     if (focusRequestToken <= 0) return;
-    sendToWebView({ type: "resize", streamKey, shouldClaim: true });
-    sendToWebView({ type: "focus", streamKey });
-    webViewRef.current?.requestFocus();
-  }, [focusRequestToken, sendToWebView, streamKey]);
+    enqueueOperation(async (surface) => {
+      await surface.refresh();
+      await surface.focus();
+    });
+  }, [enqueueOperation, focusRequestToken]);
 
   useEffect(() => {
     if (resizeRequestToken <= 0) return;
-    sendToWebView({ type: "resize", streamKey, shouldClaim: true });
-  }, [resizeRequestToken, sendToWebView, streamKey]);
+    enqueueOperation((surface) => surface.refresh());
+  }, [enqueueOperation, resizeRequestToken]);
 
-  useEffect(() => {
-    return () => {
-      if (mountedStreamKeyRef.current) {
-        const previousStreamKey = mountedStreamKeyRef.current;
-        callbacksRef.current.onRendererReadyChange?.({
-          streamKey: previousStreamKey,
-          isReady: false,
-        });
-        sendToWebView({ type: "unmount", streamKey: previousStreamKey });
+  const handleResize = useCallback(
+    (event: { nativeEvent: { cols: number; rows: number } }) => {
+      const { cols, rows } = event.nativeEvent;
+      if (!readyRef.current) {
+        readyRef.current = true;
+        const pending = pendingOperationsRef.current.splice(0);
+        pending.forEach(runOperation);
+        callbacksRef.current.onRendererReadyChange?.({ streamKey, isReady: true });
       }
-      bridgeReadyRef.current = false;
-      pendingMessagesRef.current = [];
-      mountedStreamKeyRef.current = null;
-      clearBridgeReadyTimeout();
-      clearRendererReadyTimeout();
-    };
-  }, [clearBridgeReadyTimeout, clearRendererReadyTimeout, sendToWebView]);
-
-  const handleLifecycleMessage = useCallback(
-    (message: BridgeOutboundMessage): boolean => {
-      if (message.type === "bridgeReady") {
-        bridgeReadyRef.current = true;
-        bridgeReadyVersionRef.current += 1;
-        clearBridgeReadyTimeout();
-        setBridgeReadyVersion((value) => value + 1);
-        return true;
-      }
-      if (message.type === "rendererReady") {
-        mountedStreamKeyRef.current = message.isReady ? message.streamKey : null;
-        if (message.isReady) {
-          rendererReadyVersionRef.current += 1;
-          clearRendererReadyTimeout();
-        }
-        callbacksRef.current.onRendererReadyChange?.({
-          streamKey: message.streamKey,
-          isReady: message.isReady,
-        });
-        return true;
-      }
-      return false;
+      callbacksRef.current.onResize?.({ cols, rows, shouldClaim: true });
     },
-    [clearBridgeReadyTimeout, clearRendererReadyTimeout],
+    [runOperation, streamKey],
   );
-
-  const resolveLocalFileLink = useCallback(
-    async (message: Extract<BridgeOutboundMessage, { type: "resolveLocalFileLink" }>) => {
-      try {
-        const target = await (callbacksRef.current.onResolveLocalFileLink?.(message.source) ??
-          null);
-        sendToWebView({
-          type: "resolveLocalFileLinkResponse",
-          streamKey: message.streamKey,
-          requestId: message.requestId,
-          target,
-        });
-      } catch {
-        sendToWebView({
-          type: "resolveLocalFileLinkResponse",
-          streamKey: message.streamKey,
-          requestId: message.requestId,
-          target: null,
-        });
-      }
-    },
-    [sendToWebView],
-  );
-
-  const handleTerminalMessage = useCallback(
-    (
-      message: Exclude<BridgeOutboundMessage, { type: "bridgeReady" } | { type: "rendererReady" }>,
-    ) => {
-      if (message.type === "resolveLocalFileLink") {
-        void resolveLocalFileLink(message);
-        return;
-      }
-      if (message.type === "openLocalFileLink") {
-        callbacksRef.current.onOpenLocalFileLink?.(message.target, message.disposition);
-        return;
-      }
-      switch (message.type) {
-        case "input":
-          callbacksRef.current.onInput?.(message.data);
-          break;
-        case "resize":
-          callbacksRef.current.onResize?.({
-            rows: message.rows,
-            cols: message.cols,
-            shouldClaim: message.shouldClaim !== false,
-          });
-          break;
-        case "terminalKey":
-          callbacksRef.current.onTerminalKey?.({
-            key: message.key,
-            ctrl: message.ctrl,
-            shift: message.shift,
-            alt: message.alt,
-            meta: message.meta,
-          });
-          break;
-        case "pendingModifiersConsumed":
-          callbacksRef.current.onPendingModifiersConsumed?.();
-          break;
-        case "inputModeChange":
-          callbacksRef.current.onInputModeChange?.(message.state);
-          break;
-        case "openExternalUrl":
-          void openExternalUrl(message.url);
-          break;
-        case "swipeLeft":
-          callbacksRef.current.onSwipeLeft?.();
-          break;
-        case "swipeRight":
-          callbacksRef.current.onSwipeRight?.();
-          break;
-        case "debug":
-          break;
-      }
-    },
-    [resolveLocalFileLink],
-  );
-
-  const handleMessage = useCallback(
-    (event: WebViewMessageEvent) => {
-      let message: BridgeOutboundMessage;
-      try {
-        message = JSON.parse(event.nativeEvent.data) as BridgeOutboundMessage;
-      } catch {
-        return;
-      }
-
-      if (message.type === "bridgeReady" || message.type === "rendererReady") {
-        handleLifecycleMessage(message);
-        return;
-      }
-      handleTerminalMessage(message);
-    },
-    [handleLifecycleMessage, handleTerminalMessage],
-  );
-
-  const handleLoadStart = useCallback<NonNullable<WebViewProps["onLoadStart"]>>(() => {
-    bridgeReadyRef.current = false;
-    mountedStreamKeyRef.current = null;
-    scheduleBridgeReadyWatchdog();
-  }, [scheduleBridgeReadyWatchdog]);
-
-  const handleContentProcessDidTerminate = useCallback<
-    NonNullable<WebViewProps["onContentProcessDidTerminate"]>
-  >(() => {
-    resetWebViewDocument();
-  }, [resetWebViewDocument]);
-
-  const handleRenderProcessGone = useCallback<
-    NonNullable<WebViewProps["onRenderProcessGone"]>
-  >(() => {
-    resetWebViewDocument();
-  }, [resetWebViewDocument]);
-
-  const handleWebViewTouchStart = useCallback((event: GestureResponderEvent) => {
-    pendingTapRef.current = {
-      startX: event.nativeEvent.pageX,
-      startY: event.nativeEvent.pageY,
-      moved: false,
-    };
+  const handleSurfaceRef = useCallback((surface: NativeTerminalSurfaceRef | null) => {
+    surfaceRef.current = surface;
   }, []);
-
-  const handleWebViewTouchMove = useCallback((event: GestureResponderEvent) => {
-    const pendingTap = pendingTapRef.current;
-    if (!pendingTap) return;
-    const dx = event.nativeEvent.pageX - pendingTap.startX;
-    const dy = event.nativeEvent.pageY - pendingTap.startY;
-    if (
-      Math.abs(dx) > TERMINAL_TAP_MOVE_TOLERANCE_PX ||
-      Math.abs(dy) > TERMINAL_TAP_MOVE_TOLERANCE_PX
-    ) {
-      pendingTap.moved = true;
-    }
+  const handleInput = useCallback((event: { nativeEvent: { data: string } }) => {
+    callbacksRef.current.onInput?.(event.nativeEvent.data);
   }, []);
-
-  const handleWebViewTouchEnd = useCallback(() => {
-    const pendingTap = pendingTapRef.current;
-    pendingTapRef.current = null;
-    if (!pendingTap || pendingTap.moved) {
-      return;
-    }
-    webViewRef.current?.requestFocus();
+  const handleFocus = useCallback(() => {
     callbacksRef.current.onFocus?.();
-    sendToWebView({ type: "focus", streamKey, forceRefocus: true });
-  }, [sendToWebView, streamKey]);
-
-  const handleWebViewTouchCancel = useCallback(() => {
-    pendingTapRef.current = null;
   }, []);
-
-  const backgroundColor = xtermTheme.background ?? "#0b0b0b";
-  const rootStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [styles.root, { backgroundColor }],
-    [backgroundColor],
-  );
-  const webViewStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [styles.webView, { backgroundColor }],
-    [backgroundColor],
-  );
-  const webViewContainerStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [styles.webViewContainer, { backgroundColor }],
-    [backgroundColor],
-  );
+  const handleSwipeLeft = useCallback(() => {
+    callbacksRef.current.onSwipeLeft?.();
+  }, []);
+  const handleSwipeRight = useCallback(() => {
+    callbacksRef.current.onSwipeRight?.();
+  }, []);
 
   return (
-    <View style={rootStyle} testID={testId}>
-      <WebView
-        key={webViewEpoch}
-        ref={webViewRef}
-        source={TERMINAL_WEBVIEW_SOURCE}
-        style={webViewStyle}
-        containerStyle={webViewContainerStyle}
-        originWhitelist={TERMINAL_WEBVIEW_ORIGIN_WHITELIST}
-        scrollEnabled
-        nestedScrollEnabled
-        bounces={false}
-        overScrollMode="never"
-        keyboardDisplayRequiresUserAction={false}
-        automaticallyAdjustContentInsets={false}
-        contentInsetAdjustmentBehavior="never"
-        textInteractionEnabled
-        allowsLinkPreview={false}
-        setSupportMultipleWindows={false}
-        setBuiltInZoomControls={false}
-        setDisplayZoomControls={false}
-        textZoom={100}
-        onTouchStart={handleWebViewTouchStart}
-        onTouchMove={handleWebViewTouchMove}
-        onTouchEnd={handleWebViewTouchEnd}
-        onTouchCancel={handleWebViewTouchCancel}
-        onMessage={handleMessage}
-        onLoadStart={handleLoadStart}
-        onContentProcessDidTerminate={handleContentProcessDidTerminate}
-        onRenderProcessGone={handleRenderProcessGone}
-      />
-    </View>
+    <NativeTerminalSurfaceComponent
+      ref={handleSurfaceRef}
+      style={styles.surface}
+      testID={testId}
+      terminalKey={streamKey}
+      initialBuffer={initialBuffer}
+      fontSize={fontSize}
+      focusRequest={focusRequestToken}
+      autoFocus
+      swipeGesturesEnabled={swipeGesturesEnabled}
+      appearanceScheme={isLightColor(backgroundColor) ? "light" : "dark"}
+      themeConfig={themeConfig}
+      backgroundColor={backgroundColor}
+      foregroundColor={foregroundColor}
+      mutedForegroundColor={mutedForegroundColor}
+      onInput={handleInput}
+      onResize={handleResize}
+      onFocus={handleFocus}
+      onSwipeLeft={handleSwipeLeft}
+      onSwipeRight={handleSwipeRight}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  surface: {
     flex: 1,
-    minHeight: 0,
     minWidth: 0,
-    overflow: "hidden",
-  },
-  webView: {
-    flex: 1,
-  },
-  webViewContainer: {
-    flex: 1,
+    minHeight: 0,
   },
 });
+
+export default function TerminalEmulator(props: TerminalEmulatorProps) {
+  if (!NativeTerminalSurface) {
+    return <WebViewTerminalEmulator {...props} />;
+  }
+  return <NativeTerminalEmulator key={props.streamKey} {...props} />;
+}

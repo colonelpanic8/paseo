@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PaseoTerminalModule"],
+    "podspecPath": "PaseoTerminalNative.podspec"
+  },
+  "android": {
+    "modules": ["expo.modules.paseoterminal.PaseoTerminalModule"]
+  }
+}

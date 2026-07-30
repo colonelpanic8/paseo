@@ -1,0 +1,17 @@
+{
+  "name": "@getpaseo/mobile-terminal-native",
+  "version": "0.0.0",
+  "private": true,
+  "expo-module": {
+    "ios": {
+      "modules": [
+        "PaseoTerminalModule"
+      ]
+    },
+    "android": {
+      "modules": [
+        "expo.modules.paseoterminal.PaseoTerminalModule"
+      ]
+    }
+  }
+}
