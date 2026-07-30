@@ -4708,6 +4708,111 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
+  test("stamps Codex assistant messages with the active turn's observed runtime", () => {
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: {
+        id: "observed-turn",
+        model: "gpt-observed",
+        reasoningEffort: " xhigh ",
+      },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "observed-assistant-message",
+      delta: "Observed output.",
+    });
+
+    expect(events.at(-1)).toEqual({
+      type: "timeline",
+      provider: "codex",
+      turnId: "test-turn",
+      item: {
+        type: "assistant_message",
+        text: "Observed output.",
+        messageId: "observed-assistant-message",
+        model: "gpt-observed",
+        thinkingOptionId: "xhigh",
+      },
+    });
+  });
+
+  test("does not fall back to configured Codex runtime values for turn attribution", () => {
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "unobserved-turn" },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "unobserved-assistant-message",
+      delta: "No observed runtime.",
+    });
+
+    const item = events.at(-1)?.type === "timeline" ? events.at(-1)?.item : undefined;
+    expect(item).toEqual({
+      type: "assistant_message",
+      text: "No observed runtime.",
+      messageId: "unobserved-assistant-message",
+    });
+    expect(item).not.toHaveProperty("model");
+    expect(item).not.toHaveProperty("thinkingOptionId");
+  });
+
+  test("does not stamp Codex child messages with the parent turn runtime", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: {
+        id: "parent-turn",
+        model: "gpt-parent",
+        reasoningEffort: "high",
+      },
+    });
+    asInternals(session).handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "subAgentActivity",
+        id: "spawn-attribution-child",
+        kind: "started",
+        agentThreadId: "attribution-child-thread",
+        agentPath: "/root/attribution-child",
+      },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "attribution-child-thread",
+      itemId: "child-attribution-message",
+      delta: "Child output.",
+    });
+
+    const childAssistantItems = events.flatMap((event) =>
+      event.type === "provider_subagent" &&
+      event.event.type === "timeline" &&
+      event.event.item.type === "assistant_message"
+        ? [event.event.item]
+        : [],
+    );
+    expect(childAssistantItems).toEqual([
+      {
+        type: "assistant_message",
+        text: "Child output.",
+        messageId: "child-attribution-message",
+      },
+    ]);
+    expect(childAssistantItems[0]).not.toHaveProperty("model");
+    expect(childAssistantItems[0]).not.toHaveProperty("thinkingOptionId");
+  });
+
   test("emits only the missing assistant suffix when completed text extends streamed deltas", () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
