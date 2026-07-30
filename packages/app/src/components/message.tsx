@@ -565,6 +565,8 @@ interface AssistantTurnFooterProps {
   getContent: () => string;
   completedAt?: Date;
   durationMs?: number;
+  /** "Model · Thinking" this turn ran with; omitted when it was never recorded. */
+  meta?: string | null;
   onFork?: (target: AssistantForkTarget) => Promise<void> | void;
 }
 
@@ -596,6 +598,12 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
   },
+  meta: {
+    flexShrink: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: STREAM_METADATA_FONT_SIZE,
+  },
 }));
 
 const TIMESTAMP_REVEAL_MS = 3000;
@@ -610,6 +618,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   getContent,
   completedAt,
   durationMs,
+  meta,
   onFork,
 }: AssistantTurnFooterProps) {
   const [hovered, setHovered] = useState(false);
@@ -684,6 +693,17 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
             </Text>
           </View>
         </Pressable>
+      ) : null}
+      {meta ? (
+        // Outside the duration/timestamp swap: this label doesn't change on
+        // hover, so it must not participate in that width sizer.
+        <Text
+          style={assistantTurnFooterStylesheet.meta}
+          numberOfLines={1}
+          testID="assistant-turn-meta"
+        >
+          {durationLabel ? `· ${meta}` : meta}
+        </Text>
       ) : null}
     </View>
   );
