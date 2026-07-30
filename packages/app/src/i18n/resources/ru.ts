@@ -1604,6 +1604,8 @@ export const ru: TranslationResources = {
     used: "{{percentage}}% использовано",
     tokens: "Токены{{used}}/{{max}}",
     sessionCost: "Стоимость сеанса{{cost}}",
+    model: "Модель {{model}}",
+    thinking: "Мышление {{thinking}}",
     accessibility: "Контекстное окно{{percentage}}% использовано",
   },
   review: {

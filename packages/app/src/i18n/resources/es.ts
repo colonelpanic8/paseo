@@ -1613,6 +1613,8 @@ export const es: TranslationResources = {
     used: "{{percentage}}% utilizado",
     tokens: "Fichas{{used}}/{{max}}",
     sessionCost: "Costo de la sesión{{cost}}",
+    model: "Modelo {{model}}",
+    thinking: "Pensamiento {{thinking}}",
     accessibility: "Ventana de contexto{{percentage}}% utilizada",
   },
   review: {
