@@ -1974,6 +1974,7 @@ export interface OpenCodeEventTranslationState {
   knownChildSessionIds?: Set<string>;
   subagentPresentationByChildId?: Map<string, OpenCodeSubagentPresentationState>;
   modelContextWindowsByModelKey?: ReadonlyMap<string, number>;
+  onAssistantModelResolved?: (modelId: string) => void;
   onAssistantModelContextWindowResolved?: (contextWindowMaxTokens: number) => void;
   onMaterializationMismatch?: (diagnostic: {
     partId: string;
@@ -2723,6 +2724,7 @@ function appendOpenCodeMessageUpdated(
   }
   const modelLookupKey = resolveOpenCodeModelLookupKeyFromAssistantMessage(info);
   if (modelLookupKey) {
+    state.onAssistantModelResolved?.(modelLookupKey);
     const contextWindowMaxTokens = state.modelContextWindowsByModelKey?.get(modelLookupKey);
     if (contextWindowMaxTokens !== undefined) {
       state.onAssistantModelContextWindowResolved?.(contextWindowMaxTokens);
@@ -3426,6 +3428,8 @@ class OpenCodeAgentSession implements AgentSession {
   private childHydrationCompleted = false;
   private readonly unrelatedSessionIds = new Set<string>();
   private selectedModelContextWindowMaxTokens: number | undefined;
+  private observedModel: string | undefined;
+  private releaseServer: (() => Promise<void>) | null;
   private releaseBridge: (() => void) | null;
   private ingress = Promise.resolve();
   private gapRepairRevision = 0;
@@ -3544,10 +3548,11 @@ class OpenCodeAgentSession implements AgentSession {
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
+    const model = this.observedModel ?? this.config.model;
     return {
       provider: "opencode",
       sessionId: this.sessionId,
-      model: this.config.model ?? null,
+      ...(model ? { model } : {}),
       modeId: this.currentMode,
     };
   }
@@ -3556,6 +3561,9 @@ class OpenCodeAgentSession implements AgentSession {
     const normalizedModelId =
       typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
     this.config.model = normalizedModelId ?? undefined;
+    // The observation predates this selection; without a reset, `observed ?? config`
+    // would keep reporting the old model until the next assistant message re-observes it.
+    this.observedModel = undefined;
     this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
       this.config.model,
     );
@@ -5185,6 +5193,9 @@ class OpenCodeAgentSession implements AgentSession {
           { ...diagnostic, sessionId: this.sessionId },
           "OpenCode final part snapshot replaced streamed content",
         );
+      },
+      onAssistantModelResolved: (modelId) => {
+        this.observedModel = modelId;
       },
       onAssistantModelContextWindowResolved: (contextWindowMaxTokens) => {
         this.accumulatedUsage.contextWindowMaxTokens = contextWindowMaxTokens;
