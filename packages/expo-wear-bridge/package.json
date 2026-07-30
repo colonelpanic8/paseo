@@ -12,15 +12,9 @@
   },
   "keywords": ["expo", "wear-os", "wearable", "paseo"],
   "license": "MIT",
-  "devDependencies": {
-    "@types/react": "~19.2.0",
-    "expo-module-scripts": "^5.0.8",
-    "expo-modules-core": "^2.0.4",
-    "typescript": "~5.9.2"
-  },
   "peerDependencies": {
     "expo": "*",
-    "react": "*",
+    "expo-modules-core": "*",
     "react-native": "*"
   }
 }
