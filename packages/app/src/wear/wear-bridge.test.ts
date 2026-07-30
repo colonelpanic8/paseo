@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import { WearBridge, type WearBridgeTransport } from "./wear-bridge";
@@ -939,5 +939,188 @@ describe("WearBridge transcript requests", () => {
 
     await vi.waitFor(() => expect(transport.transcripts).toHaveLength(1));
     bridge.stop();
+  });
+});
+
+const LEASE_MS = 150_000;
+const COALESCE_MS = 2_000;
+
+describe("WearBridge live transcript updates", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const request = { kind: "requestTranscript", serverId: "srv-1", agentId: "a-1" } as const;
+
+  function makeLiveBridge() {
+    const transport = makeTransport();
+    const clock = { now: NOW };
+    const state = { agents: [agent({ lastActivityAt: new Date(NOW - 720_000) })] };
+    const fetchAgentTimeline = vi.fn().mockResolvedValue(timelinePage(["hello"]));
+
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: state.agents, workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: () => ({ fetchAgentTimeline }) as never,
+      resolveNewAgentConfig: () => null,
+      now: () => clock.now,
+      logger: { warn: vi.fn() },
+    });
+
+    /** Simulate the agent doing something, the way the store would report it. */
+    const moveActivity = (offsetMs: number) => {
+      state.agents = [agent({ lastActivityAt: new Date(clock.now + offsetMs) })];
+    };
+
+    /** A store change plus the coalescing window that follows it. */
+    const settle = async () => {
+      await bridge.publish();
+      await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    };
+
+    return { bridge, transport, clock, state, fetchAgentTimeline, moveActivity, settle };
+  }
+
+  it("republishes the transcript when a leased agent shows new activity", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+    expect(live.transport.transcripts).toHaveLength(1);
+
+    live.moveActivity(0);
+    await live.settle();
+
+    // Without the lease this update would wait for the watch's own ~60s re-request.
+    expect(live.transport.transcripts).toHaveLength(2);
+    live.bridge.stop();
+  });
+
+  it("coalesces a burst of store changes into one republish", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    // One agent turn produces many store notifications; each must not become a
+    // separate timeline walk.
+    live.moveActivity(0);
+    await live.bridge.publish();
+    live.moveActivity(1);
+    await live.bridge.publish();
+    live.moveActivity(2);
+    await live.bridge.publish();
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+
+    expect(live.transport.transcripts).toHaveLength(2);
+    live.bridge.stop();
+  });
+
+  it("republishes again for activity that lands after a refresh", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    live.moveActivity(0);
+    await live.settle();
+    live.moveActivity(1);
+    await live.settle();
+
+    expect(live.transport.transcripts).toHaveLength(3);
+    live.bridge.stop();
+  });
+
+  it("stays quiet when a store change carries no new agent activity", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    // Something unrelated changed — a workspace rename, another server's agents.
+    await live.settle();
+
+    expect(live.transport.transcripts).toHaveLength(1);
+    live.bridge.stop();
+  });
+
+  it("stops pushing once the lease has lapsed", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    // The watch screen was closed, so no re-request ever renewed the lease.
+    live.clock.now += LEASE_MS + 1;
+    live.moveActivity(0);
+    await live.settle();
+
+    expect(live.transport.transcripts).toHaveLength(1);
+    live.bridge.stop();
+  });
+
+  it("keeps pushing while the watch keeps renewing the lease", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    // The watch re-requests roughly once a minute while the screen is open.
+    live.clock.now += 100_000;
+    await live.bridge.execute(request);
+    expect(live.transport.transcripts).toHaveLength(2);
+
+    // Past the original expiry, inside the renewed one.
+    live.clock.now += 100_000;
+    live.moveActivity(0);
+    await live.settle();
+
+    expect(live.transport.transcripts).toHaveLength(3);
+    live.bridge.stop();
+  });
+
+  it("drops the lease when the agent disappears from state", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    // Archived, or its server disconnected.
+    live.state.agents = [];
+    await live.settle();
+    expect(live.transport.transcripts).toHaveLength(1);
+
+    // The lease is gone, so the agent coming back does not resume pushing on its own.
+    live.moveActivity(0);
+    await live.settle();
+    expect(live.transport.transcripts).toHaveLength(1);
+    live.bridge.stop();
+  });
+
+  it("cancels a pending refresh on stop", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+    await live.bridge.execute(request);
+
+    live.moveActivity(0);
+    await live.bridge.publish();
+    live.bridge.stop();
+    await vi.advanceTimersByTimeAsync(COALESCE_MS * 2);
+
+    // No timer may fire into a disposed bridge.
+    expect(live.transport.transcripts).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("takes no lease from a snapshot refresh, only from a transcript request", async () => {
+    const live = makeLiveBridge();
+    await live.bridge.start();
+
+    live.moveActivity(0);
+    await live.settle();
+
+    // Nothing is reading this agent's transcript, so nothing should be fetched.
+    expect(live.transport.transcripts).toHaveLength(0);
+    expect(live.fetchAgentTimeline).not.toHaveBeenCalled();
+    live.bridge.stop();
   });
 });
