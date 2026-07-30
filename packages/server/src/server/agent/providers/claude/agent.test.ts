@@ -399,6 +399,31 @@ describe("convertClaudeHistoryEntry", () => {
     expect(convertClaudeHistoryEntry(entry, mapBlocks)).toEqual(mappedTimeline);
     expect(mapBlocks).toHaveBeenCalledWith(entry.message.content);
   });
+
+  test("backfills the normalized model from persisted assistant entries", () => {
+    const entry = {
+      type: "assistant",
+      uuid: "assistant-history-model",
+      message: {
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Historical answer." }],
+      },
+    };
+
+    expect(
+      convertClaudeHistoryEntry(entry, () => [
+        { type: "assistant_message", text: "Historical answer." },
+      ]),
+    ).toEqual([
+      {
+        type: "assistant_message",
+        text: "Historical answer.",
+        messageId: "assistant-history-model",
+        model: "claude-opus-4-6",
+      },
+    ]);
+  });
 });
 
 // NOTE: Turn handoff integration tests are covered by the daemon E2E test:
@@ -2000,13 +2025,13 @@ describe("ClaudeAgentSession context window usage", () => {
   test("captures the runtime model from assistant messages", async () => {
     const session = await createSessionForTest();
 
-    session.translateMessageToEvents({
+    const events = session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-runtime-model",
         role: "assistant",
         model: "claude-opus-4-6-20260101",
-        content: [],
+        content: [{ type: "text", text: "Observed response." }],
         usage: {
           input_tokens: 0,
           output_tokens: 0,
@@ -2016,6 +2041,15 @@ describe("ClaudeAgentSession context window usage", () => {
       session_id: "session-1",
     } as SDKMessage);
 
+    expect(events).toContainEqual({
+      type: "timeline",
+      provider: "claude",
+      item: {
+        type: "assistant_message",
+        text: "Observed response.",
+        model: "claude-opus-4-6",
+      },
+    });
     await expect(session.getRuntimeInfo()).resolves.toEqual({
       provider: "claude",
       sessionId: "session-1",
@@ -2025,6 +2059,83 @@ describe("ClaudeAgentSession context window usage", () => {
         runtimeModel: "claude-opus-4-6-20260101",
       },
     });
+  });
+
+  test("omits model attribution without an observed assistant model", async () => {
+    const session = await createSessionForTest();
+
+    const events = session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-without-runtime-model",
+        role: "assistant",
+        content: [{ type: "text", text: "Unattributed response." }],
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      uuid: "assistant-without-runtime-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const assistantEvent = events.find(
+      (event) => event.type === "timeline" && event.item.type === "assistant_message",
+    );
+    expect(assistantEvent).toEqual({
+      type: "timeline",
+      provider: "claude",
+      item: {
+        type: "assistant_message",
+        text: "Unattributed response.",
+      },
+    });
+    expect(assistantEvent?.item).not.toHaveProperty("model");
+  });
+
+  test("does not stamp a sidechain assistant message with the parent runtime model", async () => {
+    const session = await createSessionForTest();
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "parent-runtime-model",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "parent-runtime-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const events = session.translateMessageToEvents({
+      type: "assistant",
+      parent_tool_use_id: "task-child",
+      message: {
+        id: "child-message",
+        role: "assistant",
+        content: [{ type: "text", text: "Child response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "child-message-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const childAssistantItems = events.flatMap((event) =>
+      event.type === "provider_subagent" &&
+      event.event.type === "timeline" &&
+      event.event.item.type === "assistant_message"
+        ? [event.event.item]
+        : [],
+    );
+    expect(childAssistantItems).toEqual([
+      {
+        type: "assistant_message",
+        text: "Child response.",
+        messageId: "child-message",
+      },
+    ]);
+    expect(childAssistantItems[0]).not.toHaveProperty("model");
   });
 
   test("preserves assistant-observed runtime model metadata after run completes", async () => {
@@ -2052,7 +2163,14 @@ describe("ClaudeAgentSession context window usage", () => {
     ]);
 
     try {
-      await session.run("turn");
+      const result = await session.run("turn");
+
+      expect(result.timeline).toContainEqual({
+        type: "assistant_message",
+        text: "Runtime model changed.",
+        messageId: "assistant-runtime-model",
+        model: "claude-opus-4-6",
+      });
 
       await expect(session.getRuntimeInfo()).resolves.toEqual({
         provider: "claude",
