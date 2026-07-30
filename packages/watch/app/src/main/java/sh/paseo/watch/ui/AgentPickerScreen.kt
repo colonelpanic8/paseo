@@ -45,6 +45,8 @@ fun AgentPickerScreen(
   listState: ScalingLazyListState,
   onAgentClick: (AgentSession) -> Unit,
   onNewAgent: () -> Unit,
+  /** This workspace's project icon, if the phone published one. */
+  icon: ByteArray? = null,
 ) {
   ScalingLazyColumn(
     modifier = Modifier.fillMaxWidth(),
@@ -58,6 +60,7 @@ fun AgentPickerScreen(
         projectName = workspace.projectName,
         workspaceName = workspace.name,
         modifier = Modifier.padding(bottom = 4.dp),
+        icon = icon,
       )
     }
     items(workspace.agents, key = { it.id }) { agent ->

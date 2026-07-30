@@ -1,5 +1,7 @@
 package sh.paseo.watch.ui
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -12,10 +14,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,8 +40,14 @@ fun ActivityState.dotColor(): Color =
   }
 
 /**
- * Project icon: colored rounded square with the project initial, matching
- * <ProjectIconView> on the phone.
+ * Project icon: the project's real icon when the phone has published one, otherwise
+ * a colored rounded square with the project initial — matching <ProjectIconView> on
+ * the phone, which makes the same choice.
+ *
+ * [icon] is the raw image file straight out of the project repo (see
+ * [sh.paseo.watch.data.WatchRepository.icons]). Undecodable bytes fall through to
+ * the initial rather than leaving a hole: `BitmapFactory` returns null on anything
+ * it can't read, and that null is load-bearing.
  *
  * The status dot rides the icon's bottom-right corner so one glyph carries
  * project, identity, and state — horizontal room is the scarcest thing on a
@@ -50,22 +62,37 @@ fun ProjectIcon(
   size: Int = 26,
   state: ActivityState? = null,
   ringColor: Color = PaseoColors.surface2,
+  icon: ByteArray? = null,
 ) {
+  val bitmap = rememberIconBitmap(icon)
   Box(modifier = modifier.size(size.dp)) {
     Box(
       modifier =
         Modifier
           .size(size.dp)
           .clip(RoundedCornerShape((size / 3.2f).dp))
-          .background(deriveProjectIconColor(projectKey)),
+          // A real icon supplies its own field; the derived color would only show
+          // through its transparent pixels as a colored halo.
+          .background(if (bitmap == null) deriveProjectIconColor(projectKey) else Color.Transparent),
       contentAlignment = Alignment.Center,
     ) {
-      Text(
-        text = projectIconLabel(projectName),
-        color = Color.White,
-        fontSize = (size * 0.5f).sp,
-        fontWeight = FontWeight.Medium,
-      )
+      if (bitmap == null) {
+        Text(
+          text = projectIconLabel(projectName),
+          color = Color.White,
+          fontSize = (size * 0.5f).sp,
+          fontWeight = FontWeight.Medium,
+        )
+      } else {
+        Image(
+          bitmap = bitmap,
+          contentDescription = null,
+          modifier = Modifier.size(size.dp),
+          // Repo icons are square in practice but not by contract; cropping keeps a
+          // stray rectangle from being letterboxed inside the rounded square.
+          contentScale = ContentScale.Crop,
+        )
+      }
     }
     if (state != null) {
       val dot = (size * 0.42f).dp
@@ -89,6 +116,28 @@ fun ProjectIcon(
     }
   }
 }
+
+/**
+ * Decode once per distinct payload, not once per frame.
+ *
+ * Keyed on the array reference, which is exactly right here: the repository only
+ * ever hands out a new array when new bytes arrive, so an unchanged icon keeps its
+ * decoded bitmap across recomposition and a changed one is guaranteed to re-decode.
+ * A failed decode is cached as null just like a successful one, so a corrupt payload
+ * costs one attempt rather than one per frame.
+ */
+@Composable
+private fun rememberIconBitmap(bytes: ByteArray?): ImageBitmap? =
+  remember(bytes) {
+    if (bytes == null || bytes.isEmpty()) {
+      null
+    } else {
+      // Never throws for us in practice, but a decoder fed arbitrary repo bytes is
+      // not somewhere to find out — a crash here would take down the workspace list.
+      runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
+        .getOrNull()
+    }
+  }
 
 /** Small status dot + label, used as the secondary line on detail screens. */
 @Composable
@@ -122,6 +171,7 @@ fun WorkspaceHeader(
   workspaceName: String,
   modifier: Modifier = Modifier,
   muted: Boolean = false,
+  icon: ByteArray? = null,
 ) {
   Row(
     modifier = modifier,
@@ -133,6 +183,7 @@ fun WorkspaceHeader(
       projectName = projectName,
       size = 20,
       ringColor = PaseoColors.surface0,
+      icon = icon,
     )
     Spacer(Modifier.width(7.dp))
     Text(
