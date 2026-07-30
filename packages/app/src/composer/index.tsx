@@ -84,7 +84,6 @@ import {
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
 import { LiveVoiceButton } from "@/live-voice/live-voice-button";
-import { LiveVoicePanel } from "@/live-voice/live-voice-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -2042,7 +2041,7 @@ function ComposerContentImpl({
               glyphSize={contextWindowMeterGlyphSize}
             />
           </View>
-          <LiveVoiceButton serverId={serverId} agentId={agentId} />
+          <LiveVoiceButton serverId={serverId} />
         </>
       ) : null,
     [
@@ -2370,7 +2369,6 @@ function ComposerContentImpl({
           <View style={styles.inputAreaContent}>
             {queueList}
             {sendErrorNode}
-            <LiveVoicePanel serverId={serverId} agentId={agentId} />
 
             <View ref={messageInputContainerRef} style={styles.messageInputContainer}>
               <ComposerAutocompleteBinding
