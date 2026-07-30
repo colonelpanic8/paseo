@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AgentModelDefinition } from "@getpaseo/protocol/agent-types";
+import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
-  formatAgentModeLabel,
   formatAgentModelDisplayMeta,
   getFeatureHighlightColor,
   getFeatureTooltip,
   getAgentControlHintKey,
-  formatThinkingOptionLabel,
   normalizeModelId,
   resolveAgentModelDisplay,
   resolveAgentModelSelection,
