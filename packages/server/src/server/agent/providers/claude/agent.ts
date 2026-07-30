@@ -1295,10 +1295,9 @@ class TimelineAssembler {
     if (typeof runtimeModel !== "string") {
       return;
     }
-    const model = normalizeClaudeRuntimeModelId(runtimeModel);
-    if (model) {
-      state.model = model;
-    }
+    // Unmappable ids are kept verbatim rather than dropped; see
+    // captureRuntimeModel for the reasoning.
+    state.model = normalizeClaudeRuntimeModelId(runtimeModel) ?? runtimeModel;
   }
 
   private resolveMessageId(input: {
@@ -3786,7 +3785,11 @@ class ClaudeAgentSession implements AgentSession {
     events: AgentStreamEvent[],
     options: { suppressAssistantText?: boolean; suppressReasoning?: boolean } | undefined,
   ): void {
-    const observedModel = normalizeClaudeRuntimeModelId(message.message.model);
+    // Fall back to the raw identifier for the same reason runtimeInfo does: a
+    // model we cannot map is still the one that produced this turn, and dropping
+    // it would leave the footer blank while current-agent surfaces show it.
+    const observedModel =
+      normalizeClaudeRuntimeModelId(message.message.model) ?? message.message.model;
     if (message.message.model) {
       this.captureRuntimeModel(message.message.model, "assistant message");
     }
@@ -5388,9 +5391,10 @@ function mapAssistantHistoryBlocksWithMessageId(
   const items = mapBlocks(content);
   const assistantMessageId =
     typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null;
-  const model = normalizeClaudeRuntimeModelId(
-    typeof entry.message?.model === "string" ? entry.message.model : null,
-  );
+  // Backfilled history keeps an unmappable id verbatim too, so a restored
+  // conversation attributes turns the same way a live one does.
+  const rawHistoryModel = typeof entry.message?.model === "string" ? entry.message.model : null;
+  const model = normalizeClaudeRuntimeModelId(rawHistoryModel) ?? rawHistoryModel;
   for (const item of items) {
     if (item.type !== "assistant_message") {
       continue;
