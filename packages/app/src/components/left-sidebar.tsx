@@ -81,6 +81,7 @@ import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { usePanelStore } from "@/stores/panel-store";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
+import { SidebarLiveVoiceSlot } from "@/live-voice/live-voice-sidebar-card";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { useLeftPanelWidth } from "@/mobile-panels/provider";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
@@ -870,6 +871,8 @@ function DesktopSidebar({
           </SidebarViewSlot>
 
           <SidebarCalloutSlot />
+
+          <SidebarLiveVoiceSlot active={active} />
 
           <SidebarFooter
             handleOpenProject={handleOpenProject}
