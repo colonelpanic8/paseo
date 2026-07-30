@@ -1014,6 +1014,157 @@ describe("Codex app-server provider", () => {
     expect((startCall!.params as Record<string, unknown>).ephemeral).toBeUndefined();
   });
 
+  test("reports configured runtime values until Codex observes thread runtime values", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "test-thread",
+      model: "gpt-configured",
+      thinkingOptionId: "medium",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
+  test("captures observed model and reasoning effort from thread/start", async () => {
+    const session = new CodexAppServerAgentSession(
+      createConfig({ model: "gpt-configured", thinkingOptionId: "medium" }),
+      null,
+      createTestLogger(),
+      () => {
+        throw new Error("Test session cannot spawn Codex app-server");
+      },
+    ) as CodexTestSession;
+    session.connected = true;
+    session.client = {
+      request: async (method) => {
+        if (method === "thread/start") {
+          return {
+            thread: { id: "observed-thread" },
+            model: "gpt-observed",
+            modelProvider: "openai",
+            reasoningEffort: " xhigh ",
+          };
+        }
+        throw new Error(`Unexpected request: ${method}`);
+      },
+    };
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "observed-thread",
+      model: "gpt-observed",
+      thinkingOptionId: "xhigh",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
+  test("captures observed model and reasoning effort from thread/resume", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+    session.client = {
+      request: async (method) => {
+        if (method === "thread/loaded/list") {
+          return { data: [] };
+        }
+        if (method === "thread/resume") {
+          return {
+            thread: { id: "test-thread" },
+            model: "gpt-resumed",
+            modelProvider: "openai",
+            reasoningEffort: "high",
+          };
+        }
+        throw new Error(`Unexpected request: ${method}`);
+      },
+    };
+
+    await asInternals(session).ensureThreadLoaded();
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "test-thread",
+      model: "gpt-resumed",
+      thinkingOptionId: "high",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
+  test("retains absent notification effort and clears explicitly null effort", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: {
+        id: "test-thread",
+        model: "gpt-thread",
+        reasoningEffort: "high",
+      },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-thread",
+      thinkingOptionId: "high",
+    });
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "turn-without-effort", model: "gpt-turn" },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-turn",
+      thinkingOptionId: "high",
+    });
+
+    asInternals(session).handleNotification("turn/completed", {
+      threadId: "test-thread",
+      turn: { status: "completed", reasoningEffort: null },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-turn",
+      thinkingOptionId: "medium",
+    });
+  });
+
+  test("setThinkingOption and setModel clear stale observations", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: {
+        id: "test-thread",
+        model: "gpt-observed",
+        reasoningEffort: "high",
+      },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-observed",
+      thinkingOptionId: "high",
+    });
+
+    await session.setThinkingOption("low");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-observed",
+      thinkingOptionId: "low",
+    });
+
+    await session.setModel("gpt-selected");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-selected",
+      thinkingOptionId: "low",
+    });
+  });
+
+  test("omits unknown model and thinking option keys", async () => {
+    const session = createSession({ model: undefined, thinkingOptionId: undefined });
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "test-thread",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
   test("disposes an unresponsive app-server child with SIGKILL", async () => {
     vi.useFakeTimers();
     const child = new EventEmitter() as ChildProcessWithoutNullStreams;

@@ -19,7 +19,7 @@ import { claudeProjectDirSync } from "./project-dir.js";
 import { streamSession } from "../test-utils/session-stream-adapter.js";
 import type { AgentSession, AgentTimelineItem, AgentStreamEvent } from "../../agent-sdk-types.js";
 
-interface TestClaudeSession {
+interface TestClaudeSession extends AgentSession {
   translateMessageToEvents(message: SDKMessage): AgentStreamEvent[];
   close(): Promise<void>;
 }
@@ -1995,6 +1995,77 @@ describe("ClaudeAgentSession context window usage", () => {
       item: { type: "user_message", clientMessageId: "client-message-1" },
     });
     await session.close();
+  });
+
+  test("captures the runtime model from assistant messages", async () => {
+    const session = await createSessionForTest();
+
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-runtime-model",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [],
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      uuid: "assistant-runtime-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "claude",
+      sessionId: "session-1",
+      model: "claude-opus-4-6",
+      modeId: "default",
+      extra: {
+        runtimeModel: "claude-opus-4-6-20260101",
+      },
+    });
+  });
+
+  test("preserves assistant-observed runtime model metadata after run completes", async () => {
+    const runtimeModel = "claude-opus-4-6-20260101";
+    const session = await createSessionForTurns([
+      [
+        createInitMessage(),
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-runtime-model",
+            role: "assistant",
+            model: runtimeModel,
+            content: [{ type: "text", text: "Runtime model changed." }],
+            usage: {
+              input_tokens: 10,
+              output_tokens: 4,
+            },
+          },
+          uuid: "assistant-runtime-model-event",
+          session_id: "session-1",
+        },
+        createSuccessResult(),
+      ],
+    ]);
+
+    try {
+      await session.run("turn");
+
+      await expect(session.getRuntimeInfo()).resolves.toEqual({
+        provider: "claude",
+        sessionId: "session-1",
+        model: "claude-opus-4-6",
+        modeId: "default",
+        extra: {
+          runtimeModel,
+        },
+      });
+    } finally {
+      await session.close();
+    }
   });
 
   test("passes persistSession through to the Claude SDK query options", async () => {
