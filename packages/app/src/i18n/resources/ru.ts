@@ -1496,6 +1496,7 @@ export const ru: TranslationResources = {
       stopping: "Предыдущий звонок живого голоса ещё останавливается.",
       micDenied: "Доступ к микрофону отклонён.",
       micUnavailable: "Не удалось открыть микрофон.",
+      backgroundUnavailable: "Не удалось запустить фоновое аудио.",
       iceTimeout: "Не удалось согласовать соединение вовремя.",
       connectionLost: "Соединение живого голоса прервано.",
     },
