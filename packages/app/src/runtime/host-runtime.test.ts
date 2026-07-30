@@ -2934,6 +2934,63 @@ describe("HostRuntimeStore", () => {
     }
   });
 
+  it("keeps a color selection when the host server id is reconciled during persistence", async () => {
+    const memoryStorage = createMemoryHostRuntimeStorage();
+    const blockedWriteStarted = new Deferred<void>();
+    const releaseBlockedWrites = new Deferred<void>();
+    let blockWrites = false;
+    const storage: HostRuntimeStorage = {
+      getItem: memoryStorage.getItem,
+      setItem: async (key, value) => {
+        if (blockWrites) {
+          blockedWriteStarted.resolve();
+          await releaseBlockedWrites.promise;
+        }
+        await memoryStorage.setItem(key, value);
+      },
+    };
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+      storage,
+    });
+
+    try {
+      await store.upsertDirectConnection({
+        serverId: "local:lan:6767",
+        endpoint: "lan:6767",
+        label: "local host",
+      });
+      await vi.waitFor(async () => {
+        expect(await memoryStorage.getItem("@paseo:daemon-registry")).not.toBeNull();
+      });
+      blockWrites = true;
+
+      const colorWrite = store.setHostColor("local:lan:6767", "purple");
+      await blockedWriteStarted.promise;
+      store.reconcileServerId("local:lan:6767", "srv_color_reconciled");
+      releaseBlockedWrites.resolve();
+      await colorWrite;
+
+      expect(store.getHosts()).toMatchObject([
+        { serverId: "srv_color_reconciled", color: "purple" },
+      ]);
+      const persisted = JSON.parse(
+        (await memoryStorage.getItem("@paseo:daemon-registry")) ?? "[]",
+      ) as HostProfile[];
+      expect(persisted).toMatchObject([{ serverId: "srv_color_reconciled", color: "purple" }]);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("preserves a manual host rename when desktop status re-advertises the daemon hostname", async () => {
     const advertisedHostname = "macbook-pro.local";
     const store = new HostRuntimeStore({

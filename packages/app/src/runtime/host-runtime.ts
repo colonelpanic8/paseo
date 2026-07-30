@@ -1793,10 +1793,22 @@ export class HostRuntimeStore {
   }
 
   async setHostColor(serverId: string, color: HostColor | null): Promise<void> {
+    let targetConnectionIds: readonly string[] | null = null;
     while (true) {
       const baseHosts = this.hosts;
+      const target = baseHosts.find(
+        (host) =>
+          host.serverId === serverId ||
+          targetConnectionIds?.some((connectionId) =>
+            host.connections.some((connection) => connection.id === connectionId),
+          ) === true,
+      );
+      if (!target) {
+        throw new Error(`Host ${serverId} no longer exists.`);
+      }
+      targetConnectionIds ??= target.connections.map((connection) => connection.id);
       const next = baseHosts.map((host) =>
-        host.serverId === serverId ? { ...host, color, updatedAt: new Date().toISOString() } : host,
+        host === target ? { ...host, color, updatedAt: new Date().toISOString() } : host,
       );
       await this.writeHosts(next);
       if (this.hosts !== baseHosts) {
