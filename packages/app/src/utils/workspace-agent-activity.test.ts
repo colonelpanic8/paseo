@@ -13,11 +13,12 @@ function agent(input: {
   pendingPermissionCount?: number;
   archivedAt?: string | null;
   parentAgentId?: string | null;
+  provider?: Agent["provider"];
 }): Agent {
   return {
     serverId: "host-a",
     id: input.id,
-    provider: "codex",
+    provider: input.provider ?? "codex",
     status: input.status ?? "idle",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date(input.updatedAt),
@@ -98,6 +99,7 @@ describe("workspace agent activity index", () => {
             agentId: "permission",
             status: "needs_input",
             enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+            providers: ["codex"],
           },
         ],
         [
@@ -106,6 +108,7 @@ describe("workspace agent activity index", () => {
             agentId: "attention",
             status: "attention",
             enteredAt: new Date("2026-06-01T10:02:00.000Z"),
+            providers: ["codex"],
           },
         ],
       ]),
@@ -152,6 +155,7 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "running",
       enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+      providers: ["codex"],
     });
   });
 
@@ -187,6 +191,7 @@ describe("workspace agent activity index", () => {
             agentId: "parent",
             status: "done",
             enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+            providers: ["codex"],
           },
         ],
         [
@@ -195,6 +200,7 @@ describe("workspace agent activity index", () => {
             agentId: "child",
             status: "running",
             enteredAt: new Date("2026-06-01T10:03:00.000Z"),
+            providers: ["codex"],
           },
         ],
       ]),
@@ -271,6 +277,147 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "needs_input",
       enteredAt: new Date("2026-06-01T10:05:00.000Z"),
+      providers: ["codex"],
     });
+  });
+
+  it("refreshes the entry when the root agent's provider changes", () => {
+    const previous = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            provider: "codex",
+          }),
+        ],
+      ]),
+    );
+
+    const next = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:05:00.000Z",
+            provider: "claude",
+          }),
+        ],
+      ]),
+      previous,
+    );
+
+    expect(next).not.toBe(previous);
+    expect(next.get("workspace-a")?.providers).toEqual(["claude"]);
+  });
+
+  it("lists every live provider in the workspace, most recently active first", () => {
+    const index = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "codex-old",
+          agent({
+            id: "codex-old",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            provider: "codex",
+          }),
+        ],
+        [
+          "claude",
+          agent({
+            id: "claude",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:02:00.000Z",
+            provider: "claude",
+          }),
+        ],
+        [
+          "codex-new",
+          agent({
+            id: "codex-new",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:04:00.000Z",
+            provider: "codex",
+          }),
+        ],
+        [
+          "archived",
+          agent({
+            id: "archived",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:05:00.000Z",
+            provider: "opencode",
+            archivedAt: "2026-06-01T10:05:00.000Z",
+          }),
+        ],
+        [
+          "closed",
+          agent({
+            id: "closed",
+            workspaceId: "workspace-a",
+            status: "closed",
+            updatedAt: "2026-06-01T10:06:00.000Z",
+            provider: "pi",
+          }),
+        ],
+        [
+          "error",
+          agent({
+            id: "error",
+            workspaceId: "workspace-a",
+            status: "error",
+            updatedAt: "2026-06-01T10:07:00.000Z",
+            provider: "opencode",
+          }),
+        ],
+      ]),
+    );
+
+    const activity = index.get("workspace-a");
+    expect(activity?.agentId).toBe("error");
+    expect(activity?.providers).toEqual(["codex", "claude"]);
+  });
+
+  it("reuses the previous provider list when its contents are unchanged", () => {
+    const previous = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+          }),
+        ],
+      ]),
+    );
+
+    const next = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "idle",
+            updatedAt: "2026-06-01T10:05:00.000Z",
+            pendingPermissionCount: 1,
+          }),
+        ],
+      ]),
+      previous,
+    );
+
+    expect(next).not.toBe(previous);
+    expect(next.get("workspace-a")?.providers).toBe(previous.get("workspace-a")?.providers);
   });
 });

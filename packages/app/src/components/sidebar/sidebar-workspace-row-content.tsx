@@ -61,7 +61,7 @@ function renderChecksBadgeForgeIcon(icon: string) {
   return <ForgeBrandIcon iconKind={icon} size={10} uniProps={redColorMapping} />;
 }
 
-type SidebarWorkspaceScriptIconKind = "service" | "command";
+export type SidebarWorkspaceScriptIconKind = "service" | "command";
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -169,7 +169,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   );
 });
 
-function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
+export function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
   return (
     <View
       style={styles.workspaceTitleAccessory}
@@ -230,9 +230,10 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "done") {
+  // Snoozed rows carry no status indicator, same as done.
+  if (bucket === "done" || bucket === "snoozed") {
     return reserveIdleSpace ? (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done" />
+      <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`} />
     ) : null;
   }
 
@@ -288,7 +289,7 @@ function StatusDotOverlay({
   return <View style={overlayStyle} />;
 }
 
-function PrBadge({ hint }: { hint: PrHint }) {
+export function PrBadge({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const handlePress = useCallback(
@@ -341,7 +342,13 @@ function PrBadge({ hint }: { hint: PrHint }) {
   );
 }
 
-function ChecksBadge({ checks, forge }: { checks: PrHint["checks"]; forge: PrHint["forge"] }) {
+export function ChecksBadge({
+  checks,
+  forge,
+}: {
+  checks: PrHint["checks"];
+  forge: PrHint["forge"];
+}) {
   if (!checks || checks.length === 0) return null;
   const failed = checks.filter((check) => check.status === "failure").length;
   if (failed === 0) return null;
@@ -376,6 +383,7 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
     case "attention":
       return styles.statusDotAttention;
     case "done":
+    case "snoozed":
       return null;
   }
 }
