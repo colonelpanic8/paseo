@@ -1080,6 +1080,7 @@ interface TimelineMessageState {
   id: string;
   assistantText: string;
   reasoningText: string;
+  model?: string;
   emittedAssistantLength: number;
   emittedReasoningLength: number;
   stopped: boolean;
@@ -1121,6 +1122,7 @@ class TimelineAssembler {
       return [];
     }
     const state = this.ensureMessageState(messageId, runId);
+    this.captureMessageModel(state, message.message?.model);
     const fragments = this.extractFragments(message.message?.content);
     return this.applyAbsoluteFragments(state, fragments);
   }
@@ -1143,7 +1145,12 @@ class TimelineAssembler {
       if (!messageId) {
         return [];
       }
-      this.ensureMessageState(messageId, runId);
+      const state = this.ensureMessageState(messageId, runId);
+      const eventMessage = toObjectRecord(event.message);
+      this.captureMessageModel(
+        state,
+        typeof eventMessage?.model === "string" ? eventMessage.model : undefined,
+      );
       return [];
     }
 
@@ -1257,7 +1264,12 @@ class TimelineAssembler {
       !isClaudeTranscriptNoiseText(nextAssistantText)
     ) {
       state.emittedAssistantLength = state.assistantText.length;
-      items.push({ type: "assistant_message", text: nextAssistantText, messageId: state.id });
+      items.push({
+        type: "assistant_message",
+        text: nextAssistantText,
+        messageId: state.id,
+        ...(state.model ? { model: state.model } : {}),
+      });
     }
 
     const nextReasoningText = state.reasoningText.slice(state.emittedReasoningLength);
@@ -1290,6 +1302,12 @@ class TimelineAssembler {
       this.activeMessageByRun.set(runId, messageId);
     }
     return created;
+  }
+
+  private captureMessageModel(state: TimelineMessageState, runtimeModel: unknown): void {
+    if (typeof runtimeModel === "string") {
+      state.model = normalizeClaudeRuntimeModelId(runtimeModel) ?? runtimeModel;
+    }
   }
 
   private resolveMessageId(input: {
@@ -2100,11 +2118,8 @@ class ClaudeAgentSession implements AgentSession {
     });
   }
 
-  async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
-    if (this.cachedRuntimeInfo) {
-      return { ...this.cachedRuntimeInfo };
-    }
-    const info: AgentRuntimeInfo = {
+  private buildRuntimeInfo(): AgentRuntimeInfo {
+    return {
       provider: "claude",
       sessionId: this.claudeSessionId,
       model: this.lastOptionsModel,
@@ -2117,6 +2132,13 @@ class ClaudeAgentSession implements AgentSession {
           }
         : {}),
     };
+  }
+
+  async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
+    if (this.cachedRuntimeInfo) {
+      return { ...this.cachedRuntimeInfo };
+    }
+    const info = this.buildRuntimeInfo();
     this.cachedRuntimeInfo = info;
     return { ...info };
   }
@@ -2131,12 +2153,7 @@ class ClaudeAgentSession implements AgentSession {
       reduceFinalText: appendOrReplaceGrowingAssistantMessage,
     });
 
-    this.cachedRuntimeInfo = {
-      provider: "claude",
-      sessionId: this.claudeSessionId,
-      model: this.lastOptionsModel,
-      modeId: this.currentMode ?? null,
-    };
+    this.cachedRuntimeInfo = this.buildRuntimeInfo();
 
     if (!this.claudeSessionId) {
       throw new Error("Session ID not set after run completed");
@@ -3802,19 +3819,37 @@ class ClaudeAgentSession implements AgentSession {
         this.appendSidechainResultEvents(message, events);
         break;
       case "assistant": {
+        const observedModel =
+          normalizeClaudeRuntimeModelId(message.message.model) ?? message.message.model;
+        if (message.message.model) {
+          this.captureRuntimeModel(message.message.model, "assistant message");
+        }
         const timelineItems = this.mapBlocksToTimeline(message.message.content, {
           suppressAssistantText: options?.suppressAssistantText ?? false,
           suppressReasoning: options?.suppressReasoning ?? false,
         });
         for (const item of timelineItems) {
-          events.push({ type: "timeline", item, provider: "claude" });
+          events.push({
+            type: "timeline",
+            item:
+              item.type === "assistant_message" && observedModel
+                ? { ...item, model: observedModel }
+                : item,
+            provider: "claude",
+          });
         }
         this.appendSidechainResultEvents(message, events);
         break;
       }
-      case "stream_event":
+      case "stream_event": {
+        const streamEvent = toObjectRecord(message.event);
+        const streamMessage = toObjectRecord(streamEvent?.message);
+        if (streamEvent?.type === "message_start" && typeof streamMessage?.model === "string") {
+          this.captureRuntimeModel(streamMessage.model, "stream message start");
+        }
         this.appendStreamEventEvents(message, events, options);
         break;
+      }
       case "result":
         this.appendResultEvents(message, events);
         break;
@@ -4227,20 +4262,31 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.persistence = null;
     if (message.model) {
-      const normalizedRuntimeModel = normalizeClaudeRuntimeModelId(message.model);
-      this.logger.debug(
-        { runtimeModel: message.model, normalizedRuntimeModel },
-        "Captured runtime model from SDK init",
-      );
-      if (normalizedRuntimeModel) {
-        this.lastOptionsModel = normalizedRuntimeModel;
-      } else if (!this.lastOptionsModel) {
-        this.lastOptionsModel = this.config.model ?? null;
-      }
-      this.lastRuntimeModel = message.model;
-      this.cachedRuntimeInfo = null;
+      this.captureRuntimeModel(message.model, "SDK init");
     }
     return { threadStartedSessionId, notice };
+  }
+
+  private captureRuntimeModel(
+    runtimeModel: string,
+    source: "SDK init" | "assistant message" | "stream message start",
+  ): void {
+    if (runtimeModel === this.lastRuntimeModel) {
+      // Every assistant message repeats the model; only a change is worth the
+      // log line and the cache invalidation.
+      return;
+    }
+    const normalizedRuntimeModel = normalizeClaudeRuntimeModelId(runtimeModel);
+    this.logger.debug(
+      { runtimeModel, normalizedRuntimeModel, source },
+      "Captured runtime model from Claude",
+    );
+    // An id we cannot map to the catalog is still what Claude said it is
+    // running, so report it verbatim rather than leaving a previously
+    // recognized (now wrong) model in place. Clients render an unknown id as-is.
+    this.lastOptionsModel = normalizedRuntimeModel ?? runtimeModel;
+    this.lastRuntimeModel = runtimeModel;
+    this.cachedRuntimeInfo = null;
   }
 
   private readMissingResumedConversationError(message: SDKMessage): string | null {
@@ -5486,13 +5532,13 @@ function mapAssistantHistoryBlocksWithMessageId(
   const items = mapBlocks(content);
   const assistantMessageId =
     typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null;
-  if (!assistantMessageId) {
-    return items;
-  }
+  const rawHistoryModel = typeof entry.message?.model === "string" ? entry.message.model : null;
+  const model = normalizeClaudeRuntimeModelId(rawHistoryModel) ?? rawHistoryModel;
   for (const item of items) {
     if (item.type === "assistant_message" && !item.messageId) {
-      item.messageId = assistantMessageId;
+      if (assistantMessageId) item.messageId = assistantMessageId;
     }
+    if (item.type === "assistant_message" && model) item.model = model;
   }
   return items;
 }
