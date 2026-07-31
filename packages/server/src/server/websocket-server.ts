@@ -101,6 +101,7 @@ import {
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
 import { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
+import { LiveVoiceAgentNotifier } from "./live-voice/live-voice-agent-notifier.js";
 import type { DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import { DirectorySyncService } from "./directory-sync/index.js";
 import { OWNER_PERMISSIONS, type DaemonPermission } from "./authorization/index.js";
@@ -601,6 +602,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker;
   private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor;
   private readonly liveVoiceToolExecutionAvailable: boolean;
+  private readonly liveVoiceAgentNotifier: LiveVoiceAgentNotifier;
   private readonly hubRelationships: HubRelationshipManagement | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private connectionLifecycle: "starting" | "accepting" | "stopping" = "accepting";
@@ -680,6 +682,11 @@ export class VoiceAssistantWebSocketServer {
           throw new Error("Live Voice routed tool execution is not configured");
         },
       });
+    this.liveVoiceAgentNotifier = new LiveVoiceAgentNotifier({
+      agentManager,
+      agentStorage,
+      logger: this.logger,
+    });
     this.hubRelationships = hubRelationships ?? null;
     this.pluginRuntime = pluginRuntime;
     this.orchestrationSkills = orchestrationSkills;
@@ -1066,6 +1073,7 @@ export class VoiceAssistantWebSocketServer {
     this.unsubscribeTerminalActivity?.();
     this.unsubscribeTerminalActivity = null;
     this.liveVoiceCoordinator.dispose();
+    this.liveVoiceAgentNotifier.dispose();
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
       this.runtimeMetricsInterval = null;
@@ -1481,6 +1489,7 @@ export class VoiceAssistantWebSocketServer {
       liveVoiceCoordinator: this.liveVoiceCoordinator,
       liveVoiceRouteBroker: this.liveVoiceRouteBroker,
       liveVoiceToolExecutor: this.liveVoiceToolExecutor,
+      liveVoiceAgentNotifier: this.liveVoiceAgentNotifier,
       voiceBridge: {
         registerVoiceSpeakHandler: (agentId, handler) => {
           this.voiceSpeakHandlers.set(agentId, handler);
@@ -1792,6 +1801,8 @@ export class VoiceAssistantWebSocketServer {
         liveVoice: true,
         // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
         liveVoiceToolExecution: this.liveVoiceToolExecutionAvailable,
+        // COMPAT(liveVoiceAgentNotifications): added in v0.2.6, remove after 2027-02-28.
+        liveVoiceAgentNotifications: this.liveVoiceToolExecutionAvailable,
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: true,
         // COMPAT(projectCustomIcon): added in v0.2.0, remove after 2027-01-20.
