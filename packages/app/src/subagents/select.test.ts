@@ -95,6 +95,38 @@ describe("selectSubagentsForParent", () => {
     ).toEqual(["provider-child"]);
   });
 
+  it("keeps the provider title and description separate and reports no model yet", () => {
+    useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
+      kind: "upsert",
+      subagent: {
+        id: "provider-child",
+        parentAgentId: "parent-a",
+        provider: "claude",
+        title: "general-purpose",
+        description: "Find the hover regression",
+        status: "running",
+        createdAt: "2026-03-08T10:01:00.000Z",
+        updatedAt: "2026-03-08T10:02:00.000Z",
+        toolCallId: "call-1",
+      },
+    });
+
+    const [child] = selectProviderSubagentsForParent(
+      useProviderSubagentStore.getState(),
+      { serverId: SERVER_ID, parentAgentId: "parent-a" },
+      true,
+    );
+
+    expect(child).toMatchObject({
+      title: "general-purpose",
+      description: "Find the hover regression",
+      model: null,
+      runtimeModelId: null,
+      thinkingOptionId: null,
+    });
+    expect(child?.effectiveThinkingOptionId).toBeUndefined();
+  });
+
   it("hides locally dismissed provider children while retaining their descriptor", () => {
     const store = useProviderSubagentStore.getState();
     store.applyUpdate(SERVER_ID, {
@@ -274,7 +306,10 @@ describe("selectSubagentsForParent", () => {
         status: "running",
         requiresAttention: true,
         createdAt,
-        model: "should-not-leak",
+        model: "claude-opus-4-5",
+        thinkingOptionId: "high",
+        effectiveThinkingOptionId: "xhigh",
+        runtimeInfo: { provider: "claude", sessionId: null, model: "claude-sonnet-4-5" },
         cwd: "/private/project",
       }),
     ]);
@@ -298,21 +333,44 @@ describe("selectSubagentsForParent", () => {
         status: "running",
         requiresAttention: true,
         createdAt,
+        model: "claude-opus-4-5",
+        runtimeModelId: "claude-sonnet-4-5",
+        thinkingOptionId: "high",
+        effectiveThinkingOptionId: "xhigh",
       },
     ]);
     expect(Object.keys(rows[0] ?? {}).sort()).toEqual([
       "createdAt",
+      "effectiveThinkingOptionId",
       "id",
       "kind",
+      "model",
       "provider",
       "requiresAttention",
+      "runtimeModelId",
       "status",
       "summary",
+      "thinkingOptionId",
       "title",
     ]);
     expect(rows[0]).not.toHaveProperty("onOpen");
-    expect(rows[0]).not.toHaveProperty("model");
     expect(rows[0]).not.toHaveProperty("cwd");
+  });
+
+  it("leaves the effective thinking id undefined when the daemon never sent one", () => {
+    setAgents([
+      makeAgent({ id: "parent" }),
+      makeAgent({ id: "child", parentAgentId: "parent", thinkingOptionId: "medium" }),
+    ]);
+
+    const [child] = selectSubagentsForParent(
+      useSessionStore.getState(),
+      { serverId: SERVER_ID, parentAgentId: "parent" },
+      EMPTY_PENDING_ARCHIVE_IDS,
+    );
+
+    expect(child?.thinkingOptionId).toBe("medium");
+    expect(child?.effectiveThinkingOptionId).toBeUndefined();
   });
 
   it("moves a child when parentAgentId changes", () => {

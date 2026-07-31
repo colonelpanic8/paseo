@@ -1,6 +1,10 @@
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
-import type { SubagentRow } from "./select";
+import {
+  formatAgentModelDisplayMeta,
+  type AgentModelDisplay,
+} from "@/composer/agent-controls/utils";
+import type { ProviderSubagentRow, SubagentRow } from "./select";
 import { providerSubagentLifecycleStatus } from "./provider-store";
 
 function presentationStatus(row: SubagentRow) {
@@ -12,19 +16,28 @@ export interface SubagentRowPresentationData {
   key: string;
   kind: "agent";
   label: string;
-  subtitle: string;
+  /**
+   * Trailing muted detail rendered after the title — "Model · Thinking". Null
+   * when nothing is known, so the row renders no empty slot.
+   */
+  meta: string | null;
+  tooltip: string;
   titleState: "ready" | "loading";
   statusBucket: SidebarStateBucket | null;
 }
 
-export function buildSubagentRowPresentationData(row: SubagentRow): SubagentRowPresentationData {
-  const label = resolveRowLabel(row.title);
+export function buildSubagentRowPresentationData(
+  row: SubagentRow,
+  modelDisplay?: AgentModelDisplay | null,
+): SubagentRowPresentationData {
+  const label = resolveSubagentRowLabel(row);
   const status = presentationStatus(row);
   return {
     key: `${row.kind}_subagent_${row.id}`,
     kind: "agent",
     label: label ?? "",
-    subtitle: row.summary ?? "",
+    meta: modelDisplay ? formatAgentModelDisplayMeta(modelDisplay) : null,
+    tooltip: resolveSubagentRowTooltip(row, label),
     titleState: label ? "ready" : "loading",
     statusBucket: deriveSidebarStateBucket({
       status,
@@ -64,4 +77,32 @@ export function resolveRowLabel(title: SubagentRow["title"]): string | null {
     return null;
   }
   return normalized;
+}
+
+/**
+ * Provider descriptors are named after the subagent *type* ("general-purpose")
+ * while the description holds the human task summary, so the description is the
+ * more useful row title. Paseo subagents only have a title.
+ */
+export function resolveSubagentRowLabel(row: SubagentRow): string | null {
+  if (row.kind === "provider") {
+    return resolveRowLabel(row.description) ?? resolveRowLabel(row.title);
+  }
+  return resolveRowLabel(row.title);
+}
+
+function resolveSubagentRowTooltip(row: SubagentRow, label: string | null): string {
+  if (row.kind === "provider") {
+    return buildProviderRowTooltip(row, label);
+  }
+  return label ?? "";
+}
+
+function buildProviderRowTooltip(row: ProviderSubagentRow, label: string | null): string {
+  const type = resolveRowLabel(row.title);
+  const description = resolveRowLabel(row.description);
+  if (type && description && type !== description) {
+    return `${description} (${type})`;
+  }
+  return description ?? type ?? label ?? "";
 }
