@@ -1771,25 +1771,16 @@ export class VoiceAssistantWebSocketServer {
     }
     connection.sockets.delete(ws);
     connection.session.clearAgentTimelineSubscription(ws);
-    // Live voice must die with its socket, not after the reconnect grace below:
-    // the WebRTC media path is already gone.
-    connection.session.releaseLiveVoiceForSource(ws);
+    // Socket-scoped background-work watches cannot follow a replacement socket.
+    // Live Voice itself is session-scoped: on mobile the control socket may be
+    // suspended while native WebRTC remains healthy.
+    connection.session.releaseLiveVoiceSocketResources(ws);
     this.socketIdentities.delete(ws);
 
     if (connection.sockets.size === 0) {
       this.unregisterBrowserToolsClient(connection.clientId);
       this.incrementRuntimeCounter("sessionDisconnectedWaitingReconnect");
-      if (connection.externalDisconnectCleanupTimeout) {
-        clearTimeout(connection.externalDisconnectCleanupTimeout);
-      }
-      const timeout = setTimeout(() => {
-        if (connection.externalDisconnectCleanupTimeout !== timeout) {
-          return;
-        }
-        connection.externalDisconnectCleanupTimeout = null;
-        void this.cleanupConnection(connection, "Client disconnected (grace timeout)");
-      }, EXTERNAL_SESSION_DISCONNECT_GRACE_MS);
-      connection.externalDisconnectCleanupTimeout = timeout;
+      this.scheduleExternalDisconnectCleanup(connection);
 
       connection.connectionLogger.info(
         {
@@ -1818,6 +1809,24 @@ export class VoiceAssistantWebSocketServer {
     }
 
     await this.cleanupConnection(connection, "Client disconnected");
+  }
+
+  private scheduleExternalDisconnectCleanup(connection: TrustedSessionConnection): void {
+    if (connection.externalDisconnectCleanupTimeout) {
+      clearTimeout(connection.externalDisconnectCleanupTimeout);
+    }
+    const timeout = setTimeout(() => {
+      if (connection.externalDisconnectCleanupTimeout !== timeout) {
+        return;
+      }
+      connection.externalDisconnectCleanupTimeout = null;
+      if (connection.session.hasActiveLiveVoiceCall()) {
+        this.scheduleExternalDisconnectCleanup(connection);
+        return;
+      }
+      void this.cleanupConnection(connection, "Client disconnected (grace timeout)");
+    }, EXTERNAL_SESSION_DISCONNECT_GRACE_MS);
+    connection.externalDisconnectCleanupTimeout = timeout;
   }
 
   private async cleanupConnection(
