@@ -16,7 +16,7 @@
   # the upstream hash via `paseo.override { npmDepsHash = "..."; }`.
   paseo,
 }:
-buildNpmPackage {
+buildNpmPackage rec {
   pname = "paseo-desktop";
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
 
