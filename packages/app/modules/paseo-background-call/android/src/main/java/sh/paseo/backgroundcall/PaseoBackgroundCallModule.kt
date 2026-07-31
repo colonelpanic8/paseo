@@ -20,8 +20,12 @@ class PaseoBackgroundCallModule : Module() {
             // An app-owned React Native Modal temporarily takes window focus while its
             // selected action runs. The activity is still visible and Android permits
             // the foreground-service start, so lifecycle state is the authority here.
-            val activityLifecycle = (activity as? LifecycleOwner)?.lifecycle
-            check(activityLifecycle?.currentState == Lifecycle.State.RESUMED) {
+            val isActivityResumed =
+                (activity as? LifecycleOwner)
+                    ?.lifecycle
+                    ?.currentState
+                    ?.isAtLeast(Lifecycle.State.RESUMED) == true
+            check(isActivityResumed) {
                 "A Live Voice background call must begin while Paseo is visible"
             }
 

@@ -19,6 +19,7 @@ import {
 } from "@/live-voice/live-voice-runtime";
 import type { LiveVoiceSessionMode } from "@/live-voice/live-voice-session";
 import { registerLiveVoiceRouteAuthority } from "@/live-voice/live-voice-route-authority";
+import { attachLiveVoiceCues } from "@/live-voice/live-voice-cues";
 
 interface LiveVoiceContextValue extends LiveVoiceSnapshot {
   start: (serverId: string, sessionMode?: LiveVoiceSessionMode) => Promise<void>;
@@ -115,13 +116,16 @@ export function LiveVoiceProvider({ children }: LiveVoiceProviderProps) {
 
   useEffect(() => registerLiveVoiceRouteAuthority(runtime), [runtime]);
 
-  // A Live Voice call holds the microphone and an open peer connection, so losing
-  // the daemon connection has to tear it down locally. Two distinct losses: the
-  // socket reporting anything other than `connected`, and the host replacing the
-  // client on reconnect (a fresh client is "connected", but our call died with
-  // the old one and the daemon has already released it).
+  // Declared before the destroy effect below so React detaches the cues first:
+  // tearing the provider down ends the call, and that end is not a transition
+  // the user should hear.
+  useEffect(() => attachLiveVoiceCues(runtime), [runtime]);
+
+  // A background call's native WebRTC path can remain healthy while Android
+  // suspends the daemon control socket. Keep the exact pinned client through its
+  // own reconnect loop; only a replacement client means this runtime can no
+  // longer address the daemon-owned half of the call.
   useEffect(() => {
-    let unsubscribeStatus: (() => void) | null = null;
     let watchedServerId: string | null = null;
     let watchedClient: DaemonClient | null = null;
 
@@ -142,8 +146,6 @@ export function LiveVoiceProvider({ children }: LiveVoiceProviderProps) {
       const replacedFor =
         watchedServerId !== null && activeServerId === watchedServerId ? watchedServerId : null;
 
-      unsubscribeStatus?.();
-      unsubscribeStatus = null;
       watchedServerId = activeServerId;
       watchedClient = client;
 
@@ -151,14 +153,6 @@ export function LiveVoiceProvider({ children }: LiveVoiceProviderProps) {
         runtime.handleConnectionLost(replacedFor);
         return;
       }
-      if (!activeServerId || !client) {
-        return;
-      }
-      unsubscribeStatus = client.subscribeConnectionStatus((state) => {
-        if (state.status !== "connected") {
-          runtime.handleConnectionLost(activeServerId);
-        }
-      });
     };
 
     const unsubscribeStore = useSessionStore.subscribe(sync);
@@ -167,7 +161,6 @@ export function LiveVoiceProvider({ children }: LiveVoiceProviderProps) {
     return () => {
       unsubscribeStore();
       unsubscribeRuntime();
-      unsubscribeStatus?.();
     };
   }, [runtime]);
 
