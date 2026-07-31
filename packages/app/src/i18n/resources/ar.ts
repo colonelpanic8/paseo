@@ -1808,6 +1808,7 @@ export const ar: TranslationResources = {
         jumpToTab: "انتقل إلى علامة التبويب",
         previousWorkspace: "مساحة العمل السابقة",
         nextWorkspace: "مساحة العمل التالية",
+        nextReadyWaitingWorkspace: "مساحة العمل التالية الجاهزة أو المنتظرة",
         previousTab: "علامة التبويب السابقة",
         nextTab: "علامة التبويب التالية",
         splitPaneRight: "تقسيم الجزء الأيمن",
