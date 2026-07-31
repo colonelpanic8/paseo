@@ -1792,6 +1792,8 @@ export const ar: TranslationResources = {
     scope: "متاح في جميع أنحاء التطبيق",
     actions: {
       start: "بدء الصوت المباشر",
+      startForeground: "البدء في المقدمة",
+      startBackground: "البدء في الخلفية",
       unavailable: "الصوت المباشر غير متاح",
       stop: "إيقاف الصوت المباشر",
       mute: "كتم الميكروفون",
@@ -1800,6 +1802,10 @@ export const ar: TranslationResources = {
       showTranscript: "عرض النص",
       hideTranscript: "إخفاء النص",
       dismiss: "تجاهل",
+    },
+    modes: {
+      foreground: "وضع المقدمة",
+      background: "وضع الخلفية",
     },
     unavailable: {
       platform: "الصوت المباشر غير مدعوم على هذا الجهاز.",
