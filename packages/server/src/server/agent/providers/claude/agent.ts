@@ -2050,6 +2050,7 @@ class ClaudeAgentSession implements AgentSession {
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private lastOptionsModel: string | null = null;
   private lastRuntimeModel: string | null = null;
+  private lastObservedEffort: ClaudeThinkingEffort | null = null;
   private compacting = false;
   private queryPumpPromise: Promise<void> | null = null;
   private queryRestartNeeded = false;
@@ -2123,6 +2124,10 @@ class ClaudeAgentSession implements AgentSession {
       sessionId: this.claudeSessionId,
       model: this.lastOptionsModel,
       modeId: this.currentMode ?? null,
+      // Omitted rather than null when nothing was observed: the key's presence
+      // is what makes the runtime value win over the configured one, so an
+      // unobserved level has to leave the configured level in charge.
+      ...(this.lastObservedEffort ? { thinkingOptionId: this.lastObservedEffort } : {}),
       ...(this.lastRuntimeModel
         ? {
             extra: {
@@ -2332,6 +2337,9 @@ class ClaudeAgentSession implements AgentSession {
     );
     this.lastOptionsModel = normalizedModelId ?? this.lastOptionsModel;
     this.lastRuntimeModel = null;
+    // Effort levels are per-model, so an observation from the old model says
+    // nothing about the new one.
+    this.lastObservedEffort = null;
     this.cachedRuntimeInfo = null;
     // Model change affects persistence metadata, so invalidate cached handle.
     this.persistence = null;
@@ -2371,6 +2379,10 @@ class ClaudeAgentSession implements AgentSession {
     } else {
       throw new Error(`Unknown thinking option: ${normalizedThinkingOptionId}`);
     }
+    // Drop the observation so a level from before this selection cannot shadow
+    // it; the next frame reports what Claude actually applied.
+    this.lastObservedEffort = null;
+    this.cachedRuntimeInfo = null;
     this.queryRestartNeeded = true;
     if (this.activeForegroundTurnId || this.autonomousTurn) {
       return THINKING_APPLIES_NEXT_TURN_NOTICE;
@@ -3839,7 +3851,7 @@ class ClaudeAgentSession implements AgentSession {
     const observedModel = resolveObservedClaudeModelId(message.message.model);
     const observedEffort = resolveObservedClaudeEffort(toObjectRecord(message)?.effort);
     if (message.message.model) {
-      this.captureRuntimeModel(message.message.model, "assistant message");
+      this.captureRuntimeModel(message.message.model, "assistant message", observedEffort);
     }
     const timelineItems = this.mapBlocksToTimeline(message.message.content, {
       suppressAssistantText: options?.suppressAssistantText ?? false,
@@ -4281,23 +4293,49 @@ class ClaudeAgentSession implements AgentSession {
   private captureRuntimeModel(
     runtimeModel: string,
     source: "SDK init" | "assistant message" | "stream message start",
+    observedEffort?: ClaudeThinkingEffort | null,
   ): void {
+    const effortChanged = this.noteRuntimeEffort(observedEffort ?? null);
     if (runtimeModel === this.lastRuntimeModel) {
       // Every assistant message repeats the model; only a change is worth the
       // log line and the cache invalidation.
+      if (effortChanged) {
+        this.publishRuntimeObservation();
+      }
       return;
     }
     const observedModel = resolveObservedClaudeModelId(runtimeModel);
     if (!observedModel) {
       // A placeholder such as "<synthetic>" is not an observation.
+      if (effortChanged) {
+        this.publishRuntimeObservation();
+      }
       return;
     }
     this.logger.debug(
-      { runtimeModel, observedModel, source },
+      { runtimeModel, observedModel, observedEffort, source },
       "Captured runtime model from Claude",
     );
     this.lastOptionsModel = observedModel;
     this.lastRuntimeModel = runtimeModel;
+    this.publishRuntimeObservation();
+  }
+
+  /**
+   * Records the effort a frame reported. Returns whether it changed, so callers
+   * can fold it into one runtime-info push alongside a model change.
+   */
+  private noteRuntimeEffort(observedEffort: ClaudeThinkingEffort | null): boolean {
+    // A frame that reports no effort says nothing about the level; only a
+    // different reported level supersedes the last observation.
+    if (!observedEffort || observedEffort === this.lastObservedEffort) {
+      return false;
+    }
+    this.lastObservedEffort = observedEffort;
+    return true;
+  }
+
+  private publishRuntimeObservation(): void {
     this.cachedRuntimeInfo = null;
     // Push the observation to the manager immediately. Claude pre-assigns its
     // session id, so `thread_started` never fires for it, and without this the
@@ -4655,6 +4693,11 @@ class ClaudeAgentSession implements AgentSession {
       if (observedModel && typeof rawModel === "string") {
         this.lastOptionsModel = observedModel;
         this.lastRuntimeModel = rawModel;
+        this.cachedRuntimeInfo = null;
+      }
+      const observedEffort = resolveObservedClaudeEffort(entry.effort);
+      if (observedEffort) {
+        this.lastObservedEffort = observedEffort;
         this.cachedRuntimeInfo = null;
       }
     }
