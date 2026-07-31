@@ -1,5 +1,7 @@
 import { z } from "zod";
-import type { AgentMode } from "./agent-types.js";
+import type { AgentMode, AgentProviderAccounts } from "./agent-types.js";
+
+export type { AgentProviderAccounts };
 
 export type AgentModeColorTier = "safe" | "moderate" | "dangerous" | "planning" | `#${string}`;
 // Open string by design: the client looks icons up in a registry and falls back
@@ -33,6 +35,13 @@ export interface AgentProviderDefinition {
     defaultModeId: string;
     defaultModel?: string;
   };
+  /**
+   * Set this and the provider can be added more than once, each registration
+   * pointed at its own account directory. Declaring it is the whole feature:
+   * the config patch, the settings UI, and the daemon's account-directory
+   * lookup are all driven from here, so no code names specific providers.
+   */
+  accounts?: AgentProviderAccounts;
 }
 
 const CLAUDE_MODES: AgentProviderModeDefinition[] = [
@@ -199,6 +208,10 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
       defaultModeId: "default",
       defaultModel: "haiku",
     },
+    accounts: {
+      envVar: "CLAUDE_CONFIG_DIR",
+      directoryExample: "/home/you/.claude-work",
+    },
   },
   {
     id: "codex",
@@ -210,6 +223,10 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
       enabled: true,
       defaultModeId: "auto",
       defaultModel: "gpt-5.4-mini",
+    },
+    accounts: {
+      envVar: "CODEX_HOME",
+      directoryExample: "/home/you/.codex-work",
     },
   },
   {
@@ -268,6 +285,16 @@ export const DEV_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
   },
 ];
 
+export function findAgentProviderDefinition(
+  provider: string,
+  definitions: AgentProviderDefinition[] = [
+    ...AGENT_PROVIDER_DEFINITIONS,
+    ...DEV_AGENT_PROVIDER_DEFINITIONS,
+  ],
+): AgentProviderDefinition | undefined {
+  return definitions.find((entry) => entry.id === provider);
+}
+
 export function getAgentProviderDefinition(
   provider: string,
   definitions: AgentProviderDefinition[] = [
@@ -275,7 +302,7 @@ export function getAgentProviderDefinition(
     ...DEV_AGENT_PROVIDER_DEFINITIONS,
   ],
 ): AgentProviderDefinition {
-  const definition = definitions.find((entry) => entry.id === provider);
+  const definition = findAgentProviderDefinition(provider, definitions);
   if (!definition) {
     throw new Error(`Unknown agent provider: ${provider}`);
   }

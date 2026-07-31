@@ -2109,6 +2109,22 @@ export const ptBR: TranslationResources = {
     providers: {
       title: "Provedores",
       addProvider: "Adicionar provedor",
+      accounts: {
+        addTitle: "Adicionar conta do {{provider}}",
+        rowTitle: "Conta do {{provider}}",
+        rowDescription: "Outra conta com credenciais e histórico próprios",
+        add: "Adicionar conta",
+        name: "Nome da conta",
+        namePlaceholder: "ex.: Trabalho",
+        directory: "Diretório da conta",
+        directoryHint: "Defina {{envVar}} como este caminho absoluto no host.",
+        errors: {
+          nameRequired: "Digite um nome para a conta.",
+          directoryRequired: "Digite um diretório para a conta.",
+          directoryAbsolute: "Digite um caminho absoluto neste host.",
+          directoryDuplicate: "Esse diretório de conta já está configurado.",
+        },
+      },
       providerDetails: "Detalhes do provedor {{name}}",
       enableProvider: "Ativar {{name}}",
       unavailable: "Conecte-se a este host para ver provedores",

@@ -574,6 +574,81 @@ test("new provider extending claude appears in registry", () => {
   expect(registry.zai.createClient(logger).provider).toBe("zai");
 });
 
+test("Claude account profile receives its isolated config directory", () => {
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      "claude-account-work": {
+        extends: "claude",
+        label: "Claude · Work",
+        env: {
+          CLAUDE_CONFIG_DIR: "/accounts/claude-work",
+        },
+      },
+    },
+  });
+
+  expect(registry["claude-account-work"]).toMatchObject({
+    id: "claude-account-work",
+    label: "Claude · Work",
+    derivedFromProviderId: "claude",
+  });
+  registry["claude-account-work"].createClient(logger);
+  expect(mockState.constructorArgs.claude.at(-1)).toEqual({
+    runtimeSettings: {
+      env: {
+        CLAUDE_CONFIG_DIR: "/accounts/claude-work",
+      },
+    },
+  });
+});
+
+test("base providers advertise accounts but an account does not offer more of its own", () => {
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      "claude-work": {
+        extends: "claude",
+        label: "Claude · Work",
+        env: { CLAUDE_CONFIG_DIR: "/accounts/claude-work" },
+      },
+    },
+  });
+
+  expect(registry.claude.accounts).toEqual({
+    envVar: "CLAUDE_CONFIG_DIR",
+    directoryExample: "/home/you/.claude-work",
+  });
+  expect(registry["claude-work"].accounts).toBeUndefined();
+  expect(registry.opencode.accounts).toBeUndefined();
+});
+
+test("Codex account profile receives its isolated Codex home", () => {
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      "codex-account-work": {
+        extends: "codex",
+        label: "Codex · Work",
+        env: {
+          CODEX_HOME: "/accounts/codex-work",
+        },
+      },
+    },
+  });
+
+  expect(registry["codex-account-work"]).toMatchObject({
+    id: "codex-account-work",
+    label: "Codex · Work",
+    derivedFromProviderId: "codex",
+  });
+  registry["codex-account-work"].createClient(logger);
+  expect(mockState.constructorArgs.codex.at(-1)).toEqual({
+    runtimeSettings: {
+      env: {
+        CODEX_HOME: "/accounts/codex-work",
+      },
+    },
+  });
+});
+
 test("built-in OMP override keeps the real OMP adapter enabled and launchable", async () => {
   const omp = new FakeOmp(["custom-omp"]);
   const registry = buildProviderRegistry(logger, {

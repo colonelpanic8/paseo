@@ -249,6 +249,9 @@ function createDerivedDefinition(
     id: providerId,
     label: override.label,
     description: override.description ?? baseDefinition.description,
+    // A derived profile is already one account. Only the base provider offers
+    // to create more, so accounts never chain off an account.
+    accounts: undefined,
   };
 }
 
