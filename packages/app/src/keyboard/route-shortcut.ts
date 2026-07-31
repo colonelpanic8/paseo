@@ -77,6 +77,7 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
     id: "message-input.plan-mode.toggle",
     scope: "message-input",
   },
+  "live-voice.mute.toggle": { id: "live-voice.mute-toggle", scope: "global" },
 };
 
 const SIMPLE_CALLBACKS: Record<string, ShortcutCallbackName> = {
