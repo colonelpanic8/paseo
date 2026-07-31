@@ -176,6 +176,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "dictation-toggle": "settings.shortcuts.help.startStopDictation",
   "stash-prompt": "settings.shortcuts.help.stashPrompt",
   "agent-interrupt": "settings.shortcuts.help.interruptAgent",
+  "find-in-conversation": "settings.shortcuts.help.findInConversation",
   "voice-mute-toggle": "settings.shortcuts.help.muteUnmuteVoiceMode",
 };
 
@@ -1185,6 +1186,31 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "agent-input",
       label: "Start/stop dictation",
       keys: ["mod", "D"],
+    },
+  },
+  // --- Find in conversation ---
+  {
+    id: "agent-find-cmd-f-mac",
+    action: "agent.find",
+    combo: "Cmd+F",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "find-in-conversation",
+      section: "agent-input",
+      label: "Find in conversation",
+      keys: ["mod", "F"],
+    },
+  },
+  {
+    id: "agent-find-ctrl-f-non-mac",
+    action: "agent.find",
+    combo: "Ctrl+F",
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "find-in-conversation",
+      section: "agent-input",
+      label: "Find in conversation",
+      keys: ["mod", "F"],
     },
   },
   {

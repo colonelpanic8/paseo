@@ -191,6 +191,13 @@ export const ptBR: TranslationResources = {
   agentStream: {
     empty: "Comece a conversar com este agente...",
     scrollToBottom: "Rolar para o fim",
+    find: {
+      placeholder: "Buscar na conversa",
+      matchCount: "{{current}}/{{total}}",
+      previous: "Correspondência anterior",
+      next: "Próxima correspondência",
+      close: "Fechar busca",
+    },
     permission: {
       plan: "Plano",
       required: "Permissão necessária",
@@ -1935,6 +1942,7 @@ export const ptBR: TranslationResources = {
         selectHost: "Selecionar host",
         toggleFastMode: "Alternar modo rápido",
         togglePlanMode: "Alternar modo de planejamento",
+        findInConversation: "Buscar na conversa",
       },
       helpNotes: {
         showKeyboardShortcuts:
