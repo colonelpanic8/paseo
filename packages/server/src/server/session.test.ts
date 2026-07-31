@@ -30,6 +30,7 @@ import type { SessionOptions } from "./session.js";
 import type { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
 import type { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
 import type { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
+import type { LiveVoiceAgentNotifier } from "./live-voice/live-voice-agent-notifier.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "./messages.js";
 import {
   asSessionInternals as asSessionInternalsHelper,
@@ -320,6 +321,7 @@ interface SessionForTestOptions {
   liveVoiceCoordinator?: LiveVoiceCoordinator;
   liveVoiceRouteBroker?: LiveVoiceRouteBroker;
   liveVoiceToolExecutor?: LiveVoiceToolExecutor;
+  liveVoiceAgentNotifier?: LiveVoiceAgentNotifier;
   downloadTokenStore?: SessionOptions["downloadTokenStore"];
   messages?: unknown[];
   targetedMessages?: Array<{ source: object; message: SessionOutboundMessage }>;
@@ -424,6 +426,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     liveVoiceCoordinator: options.liveVoiceCoordinator,
     liveVoiceRouteBroker: options.liveVoiceRouteBroker,
     liveVoiceToolExecutor: options.liveVoiceToolExecutor,
+    liveVoiceAgentNotifier: options.liveVoiceAgentNotifier,
     serverId: options.serverId,
     daemonVersion: options.daemonVersion,
     daemonRuntimeConfig: options.daemonRuntimeConfig,
@@ -473,9 +476,10 @@ describe("Live Voice routing session boundary", () => {
     ]);
   });
 
-  test("only a capable owner's exact source receives reverse route requests", async () => {
+  test("routes a capable owner's reverse requests through its reconnectable session", async () => {
     const source = {};
     const otherSource = {};
+    const messages: SessionOutboundMessage[] = [];
     const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
     const start = vi.fn().mockImplementation(async (request) => {
       await request.sendRouteRequest({
@@ -491,6 +495,7 @@ describe("Live Voice routing session boundary", () => {
       };
     });
     const session = createSessionForTest({
+      messages,
       targetedMessages,
       liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
     });
@@ -506,16 +511,39 @@ describe("Live Voice routing session boundary", () => {
       source,
     );
 
-    expect(targetedMessages[0]).toEqual({
-      source,
-      message: {
-        type: "voice.live.route.request",
-        requestId: "route-request-1",
-        liveSessionId: "live-session-1",
-        operation: { kind: "list_hosts" },
-      },
+    expect(start.mock.calls[0]?.[0].owner).toEqual({ sessionKey: session });
+    expect(messages).toContainEqual({
+      type: "voice.live.route.request",
+      requestId: "route-request-1",
+      liveSessionId: "live-session-1",
+      operation: { kind: "list_hosts" },
     });
     expect(targetedMessages.some((entry) => entry.source === otherSource)).toBe(false);
+  });
+
+  test("accepts reverse route responses from a replacement socket in the owning session", async () => {
+    const replacementSource = {};
+    const receiveResponse = vi.fn();
+    const session = createSessionForTest({
+      liveVoiceRouteBroker: { receiveResponse } as unknown as LiveVoiceRouteBroker,
+    });
+    const response = {
+      type: "voice.live.route.response" as const,
+      payload: {
+        requestId: "route-request-1",
+        liveSessionId: "live-session-1",
+        ok: false as const,
+        error: {
+          code: "target_offline",
+          message: "The selected host is offline.",
+          retryable: true,
+        },
+      },
+    };
+
+    await session.handleMessage(response, replacementSource);
+
+    expect(receiveResponse).toHaveBeenCalledExactlyOnceWith(response, session);
   });
 
   test("target tool execution responds only to the requesting source", async () => {
@@ -544,12 +572,15 @@ describe("Live Voice routing session boundary", () => {
       source,
     );
 
-    expect(execute).toHaveBeenCalledWith({
-      type: "voice.live.tool.execute.request",
-      requestId: "execute-request-1",
-      toolName: "list_agents",
-      arguments: {},
-    });
+    expect(execute).toHaveBeenCalledWith(
+      {
+        type: "voice.live.tool.execute.request",
+        requestId: "execute-request-1",
+        toolName: "list_agents",
+        arguments: {},
+      },
+      {},
+    );
     expect(targetedMessages).toEqual([
       {
         source,
@@ -559,6 +590,98 @@ describe("Live Voice routing session boundary", () => {
             requestId: "execute-request-1",
             ok: true,
             toolResult: { content: [], structuredContent: { agents: [] } },
+          },
+        },
+      },
+    ]);
+  });
+
+  test("reports background work started by a routed tool to the requesting source only", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const watch = vi.fn();
+    const execute = vi.fn(
+      async (
+        request: { requestId: string },
+        context: { onBackgroundAgentStarted?: (params: { agentId: string }) => void },
+      ) => {
+        context.onBackgroundAgentStarted?.({ agentId: "agent-1" });
+        return {
+          type: "voice.live.tool.execute.response",
+          payload: { requestId: request.requestId, ok: true, toolResult: { content: [] } },
+        };
+      },
+    );
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceToolExecutor: { execute } as unknown as LiveVoiceToolExecutor,
+      liveVoiceAgentNotifier: { watch } as unknown as LiveVoiceAgentNotifier,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.tool.execute.request",
+        requestId: "execute-request-1",
+        toolName: "create_agent",
+        arguments: {},
+        notifyOnAgentFinish: true,
+      },
+      source,
+    );
+
+    expect(watch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agentId: "agent-1",
+        requestId: "execute-request-1",
+        sourceKey: source,
+      }),
+    );
+  });
+
+  test("speaks a work notification into the requesting client's session-owned call", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const say = vi.fn().mockResolvedValue({
+      delivered: false,
+      errorCode: "unknown_call",
+      errorMessage: "This client does not own a live voice call with that id.",
+    });
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceCoordinator: { say } as unknown as LiveVoiceCoordinator,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.agent.notify.request",
+        requestId: "notify-1",
+        liveSessionId: "live-session-1",
+        notification: {
+          agentId: "agent-1",
+          title: "Rebase main",
+          reason: "finished",
+          summary: null,
+        },
+      },
+      source,
+    );
+
+    expect(say).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ liveSessionId: "live-session-1", sessionKey: session }),
+    );
+    expect(say.mock.calls[0]?.[0].text).toContain("Rebase main");
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.agent.notify.response",
+          payload: {
+            requestId: "notify-1",
+            delivered: false,
+            error: {
+              code: "unknown_call",
+              message: "This client does not own a live voice call with that id.",
+            },
           },
         },
       },
