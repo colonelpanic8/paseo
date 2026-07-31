@@ -1761,6 +1761,7 @@ export const ar: TranslationResources = {
       connectedHosts: "المضيفين المتصلين",
       offline: "غير متصل",
       versionDiffers: "الإصدار يختلف عن هذا الجهاز",
+      viewCommit: "عرض الالتزام على GitHub",
       releaseChannel: {
         label: "الافراج عن القناة",
         description: "قم بالتبديل إلى Beta للحصول على التحديثات عاجلاً والمساعدة في تشكيلها",
