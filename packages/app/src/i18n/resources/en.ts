@@ -2084,6 +2084,22 @@ export const en = {
     providers: {
       title: "Providers",
       addProvider: "Add provider",
+      accounts: {
+        addTitle: "Add {{provider}} account",
+        rowTitle: "{{provider}} account",
+        rowDescription: "Another account with its own credentials and history",
+        add: "Add account",
+        name: "Account name",
+        namePlaceholder: "e.g. Work",
+        directory: "Account directory",
+        directoryHint: "Sets {{envVar}} to this absolute path on the host.",
+        errors: {
+          nameRequired: "Enter an account name.",
+          directoryRequired: "Enter an account directory.",
+          directoryAbsolute: "Enter an absolute path on this host.",
+          directoryDuplicate: "That account directory is already configured.",
+        },
+      },
       providerDetails: "{{name}} provider details",
       enableProvider: "Enable {{name}}",
       unavailable: "Connect to this host to see providers",
