@@ -467,6 +467,33 @@ describe("resolveAgentModelDisplay", () => {
       }).thinkingOptionId,
     ).toBe("high");
   });
+
+  it("reports no thinking level for a recorded turn that did not report one", () => {
+    // The model default describes what the model would do, not what this turn
+    // did; on a completed turn that is a fabricated history entry.
+    expect(
+      resolveAgentModelDisplay({
+        models: CLAUDE_MODELS,
+        source: { runtimeModelId: "claude-opus-4-5", effectiveThinkingOptionId: null },
+        thinkingFallback: "none",
+      }),
+    ).toEqual({
+      modelId: "claude-opus-4-5",
+      modelLabel: "Opus 4.5",
+      thinkingOptionId: null,
+      thinkingLabel: null,
+    });
+  });
+
+  it("still reports a thinking level the turn did record", () => {
+    expect(
+      resolveAgentModelDisplay({
+        models: CLAUDE_MODELS,
+        source: { runtimeModelId: "claude-opus-4-5", effectiveThinkingOptionId: "xhigh" },
+        thinkingFallback: "none",
+      }).thinkingLabel,
+    ).toBe("Extra high");
+  });
 });
 
 describe("formatAgentModelDisplayMeta", () => {
