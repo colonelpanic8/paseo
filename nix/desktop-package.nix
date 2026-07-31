@@ -132,6 +132,22 @@ buildNpmPackage rec {
     mkdir -p $out/share/paseo-desktop/packages/app
     cp -a packages/app/dist $out/share/paseo-desktop/packages/app/
 
+    for runtime_path in \
+      packages/desktop/dist/main.js \
+      packages/desktop/dist/preload.js \
+      packages/desktop/dist/features/browser-keyboard/guest-preload.js \
+      packages/desktop/package.json; do
+      if [ ! -e "$out/share/paseo-desktop/$runtime_path" ]; then
+        echo "desktop runtime trace omitted $runtime_path" >&2
+        exit 1
+      fi
+    done
+
+    if [ -e $out/share/paseo-desktop/node_modules/electron ]; then
+      echo "desktop runtime trace included npm Electron" >&2
+      exit 1
+    fi
+
     # Skills directory referenced at runtime by some agents
     if [ -d skills ]; then
       cp -a skills $out/share/paseo-desktop/

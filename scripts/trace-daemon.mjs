@@ -105,7 +105,7 @@ const { fileList, warnings } = await nodeFileTrace(entries, {
     "**/*.e2e.test.js",
     // The Nix desktop package runs under nixpkgs' Electron. Tracing the npm
     // package would duplicate the complete Electron distribution in $out.
-    ...(traceDesktop ? ["electron/**"] : []),
+    ...(traceDesktop ? ["node_modules/electron/**"] : []),
   ],
 });
 
