@@ -1799,6 +1799,8 @@ export const ru: TranslationResources = {
     scope: "Доступно во всём приложении",
     actions: {
       start: "Начать живой голос",
+      startForeground: "Запустить на переднем плане",
+      startBackground: "Запустить в фоне",
       unavailable: "Живой голос недоступен",
       stop: "Остановить живой голос",
       mute: "Отключить микрофон",
@@ -1807,6 +1809,10 @@ export const ru: TranslationResources = {
       showTranscript: "Показать расшифровку",
       hideTranscript: "Скрыть расшифровку",
       dismiss: "Закрыть",
+    },
+    modes: {
+      foreground: "Режим переднего плана",
+      background: "Фоновый режим",
     },
     unavailable: {
       platform: "Живой голос не поддерживается на этом устройстве.",
