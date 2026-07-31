@@ -2945,6 +2945,8 @@ export const ServerInfoStatusPayloadSchema = z
         stableProjectIdentity: z.boolean().optional(),
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: z.boolean().optional(),
+        // COMPAT(agentEnv): added in v0.2.4, drop the gate when floor >= v0.2.4.
+        agentEnv: z.boolean().optional(),
       })
       .optional(),
   })
