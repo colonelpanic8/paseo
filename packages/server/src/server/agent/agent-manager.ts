@@ -4535,6 +4535,9 @@ export class AgentManager {
     if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);
     }
+    // A failed turn still observed a model before it died; surface it the same
+    // way turn_completed does.
+    void this.refreshRuntimeInfo(agent);
   }
 
   private onStreamTurnCanceled(params: {
@@ -4571,6 +4574,9 @@ export class AgentManager {
     if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);
     }
+    // An interrupted turn still observed a model before it stopped; surface it
+    // the same way turn_completed does.
+    void this.refreshRuntimeInfo(agent);
   }
 
   private onStreamTurnStarted(params: {
