@@ -11,6 +11,7 @@ import {
   TextInputKeyPressEventData,
   TextInputSelectionChangeEventData,
 } from "react-native";
+import type { StyleProp, TextStyle } from "react-native";
 import {
   useState,
   useRef,
@@ -39,6 +40,10 @@ import {
 } from "@/utils/image-attachments-from-files";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
+import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
+import type { ComposerSigils } from "@/composer/tokens/sigils";
+import { collectComposerTokens, type ComposerTokenCatalog } from "@/composer/tokens/tokens";
+import { ComposerTokenHighlightLayer } from "./token-highlight";
 import { focusWithRetries } from "@/utils/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -78,6 +83,10 @@ import {
 
 const DEFAULT_SEND_KEYS: ShortcutKey[][] = [["Enter"]];
 const COMPOSER_INPUT_DATASET = { composerInput: "" } as const;
+// Adds the marker the tokenized-selection stylesheet targets. Only applied while
+// the draft actually contains a token, so an ordinary draft keeps ordinary
+// selection behavior.
+const COMPOSER_INPUT_TOKENIZED_DATASET = { composerInput: "", composerTokenized: "" } as const;
 
 export interface AttachmentMenuItem {
   id: string;
@@ -89,6 +98,7 @@ export interface AttachmentMenuItem {
 
 export interface MessageInputProps {
   value: string;
+  tokenCatalog: ComposerTokenCatalog;
   onChangeText: (text: string) => void;
   onSubmit: (payload: MessagePayload) => void;
   /** When true, the submit button is enabled even without text or images (e.g. external attachment selected). */
@@ -1026,6 +1036,42 @@ function computeTextInputHeightStyle(inputHeight: number, maxInputHeight: number
   };
 }
 
+/**
+ * Resolve how the draft's command/skill tokens should be drawn on this platform.
+ *
+ * Tokens are re-derived from the draft text on every change — nothing about a token
+ * is persisted, so drafts, dictation and undo need no knowledge of them.
+ *
+ * Web opts out when the draft has no token and keeps rendering through the plain
+ * textarea instead of the mirror. Native always keeps its controlled plain-text
+ * path because React Native TextInput cannot safely render styled spans.
+ */
+function useComposerTokenRendering(
+  value: string,
+  tokenCatalog: ComposerTokenCatalog,
+): {
+  sigils: ComposerSigils;
+  showTokenMirror: boolean;
+  /** Marks the input for the tokenized-selection stylesheet while a token exists. */
+  dataSet: typeof COMPOSER_INPUT_DATASET;
+  /** Makes the input's own glyphs transparent while the mirror draws them. */
+  inputTextStyle: StyleProp<TextStyle>;
+} {
+  const sigils = useComposerSigils();
+  const hasTokens = useMemo(
+    () => collectComposerTokens(value, tokenCatalog).length > 0,
+    [value, tokenCatalog],
+  );
+  const showTokenMirror = isWeb && hasTokens;
+
+  return {
+    sigils,
+    showTokenMirror,
+    dataSet: showTokenMirror ? COMPOSER_INPUT_TOKENIZED_DATASET : COMPOSER_INPUT_DATASET,
+    inputTextStyle: showTokenMirror ? styles.textInputMirrored : null,
+  };
+}
+
 function isTextAreaLike(v: unknown): v is TextAreaHandle {
   return typeof v === "object" && v !== null && "scrollHeight" in v;
 }
@@ -1069,6 +1115,7 @@ function computeSendButtonState(input: SendButtonStateInput): SendButtonStateOut
 
 interface ResolvedMessageInputProps {
   value: string;
+  tokenCatalog: ComposerTokenCatalog;
   onChangeText: (text: string) => void;
   onSubmit: (payload: MessagePayload) => void;
   hasExternalContent: boolean;
@@ -1112,6 +1159,7 @@ interface ResolvedMessageInputProps {
 function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInputProps {
   return {
     value: props.value,
+    tokenCatalog: props.tokenCatalog,
     onChangeText: props.onChangeText,
     onSubmit: props.onSubmit,
     hasExternalContent: props.hasExternalContent ?? false,
@@ -1163,6 +1211,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
   function MessageInput(props, ref) {
     const {
       value,
+      tokenCatalog,
       onChangeText,
       onSubmit,
       hasExternalContent,
@@ -1701,9 +1750,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       ],
       [inputWrapperStyle, surfacePresentation.input.opacity],
     );
+    const tokenRendering = useComposerTokenRendering(value, tokenCatalog);
+    const { showTokenMirror } = tokenRendering;
+
     const textInputStyle = useMemo(
-      () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
-      [inputHeight, maxInputHeight],
+      () => [
+        styles.textInput,
+        computeTextInputHeightStyle(inputHeight, maxInputHeight),
+        tokenRendering.inputTextStyle,
+      ],
+      [inputHeight, maxInputHeight, tokenRendering.inputTextStyle],
     );
     const sendButtonCombinedStyle = useMemo(
       () => [styles.sendButton, isSendButtonDisabled && styles.buttonDisabled],
@@ -1753,9 +1809,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           {attachmentSlot}
           {/* Text input */}
           <View style={styles.textInputScrollWrapper}>
+            <ComposerTokenHighlightLayer
+              enabled={showTokenMirror}
+              value={value}
+              sigils={tokenRendering.sigils}
+              tokenCatalog={tokenCatalog}
+              textareaRef={webTextareaRef}
+            />
             <ThemedTextInput
               ref={textInputRef}
-              dataSet={COMPOSER_INPUT_DATASET}
+              dataSet={tokenRendering.dataSet}
               value={value}
               onChangeText={handleInputChange}
               placeholder={placeholder ?? t("composer.placeholders.fallback")}
@@ -1906,6 +1969,17 @@ const styles = StyleSheet.create((theme: Theme) => ({
           outlineStyle: "none",
           outlineWidth: 0,
           outlineColor: "transparent",
+        } as object)
+      : {}),
+  },
+  // Hands the glyphs to the mirror layer while the textarea keeps the caret,
+  // selection and IME. `caretColor` has no React Native equivalent, hence the
+  // web-only escape.
+  textInputMirrored: {
+    color: "transparent",
+    ...(isWeb
+      ? ({
+          caretColor: theme.colors.foreground,
         } as object)
       : {}),
   },

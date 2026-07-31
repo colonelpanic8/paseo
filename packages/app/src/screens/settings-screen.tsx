@@ -75,6 +75,11 @@ import { Button } from "@/components/ui/button";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
+import {
+  COMPOSER_SIGIL_CHOICES,
+  resolveComposerSigils,
+  type ComposerSigil,
+} from "@/composer/tokens/sigils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
 import { BrowserDataSection } from "@/desktop/components/browser-data-section";
@@ -120,6 +125,11 @@ import {
   type SettingsSectionSlug,
 } from "@/utils/host-routes";
 import { navigateToLastWorkspace } from "@/stores/navigation-active-workspace-store";
+
+const COMPOSER_SIGIL_OPTIONS = COMPOSER_SIGIL_CHOICES.map((choice) => ({
+  value: choice,
+  label: choice,
+}));
 
 // ---------------------------------------------------------------------------
 // View model
@@ -253,6 +263,8 @@ interface GeneralSectionProps {
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
   handleModelPickerAllModelsChange: (startsWithAllModels: boolean) => void;
+  handleCommandTriggerSigilChange: (sigil: ComposerSigil) => void;
+  handleSkillTriggerSigilChange: (sigil: ComposerSigil) => void;
 }
 
 interface ServiceUrlBehaviorMenuItemProps {
@@ -310,10 +322,18 @@ function GeneralSection({
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
   handleModelPickerAllModelsChange,
+  handleCommandTriggerSigilChange,
+  handleSkillTriggerSigilChange,
 }: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
   const sendBehaviorOptions = useMemo(() => getSendBehaviorOptions(t), [t]);
+  // Displayed rather than stored: a stale or colliding stored pair still shows the
+  // pair the composer is actually using.
+  const activeSigils = resolveComposerSigils({
+    command: settings.commandTriggerSigil,
+    skill: settings.skillTriggerSigil,
+  });
   const sendBehaviorDescriptionKey =
     settings.sendBehavior === "interrupt"
       ? "settings.general.defaultSend.descriptions.interrupt"
@@ -366,6 +386,38 @@ function GeneralSection({
             value={settings.sendBehavior}
             onValueChange={handleSendBehaviorChange}
             options={sendBehaviorOptions}
+          />
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.general.commandTrigger.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.commandTrigger.description")}
+            </Text>
+          </View>
+          <SegmentedControl
+            size="sm"
+            testID="settings-command-trigger"
+            value={activeSigils.command}
+            onValueChange={handleCommandTriggerSigilChange}
+            options={COMPOSER_SIGIL_OPTIONS}
+          />
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.general.skillTrigger.label")}</Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.skillTrigger.description")}
+            </Text>
+          </View>
+          <SegmentedControl
+            size="sm"
+            testID="settings-skill-trigger"
+            value={activeSigils.skill}
+            onValueChange={handleSkillTriggerSigilChange}
+            options={COMPOSER_SIGIL_OPTIONS}
           />
         </View>
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
@@ -1199,6 +1251,39 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     [updateSettings],
   );
 
+  // Picking the character the other menu already uses swaps the two rather than
+  // rejecting the choice — the user asked for that character, and a swap is the
+  // only outcome that both honours the pick and keeps the pair distinct.
+  const handleCommandTriggerSigilChange = useCallback(
+    (sigil: ComposerSigil) => {
+      const current = resolveComposerSigils({
+        command: settings.commandTriggerSigil,
+        skill: settings.skillTriggerSigil,
+      });
+      void updateSettings(
+        sigil === current.skill
+          ? { commandTriggerSigil: sigil, skillTriggerSigil: current.command }
+          : { commandTriggerSigil: sigil },
+      );
+    },
+    [settings.commandTriggerSigil, settings.skillTriggerSigil, updateSettings],
+  );
+
+  const handleSkillTriggerSigilChange = useCallback(
+    (sigil: ComposerSigil) => {
+      const current = resolveComposerSigils({
+        command: settings.commandTriggerSigil,
+        skill: settings.skillTriggerSigil,
+      });
+      void updateSettings(
+        sigil === current.command
+          ? { skillTriggerSigil: sigil, commandTriggerSigil: current.skill }
+          : { skillTriggerSigil: sigil },
+      );
+    },
+    [settings.commandTriggerSigil, settings.skillTriggerSigil, updateSettings],
+  );
+
   const handleLanguageChange = useCallback(
     (language: AppLanguage) => {
       void updateSettings({ language });
@@ -1427,6 +1512,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                 handleLanguageChange={handleLanguageChange}
                 handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
                 handleModelPickerAllModelsChange={handleModelPickerAllModelsChange}
+                handleCommandTriggerSigilChange={handleCommandTriggerSigilChange}
+                handleSkillTriggerSigilChange={handleSkillTriggerSigilChange}
               />
               {isDesktopApp ? <BrowserDataSection /> : null}
             </>
