@@ -93,6 +93,7 @@ import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispat
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
+import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
@@ -1089,6 +1090,7 @@ export function Composer({
   const isDesktopLayout = resolveIsDesktopWebBreakpoint(isCompactLayout);
   const messagePlaceholder = resolveMessagePlaceholder(isDesktopLayout, t);
   const userInput = value;
+  const composerSigils = useComposerSigils();
   const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
   const {
@@ -1182,6 +1184,7 @@ export function Composer({
     agentId,
     draftConfig: commandDraftConfig,
     canExecuteClientSlashCommand: buildOutgoingAttachments(attachments).length === 0,
+    sigils: composerSigils,
     onClientSlashCommand: runClientSlashCommand,
     onAutocompleteApplied: () => {
       messageInputRef.current?.focus();
@@ -2077,6 +2080,7 @@ export function Composer({
               <StableMessageInput
                 ref={messageInputRef}
                 value={userInput}
+                tokenCatalog={autocomplete.tokenCatalog}
                 onChangeText={setUserInput}
                 onSubmit={handleSubmit}
                 hasExternalContent={hasExternalContent}
