@@ -1571,6 +1571,130 @@ describe("ClaudeAgentSession context window usage", () => {
     });
   });
 
+  test("dispatches model_changed when an assistant message reveals the runtime model", async () => {
+    const session = await createSessionForTest();
+    const observed: AgentStreamEvent[] = [];
+    session.subscribe((event) => {
+      if (event.type === "model_changed") observed.push(event);
+    });
+
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-model-changed",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Observed response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-model-changed-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toMatchObject({
+      type: "model_changed",
+      provider: "claude",
+      runtimeInfo: { model: "claude-opus-4-6" },
+    });
+
+    // A repeat of the same model is not a change and must not re-dispatch.
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-model-repeat",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Second response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-model-repeat-event",
+      session_id: "session-1",
+    } as SDKMessage);
+    expect(observed).toHaveLength(1);
+  });
+
+  test("ignores the <synthetic> placeholder instead of reporting it as a model", async () => {
+    const session = await createSessionForTest();
+
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-real-model",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Real response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-real-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const syntheticEvents = session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-synthetic",
+        role: "assistant",
+        model: "<synthetic>",
+        content: [{ type: "text", text: "Synthetic notice." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-synthetic-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const syntheticItem = syntheticEvents.find(
+      (event) => event.type === "timeline" && event.item.type === "assistant_message",
+    );
+    expect(syntheticItem?.item).not.toHaveProperty("model");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-opus-4-6",
+      extra: { runtimeModel: "claude-opus-4-6-20260101" },
+    });
+  });
+
+  test("re-seeds the observed model from a persisted transcript", async () => {
+    const session = await createSessionForTest();
+    const ingest = session as unknown as { ingestPersistedHistory(content: string): void };
+
+    const transcript = [
+      JSON.stringify({
+        type: "assistant",
+        uuid: "hist-1",
+        message: {
+          role: "assistant",
+          model: "claude-sonnet-4-5-20250929",
+          content: [{ type: "text", text: "Earlier turn." }],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "hist-2",
+        message: {
+          role: "assistant",
+          model: "claude-opus-4-6-20260101",
+          content: [{ type: "text", text: "Latest turn." }],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "hist-3",
+        message: {
+          role: "assistant",
+          model: "<synthetic>",
+          content: [{ type: "text", text: "Synthetic tail." }],
+        },
+      }),
+    ].join("\n");
+    ingest.ingestPersistedHistory(transcript);
+
+    // The last real assistant model wins; the synthetic tail is not an observation.
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-opus-4-6",
+      extra: { runtimeModel: "claude-opus-4-6-20260101" },
+    });
+  });
+
   test("omits model attribution without an observed assistant model", async () => {
     const session = await createSessionForTest();
 
