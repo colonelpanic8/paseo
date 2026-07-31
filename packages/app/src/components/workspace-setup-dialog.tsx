@@ -391,7 +391,7 @@ export function WorkspaceSetupDialog() {
         <ProjectIconView
           iconDataUri={iconDataUri}
           initial={placeholderInitial}
-          projectKey={sourceDirectory}
+          projectViewKey={sourceDirectory}
           imageStyle={styles.projectIcon}
           fallbackStyle={styles.projectIconFallback}
           textStyle={styles.projectIconFallbackText}
