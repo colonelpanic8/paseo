@@ -66,6 +66,16 @@ export const fr: TranslationResources = {
       modelGroupLabel: "Modèle",
       modelSearchKeywords:
         "changer de modèle modifier le modèle définir le modèle sélectionner le modèle",
+      thinkingGroupLabel: "Raisonnement",
+      thinkingSearchKeywords: "raisonnement effort réflexion",
+      modeGroupLabel: "Mode",
+      modeSearchKeywords: "accès permission approbation mode",
+      planModeGroupLabel: "Mode plan",
+      planModeSearchKeywords: "plan planification mode plan",
+      fastModeGroupLabel: "Rapide",
+      fastModeSearchKeywords: "rapide vitesse faible latence",
+      settingOn: "Activé",
+      settingOff: "Désactivé",
     },
   },
   composer: {
@@ -1202,6 +1212,8 @@ export const fr: TranslationResources = {
         installFailed: "Impossible d'installer les compétences d'orchestration.",
         updateFailed: "Impossible de mettre à jour les compétences d'orchestration.",
         uninstallFailed: "Impossible de désinstaller les compétences d'orchestration.",
+        saveSelectionFailed:
+          "Impossible d'enregistrer la sélection des compétences d'orchestration.",
       },
     },
   },
@@ -1738,6 +1750,7 @@ export const fr: TranslationResources = {
       vimHint: "S’applique aux fichiers source sur le web et le bureau.",
     },
     hostSections: {
+      projects: "Projets",
       connections: "Relations",
       agents: "Agents",
       workspaces: "Workspaces",
@@ -1998,6 +2011,16 @@ export const fr: TranslationResources = {
         uninstallTitle: "Désinstaller les compétencesPaseo?",
         uninstallMessage:
           "Supprime toutes les compétences d'orchestrationPaseode ~/.agents, ~/.claude, ~/.codex.",
+        choose: "Choisir les compétences",
+        chooseAll: "Toutes les compétences",
+        chooseAllHint:
+          "Gardez installées toutes les compétences fournies, y compris celles ajoutées plus tard.",
+        chooseList: "Compétences fournies",
+        chooseEmpty: "Cette version ne fournit aucune compétence.",
+        removeTitle: "Supprimer les compétences décochées ?",
+        removeMessage:
+          "{{skills}} seront supprimées de ~/.agents, ~/.claude et ~/.codex. Tout ce que vous avez ajouté dans ces dossiers de compétences est également supprimé.",
+        saveFailed: "Impossible d'enregistrer votre sélection de compétences.",
       },
       actions: {
         install: "Installer",
@@ -2005,7 +2028,10 @@ export const fr: TranslationResources = {
         installed: "Installé",
         update: "Mise à jour",
         working: "Fonctionnement...",
+        remove: "Supprimer",
         uninstall: "Désinstaller",
+        save: "Enregistrer",
+        saving: "Enregistrement...",
       },
       operations: {
         add: "Ajouter une compétence",
@@ -2235,25 +2261,23 @@ export const fr: TranslationResources = {
       },
     },
     project: {
-      noEditableTarget:
-        "Nous n'avons pas de copie modifiable de ce projet sur aucun hôte connecté.",
+      noEditableTarget: "Ce projet n'est pas modifiable sur cet hôte.",
       backToProjects: "Retour aux projets",
-      switchHost: "Changer d'hôte",
-      rename: {
-        renamedToast: "Projet renommé",
-        errorFallback: "Impossible de renommer le projet",
-        renameLabel: "Renommer le projet",
-        resetLabel: "Réinitialiser le nom du projet par défaut",
-        projectNameLabel: "Nom du projet",
-        saveLabel: "Enregistrer le nom du projet",
-        cancelLabel: "Annuler le changement de nom",
-        reset: "Réinitialiser",
+      edit: {
+        title: "Modifier le projet",
+        name: "Nom",
+        nameLabel: "Nom du projet",
+        icon: "Icône",
+        chooseImage: "Choisir une image",
+        useAutomatic: "Utiliser l'automatique",
+        imageUrl: "URL d'image ou de site",
+        save: "Enregistrer",
+        savedToast: "Projet mis à jour",
       },
       readFailures: {
         invalidTitle: "paseo.json n'a pas pu être analysé",
         invalidDescription: "Corrigez le fichier sur le disque, puis rechargez.",
         missingTitle: "Cet hôte n'a pas ce projet",
-        missingWithHosts: "Basculez vers un autre hôte ci-dessus ou rechargez.",
         missingSingleHost: "L'hôte sélectionné n'a aucune trace de ce projet.",
         transportTitle: "Impossible de charger paseo.json",
         transportFallback: "L'hôte n'a pas répondu.",
