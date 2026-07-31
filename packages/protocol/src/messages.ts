@@ -728,6 +728,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastUsage: AgentUsageSchema.optional(),
   lastError: z.string().optional(),
   title: z.string().nullable(),
+  summary: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
@@ -742,6 +743,7 @@ export const AgentListItemPayloadSchema = z.object({
   id: z.string(),
   shortId: z.string(),
   title: z.string().nullable(),
+  summary: z.string().nullable().optional(),
   provider: AgentProviderSchema,
   model: z.string().nullable(),
   thinkingOptionId: z.string().nullable().optional(),
@@ -3041,6 +3043,9 @@ export const ServerInfoStatusPayloadSchema = z
         liveVoice: z.boolean().optional(),
         // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
         liveVoiceToolExecution: z.boolean().optional(),
+        // COMPAT(agentPurposeSummary): added in v0.2.5, remove after 2027-01-30
+        // once the daemon floor is >= v0.2.5.
+        agentPurposeSummary: z.boolean().optional(),
       })
       .optional(),
   })

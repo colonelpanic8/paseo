@@ -201,9 +201,20 @@ function SubagentsTrackRow({
         {({ pressed }) => (
           <View style={hovered || pressed ? styles.rowActive : styles.row}>
             <WorkspaceTabIcon presentation={presentation} />
-            <Text style={styles.rowLabel} numberOfLines={1}>
-              {displayLabel}
-            </Text>
+            <View style={styles.rowText}>
+              <Text style={styles.rowLabel} numberOfLines={1}>
+                {displayLabel}
+              </Text>
+              {presentation.subtitle ? (
+                <Text
+                  style={styles.rowSubtitle}
+                  numberOfLines={1}
+                  testID={`subagents-track-summary-${row.id}`}
+                >
+                  {presentation.subtitle}
+                </Text>
+              ) : null}
+            </View>
             {row.kind === "paseo" ? (
               <SubagentRowActions
                 rowId={row.id}
@@ -385,11 +396,18 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     backgroundColor: theme.colors.surface2,
   },
-  rowLabel: {
+  rowText: {
     flex: 1,
     minWidth: 0,
+    gap: 1,
+  },
+  rowLabel: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
+  },
+  rowSubtitle: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   actionClusterVisible: {
     flexDirection: "row",

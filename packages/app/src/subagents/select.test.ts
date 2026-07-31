@@ -33,6 +33,7 @@ const AGENT_DEFAULTS: Agent = {
   lastUsage: undefined,
   lastError: null,
   title: "Agent",
+  summary: null,
   cwd: "/tmp/project",
   model: null,
   features: undefined,
@@ -145,6 +146,39 @@ describe("selectSubagentsForParent", () => {
     expect(rows.map((row) => row.id)).toEqual(["child-a"]);
   });
 
+  it("includes summaries only when the daemon advertises purpose summaries", () => {
+    setAgents([
+      makeAgent({
+        id: "child-a",
+        parentAgentId: "parent-a",
+        summary: "Reviewing state projections",
+      }),
+    ]);
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: SERVER_ID, parentAgentId: "parent-a" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      )[0]?.summary,
+    ).toBeNull();
+
+    useSessionStore.getState().updateSessionServerInfo(SERVER_ID, {
+      serverId: SERVER_ID,
+      hostname: "host",
+      version: "0.2.5",
+      features: { agentPurposeSummary: true },
+    });
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: SERVER_ID, parentAgentId: "parent-a" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      )[0]?.summary,
+    ).toBe("Reviewing state projections");
+  });
+
   it("excludes siblings, unrelated agents, and grandchildren", () => {
     setAgents([
       makeAgent({ id: "parent-a" }),
@@ -236,6 +270,7 @@ describe("selectSubagentsForParent", () => {
         parentAgentId: "parent",
         provider: "claude",
         title: "Review child",
+        summary: null,
         status: "running",
         requiresAttention: true,
         createdAt,
@@ -259,6 +294,7 @@ describe("selectSubagentsForParent", () => {
         id: "child",
         provider: "claude",
         title: "Review child",
+        summary: null,
         status: "running",
         requiresAttention: true,
         createdAt,
@@ -271,6 +307,7 @@ describe("selectSubagentsForParent", () => {
       "provider",
       "requiresAttention",
       "status",
+      "summary",
       "title",
     ]);
     expect(rows[0]).not.toHaveProperty("onOpen");

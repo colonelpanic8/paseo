@@ -80,6 +80,7 @@ function historyEntry(input: {
   cwd: string;
   updatedAt: string;
   title?: string | null;
+  summary?: string | null;
   archivedAt?: string | null;
 }): FetchAgentHistoryEntry {
   return {
@@ -108,6 +109,7 @@ function historyEntry(input: {
       pendingPermissions: [],
       persistence: null,
       title: input.title ?? null,
+      summary: input.summary ?? null,
       cwd: input.cwd,
       model: null,
       thinkingOptionId: null,
@@ -203,6 +205,7 @@ describe("fetchAgentHistoryPage", () => {
             cwd: "/repo",
             updatedAt: "2026-04-02T10:00:00.000Z",
             title: "History one",
+            summary: "Reviewing the archived implementation",
           }),
         ],
       }),
@@ -216,6 +219,7 @@ describe("fetchAgentHistoryPage", () => {
         serverId: "server-1",
         serverLabel: "server-1",
         title: "History one",
+        summary: "Reviewing the archived implementation",
         cwd: "/repo",
         provider: "codex",
         archivedAt: null,
