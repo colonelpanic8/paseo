@@ -35,6 +35,7 @@ import {
   type ProviderCatalog,
 } from "../agent-sdk-types.js";
 import type {
+  AgentRealtimeVoiceAppendTextParams,
   AgentRealtimeVoiceEvent,
   AgentRealtimeVoiceSession,
   AgentRealtimeVoiceStartParams,
@@ -4536,6 +4537,15 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
   async realtimeStop(): Promise<void> {
     const { client, threadId } = await this.requireRealtimeThread();
     await client.request("thread/realtime/stop", { threadId });
+  }
+
+  async realtimeAppendText(params: AgentRealtimeVoiceAppendTextParams): Promise<void> {
+    const { client, threadId } = await this.requireRealtimeThread();
+    await client.request("thread/realtime/appendText", {
+      threadId,
+      text: params.text,
+      ...(params.role ? { role: params.role } : {}),
+    });
   }
 
   private async requireRealtimeThread(): Promise<{
