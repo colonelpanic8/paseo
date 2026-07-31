@@ -68,7 +68,8 @@ const sessionMock = vi.hoisted(() => {
       void this.delivery.detach(source);
     });
     clearAgentTimelineSubscription = vi.fn();
-    releaseLiveVoiceForSource = vi.fn();
+    releaseLiveVoiceSocketResources = vi.fn();
+    hasActiveLiveVoiceCall = vi.fn(() => false);
     getClientActivity = vi.fn(() => null);
     wantsSourceEvent = (source: object) => !this.delivery.isModern(source);
     getSessionId = vi.fn(() => "mock-session-id");
@@ -1127,6 +1128,30 @@ describe("relay external socket reconnect behavior", () => {
     socket1.emit("close", 1006, "");
     await vi.advanceTimersByTimeAsync(90_000);
     expect(session.cleanup).toHaveBeenCalledTimes(1);
+
+    await server.close();
+  });
+
+  test("retains a disconnected session while its Live Voice call remains active", async () => {
+    const server = createServer();
+    const socket = new MockSocket();
+    await attachRelayAndHello({
+      server,
+      socket,
+      clientId: "cid-relay-live-voice",
+    });
+    const session = sessionMock.instances[0];
+    session.hasActiveLiveVoiceCall.mockReturnValue(true);
+
+    socket.emit("close", 1006, "");
+    await vi.advanceTimersByTimeAsync(90_000);
+
+    expect(session.releaseLiveVoiceSocketResources).toHaveBeenCalledWith(socket);
+    expect(session.cleanup).not.toHaveBeenCalled();
+
+    session.hasActiveLiveVoiceCall.mockReturnValue(false);
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(session.cleanup).toHaveBeenCalledOnce();
 
     await server.close();
   });
