@@ -15,7 +15,12 @@ import type { FileBackedChatService } from "./chat/chat-service.js";
 import type { LoopService } from "./loop-service.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
-import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
+import {
+  listProviderAccountProfiles,
+  toClientMutableDaemonConfig,
+  type DaemonConfigStore,
+  type MutableDaemonConfig,
+} from "./daemon-config-store.js";
 import {
   type ServerInfoStatusPayload,
   type SessionOutboundMessage,
@@ -667,6 +672,8 @@ export class VoiceAssistantWebSocketServer {
         { removeProviders: details.removedProviders },
       );
       this.agentManager.updateProviderRegistry(nextAgentManagerState);
+      // Accounts can appear or disappear here, and each one has its own quota.
+      this.providerUsageService.invalidate();
       this.broadcastDaemonConfigChanged(config);
     });
 
@@ -683,6 +690,7 @@ export class VoiceAssistantWebSocketServer {
 
     this.providerUsageService = new ProviderUsageService({
       logger: this.logger,
+      listAccountProfiles: () => listProviderAccountProfiles(this.daemonConfigStore.get()),
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
@@ -1612,7 +1620,7 @@ export class VoiceAssistantWebSocketServer {
       type: "status",
       payload: {
         status: "daemon_config_changed",
-        config,
+        config: toClientMutableDaemonConfig(config),
       },
     });
   }

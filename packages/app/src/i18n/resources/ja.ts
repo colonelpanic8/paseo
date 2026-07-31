@@ -2094,6 +2094,22 @@ export const ja: TranslationResources = {
     providers: {
       title: "プロバイダー",
       addProvider: "プロバイダーを追加",
+      accounts: {
+        addTitle: "{{provider}} アカウントを追加",
+        rowTitle: "{{provider}} アカウント",
+        rowDescription: "独自の認証情報と履歴を持つ別のアカウント",
+        add: "アカウントを追加",
+        name: "アカウント名",
+        namePlaceholder: "例：仕事用",
+        directory: "アカウントディレクトリ",
+        directoryHint: "{{envVar}} をホスト上のこの絶対パスに設定します。",
+        errors: {
+          nameRequired: "アカウント名を入力してください。",
+          directoryRequired: "アカウントディレクトリを入力してください。",
+          directoryAbsolute: "このホスト上の絶対パスを入力してください。",
+          directoryDuplicate: "そのアカウントディレクトリはすでに設定されています。",
+        },
+      },
       providerDetails: "{{name}}プロバイダーの詳細",
       enableProvider: "{{name}}を有効にする",
       unavailable: "プロバイダーを見るにはこのホストに接続してください",

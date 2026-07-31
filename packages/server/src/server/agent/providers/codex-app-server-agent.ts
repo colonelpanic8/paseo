@@ -242,6 +242,7 @@ interface CodexAppServerClientLike {
 
 interface CodexAppServerAgentDeps {
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
+  codexHome?: string;
   customProvider?: {
     id: string;
     label: string;
@@ -529,8 +530,12 @@ async function checkCodexLaunchAvailable(launch: ResolvedProviderLaunch) {
   });
 }
 
-function resolveCodexHomeDir(): string {
-  return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
+function resolveCodexHomeDir(runtimeSettings?: ProviderRuntimeSettings): string {
+  return (
+    runtimeSettings?.env?.CODEX_HOME?.trim() ||
+    process.env.CODEX_HOME?.trim() ||
+    path.join(os.homedir(), ".codex")
+  );
 }
 
 function decodeEscapedChar(next: string): string {
@@ -640,8 +645,9 @@ function parseFrontMatter(markdown: string): {
   return { frontMatter, body };
 }
 
-async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
-  const codexHome = resolveCodexHomeDir();
+async function listCodexCustomPrompts(
+  codexHome = resolveCodexHomeDir(),
+): Promise<AgentSlashCommand[]> {
   const promptsDir = path.join(codexHome, "prompts");
   let entries: Dirent[];
   try {
@@ -684,6 +690,7 @@ async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
 export async function listCodexSkills(
   cwd: string,
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+  codexHome = resolveCodexHomeDir(),
 ): Promise<AgentSlashCommand[]> {
   const candidates: string[] = [];
   candidates.push(path.join(cwd, ".codex", "skills"));
@@ -696,7 +703,7 @@ export async function listCodexSkills(
     candidates.push(path.join(repoRoot, ".codex", "skills"));
   }
 
-  candidates.push(path.join(resolveCodexHomeDir(), "skills"));
+  candidates.push(path.join(codexHome, "skills"));
 
   const candidateReads = await Promise.all(
     candidates.map(async (dir) => {
@@ -3648,7 +3655,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): Promise<CodexPromptInput> {
     if (commandName.startsWith("prompts:")) {
       const promptName = commandName.slice("prompts:".length);
-      const codexHome = resolveCodexHomeDir();
+      const codexHome = this.deps.codexHome ?? resolveCodexHomeDir();
       const promptPath = path.join(codexHome, "prompts", `${promptName}.md`);
       const raw = await fs.readFile(promptPath, "utf8");
       const parsed = parseFrontMatter(raw);
@@ -4298,7 +4305,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    const prompts = await listCodexCustomPrompts();
+    const codexHome = this.deps.codexHome ?? resolveCodexHomeDir();
+    const prompts = await listCodexCustomPrompts(codexHome);
     if (!this.connected) {
       await this.connect();
     } else {
@@ -4312,7 +4320,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }));
     const fallbackSkills =
       appServerSkills.length === 0
-        ? await listCodexSkills(this.config.cwd, this.deps.workspaceGitService)
+        ? await listCodexSkills(this.config.cwd, this.deps.workspaceGitService, codexHome)
         : [];
     const builtin: AgentSlashCommand[] = [
       {
@@ -6227,6 +6235,7 @@ export class CodexAppServerAgentClient implements AgentClient {
   private sessionDeps(): CodexAppServerAgentDeps {
     return {
       ...this.deps,
+      codexHome: resolveCodexHomeDir(this.runtimeSettings),
       customCodexConfig: buildCodexCustomProviderConfig(
         this.runtimeSettings,
         this.deps.customProvider,

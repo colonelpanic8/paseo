@@ -91,6 +91,12 @@ interface ClaudeCredentialRecord {
 interface ClaudeQuotaProviderOptions {
   logger: Logger;
   claudeHome?: string;
+  /**
+   * Scope this fetcher to exactly one account directory. Unlike `claudeHome`,
+   * it also suppresses the shared credential fallbacks below — an account that
+   * isn't signed in must read as unavailable, never as somebody else's quota.
+   */
+  accountConfigDir?: string;
   claudeKeychainReader?: () => Promise<unknown | null>;
   platform?: typeof process.platform;
   fetch?: ProviderApiFetch;
@@ -318,14 +324,19 @@ export class ClaudeQuotaProvider implements ProviderUsageFetcher {
 
   private readonly logger: Logger;
   private readonly claudeHome: string;
+  private readonly isAccountScoped: boolean;
   private readonly readKeychainCredentials: () => Promise<unknown | null>;
   private readonly platform: typeof process.platform;
   private readonly fetchApi: ProviderApiFetch;
 
   constructor(options: ClaudeQuotaProviderOptions) {
     this.logger = options.logger.child({ module: "claude-quota-provider" });
+    this.isAccountScoped = Boolean(options.accountConfigDir?.trim());
     this.claudeHome =
-      options.claudeHome || process.env["CLAUDE_HOME"] || join(homedir(), ".claude");
+      options.accountConfigDir?.trim() ||
+      options.claudeHome ||
+      process.env["CLAUDE_HOME"] ||
+      join(homedir(), ".claude");
     this.readKeychainCredentials = options.claudeKeychainReader ?? readClaudeKeychainCredentials;
     this.platform = options.platform ?? process.platform;
     this.fetchApi = options.fetch ?? fetch;
@@ -443,7 +454,9 @@ export class ClaudeQuotaProvider implements ProviderUsageFetcher {
       }
     }
 
-    if (this.platform === "darwin") {
+    // The login keychain holds the default account's credentials, so consulting
+    // it for a specific account would report the wrong account's usage.
+    if (this.platform === "darwin" && !this.isAccountScoped) {
       const creds = ClaudeCredentialsSchema.safeParse(await this.readKeychainCredentials());
       const oauth = creds.success ? creds.data.claudeAiOauth : undefined;
       if (oauth?.accessToken) {

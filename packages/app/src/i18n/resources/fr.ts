@@ -2128,6 +2128,22 @@ export const fr: TranslationResources = {
     providers: {
       title: "Fournisseurs",
       addProvider: "Ajouter un fournisseur",
+      accounts: {
+        addTitle: "Ajouter un compte {{provider}}",
+        rowTitle: "Compte {{provider}}",
+        rowDescription: "Un autre compte avec ses propres identifiants et son historique",
+        add: "Ajouter le compte",
+        name: "Nom du compte",
+        namePlaceholder: "p. ex. Travail",
+        directory: "Répertoire du compte",
+        directoryHint: "Définissez {{envVar}} sur ce chemin absolu de l’hôte.",
+        errors: {
+          nameRequired: "Saisissez un nom de compte.",
+          directoryRequired: "Saisissez un répertoire de compte.",
+          directoryAbsolute: "Saisissez un chemin absolu sur cet hôte.",
+          directoryDuplicate: "Ce répertoire de compte est déjà configuré.",
+        },
+      },
       providerDetails: "Détails du fournisseur{{name}}",
       enableProvider: "Activer{{name}}",
       unavailable: "Connectez-vous à cet hôte pour voir les fournisseurs",

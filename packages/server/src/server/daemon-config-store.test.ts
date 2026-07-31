@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { DaemonConfigStore, applyMutableProviderConfigToOverrides } from "./daemon-config-store.js";
+import {
+  DaemonConfigStore,
+  applyMutableProviderConfigToOverrides,
+  getProviderAccountConfigDir,
+  listProviderAccountProfiles,
+  toClientMutableDaemonConfig,
+} from "./daemon-config-store.js";
 import { loadPersistedConfig } from "./persisted-config.js";
 
 describe("applyMutableProviderConfigToOverrides", () => {
@@ -51,6 +57,46 @@ describe("applyMutableProviderConfigToOverrides", () => {
         ],
       },
     });
+  });
+});
+
+describe("toClientMutableDaemonConfig", () => {
+  test("exposes account directories without exposing provider environment secrets", () => {
+    const clientConfig = toClientMutableDaemonConfig({
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {
+        "claude-account-work": {
+          extends: "claude",
+          label: "Claude · Work",
+          env: {
+            CLAUDE_CONFIG_DIR: "/accounts/claude-work",
+            ANTHROPIC_API_KEY: "secret",
+          },
+        },
+        proxy: {
+          extends: "claude",
+          env: {
+            ANTHROPIC_BASE_URL: "https://example.com",
+            ANTHROPIC_API_KEY: "also-secret",
+          },
+        },
+      },
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    expect(clientConfig.providers["claude-account-work"]).toEqual({
+      extends: "claude",
+      label: "Claude · Work",
+      accountConfigDir: "/accounts/claude-work",
+    });
+    expect(clientConfig.providers.proxy).toEqual({
+      extends: "claude",
+    });
+    expect(JSON.stringify(clientConfig)).not.toContain("secret");
   });
 });
 
@@ -692,5 +738,125 @@ describe("DaemonConfigStore", () => {
       command: ["npx", "-y", "--version"],
       env: {},
     });
+  });
+});
+
+describe("provider account directories", () => {
+  test("reads the env var the base provider declared, not a hardcoded one", () => {
+    expect(
+      getProviderAccountConfigDir({
+        extends: "claude",
+        env: { CLAUDE_CONFIG_DIR: "/accounts/claude-work" },
+      }),
+    ).toBe("/accounts/claude-work");
+    expect(
+      getProviderAccountConfigDir({
+        extends: "codex",
+        env: { CODEX_HOME: "/accounts/codex-work" },
+      }),
+    ).toBe("/accounts/codex-work");
+  });
+
+  test("ignores providers whose base never declared account support", () => {
+    expect(
+      getProviderAccountConfigDir({
+        extends: "opencode",
+        env: { CLAUDE_CONFIG_DIR: "/accounts/claude-work" },
+      }),
+    ).toBeUndefined();
+    expect(
+      getProviderAccountConfigDir({
+        extends: "acp",
+        env: { CODEX_HOME: "/accounts/codex-work" },
+      }),
+    ).toBeUndefined();
+  });
+
+  test("does not mistake a built-in provider's own override for an account", () => {
+    expect(
+      listProviderAccountProfiles({
+        mcp: { injectIntoAgents: false },
+        browserTools: { enabled: false },
+        providers: {
+          claude: {
+            extends: "claude",
+            label: "Claude",
+            env: { CLAUDE_CONFIG_DIR: "/home/you/.claude-elsewhere" },
+          },
+        },
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      }),
+    ).toEqual([]);
+  });
+
+  test("lists each configured account so per-account subsystems can fan out", () => {
+    expect(
+      listProviderAccountProfiles({
+        mcp: { injectIntoAgents: false },
+        browserTools: { enabled: false },
+        providers: {
+          "claude-work": {
+            extends: "claude",
+            label: "Claude · Work",
+            env: { CLAUDE_CONFIG_DIR: "/accounts/claude-work" },
+          },
+          "codex-retired": {
+            extends: "codex",
+            label: "Codex · Retired",
+            enabled: false,
+            env: { CODEX_HOME: "/accounts/codex-retired" },
+          },
+          proxy: {
+            extends: "claude",
+            label: "Proxy",
+            env: { ANTHROPIC_BASE_URL: "https://example.com" },
+          },
+        },
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      }),
+    ).toEqual([
+      {
+        providerId: "claude-work",
+        baseProviderId: "claude",
+        displayName: "Claude · Work",
+        configDir: "/accounts/claude-work",
+      },
+    ]);
+  });
+
+  test("lists accounts from the restart-shaped config that carries accountConfigDir, not env", () => {
+    // createInitialMutableDaemonConfig deliberately drops env at boot, keeping
+    // only the derived accountConfigDir. Profiles must survive that shape or
+    // every account's usage row disappears on daemon restart.
+    expect(
+      listProviderAccountProfiles({
+        mcp: { injectIntoAgents: false },
+        browserTools: { enabled: false },
+        providers: {
+          "claude-work": {
+            extends: "claude",
+            label: "Claude · Work",
+            accountConfigDir: "/accounts/claude-work",
+          },
+        },
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      }),
+    ).toEqual([
+      {
+        providerId: "claude-work",
+        baseProviderId: "claude",
+        displayName: "Claude · Work",
+        configDir: "/accounts/claude-work",
+      },
+    ]);
   });
 });

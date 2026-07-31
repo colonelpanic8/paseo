@@ -143,7 +143,11 @@ import { FileBackedChatService } from "./chat/chat-service.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
-import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
+import {
+  DaemonConfigStore,
+  getProviderAccountConfigDir,
+  type MutableDaemonConfig,
+} from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
@@ -496,10 +500,23 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
-function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
+export function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
   const providers: MutableDaemonConfig["providers"] = Object.fromEntries(
     Object.entries(config.providerOverrides ?? {}).map(([providerId, override]) => {
       const providerConfig: MutableDaemonConfig["providers"][string] = {};
+      if (override.extends !== undefined) {
+        providerConfig.extends = override.extends;
+      }
+      if (override.label !== undefined) {
+        providerConfig.label = override.label;
+      }
+      if (override.description !== undefined) {
+        providerConfig.description = override.description;
+      }
+      const accountConfigDir = getProviderAccountConfigDir(override);
+      if (accountConfigDir !== undefined) {
+        providerConfig.accountConfigDir = accountConfigDir;
+      }
       if (override.enabled !== undefined) {
         providerConfig.enabled = override.enabled;
       }

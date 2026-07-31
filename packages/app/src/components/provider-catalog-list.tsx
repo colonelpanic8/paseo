@@ -5,12 +5,14 @@ import { SvgXml } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ExternalLink, PackagePlus, Search } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
+import { getProviderIcon } from "@/components/provider-icons";
 import { isWeb } from "@/constants/platform";
 import {
   useAcpProviderCatalog,
   type AcpProviderCatalogItem,
 } from "@/hooks/use-acp-provider-catalog";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import type { ProviderAccountBase } from "@/provider-accounts/provider-account-config";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
 
@@ -18,6 +20,12 @@ interface ProviderCatalogListProps {
   serverId: string;
   installingProviderId: string | null;
   onInstall: (entry: AcpProviderCatalogItem) => Promise<void> | void;
+  /**
+   * Providers that can be registered more than once. They stay listed after
+   * install, because adding one again is how you add a second account.
+   */
+  accountBases: ProviderAccountBase[];
+  onAddAccount: (base: ProviderAccountBase) => void;
 }
 
 const SEARCH_ICON_SIZE = 16;
@@ -37,11 +45,50 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
 
-function matchesSearch(entry: AcpProviderCatalogItem, query: string): boolean {
+function matchesSearch(fields: (string | undefined)[], query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  return [entry.title, entry.id, entry.description].some((value) =>
-    value.toLowerCase().includes(normalized),
+  return fields.some((value) => value?.toLowerCase().includes(normalized));
+}
+
+interface AccountRowProps {
+  base: ProviderAccountBase;
+  onAddAccount: (base: ProviderAccountBase) => void;
+}
+
+function AccountRow({ base, onAddAccount }: AccountRowProps) {
+  const { t } = useTranslation();
+  const ProviderIcon = useMemo(
+    () => withUnistyles(getProviderIcon(base.providerId), foregroundColorMapping),
+    [base.providerId],
+  );
+  const handleAddAccount = useCallback(() => {
+    onAddAccount(base);
+  }, [base, onAddAccount]);
+
+  return (
+    <View style={styles.row}>
+      <View style={styles.iconFrame}>
+        <ProviderIcon size={PROVIDER_REMOTE_ICON_SIZE} />
+      </View>
+      <View style={styles.textColumn}>
+        <Text style={styles.name} numberOfLines={1}>
+          {t("settings.providers.accounts.rowTitle", { provider: base.label })}
+        </Text>
+        <Text style={styles.description} numberOfLines={2}>
+          {t("settings.providers.accounts.rowDescription")}
+        </Text>
+      </View>
+      <Button
+        size="sm"
+        variant="default"
+        onPress={handleAddAccount}
+        style={styles.actionButton}
+        testID={`add-account-${base.providerId}`}
+      >
+        {t("providerCatalog.actions.add")}
+      </Button>
+    </View>
   );
 }
 
@@ -123,6 +170,8 @@ export function ProviderCatalogList({
   serverId,
   installingProviderId,
   onInstall,
+  accountBases,
+  onAddAccount,
 }: ProviderCatalogListProps) {
   const { t } = useTranslation();
   const { entries: catalogEntries } = useAcpProviderCatalog();
@@ -134,13 +183,20 @@ export function ProviderCatalogList({
     [providerEntries],
   );
 
+  const availableAccountBases = useMemo(
+    () => accountBases.filter((base) => matchesSearch([base.label, base.providerId], search)),
+    [accountBases, search],
+  );
+
   const availableEntries = useMemo(
     () =>
       catalogEntries
         .filter((entry) => !installedIds.has(entry.id))
-        .filter((entry) => matchesSearch(entry, search)),
+        .filter((entry) => matchesSearch([entry.title, entry.id, entry.description], search)),
     [catalogEntries, installedIds, search],
   );
+
+  const isEmpty = availableAccountBases.length === 0 && availableEntries.length === 0;
 
   return (
     <View>
@@ -161,12 +217,15 @@ export function ProviderCatalogList({
         />
       </View>
 
-      {availableEntries.length === 0 ? (
+      {isEmpty ? (
         <View style={styles.stateBox}>
           <Text style={styles.stateText}>{t("providerCatalog.noProviders")}</Text>
         </View>
       ) : (
         <View style={styles.list}>
+          {availableAccountBases.map((base) => (
+            <AccountRow key={base.providerId} base={base} onAddAccount={onAddAccount} />
+          ))}
           {availableEntries.map((entry) => (
             <CatalogRow
               key={entry.id}

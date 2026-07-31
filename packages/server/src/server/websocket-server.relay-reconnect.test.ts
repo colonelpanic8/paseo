@@ -921,7 +921,7 @@ describe("relay external socket reconnect behavior", () => {
     await server.close();
   });
 
-  test("advertises stable project identity in initial server_info", async () => {
+  test("advertises current host capabilities in initial server_info", async () => {
     const server = createServer();
     const socket = new MockSocket();
 

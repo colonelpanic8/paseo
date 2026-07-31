@@ -444,6 +444,42 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
     }
   });
 
+  test("reads settings models from the runtime account config directory", async () => {
+    const accountConfigDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "paseo-claude-models-account-"),
+    );
+    try {
+      await fs.writeFile(
+        path.join(accountConfigDir, "settings.json"),
+        JSON.stringify({ model: "account-specific-model" }),
+        "utf-8",
+      );
+      const client = new ClaudeAgentClient({
+        logger,
+        resolveBinary: async () => "/test/claude/bin",
+        resolveVersion: async () => "2.1.219",
+        runtimeSettings: {
+          env: { CLAUDE_CONFIG_DIR: accountConfigDir },
+        },
+      });
+
+      const { models } = await client.fetchCatalog({
+        scope: "workspace",
+        cwd: "/tmp/claude-models",
+        force: false,
+      });
+
+      expect(models).toContainEqual(
+        expect.objectContaining({
+          provider: "claude",
+          id: "account-specific-model",
+        }),
+      );
+    } finally {
+      await fs.rm(accountConfigDir, { recursive: true, force: true });
+    }
+  });
+
   test("preserves the catalog when Claude Code version detection fails", async () => {
     const emptyConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-models-empty-"));
     try {
@@ -1116,6 +1152,47 @@ describe("normalizeClaudeAskUserQuestionUpdatedInput", () => {
 });
 
 describe("ClaudeAgentClient.listImportableSessions", () => {
+  test("lists sessions from the runtime account config directory", async () => {
+    const accountConfigDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "paseo-claude-import-account-"),
+    );
+    try {
+      const cwd = path.join(accountConfigDir, "account-project");
+      await fs.mkdir(cwd, { recursive: true });
+      const projectDir = claudeProjectDirSync(cwd, { configDir: accountConfigDir });
+      await fs.mkdir(projectDir, { recursive: true });
+      await fs.writeFile(
+        path.join(projectDir, "account-session.jsonl"),
+        `${JSON.stringify({
+          isSidechain: false,
+          type: "user",
+          message: { role: "user", content: "Account-specific prompt" },
+          cwd,
+          sessionId: "account-session",
+        })}\n`,
+        "utf-8",
+      );
+
+      const client = new ClaudeAgentClient({
+        logger: createTestLogger(),
+        resolveBinary: async () => "/test/claude/bin",
+        runtimeSettings: {
+          env: { CLAUDE_CONFIG_DIR: accountConfigDir },
+        },
+      });
+
+      await expect(client.listImportableSessions({ cwd })).resolves.toEqual([
+        expect.objectContaining({
+          providerHandleId: "account-session",
+          cwd,
+          title: "Account-specific prompt",
+        }),
+      ]);
+    } finally {
+      await fs.rm(accountConfigDir, { recursive: true, force: true });
+    }
+  });
+
   test("scopes candidates to the requested cwd before applying the limit", async () => {
     const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-import-"));
     const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
