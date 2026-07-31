@@ -3,6 +3,7 @@ import {
   normalizeStoredHostProfile,
   orderHostsLocalFirst,
   resolveActiveHostServerId,
+  upsertHostConnectionInProfiles,
   type HostProfile,
 } from "./host-connection";
 
@@ -113,6 +114,43 @@ describe("normalizeStoredHostProfile", () => {
       useTls: true,
       daemonPublicKeyB64: "pubkey",
     });
+  });
+});
+
+describe("upsertHostConnectionInProfiles", () => {
+  it("replaces credentials for the same direct endpoint", () => {
+    const existing: HostProfile = {
+      ...makeHost("srv_managed"),
+      connections: [
+        {
+          id: "direct:ryzen-shine:6767",
+          type: "directTcp",
+          endpoint: "ryzen-shine:6767",
+          password: "old-secret",
+        },
+      ],
+      preferredConnectionId: "direct:ryzen-shine:6767",
+    };
+
+    const updated = upsertHostConnectionInProfiles({
+      profiles: [existing],
+      serverId: "srv_managed",
+      connection: {
+        id: "direct:ryzen-shine:6767",
+        type: "directTcp",
+        endpoint: "ryzen-shine:6767",
+        password: "new-secret",
+      },
+    });
+
+    expect(updated[0]?.connections).toEqual([
+      {
+        id: "direct:ryzen-shine:6767",
+        type: "directTcp",
+        endpoint: "ryzen-shine:6767",
+        password: "new-secret",
+      },
+    ]);
   });
 });
 
