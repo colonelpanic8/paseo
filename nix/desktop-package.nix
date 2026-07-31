@@ -131,20 +131,43 @@ buildNpmPackage rec {
     install -Dm644 packages/desktop/assets/icon.png \
       $out/share/icons/hicolor/512x512/apps/paseo-desktop.png
 
+    # Electron app root whose sole job is to name the app.
+    #
+    # On Wayland the toplevel app_id — what a bar/taskbar uses to find the
+    # .desktop entry and therefore the icon — comes from the `name` field of
+    # the package.json in the directory Electron is launched with. It is fixed
+    # during startup, so neither `--class=` nor a later `app.setName()` can
+    # change it; launching `electron path/to/main.js` (no directory, no
+    # package.json) leaves it at the default "electron" and the window shows
+    # the generic Electron icon. Launching packages/desktop directly is no
+    # good either: its name is "@getpaseo/desktop".
+    #
+    # So point Electron at a one-file app root named "paseo-desktop" (matching
+    # paseo-desktop.desktop / the hicolor icon) that just requires the real
+    # main. main.ts still calls app.setName("Paseo"), which keeps the user-data
+    # directory and menu title as before.
+    mkdir -p $out/share/paseo-desktop/electron-app
+    printf '%s\n' '{ "name": "paseo-desktop", "version": "${version}", "main": "index.js" }' \
+      > $out/share/paseo-desktop/electron-app/package.json
+    printf '%s\n' 'require("../packages/desktop/dist/main.js");' \
+      > $out/share/paseo-desktop/electron-app/index.js
+
     # Launcher wraps nixpkgs electron.
     # --no-sandbox: Chromium's setuid sandbox can't live in /nix/store
     # (immutable, no setuid). Acceptable for v1; a follow-up can wire
     # `security.wrappers` via a NixOS module for users who want the sandbox.
     #
-    # EXPO_DEV_URL: We run unpackaged via `electron path/to/main.js`, so
+    # EXPO_DEV_URL: We run unpackaged via `electron path/to/app-root`, so
     # `app.isPackaged` is false. In that mode main.ts loads `DEV_SERVER_URL`
     # (defaults to http://localhost:8081 — the Expo dev server, which doesn't
     # exist here). Point it at the `paseo://` protocol handler instead, which
     # serves from `__dirname/../../app/dist` (our install layout matches).
     makeWrapper ${electron}/bin/electron $out/bin/paseo-desktop \
-      --add-flags "$out/share/paseo-desktop/packages/desktop/dist/main.js" \
+      --add-flags "$out/share/paseo-desktop/electron-app" \
       --add-flags "--no-sandbox" \
-      --set EXPO_DEV_URL "paseo://app/"
+      --add-flags "--class=paseo-desktop" \
+      --set EXPO_DEV_URL "paseo://app/" \
+      --set CHROME_DESKTOP "paseo-desktop.desktop"
 
     copyDesktopItems
 
@@ -160,7 +183,23 @@ buildNpmPackage rec {
       exec = "paseo-desktop";
       icon = "paseo-desktop";
       categories = [ "Development" ];
+      startupWMClass = "paseo-desktop";
+    })
+    # Hidden alias entry. Which of the two names Electron ends up publishing as
+    # the Wayland app_id depends on the Electron version: 41 uses the app-root
+    # package.json `name` ("paseo-desktop"), 38 uses the runtime app name that
+    # main.ts sets ("Paseo"). Ship a NoDisplay entry for the second spelling so
+    # the icon resolves either way without a duplicate launcher item.
+    (makeDesktopItem {
+      name = "Paseo";
+      desktopName = "Paseo";
+      genericName = "AI Coding Agents";
+      comment = "Self-hosted daemon for AI coding agents";
+      exec = "paseo-desktop";
+      icon = "paseo-desktop";
+      categories = [ "Development" ];
       startupWMClass = "Paseo";
+      noDisplay = true;
     })
   ];
 
