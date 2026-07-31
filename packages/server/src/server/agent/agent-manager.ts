@@ -70,7 +70,11 @@ import { limitAgentTimelineItemContent } from "./agent-timeline-content.js";
 import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
-import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
+import {
+  stripInternalPaseoMcpServer,
+  stripInternalPaseoMcpServerFromPersistence,
+  withRuntimePaseoMcpServer,
+} from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
 import {
@@ -372,6 +376,12 @@ interface ManagedAgentBase {
   activeTurnStartedAt: Date | null;
   lastUsage?: AgentUsage;
   lastError?: string;
+  lastFailure?: {
+    kind: "authentication_required" | "provider_error";
+    message: string;
+    code?: string;
+    diagnostic?: string;
+  };
   attention: AttentionState;
   foregroundTurnWaiters: Set<ForegroundTurnWaiter>;
   finalizedForegroundTurnIds: Set<string>;
@@ -498,13 +508,14 @@ function attachPersistenceCwd(
   handle: AgentPersistenceHandle | null,
   cwd: string,
 ): AgentPersistenceHandle | null {
-  if (!handle) {
+  const sanitized = stripInternalPaseoMcpServerFromPersistence(handle);
+  if (!sanitized) {
     return null;
   }
   return {
-    ...handle,
+    ...sanitized,
     metadata: {
-      ...handle.metadata,
+      ...sanitized.metadata,
       cwd,
     },
   };
@@ -524,6 +535,25 @@ const AgentIdSchema = z.guid();
 
 function isAgentBusy(status: AgentLifecycleStatus): boolean {
   return BUSY_STATUSES.has(status);
+}
+
+function classifyAgentFailure(
+  event: Extract<AgentStreamEvent, { type: "turn_failed" }>,
+): NonNullable<ManagedAgentBase["lastFailure"]> {
+  const evidence = [event.error, event.code, event.diagnostic]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n")
+    .toLowerCase();
+  const authenticationRequired =
+    /\bauth_required\b|\bauthentication (?:is )?(?:required|failed)\b|\boauth\b|\bunauthori[sz]ed\b|\b(?:log|sign) in\b/.test(
+      evidence,
+    );
+  return {
+    kind: authenticationRequired ? "authentication_required" : "provider_error",
+    message: event.error,
+    ...(event.code ? { code: event.code } : {}),
+    ...(event.diagnostic ? { diagnostic: event.diagnostic } : {}),
+  };
 }
 
 function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
@@ -1398,6 +1428,7 @@ export class AgentManager {
     const preservedHistoryPrimed = existing.historyPrimed;
     const preservedLastUsage = existing.lastUsage;
     const preservedLastError = existing.lastError;
+    const preservedLastFailure = existing.lastFailure;
     const preservedAttention = existing.attention;
     const handle = existing.persistence;
     const provider = handle?.provider ?? existing.provider;
@@ -1451,6 +1482,7 @@ export class AgentManager {
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
         lastError: preservedLastError,
+        lastFailure: preservedLastFailure,
         attention: preservedAttention,
       });
     } finally {
@@ -1734,6 +1766,7 @@ export class AgentManager {
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
+        lastFailure: record.lastFailure,
         attention: { requiresAttention: false },
         internal: record.internal,
         labels: record.labels,
@@ -2225,6 +2258,7 @@ export class AgentManager {
     const agent = existingAgent;
     const isReplacement = agent.pendingReplacement;
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
 
     const pendingRun = this.runs.createPendingRun(agentId);
 
@@ -3160,6 +3194,7 @@ export class AgentManager {
       historyPrimed?: boolean;
       lastUsage?: AgentUsage;
       lastError?: string;
+      lastFailure?: ManagedAgentBase["lastFailure"];
       attention?: AttentionState;
       initialTitle?: string | null;
       publishWhenReady?: boolean;
@@ -3314,6 +3349,7 @@ export class AgentManager {
           historyPrimed?: boolean;
           lastUsage?: AgentUsage;
           lastError?: string;
+          lastFailure?: ManagedAgentBase["lastFailure"];
           attention?: AttentionState;
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
@@ -3355,6 +3391,7 @@ export class AgentManager {
       lastUserMessageAt: options?.lastUserMessageAt ?? null,
       lastUsage: options?.lastUsage,
       lastError: options?.lastError,
+      lastFailure: options?.lastFailure,
       attention: resolveInitialAttention(options?.attention),
       internal: config.internal ?? false,
       labels: options?.labels ?? {},
@@ -4149,6 +4186,7 @@ export class AgentManager {
     // data accumulated during streaming isn't lost when the provider omits
     // it from the completion event.
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
     if (
       !isForegroundEvent &&
       !agent.activeForegroundTurnId &&
@@ -4190,6 +4228,7 @@ export class AgentManager {
       agent.lifecycle = "error";
     }
     agent.lastError = event.error;
+    agent.lastFailure = classifyAgentFailure(event);
     await this.appendSystemErrorTimelineMessage(
       agent,
       event.provider,
@@ -4232,6 +4271,7 @@ export class AgentManager {
       agent.lifecycle = "idle";
     }
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
     this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Interrupted");
     if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);
