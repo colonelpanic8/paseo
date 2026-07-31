@@ -1488,6 +1488,8 @@ export const ptBR: TranslationResources = {
     scope: "Global em todo o aplicativo",
     actions: {
       start: "Iniciar voz ao vivo",
+      startForeground: "Iniciar em primeiro plano",
+      startBackground: "Iniciar em segundo plano",
       unavailable: "Voz ao vivo indisponível",
       stop: "Parar voz ao vivo",
       mute: "Silenciar microfone",
@@ -1496,6 +1498,10 @@ export const ptBR: TranslationResources = {
       showTranscript: "Mostrar transcrição",
       hideTranscript: "Ocultar transcrição",
       dismiss: "Dispensar",
+    },
+    modes: {
+      foreground: "Modo em primeiro plano",
+      background: "Modo em segundo plano",
     },
     unavailable: {
       platform: "A voz ao vivo não é compatível com este dispositivo.",
