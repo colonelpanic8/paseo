@@ -1733,6 +1733,8 @@ export const en = {
     scope: "Global across the app",
     actions: {
       start: "Start live voice",
+      startForeground: "Start foreground",
+      startBackground: "Start background",
       unavailable: "Live voice unavailable",
       stop: "Stop live voice",
       mute: "Mute microphone",
@@ -1741,6 +1743,10 @@ export const en = {
       showTranscript: "Show transcript",
       hideTranscript: "Hide transcript",
       dismiss: "Dismiss",
+    },
+    modes: {
+      foreground: "Foreground mode",
+      background: "Background mode",
     },
     unavailable: {
       platform: "Live voice is not supported on this device.",
