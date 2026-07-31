@@ -466,6 +466,19 @@ function isClaudeThinkingEffort(value: string | null | undefined): value is Clau
   );
 }
 
+/**
+ * The effort a Claude frame actually ran at, read off the frame itself.
+ *
+ * Claude Code records `effort` as a sibling of `message` on assistant frames —
+ * it is not on the SDK's `SDKAssistantMessage` type, so read it defensively and
+ * stamp nothing when it is absent. Thinking option ids are the effort levels
+ * verbatim, so a valid level needs no mapping. Numeric efforts (the hook API
+ * allows them) have no catalog id and are treated as unobserved.
+ */
+function resolveObservedClaudeEffort(value: unknown): ClaudeThinkingEffort | null {
+  return typeof value === "string" && isClaudeThinkingEffort(value) ? value : null;
+}
+
 function isClaudeThinkingOption(value: string | null | undefined): value is ClaudeThinkingOption {
   return (
     value === CLAUDE_DISABLED_THINKING_OPTION_ID ||
@@ -4142,6 +4155,7 @@ class ClaudeAgentSession implements AgentSession {
     options: { suppressAssistantText?: boolean; suppressReasoning?: boolean } | undefined,
   ): void {
     const observedModel = resolveObservedClaudeModelId(message.message.model);
+    const observedEffort = resolveObservedClaudeEffort(toObjectRecord(message)?.effort);
     if (message.message.model) {
       this.captureRuntimeModel(message.message.model, "assistant message");
     }
@@ -4153,8 +4167,12 @@ class ClaudeAgentSession implements AgentSession {
       events.push({
         type: "timeline",
         item:
-          item.type === "assistant_message" && observedModel
-            ? { ...item, model: observedModel }
+          item.type === "assistant_message"
+            ? {
+                ...item,
+                ...(observedModel ? { model: observedModel } : {}),
+                ...(observedEffort ? { thinkingOptionId: observedEffort } : {}),
+              }
             : item,
         provider: "claude",
       });
@@ -5970,11 +5988,13 @@ function mapAssistantHistoryBlocksWithMessageId(
     typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null;
   const rawHistoryModel = typeof entry.message?.model === "string" ? entry.message.model : null;
   const model = resolveObservedClaudeModelId(rawHistoryModel);
+  const effort = resolveObservedClaudeEffort(entry.effort);
   for (const item of items) {
     if (item.type === "assistant_message" && !item.messageId) {
       if (assistantMessageId) item.messageId = assistantMessageId;
     }
     if (item.type === "assistant_message" && model) item.model = model;
+    if (item.type === "assistant_message" && effort) item.thinkingOptionId = effort;
   }
   return items;
 }
