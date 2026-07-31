@@ -16,6 +16,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 export type AgentModelDisplayResolver = (input: {
   provider: string | null | undefined;
   source: AgentModelDisplaySource | null | undefined;
+  thinkingFallback?: "model-default" | "none";
 }) => AgentModelDisplay;
 
 export function useAgentModelDisplayResolver(
@@ -25,11 +26,15 @@ export function useAgentModelDisplayResolver(
   const { entries } = useProvidersSnapshot(serverId, { cwd });
 
   return useMemo(() => {
-    return ({ provider, source }) => {
+    return ({ provider, source, thinkingFallback }) => {
       const models: AgentModelDefinition[] | null = provider
         ? (entries?.find((entry) => entry.provider === provider)?.models ?? null)
         : null;
-      return resolveAgentModelDisplay({ models, source });
+      return resolveAgentModelDisplay({
+        models,
+        source,
+        ...(thinkingFallback ? { thinkingFallback } : {}),
+      });
     };
   }, [entries]);
 }

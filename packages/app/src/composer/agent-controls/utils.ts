@@ -278,6 +278,15 @@ export const UNKNOWN_AGENT_MODEL_DISPLAY: AgentModelDisplay = {
 export function resolveAgentModelDisplay(input: {
   models: AgentModelDefinition[] | null;
   source: AgentModelDisplaySource | null | undefined;
+  /**
+   * What to show when no thinking level was reported. "model-default" answers
+   * "what would this model think at", which is right for a live agent whose
+   * configured level the daemon may simply not have echoed yet. "none" answers
+   * "what did it actually think at", which is the only honest answer for a
+   * recorded turn — the model default is a guess, and for Claude it is always
+   * the first effort level, so every turn would read "Low".
+   */
+  thinkingFallback?: "model-default" | "none";
 }): AgentModelDisplay {
   const { models, source } = input;
   if (!source) {
@@ -296,7 +305,7 @@ export function resolveAgentModelDisplay(input: {
   const thinkingOptionId = resolveThinkingId(
     null,
     resolveDisplayThinkingSource(source),
-    selectedModel,
+    input.thinkingFallback === "none" ? null : selectedModel,
   );
   const thinkingOption =
     selectedModel?.thinkingOptions?.find((option) => option.id === thinkingOptionId) ?? null;
