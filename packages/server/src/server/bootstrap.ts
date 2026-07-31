@@ -149,6 +149,8 @@ import {
   type MutableDaemonConfig,
 } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
+import { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
@@ -558,6 +560,7 @@ export async function createPaseoDaemon(
   );
   const browserToolsPolicy = new DaemonConfigBrowserToolsPolicy(daemonConfigStore);
   const browserToolsBroker = new BrowserToolsBroker({});
+  const liveVoiceRouteBroker = new LiveVoiceRouteBroker();
 
   const serverId = getOrCreateServerId(config.paseoHome, { logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.paseoHome, logger);
@@ -1281,6 +1284,7 @@ export async function createPaseoDaemon(
     createPaseoWorktree: createAgentCommandDependencies.createPaseoWorktree,
     browserToolsEnabled: browserToolsPolicy.isEnabled(),
     browserToolsBroker,
+    liveVoiceRouteBroker,
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
@@ -1292,6 +1296,9 @@ export async function createPaseoDaemon(
   });
   const createAgentToolCatalog = (runtime: PaseoToolRuntimeContext) =>
     createPaseoToolCatalog(createAgentToolHostDependencies(runtime));
+  const liveVoiceToolExecutor = new LiveVoiceToolExecutor({
+    createCatalog: createAgentToolCatalog,
+  });
   agentManager.setPaseoToolCatalogFactory(createAgentToolCatalog);
   agentManager.setPaseoToolsEnabled(config.mcpInjectIntoAgents !== false);
 
@@ -1553,6 +1560,8 @@ export async function createPaseoDaemon(
               },
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
+              liveVoiceRouteBroker,
+              liveVoiceToolExecutor,
               hubRelationships,
             );
             await hubRelationships.start();
