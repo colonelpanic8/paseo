@@ -879,6 +879,22 @@ export const WorkspacePinSetRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Workspace snooze is a metadata pair: when the user snoozed and when the
+// workspace wakes. Both are ISO timestamps; the snoozed sidebar state is
+// derived client-side from this pair plus the clock.
+export const WorkspaceSnoozeStatusSchema = z.object({
+  snoozedAt: z.string(),
+  snoozedUntil: z.string(),
+});
+
+export const WorkspaceSnoozeSetRequestSchema = z.object({
+  type: z.literal("workspace.snooze.set.request"),
+  workspaceId: z.string(),
+  // Null wakes the workspace; a future ISO timestamp snoozes it until then.
+  snoozedUntil: z.string().nullable(),
+  requestId: z.string(),
+});
+
 export const WorkspaceRecoveryInspectRequestSchema = z.object({
   type: z.literal("workspace.recovery.inspect.request"),
   workspaceId: z.string(),
@@ -888,6 +904,14 @@ export const WorkspaceRecoveryInspectRequestSchema = z.object({
 export const WorkspaceRecoveryRestoreRequestSchema = z.object({
   type: z.literal("workspace.recovery.restore.request"),
   workspaceId: z.string(),
+  requestId: z.string(),
+});
+
+// Recently-archived workspaces, newest first. This is an undo affordance for the
+// sidebar's status view, not an archive browser: the daemon caps what it returns
+// and the client never merges these into the live workspace directory.
+export const WorkspaceArchivedListRequestSchema = z.object({
+  type: z.literal("workspace.archived.list.request"),
   requestId: z.string(),
 });
 
@@ -1601,6 +1625,19 @@ export const WorkspacePinSetResponseSchema = z.object({
   payload: WorkspacePinSetResponsePayloadSchema,
 });
 
+export const WorkspaceSnoozeSetResponsePayloadSchema = z.object({
+  requestId: z.string(),
+  workspaceId: z.string(),
+  accepted: z.boolean(),
+  snoozeStatus: WorkspaceSnoozeStatusSchema.nullable(),
+  error: z.string().nullable(),
+});
+
+export const WorkspaceSnoozeSetResponseSchema = z.object({
+  type: z.literal("workspace.snooze.set.response"),
+  payload: WorkspaceSnoozeSetResponsePayloadSchema,
+});
+
 export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("recoverable"),
@@ -1616,6 +1653,21 @@ export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
     message: z.string(),
   }),
 ]);
+
+export const ArchivedWorkspacePayloadSchema = z.object({
+  id: z.string(),
+  projectDisplayName: z.string(),
+  name: z.string(),
+  archivedAt: z.string(),
+});
+
+export const WorkspaceArchivedListResponseSchema = z.object({
+  type: z.literal("workspace.archived.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    entries: z.array(ArchivedWorkspacePayloadSchema),
+  }),
+});
 
 export const WorkspaceRecoveryInspectResponseSchema = z.object({
   type: z.literal("workspace.recovery.inspect.response"),
@@ -2514,8 +2566,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProjectRemoveRequestSchema,
   WorkspaceTitleSetRequestSchema,
   WorkspacePinSetRequestSchema,
+  WorkspaceSnoozeSetRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
   WorkspaceRecoveryRestoreRequestSchema,
+  WorkspaceArchivedListRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -2869,6 +2923,10 @@ export const ServerInfoStatusPayloadSchema = z
         providerSubagents: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: z.boolean().optional(),
+        // COMPAT(archivedWorkspacesList): added in v0.2.0, remove gate after 2027-01-28.
+        archivedWorkspacesList: z.boolean().optional(),
+        // COMPAT(workspaceSnooze): added in v0.2.4, drop the gate when floor >= v0.2.4.
+        workspaceSnooze: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -3182,6 +3240,10 @@ export const WorkspaceDescriptorPayloadSchema = z
     title: z.string().nullable().optional(),
     // COMPAT(workspacePinning): added in v0.1.107, remove optional after 2027-01-12.
     pinnedAt: z.string().nullable().optional(),
+    // COMPAT(workspaceSnooze): added in v0.2.4, drop the optional gate when floor >= v0.2.4.
+    // Set while the user has snoozed this workspace; the client derives the
+    // "Snoozed" sidebar state from it. Old daemons omit the field.
+    snoozeStatus: WorkspaceSnoozeStatusSchema.nullable().optional(),
     archivingAt: z.string().nullable().optional().default(null),
     status: WorkspaceStateBucketSchema,
     // Best-effort workspace status entry timestamp. Old daemons omit the
@@ -5338,8 +5400,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectRemoveResponseSchema,
   WorkspaceTitleSetResponseSchema,
   WorkspacePinSetResponseSchema,
+  WorkspaceSnoozeSetResponseSchema,
   WorkspaceRecoveryInspectResponseSchema,
   WorkspaceRecoveryRestoreResponseSchema,
+  WorkspaceArchivedListResponseSchema,
   WaitForFinishResponseMessageSchema,
   AgentPermissionRequestMessageSchema,
   AgentPermissionResolvedMessageSchema,
@@ -5528,6 +5592,11 @@ export type WorkspaceTitleSetResponsePayload = z.infer<
 >;
 export type WorkspacePinSetResponse = z.infer<typeof WorkspacePinSetResponseSchema>;
 export type WorkspacePinSetResponsePayload = z.infer<typeof WorkspacePinSetResponsePayloadSchema>;
+export type WorkspaceSnoozeStatus = z.infer<typeof WorkspaceSnoozeStatusSchema>;
+export type WorkspaceSnoozeSetResponse = z.infer<typeof WorkspaceSnoozeSetResponseSchema>;
+export type WorkspaceSnoozeSetResponsePayload = z.infer<
+  typeof WorkspaceSnoozeSetResponsePayloadSchema
+>;
 export type WorkspaceRecoveryState = z.infer<typeof WorkspaceRecoveryStateSchema>;
 export type WorkspaceRecoveryInspectResponse = z.infer<
   typeof WorkspaceRecoveryInspectResponseSchema
@@ -5535,6 +5604,7 @@ export type WorkspaceRecoveryInspectResponse = z.infer<
 export type WorkspaceRecoveryRestoreResponse = z.infer<
   typeof WorkspaceRecoveryRestoreResponseSchema
 >;
+export type WorkspaceArchivedListResponse = z.infer<typeof WorkspaceArchivedListResponseSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
@@ -5673,8 +5743,11 @@ export type ProjectIconSetRequest = z.infer<typeof ProjectIconSetRequestSchema>;
 export type ProjectRemoveRequest = z.infer<typeof ProjectRemoveRequestSchema>;
 export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSchema>;
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
+export type WorkspaceSnoozeSetRequest = z.infer<typeof WorkspaceSnoozeSetRequestSchema>;
 export type WorkspaceRecoveryInspectRequest = z.infer<typeof WorkspaceRecoveryInspectRequestSchema>;
 export type WorkspaceRecoveryRestoreRequest = z.infer<typeof WorkspaceRecoveryRestoreRequestSchema>;
+export type WorkspaceArchivedListRequest = z.infer<typeof WorkspaceArchivedListRequestSchema>;
+export type ArchivedWorkspacePayload = z.infer<typeof ArchivedWorkspacePayloadSchema>;
 export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;
 export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMessageSchema>;
 export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;
