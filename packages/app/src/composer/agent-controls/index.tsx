@@ -141,6 +141,12 @@ interface ControlledAgentControlsProps {
   onSelectProviderAndModel?: (provider: string, modelId: string) => void;
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
+  /**
+   * Thinking id to read out on the chip when it differs from the selected one —
+   * the runtime may be running a level other than the configured one. Selection
+   * and mutation stay driven by `selectedThinkingOptionId`.
+   */
+  displayThinkingOptionId?: string;
   onSelectThinkingOption?: (thinkingOptionId: string) => void;
   disabled?: boolean;
   isModelLoading?: boolean;
@@ -373,6 +379,7 @@ type AgentControlsSlice = {
   model: string | null | undefined;
   features: AgentFeature[] | undefined;
   thinkingOptionId: string | null | undefined;
+  effectiveThinkingOptionId: string | null | undefined;
   lastUsage: unknown;
 } | null;
 
@@ -392,6 +399,7 @@ function selectAgentControlsSlice(
     model: currentAgent.model,
     features: currentAgent.features,
     thinkingOptionId: currentAgent.thinkingOptionId,
+    effectiveThinkingOptionId: currentAgent.effectiveThinkingOptionId,
     lastUsage: currentAgent.lastUsage,
   };
 }
@@ -451,6 +459,7 @@ function ControlledAgentControls({
   onSelectProviderAndModel,
   thinkingOptions,
   selectedThinkingOptionId,
+  displayThinkingOptionId,
   onSelectThinkingOption,
   disabled = false,
   isModelLoading = false,
@@ -505,7 +514,7 @@ function ControlledAgentControls({
   );
   const displayThinking = findOptionLabel(
     formattedThinkingOptions,
-    selectedThinkingOptionId,
+    displayThinkingOptionId ?? selectedThinkingOptionId,
     formattedThinkingOptions[0]?.label ?? t("agentControls.thinking.unknown"),
   );
 
@@ -1603,6 +1612,7 @@ export const AgentControls = memo(function AgentControls({
     runtimeModelId: agent?.runtimeModelId,
     configuredModelId: agent?.model,
     explicitThinkingOptionId: agent?.thinkingOptionId,
+    effectiveThinkingOptionId: agent?.effectiveThinkingOptionId,
   });
 
   const modelOptions = useMemo<AgentControlOption[]>(() => {
@@ -1774,6 +1784,7 @@ export const AgentControls = memo(function AgentControls({
       onToggleFavoriteModel={handleToggleFavoriteModel}
       thinkingOptions={thinkingOptions.length > 1 ? thinkingOptions : undefined}
       selectedThinkingOptionId={modelSelection.selectedThinkingId ?? undefined}
+      displayThinkingOptionId={modelSelection.displayThinkingId ?? undefined}
       onSelectThinkingOption={handleSelectThinkingOption}
       features={agent.features}
       onSetFeature={handleSetFeature}
