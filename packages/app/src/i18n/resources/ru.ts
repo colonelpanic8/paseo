@@ -951,12 +951,6 @@ export const ru: TranslationResources = {
       sessions: "История",
       schedules: "Расписания",
     },
-    worktreeSetup: {
-      title: "Настройка сценариев рабочего дерева",
-      description:
-        "Добавьте команды настройки, чтобы новые рабочие деревья могли автоматически устанавливать зависимости и готовиться.",
-      openProjectSettings: "Открыть настройки проекта",
-    },
     project: {
       actions: {
         menu: "Действия проекта",
