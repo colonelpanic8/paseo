@@ -18,6 +18,7 @@ import type {
   AgentRuntimeInfo,
   AgentSession,
   AgentSessionConfig,
+  AgentSlashCommand,
   AgentStreamEvent,
   AgentTimelineItem,
   FetchCatalogOptions,
@@ -36,6 +37,20 @@ export const MOCK_LOAD_TEST_DEFAULT_MODEL_ID = "five-minute-stream";
 const MOCK_LOAD_TEST_MODE_ID = "load-test";
 const MOCK_LOAD_TEST_DURATION_MS = 5 * 60 * 1000;
 const MOCK_LOAD_TEST_INTERVAL_MS = 40;
+const MOCK_LOAD_TEST_COMMANDS: readonly AgentSlashCommand[] = [
+  {
+    name: "HOME",
+    description: "Exercise shell-variable collisions in development.",
+    argumentHint: "",
+    kind: "skill",
+  },
+  {
+    name: "release-beta",
+    description: "Simulate a provider skill in development.",
+    argumentHint: "",
+    kind: "skill",
+  },
+];
 
 const CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -546,6 +561,10 @@ export class MockLoadTestAgentClient implements AgentClient {
     };
   }
 
+  async listCommands(_config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
+    return [...MOCK_LOAD_TEST_COMMANDS];
+  }
+
   async listImportableSessions(): Promise<ImportableProviderSession[]> {
     return [];
   }
@@ -593,6 +612,10 @@ export class MockLoadTestAgentSession implements AgentSession {
       typeof options.config.featureValues?.mockRewindError === "string"
         ? options.config.featureValues.mockRewindError
         : null;
+  }
+
+  async listCommands(): Promise<AgentSlashCommand[]> {
+    return [...MOCK_LOAD_TEST_COMMANDS];
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
