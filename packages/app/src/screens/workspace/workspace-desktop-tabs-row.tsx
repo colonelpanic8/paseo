@@ -730,9 +730,21 @@ function TabChip({
             testID={`workspace-tab-tooltip-${buildDeterministicWorkspaceTabId(tab.target)}`}
           >
             {tab.target.kind === "agent" ? (
-              <View style={styles.tooltipAgentRow}>
-                <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
-                <Text style={styles.tooltipAgentId}>{tab.target.agentId.slice(0, 7)}</Text>
+              <View style={styles.tooltipAgentContent}>
+                <View style={styles.tooltipAgentRow}>
+                  <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
+                  <Text style={styles.tooltipAgentId}>{tab.target.agentId.slice(0, 7)}</Text>
+                </View>
+                {/* Provider, model, and thinking level — the descriptor subtitle has
+                    no other home, and this is where tab metadata already lives. */}
+                {presentation.subtitle && presentation.subtitle !== tooltipLabel ? (
+                  <Text
+                    style={styles.tooltipAgentSubtitle}
+                    testID={`workspace-tab-tooltip-subtitle-${buildDeterministicWorkspaceTabId(tab.target)}`}
+                  >
+                    {presentation.subtitle}
+                  </Text>
+                ) : null}
               </View>
             ) : (
               <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
@@ -1400,10 +1412,17 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   newTabTooltipShortcut: {},
+  tooltipAgentContent: {
+    gap: theme.spacing[1],
+  },
   tooltipAgentRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  tooltipAgentSubtitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   tooltipAgentId: {
     color: theme.colors.foregroundMuted,

@@ -18,7 +18,7 @@ import { claudeProjectDirSync } from "./project-dir.js";
 import { streamSession } from "../test-utils/session-stream-adapter.js";
 import type { AgentSession, AgentTimelineItem, AgentStreamEvent } from "../../agent-sdk-types.js";
 
-interface TestClaudeSession {
+interface TestClaudeSession extends AgentSession {
   translateMessageToEvents(message: SDKMessage): AgentStreamEvent[];
 }
 
@@ -390,6 +390,31 @@ describe("convertClaudeHistoryEntry", () => {
 
     expect(convertClaudeHistoryEntry(entry, mapBlocks)).toEqual(mappedTimeline);
     expect(mapBlocks).toHaveBeenCalledWith(entry.message.content);
+  });
+
+  test("backfills the normalized model from persisted assistant entries", () => {
+    const entry = {
+      type: "assistant",
+      uuid: "assistant-history-model",
+      message: {
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Historical answer." }],
+      },
+    };
+
+    expect(
+      convertClaudeHistoryEntry(entry, () => [
+        { type: "assistant_message", text: "Historical answer." },
+      ]),
+    ).toEqual([
+      {
+        type: "assistant_message",
+        text: "Historical answer.",
+        messageId: "assistant-history-model",
+        model: "claude-opus-4-6",
+      },
+    ]);
   });
 });
 
@@ -1583,6 +1608,377 @@ describe("ClaudeAgentSession context window usage", () => {
       ...overrides,
     };
   }
+
+  test("captures the runtime model from assistant messages", async () => {
+    const session = await createSessionForTest();
+
+    const events = session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-runtime-model",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Observed response." }],
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      uuid: "assistant-runtime-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    expect(events).toContainEqual({
+      type: "timeline",
+      provider: "claude",
+      item: {
+        type: "assistant_message",
+        text: "Observed response.",
+        model: "claude-opus-4-6",
+      },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "claude",
+      sessionId: "session-1",
+      model: "claude-opus-4-6",
+      modeId: "default",
+      extra: {
+        runtimeModel: "claude-opus-4-6-20260101",
+      },
+    });
+  });
+
+  test("dispatches model_changed when an assistant message reveals the runtime model", async () => {
+    const session = await createSessionForTest();
+    const observed: AgentStreamEvent[] = [];
+    session.subscribe((event) => {
+      if (event.type === "model_changed") observed.push(event);
+    });
+
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-model-changed",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Observed response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-model-changed-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toMatchObject({
+      type: "model_changed",
+      provider: "claude",
+      runtimeInfo: { model: "claude-opus-4-6" },
+    });
+
+    // A repeat of the same model is not a change and must not re-dispatch.
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-model-repeat",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Second response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-model-repeat-event",
+      session_id: "session-1",
+    } as SDKMessage);
+    expect(observed).toHaveLength(1);
+  });
+
+  test("ignores the <synthetic> placeholder instead of reporting it as a model", async () => {
+    const session = await createSessionForTest();
+
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-real-model",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Real response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-real-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const syntheticEvents = session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-synthetic",
+        role: "assistant",
+        model: "<synthetic>",
+        content: [{ type: "text", text: "Synthetic notice." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-synthetic-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const syntheticItem = syntheticEvents.find(
+      (event) => event.type === "timeline" && event.item.type === "assistant_message",
+    );
+    expect(syntheticItem?.item).not.toHaveProperty("model");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-opus-4-6",
+      extra: { runtimeModel: "claude-opus-4-6-20260101" },
+    });
+  });
+
+  test("re-seeds the observed model from a persisted transcript", async () => {
+    const session = await createSessionForTest();
+    const ingest = session as unknown as { ingestPersistedHistory(content: string): void };
+
+    const transcript = [
+      JSON.stringify({
+        type: "assistant",
+        uuid: "hist-1",
+        message: {
+          role: "assistant",
+          model: "claude-sonnet-4-5-20250929",
+          content: [{ type: "text", text: "Earlier turn." }],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "hist-2",
+        message: {
+          role: "assistant",
+          model: "claude-opus-4-6-20260101",
+          content: [{ type: "text", text: "Latest turn." }],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "hist-3",
+        message: {
+          role: "assistant",
+          model: "<synthetic>",
+          content: [{ type: "text", text: "Synthetic tail." }],
+        },
+      }),
+    ].join("\n");
+    ingest.ingestPersistedHistory(transcript);
+
+    // The last real assistant model wins; the synthetic tail is not an observation.
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-opus-4-6",
+      extra: { runtimeModel: "claude-opus-4-6-20260101" },
+    });
+  });
+
+  test("omits model attribution without an observed assistant model", async () => {
+    const session = await createSessionForTest();
+
+    const events = session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-without-runtime-model",
+        role: "assistant",
+        content: [{ type: "text", text: "Unattributed response." }],
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      uuid: "assistant-without-runtime-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const assistantEvent = events.find(
+      (event) => event.type === "timeline" && event.item.type === "assistant_message",
+    );
+    expect(assistantEvent).toEqual({
+      type: "timeline",
+      provider: "claude",
+      item: {
+        type: "assistant_message",
+        text: "Unattributed response.",
+      },
+    });
+    expect(assistantEvent?.item).not.toHaveProperty("model");
+  });
+
+  test("does not stamp a sidechain assistant message with the parent runtime model", async () => {
+    const session = await createSessionForTest();
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "parent-runtime-model",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "parent-runtime-model-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const events = session.translateMessageToEvents({
+      type: "assistant",
+      parent_tool_use_id: "task-child",
+      message: {
+        id: "child-message",
+        role: "assistant",
+        content: [{ type: "text", text: "Child response." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "child-message-event",
+      session_id: "session-1",
+    } as SDKMessage);
+
+    const childAssistantItems = events.flatMap((event) =>
+      event.type === "provider_subagent" &&
+      event.event.type === "timeline" &&
+      event.event.item.type === "assistant_message"
+        ? [event.event.item]
+        : [],
+    );
+    expect(childAssistantItems).toEqual([
+      {
+        type: "assistant_message",
+        text: "Child response.",
+        messageId: "child-message",
+      },
+    ]);
+    expect(childAssistantItems[0]).not.toHaveProperty("model");
+  });
+
+  test("preserves assistant-observed runtime model metadata after run completes", async () => {
+    const runtimeModel = "claude-opus-4-6-20260101";
+    const session = await createSessionForTurns([
+      [
+        createInitMessage(),
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-runtime-model",
+            role: "assistant",
+            model: runtimeModel,
+            content: [{ type: "text", text: "Runtime model changed." }],
+            usage: {
+              input_tokens: 10,
+              output_tokens: 4,
+            },
+          },
+          uuid: "assistant-runtime-model-event",
+          session_id: "session-1",
+        },
+        createSuccessResult(),
+      ],
+    ]);
+
+    try {
+      const result = await session.run("turn");
+
+      expect(result.timeline).toContainEqual({
+        type: "assistant_message",
+        text: "Runtime model changed.",
+        messageId: "assistant-runtime-model",
+        model: "claude-opus-4-6",
+      });
+
+      await expect(session.getRuntimeInfo()).resolves.toEqual({
+        provider: "claude",
+        sessionId: "session-1",
+        model: "claude-opus-4-6",
+        modeId: "default",
+        extra: {
+          runtimeModel,
+        },
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("attributes a turn with an unrecognized model rather than leaving it blank", async () => {
+    const unknownRuntimeModel = "claude-experimental-9-9-20991231";
+    const session = await createSessionForTurns([
+      [
+        createInitMessage(),
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-offcatalog",
+            role: "assistant",
+            model: unknownRuntimeModel,
+            content: [{ type: "text", text: "Off-catalog output." }],
+            usage: { input_tokens: 10, output_tokens: 4 },
+          },
+          uuid: "assistant-offcatalog-event",
+          session_id: "session-1",
+        },
+        createSuccessResult(),
+      ],
+    ]);
+
+    try {
+      const result = await session.run("turn");
+
+      expect(result.timeline).toContainEqual({
+        type: "assistant_message",
+        text: "Off-catalog output.",
+        messageId: "assistant-offcatalog",
+        model: unknownRuntimeModel,
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("reports an unrecognized runtime model verbatim instead of a stale known one", async () => {
+    // Claude falling back to a model outside our catalog must not leave the
+    // previously recognized model in place — that asserts the agent is running
+    // something it isn't.
+    const unknownRuntimeModel = "claude-experimental-9-9-20991231";
+    const session = await createSessionForTurns([
+      [
+        createInitMessage(),
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-known-model",
+            role: "assistant",
+            model: "claude-opus-4-6-20260101",
+            content: [{ type: "text", text: "Known model." }],
+            usage: { input_tokens: 10, output_tokens: 4 },
+          },
+          uuid: "assistant-known-model-event",
+          session_id: "session-1",
+        },
+        {
+          type: "assistant",
+          message: {
+            id: "assistant-unknown-model",
+            role: "assistant",
+            model: unknownRuntimeModel,
+            content: [{ type: "text", text: "Unknown model." }],
+            usage: { input_tokens: 10, output_tokens: 4 },
+          },
+          uuid: "assistant-unknown-model-event",
+          session_id: "session-1",
+        },
+        createSuccessResult(),
+      ],
+    ]);
+
+    try {
+      await session.run("turn");
+
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: unknownRuntimeModel,
+        extra: { runtimeModel: unknownRuntimeModel },
+      });
+    } finally {
+      await session.close();
+    }
+  });
 
   test("passes persistSession through to the Claude SDK query options", async () => {
     const createResultTurn = (sessionId: string) => [
