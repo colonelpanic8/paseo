@@ -16,6 +16,8 @@ export interface SubagentRowPresentationData {
   key: string;
   kind: "agent";
   label: string;
+  /** Rolling purpose summary shown beneath the label for Paseo-managed subagents. */
+  subtitle: string;
   /**
    * Trailing muted detail rendered after the title — "Model · Thinking". Null
    * when nothing is known, so the row renders no empty slot.
@@ -36,6 +38,7 @@ export function buildSubagentRowPresentationData(
     key: `${row.kind}_subagent_${row.id}`,
     kind: "agent",
     label: label ?? "",
+    subtitle: row.kind === "paseo" ? (row.summary ?? "") : "",
     meta: modelDisplay ? formatAgentModelDisplayMeta(modelDisplay) : null,
     tooltip: resolveSubagentRowTooltip(row, label),
     titleState: label ? "ready" : "loading",

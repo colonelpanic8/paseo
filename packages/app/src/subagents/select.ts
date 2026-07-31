@@ -40,6 +40,8 @@ export interface ProviderSubagentRow extends SubagentRowRuntime {
   provider: ProviderSubagentDescriptorPayload["provider"];
   /** Provider-supplied name. Claude descriptors put the subagent *type* here. */
   title: string | null;
+  /** Provider-owned subagents do not receive Paseo's rolling purpose summaries. */
+  summary?: null;
   /** Provider-supplied task summary. Preferred over `title` as the row label. */
   description: string | null;
   status: ProviderSubagentDescriptorPayload["status"];

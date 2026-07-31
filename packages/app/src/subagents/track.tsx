@@ -67,7 +67,7 @@ function buildRowView(
       key: data.key,
       kind: data.kind,
       label: data.label,
-      subtitle: "",
+      subtitle: data.subtitle,
       tooltip: data.tooltip,
       titleState: data.titleState,
       statusBucket: data.statusBucket,
@@ -237,9 +237,20 @@ function SubagentsTrackRow({
         {({ pressed }) => (
           <View style={hovered || pressed ? styles.rowActive : styles.row}>
             <WorkspaceTabIcon presentation={presentation} />
-            <Text style={styles.rowLabel} numberOfLines={1}>
-              {displayLabel}
-            </Text>
+            <View style={styles.rowText}>
+              <Text style={styles.rowLabel} numberOfLines={1}>
+                {displayLabel}
+              </Text>
+              {presentation.subtitle ? (
+                <Text
+                  style={styles.rowSubtitle}
+                  numberOfLines={1}
+                  testID={`subagents-track-summary-${row.id}`}
+                >
+                  {presentation.subtitle}
+                </Text>
+              ) : null}
+            </View>
             {meta ? (
               // Capped width so the meta truncates before it can crowd the title,
               // including on compact where the action cluster is always visible.
@@ -440,6 +451,10 @@ const styles = StyleSheet.create((theme) => ({
   rowLabel: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
+  },
+  rowSubtitle: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   rowMeta: {
     flexShrink: 1,
