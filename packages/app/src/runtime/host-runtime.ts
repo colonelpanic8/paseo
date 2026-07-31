@@ -2445,26 +2445,37 @@ export function useHostRuntimeConnectionStatus(serverId: string): HostRuntimeCon
   );
 }
 
+interface HostRuntimeConnectionStatusStore {
+  subscribeAll(listener: () => void): () => void;
+  getSnapshot(serverId: string): Pick<HostRuntimeSnapshot, "connectionStatus"> | null;
+}
+
+export function useHostRuntimeConnectionStatusesFromStore(
+  store: HostRuntimeConnectionStatusStore,
+  serverIds: readonly string[],
+): ReadonlyMap<string, HostRuntimeConnectionStatus> {
+  const statusSnapshot = useSyncExternalStore(
+    (onStoreChange) => store.subscribeAll(onStoreChange),
+    () =>
+      serverIds
+        .map((serverId) => store.getSnapshot(serverId)?.connectionStatus ?? "connecting")
+        .join("|"),
+    () =>
+      serverIds
+        .map((serverId) => store.getSnapshot(serverId)?.connectionStatus ?? "connecting")
+        .join("|"),
+  );
+
+  const statuses = statusSnapshot.split("|") as HostRuntimeConnectionStatus[];
+  return new Map(
+    serverIds.map((serverId, index) => [serverId, statuses[index] ?? "connecting"] as const),
+  );
+}
+
 export function useHostRuntimeConnectionStatuses(
   serverIds: readonly string[],
 ): ReadonlyMap<string, HostRuntimeConnectionStatus> {
-  const store = getHostRuntimeStore();
-  const version = useSyncExternalStore(
-    (onStoreChange) => store.subscribeAll(onStoreChange),
-    () => store.getVersion(),
-    () => store.getVersion(),
-  );
-
-  return useMemo(() => {
-    // The aggregate version is the reactivity trigger; re-read snapshots on every host tick.
-    void version;
-    return new Map(
-      serverIds.map(
-        (serverId) =>
-          [serverId, store.getSnapshot(serverId)?.connectionStatus ?? "connecting"] as const,
-      ),
-    );
-  }, [serverIds, store, version]);
+  return useHostRuntimeConnectionStatusesFromStore(getHostRuntimeStore(), serverIds);
 }
 
 export function useHostRuntimeLastError(serverId: string): string | null {
