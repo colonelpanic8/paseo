@@ -1627,6 +1627,73 @@ describe("ClaudeAgentSession context window usage", () => {
     }
   });
 
+  test("reports the observed effort as the runtime thinking level", async () => {
+    const session = await createSessionForTest();
+
+    // Absent until a frame reports one, so the configured level stays in charge.
+    await expect(session.getRuntimeInfo()).resolves.not.toHaveProperty("thinkingOptionId");
+
+    session.translateMessageToEvents({
+      type: "assistant",
+      effort: "low",
+      message: {
+        id: "assistant-runtime-effort",
+        role: "assistant",
+        model: "claude-sonnet-5",
+        content: [{ type: "text", text: "Ran low." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-runtime-effort-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-sonnet-5",
+      thinkingOptionId: "low",
+    });
+
+    // A later frame that reports no effort says nothing; the observation holds.
+    session.translateMessageToEvents({
+      type: "assistant",
+      message: {
+        id: "assistant-runtime-effort-silent",
+        role: "assistant",
+        model: "claude-sonnet-5",
+        content: [{ type: "text", text: "Silent about effort." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-runtime-effort-silent-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ thinkingOptionId: "low" });
+  });
+
+  test("drops the observed effort when the user picks a thinking option", async () => {
+    const session = await createSessionForTest();
+
+    session.translateMessageToEvents({
+      type: "assistant",
+      effort: "low",
+      message: {
+        id: "assistant-stale-effort",
+        role: "assistant",
+        model: "claude-sonnet-5",
+        content: [{ type: "text", text: "Ran low." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-stale-effort-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ thinkingOptionId: "low" });
+
+    await session.setThinkingOption("high");
+
+    // The stale "low" must not shadow the fresh selection; with no observation
+    // the key is absent so the configured level wins downstream.
+    await expect(session.getRuntimeInfo()).resolves.not.toHaveProperty("thinkingOptionId");
+  });
+
   test("dispatches model_changed when an assistant message reveals the runtime model", async () => {
     const session = await createSessionForTest();
     const observed: AgentStreamEvent[] = [];
