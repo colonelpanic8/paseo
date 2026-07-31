@@ -32,7 +32,7 @@ import {
 import {
   findClaudeModel,
   getClaudeModelsWithSettings,
-  normalizeClaudeRuntimeModelId,
+  resolveObservedClaudeModelId,
 } from "./models.js";
 import {
   CLAUDE_DISABLED_THINKING_OPTION_ID,
@@ -1304,8 +1304,10 @@ class TimelineAssembler {
   }
 
   private captureMessageModel(state: TimelineMessageState, runtimeModel: unknown): void {
-    if (typeof runtimeModel === "string") {
-      state.model = normalizeClaudeRuntimeModelId(runtimeModel) ?? runtimeModel;
+    const observedModel =
+      typeof runtimeModel === "string" ? resolveObservedClaudeModelId(runtimeModel) : null;
+    if (observedModel) {
+      state.model = observedModel;
     }
   }
 
@@ -3798,38 +3800,14 @@ class ClaudeAgentSession implements AgentSession {
         this.appendUserMessageEvents(message, events);
         this.appendSidechainResultEvents(message, events);
         break;
-      case "assistant": {
-        const observedModel =
-          normalizeClaudeRuntimeModelId(message.message.model) ?? message.message.model;
-        if (message.message.model) {
-          this.captureRuntimeModel(message.message.model, "assistant message");
-        }
-        const timelineItems = this.mapBlocksToTimeline(message.message.content, {
-          suppressAssistantText: options?.suppressAssistantText ?? false,
-          suppressReasoning: options?.suppressReasoning ?? false,
-        });
-        for (const item of timelineItems) {
-          events.push({
-            type: "timeline",
-            item:
-              item.type === "assistant_message" && observedModel
-                ? { ...item, model: observedModel }
-                : item,
-            provider: "claude",
-          });
-        }
+      case "assistant":
+        this.appendAssistantMessageEvents(message, events, options);
         this.appendSidechainResultEvents(message, events);
         break;
-      }
-      case "stream_event": {
-        const streamEvent = toObjectRecord(message.event);
-        const streamMessage = toObjectRecord(streamEvent?.message);
-        if (streamEvent?.type === "message_start" && typeof streamMessage?.model === "string") {
-          this.captureRuntimeModel(streamMessage.model, "stream message start");
-        }
+      case "stream_event":
+        this.captureStreamEventRuntimeModel(message);
         this.appendStreamEventEvents(message, events, options);
         break;
-      }
       case "result":
         this.appendResultEvents(message, events);
         break;
@@ -3838,6 +3816,41 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     return events;
+  }
+
+  private appendAssistantMessageEvents(
+    message: Extract<SDKMessage, { type: "assistant" }>,
+    events: AgentStreamEvent[],
+    options: { suppressAssistantText?: boolean; suppressReasoning?: boolean } | undefined,
+  ): void {
+    const observedModel = resolveObservedClaudeModelId(message.message.model);
+    if (message.message.model) {
+      this.captureRuntimeModel(message.message.model, "assistant message");
+    }
+    const timelineItems = this.mapBlocksToTimeline(message.message.content, {
+      suppressAssistantText: options?.suppressAssistantText ?? false,
+      suppressReasoning: options?.suppressReasoning ?? false,
+    });
+    for (const item of timelineItems) {
+      events.push({
+        type: "timeline",
+        item:
+          item.type === "assistant_message" && observedModel
+            ? { ...item, model: observedModel }
+            : item,
+        provider: "claude",
+      });
+    }
+  }
+
+  private captureStreamEventRuntimeModel(
+    message: Extract<SDKMessage, { type: "stream_event" }>,
+  ): void {
+    const streamEvent = toObjectRecord(message.event);
+    const streamMessage = toObjectRecord(streamEvent?.message);
+    if (streamEvent?.type === "message_start" && typeof streamMessage?.model === "string") {
+      this.captureRuntimeModel(streamMessage.model, "stream message start");
+    }
   }
 
   /**
@@ -4256,17 +4269,25 @@ class ClaudeAgentSession implements AgentSession {
       // log line and the cache invalidation.
       return;
     }
-    const normalizedRuntimeModel = normalizeClaudeRuntimeModelId(runtimeModel);
+    const observedModel = resolveObservedClaudeModelId(runtimeModel);
+    if (!observedModel) {
+      // A placeholder such as "<synthetic>" is not an observation.
+      return;
+    }
     this.logger.debug(
-      { runtimeModel, normalizedRuntimeModel, source },
+      { runtimeModel, observedModel, source },
       "Captured runtime model from Claude",
     );
-    // An id we cannot map to the catalog is still what Claude said it is
-    // running, so report it verbatim rather than leaving a previously
-    // recognized (now wrong) model in place. Clients render an unknown id as-is.
-    this.lastOptionsModel = normalizedRuntimeModel ?? runtimeModel;
+    this.lastOptionsModel = observedModel;
     this.lastRuntimeModel = runtimeModel;
     this.cachedRuntimeInfo = null;
+    // Push the observation to the manager immediately. Claude pre-assigns its
+    // session id, so `thread_started` never fires for it, and without this the
+    // manager's runtimeInfo would only refresh at turn completion — leaving
+    // running agents (exactly the ones the subagents track shows) modelless.
+    this.dispatchEvents([
+      { type: "model_changed", provider: "claude", runtimeInfo: this.buildRuntimeInfo() },
+    ]);
   }
 
   private readMissingResumedConversationError(message: SDKMessage): string | null {
@@ -4603,6 +4624,21 @@ class ClaudeAgentSession implements AgentSession {
     }
     if (entry.type === "assistant" && typeof entry.uuid === "string") {
       this.rememberRewindAssistantAnchor(entry.uuid);
+    }
+    if (entry.type === "assistant") {
+      // Re-seed the runtime observation from the transcript so a daemon
+      // restart doesn't blank the observed model until the next turn
+      // completes. Entries replay in order, so the last assistant wins.
+      // No model_changed dispatch here: nothing is subscribed during load,
+      // and the manager refreshes runtime info when it attaches.
+      const rawModel = toObjectRecord(entry.message)?.model;
+      const observedModel =
+        typeof rawModel === "string" ? resolveObservedClaudeModelId(rawModel) : null;
+      if (observedModel && typeof rawModel === "string") {
+        this.lastOptionsModel = observedModel;
+        this.lastRuntimeModel = rawModel;
+        this.cachedRuntimeInfo = null;
+      }
     }
 
     if (items.length > 0) {
@@ -5511,7 +5547,7 @@ function mapAssistantHistoryBlocksWithMessageId(
   const assistantMessageId =
     typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null;
   const rawHistoryModel = typeof entry.message?.model === "string" ? entry.message.model : null;
-  const model = normalizeClaudeRuntimeModelId(rawHistoryModel) ?? rawHistoryModel;
+  const model = resolveObservedClaudeModelId(rawHistoryModel);
   for (const item of items) {
     if (item.type === "assistant_message" && !item.messageId) {
       if (assistantMessageId) item.messageId = assistantMessageId;
