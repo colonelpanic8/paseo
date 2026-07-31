@@ -27,6 +27,22 @@ export function toggleProjectCollapsed(
   return { ...state, collapsedProjectKeys: next };
 }
 
+// Status groups that start collapsed for everyone, including users whose
+// persisted state predates the bucket's existence.
+const DEFAULT_COLLAPSED_STATUS_GROUP_KEYS: ReadonlySet<string> = new Set(["snoozed"]);
+
+// The persisted set stores "the user toggled this group away from its default".
+// For normal groups presence = collapsed. For default-collapsed groups the
+// semantics INVERT: presence = the user expanded it. Keeping the persisted shape
+// and toggle functions unchanged preserves back-compat with stored state.
+export function isStatusGroupCollapsed(
+  collapsedStatusGroupKeys: ReadonlySet<string>,
+  statusGroupKey: string,
+): boolean {
+  const toggledByUser = collapsedStatusGroupKeys.has(statusGroupKey);
+  return DEFAULT_COLLAPSED_STATUS_GROUP_KEYS.has(statusGroupKey) ? !toggledByUser : toggledByUser;
+}
+
 export function toggleStatusGroupCollapsed(
   state: CollapsedProjectsState,
   statusGroupKey: string,

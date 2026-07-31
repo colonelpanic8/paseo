@@ -79,6 +79,17 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
+  // User-initiated snooze: when it was set and when the workspace wakes. The
+  // "Snoozed" sidebar state is derived client-side; the server only stores the
+  // pair and never auto-clears it — it expires or the user wakes the workspace.
+  snoozeStatus: z
+    .object({
+      snoozedAt: z.string(),
+      snoozedUntil: z.string(),
+    })
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
 });
 
 export type PersistedProjectRecord = z.infer<typeof PersistedProjectRecordSchema>;
@@ -507,6 +518,7 @@ export function createPersistedWorkspaceRecord(input: {
   updatedAt: string;
   archivedAt?: string | null;
   pinnedAt?: string | null;
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
 }): PersistedWorkspaceRecord {
   return PersistedWorkspaceRecordSchema.parse({
     ...input,
@@ -518,6 +530,7 @@ export function createPersistedWorkspaceRecord(input: {
     mainRepoRoot: input.mainRepoRoot ?? null,
     archivedAt: input.archivedAt ?? null,
     pinnedAt: input.pinnedAt ?? null,
+    snoozeStatus: input.snoozeStatus ?? null,
   });
 }
 

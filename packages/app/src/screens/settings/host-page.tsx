@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Globe,
   Monitor,
+  Palette,
   Pencil,
   Plus,
   RotateCw,
@@ -44,6 +45,9 @@ import { loadDesktopSettings, useDesktopSettings } from "@/desktop/settings/desk
 import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { getHostColorFillStyle } from "@/styles/host-color";
+import { normalizeHexColor } from "@/styles/host-color-value";
+import { HOST_COLOR_KEYS, isHostColorKey, type HostColor } from "@/types/host-connection";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -78,6 +82,7 @@ const ThemedProfilePencil = withUnistyles(Pencil);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedProfileSquareTerminal = withUnistyles(SquareTerminal);
 const ThemedPlus = withUnistyles(Plus);
+const ThemedPalette = withUnistyles(Palette);
 
 interface DynamicProviderIconProps {
   iconKey: string;
@@ -347,6 +352,7 @@ export function HostSettingsPage({
   serverId: string;
   onHostRemoved?: () => void;
 }) {
+  const { t } = useTranslation();
   const host = useHostProfile(serverId);
   const isLocalDaemon = useIsLocalDaemon(serverId);
 
@@ -365,12 +371,188 @@ export function HostSettingsPage({
 
       <HostStatusBadges serverId={serverId} />
 
+      <SettingsSection title={t("settings.host.daemon.color.section")}>
+        <HostColorCard host={host} />
+      </SettingsSection>
+
       {isLocalDaemon ? <LocalDaemonSection /> : null}
 
       {!isLocalDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
 
       <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
     </View>
+  );
+}
+
+const HOST_COLOR_LABEL_KEYS = {
+  none: "settings.host.daemon.color.options.none",
+  blue: "settings.host.daemon.color.options.blue",
+  green: "settings.host.daemon.color.options.green",
+  amber: "settings.host.daemon.color.options.amber",
+  orange: "settings.host.daemon.color.options.orange",
+  red: "settings.host.daemon.color.options.red",
+  purple: "settings.host.daemon.color.options.purple",
+} as const;
+
+/** Picks the color that tints this host wherever it is labelled. */
+function HostColorCard({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const { setHostColor } = useHostMutations();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPickingCustom, setIsPickingCustom] = useState(false);
+  const selectedColor = host.color ?? null;
+  // Only a value outside the palette belongs to the custom swatch; a palette key
+  // must keep lighting up its own swatch instead.
+  const customColor =
+    selectedColor !== null && !isHostColorKey(selectedColor) ? selectedColor : null;
+
+  const applyColor = useCallback(
+    (color: HostColor | null) => {
+      if (isSaving || color === selectedColor) {
+        return;
+      }
+      setIsSaving(true);
+      void setHostColor(host.serverId, color)
+        .catch((error) => {
+          Alert.alert(
+            t("common.errors.unableToSave"),
+            error instanceof Error ? error.message : String(error),
+          );
+        })
+        .finally(() => setIsSaving(false));
+    },
+    [host.serverId, isSaving, selectedColor, setHostColor, t],
+  );
+
+  const handleOpenCustom = useCallback(() => setIsPickingCustom(true), []);
+  const handleCloseCustom = useCallback(() => setIsPickingCustom(false), []);
+  const handleSubmitCustom = useCallback(
+    (value: string) => {
+      const normalized = normalizeHexColor(value);
+      // The modal's validate already rejected everything else; this narrows the type.
+      if (normalized) {
+        applyColor(normalized);
+      }
+    },
+    [applyColor],
+  );
+
+  const validateCustom = useCallback(
+    (value: string) =>
+      normalizeHexColor(value) ? null : t("settings.host.daemon.color.custom.invalid"),
+    [t],
+  );
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-color-card">
+      <View style={styles.colorRow}>
+        <View>
+          <Text style={settingsStyles.rowTitle}>{t("settings.host.daemon.color.title")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.host.daemon.color.hint")}</Text>
+        </View>
+        <View
+          style={styles.colorSwatchRow}
+          accessibilityRole="radiogroup"
+          accessibilityLabel={t("settings.host.daemon.color.title")}
+        >
+          <HostColorSwatch
+            color={null}
+            selected={selectedColor === null}
+            disabled={isSaving}
+            label={t(HOST_COLOR_LABEL_KEYS.none)}
+            testID="host-page-color-none"
+            onSelect={applyColor}
+          />
+          {HOST_COLOR_KEYS.map((color) => (
+            <HostColorSwatch
+              key={color}
+              color={color}
+              selected={selectedColor === color}
+              disabled={isSaving}
+              label={t(HOST_COLOR_LABEL_KEYS[color])}
+              testID={`host-page-color-${color}`}
+              onSelect={applyColor}
+            />
+          ))}
+          <HostColorSwatch
+            color={customColor}
+            selected={customColor !== null}
+            disabled={isSaving}
+            label={t("settings.host.daemon.color.custom.label")}
+            testID="host-page-color-custom"
+            emptyVariant="custom"
+            onSelect={handleOpenCustom}
+          />
+        </View>
+      </View>
+      <AdaptiveRenameModal
+        visible={isPickingCustom}
+        title={t("settings.host.daemon.color.custom.title")}
+        initialValue={customColor ?? ""}
+        placeholder="#4f46e5"
+        submitLabel={t("settings.host.daemon.color.custom.submit")}
+        validate={validateCustom}
+        maxLength={7}
+        onClose={handleCloseCustom}
+        onSubmit={handleSubmitCustom}
+        testID="host-page-color-custom-modal"
+      />
+    </View>
+  );
+}
+
+function HostColorSwatch({
+  color,
+  selected,
+  disabled,
+  label,
+  testID,
+  emptyVariant = "none",
+  onSelect,
+}: {
+  color: HostColor | null;
+  selected: boolean;
+  disabled: boolean;
+  label: string;
+  testID: string;
+  /** What an unset swatch means: the "no tint" choice, or "pick your own". */
+  emptyVariant?: "none" | "custom";
+  onSelect: (color: HostColor | null) => void;
+}) {
+  const handlePress = useCallback(() => onSelect(color), [color, onSelect]);
+  const accessibilityState = useMemo(() => ({ checked: selected, disabled }), [disabled, selected]);
+  const containerStyle = useMemo(
+    () => [
+      styles.colorSwatch,
+      selected && styles.colorSwatchSelected,
+      disabled && styles.colorSwatchDisabled,
+    ],
+    [disabled, selected],
+  );
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      disabled={disabled}
+      hitSlop={4}
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={accessibilityState}
+      aria-checked={selected}
+      aria-disabled={disabled}
+      style={containerStyle}
+      testID={testID}
+    >
+      {color ? (
+        <View style={[styles.colorSwatchFill, getHostColorFillStyle(color)]} />
+      ) : (
+        <View style={[styles.colorSwatchFill, styles.colorSwatchFillNone]}>
+          {emptyVariant === "custom" ? (
+            <ThemedPalette size={12} uniProps={mutedColorMapping} />
+          ) : null}
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -1846,6 +2028,42 @@ const styles = StyleSheet.create((theme) => ({
   updateFailure: {
     marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[4],
+  },
+  colorSwatchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+    marginTop: theme.spacing[3],
+  },
+  colorRow: {
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+  },
+  colorSwatch: {
+    width: 26,
+    height: 26,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorSwatchSelected: {
+    borderColor: theme.colors.foreground,
+  },
+  colorSwatchDisabled: {
+    opacity: 0.5,
+  },
+  colorSwatchFill: {
+    width: 18,
+    height: 18,
+    borderRadius: theme.borderRadius.full,
+  },
+  colorSwatchFillNone: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
   identityEditButton: {
     padding: theme.spacing[1],
