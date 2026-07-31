@@ -883,6 +883,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               // to fall back to and no daemon-computed effective value here.
               effectiveThinkingOptionId: attribution.thinkingOptionId ?? null,
             },
+            // A recorded turn reports what it ran at or nothing. The model
+            // default would read "Low" on every Claude turn regardless.
+            thinkingFallback: "none",
           }),
         ),
       [resolveModelDisplay, turnProvider],

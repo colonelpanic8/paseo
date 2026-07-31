@@ -1571,6 +1571,62 @@ describe("ClaudeAgentSession context window usage", () => {
     });
   });
 
+  test("stamps the effort the assistant frame actually ran at", async () => {
+    const session = await createSessionForTest();
+
+    const events = session.translateMessageToEvents({
+      type: "assistant",
+      effort: "low",
+      message: {
+        id: "assistant-effort",
+        role: "assistant",
+        model: "claude-sonnet-5",
+        content: [{ type: "text", text: "Ran low." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-effort-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+
+    expect(events).toContainEqual({
+      type: "timeline",
+      provider: "claude",
+      item: {
+        type: "assistant_message",
+        text: "Ran low.",
+        model: "claude-sonnet-5",
+        thinkingOptionId: "low",
+      },
+    });
+  });
+
+  test("stamps no thinking level when the frame reports no usable effort", async () => {
+    const session = await createSessionForTest();
+
+    const [absent, numeric] = [undefined, 3].map((effort, index) =>
+      session.translateMessageToEvents({
+        type: "assistant",
+        ...(effort === undefined ? {} : { effort }),
+        message: {
+          id: `assistant-effort-${index}`,
+          role: "assistant",
+          model: "claude-sonnet-5",
+          content: [{ type: "text", text: "No effort reported." }],
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
+        uuid: `assistant-effort-${index}-event`,
+        session_id: "session-1",
+      } as unknown as SDKMessage),
+    );
+
+    for (const events of [absent, numeric]) {
+      const assistantEvent = events?.find(
+        (event) => event.type === "timeline" && event.item.type === "assistant_message",
+      );
+      expect(assistantEvent?.item).not.toHaveProperty("thinkingOptionId");
+    }
+  });
+
   test("dispatches model_changed when an assistant message reveals the runtime model", async () => {
     const session = await createSessionForTest();
     const observed: AgentStreamEvent[] = [];

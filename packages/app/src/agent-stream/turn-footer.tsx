@@ -7,6 +7,7 @@ import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import {
   collectAssistantTurnContentForStreamRenderStrategy,
+  resolveTurnAttributionForStreamRenderStrategy,
   type StreamStrategy,
 } from "./strategy";
 import { resolveAssistantTurnForkBoundary, type AssistantTurnForkBoundary } from "./turn-boundary";
@@ -17,7 +18,7 @@ import {
   type AssistantForkTarget,
 } from "@/components/message";
 import type { TurnFooterHost } from "./layout";
-import { resolveTurnAttribution, type TurnAttribution } from "./turn-attribution";
+import type { TurnAttribution } from "./turn-attribution";
 import { SyncedLoader } from "@/components/synced-loader";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 
@@ -180,9 +181,13 @@ function CompletedTurnFooter({
 }) {
   const meta = useMemo(() => {
     if (!formatTurnMeta) return null;
-    const attribution = resolveTurnAttribution(items, startIndex);
+    const attribution = resolveTurnAttributionForStreamRenderStrategy({
+      strategy,
+      items,
+      startIndex,
+    });
     return attribution ? formatTurnMeta(attribution) : null;
-  }, [formatTurnMeta, items, startIndex]);
+  }, [formatTurnMeta, items, startIndex, strategy]);
   const getContent = useCallback(
     () =>
       collectAssistantTurnContentForStreamRenderStrategy({
