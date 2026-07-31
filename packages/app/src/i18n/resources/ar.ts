@@ -2049,6 +2049,22 @@ export const ar: TranslationResources = {
     providers: {
       title: "مقدمي الخدمات",
       addProvider: "إضافة مزود",
+      accounts: {
+        addTitle: "إضافة حساب {{provider}}",
+        rowTitle: "حساب {{provider}}",
+        rowDescription: "حساب آخر بمعلومات اعتماد وسجل خاصين به",
+        add: "إضافة حساب",
+        name: "اسم الحساب",
+        namePlaceholder: "مثلاً: العمل",
+        directory: "مجلد الحساب",
+        directoryHint: "عيّن {{envVar}} إلى هذا المسار المطلق على المضيف.",
+        errors: {
+          nameRequired: "أدخل اسم الحساب.",
+          directoryRequired: "أدخل مجلد الحساب.",
+          directoryAbsolute: "أدخل مساراً مطلقاً على هذا المضيف.",
+          directoryDuplicate: "مجلد الحساب هذا مضاف بالفعل.",
+        },
+      },
       providerDetails: "تفاصيل مزود{{name}}",
       enableProvider: "تمكين{{name}}",
       unavailable: "اتصل بهذا المضيف لرؤية مقدمي الخدمة",

@@ -87,6 +87,8 @@ To add plan usage for a provider, add `packages/server/src/services/quota-fetche
 
 Keep the protocol shape provider-agnostic. Do not add provider-specific renderers for new limit windows; labels and generic bars should carry the UI. API responses should be parsed and normalized with Zod inside the fetcher, while the protocol boundary stays strict so old/new client compatibility is explicit.
 
+If the provider declares `accounts`, give the fetcher an `accountConfigDir` option and pass the factory's `accountConfigDir` through in `manifest.ts`, so each account reports its own usage row instead of collapsing onto the base provider. `accountConfigDir` must mean _only_ this directory: suppress every shared credential fallback the default fetcher relies on — ambient env vars, legacy paths, the macOS Keychain — or an account that isn't signed in will silently report another account's quota.
+
 Kimi Code usage follows the CLI-managed credential file at `KIMI_CODE_HOME` or `~/.kimi-code/credentials/kimi-code.json`; do not probe the legacy `~/.kimi` path as the primary source for current Kimi Code installs.
 
 ---
@@ -218,9 +220,16 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
       defaultModeId: "default",
       defaultModel: "some-model",
     },
+    // Optional: let the provider be added more than once, one account per directory
+    accounts: {
+      envVar: "MY_PROVIDER_HOME",
+      directoryExample: "/home/you/.my-provider-work",
+    },
   },
 ];
 ```
+
+`accounts` is the entire multi-account feature. Declaring it makes the provider appear under **Add provider** as an account row, makes the settings form write a derived provider with that env var, and makes usage quotas fan out per account. It rides along on the provider snapshot, so it doubles as the capability signal for older daemons. Only declare it if _all_ per-account state — auth, settings, history — lives under that one directory, and make sure the client reads the directory from `runtimeSettings.env` rather than `process.env` on every path that touches credentials, discovery, or history.
 
 ### 3. Add the factory to the provider registry
 

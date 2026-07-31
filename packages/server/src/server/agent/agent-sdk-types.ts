@@ -1,9 +1,9 @@
 import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentProviderNotice } from "@getpaseo/protocol/agent-types";
+import type { AgentProviderAccounts, AgentProviderNotice } from "@getpaseo/protocol/agent-types";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { PaseoToolCatalog } from "./tools/types.js";
 
-export type { AgentProviderNotice };
+export type { AgentProviderAccounts, AgentProviderNotice };
 
 export type AgentProvider = string;
 
@@ -113,6 +113,8 @@ export interface ProviderSnapshotEntry {
   label?: string;
   description?: string;
   defaultModeId?: string | null;
+  /** Present only on providers that can be registered more than once. */
+  accounts?: AgentProviderAccounts;
 }
 
 export interface AgentCreateConfigParent {

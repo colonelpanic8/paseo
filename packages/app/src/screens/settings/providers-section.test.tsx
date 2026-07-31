@@ -7,41 +7,54 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import type { MutableDaemonConfig } from "@getpaseo/protocol/messages";
 
-const { theme, snapshotState, configState, patchConfigMock, openProviderSettingsMock } = vi.hoisted(
-  () => ({
-    theme: {
-      spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
-      iconSize: { sm: 14, md: 20 },
-      fontSize: { xs: 11, sm: 13, base: 15 },
-      fontWeight: { normal: "400" },
-      borderRadius: { lg: 8 },
-      opacity: { 50: 0.5 },
-      colors: {
-        surface1: "#111",
-        surface2: "#222",
-        surface3: "#333",
-        foreground: "#fff",
-        foregroundMuted: "#aaa",
-        border: "#555",
-        accent: "#0a84ff",
-        statusSuccess: "#00ff00",
-        statusWarning: "#ff9500",
-        statusDanger: "#ff0000",
-        palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
-      },
+const {
+  theme,
+  snapshotState,
+  configState,
+  patchConfigMock,
+  openProviderSettingsMock,
+  daemonConfigServerIds,
+  providerSnapshotServerIds,
+  connectedServerIds,
+  featureRequests,
+} = vi.hoisted(() => ({
+  theme: {
+    spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
+    iconSize: { sm: 14, md: 20 },
+    fontSize: { xs: 11, sm: 13, base: 15 },
+    fontWeight: { normal: "400" },
+    borderRadius: { lg: 8 },
+    opacity: { 50: 0.5 },
+    colors: {
+      surface1: "#111",
+      surface2: "#222",
+      surface3: "#333",
+      foreground: "#fff",
+      foregroundMuted: "#aaa",
+      border: "#555",
+      accent: "#0a84ff",
+      statusSuccess: "#00ff00",
+      statusWarning: "#ff9500",
+      statusDanger: "#ff0000",
+      palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
     },
-    snapshotState: {
-      entries: undefined as ProviderSnapshotEntry[] | undefined,
-      isLoading: false,
-      isRefreshing: false,
-    },
-    configState: {
-      config: null as MutableDaemonConfig | null,
-    },
-    patchConfigMock: vi.fn(async () => undefined),
-    openProviderSettingsMock: vi.fn(),
-  }),
-);
+  },
+  snapshotState: {
+    entries: undefined as ProviderSnapshotEntry[] | undefined,
+    isLoading: false,
+    isRefreshing: false,
+  },
+  configState: {
+    config: null as MutableDaemonConfig | null,
+    isLoading: false,
+  },
+  patchConfigMock: vi.fn(async (_serverId: string, _patch: unknown) => undefined),
+  openProviderSettingsMock: vi.fn(),
+  daemonConfigServerIds: [] as string[],
+  providerSnapshotServerIds: [] as string[],
+  connectedServerIds: [] as string[],
+  featureRequests: [] as Array<{ serverId: string; feature: string }>,
+}));
 
 vi.mock("react-native", () => ({
   Platform: { OS: "web" },
@@ -119,6 +132,8 @@ vi.mock("react-i18next", () => ({
           "settings.providers.models.many": "{{count}} models",
           "settings.providers.addErrorTitle": "Unable to add provider",
           "settings.providers.updateErrorTitle": "Unable to update provider",
+          "settings.providers.loading": "Loading...",
+          "settings.providers.addProvider": "Add provider",
           "settings.providers.actions.menu": "{{name}} actions",
           "settings.providers.actions.remove": "Remove provider",
           "settings.providers.actions.removing": "Removing...",
@@ -239,36 +254,80 @@ vi.mock("@/stores/provider-settings-store", () => ({
 }));
 
 vi.mock("@/components/provider-catalog-list", () => ({
-  ProviderCatalogList: () => null,
+  ProviderCatalogList: ({
+    accountBases,
+    onAddAccount,
+  }: {
+    accountBases: { providerId: string; label: string }[];
+    onAddAccount: (base: { providerId: string; label: string }) => void;
+  }) =>
+    React.createElement(
+      "div",
+      { "data-testid": "provider-catalog-list" },
+      accountBases.map((base) =>
+        React.createElement("button", {
+          key: base.providerId,
+          type: "button",
+          "data-testid": `add-account-${base.providerId}`,
+          onClick: () => onAddAccount(base),
+        }),
+      ),
+    ),
+}));
+
+vi.mock("@/provider-accounts/provider-account-form-sheet", () => ({
+  ProviderAccountFormSheet: ({
+    base,
+    existingProviderIds,
+  }: {
+    base: { providerId: string };
+    existingProviderIds: ReadonlySet<string>;
+  }) =>
+    React.createElement("div", {
+      "data-testid": `${base.providerId}-account-form-sheet`,
+      "data-existing-provider-ids": [...existingProviderIds].sort().join(","),
+    }),
 }));
 
 vi.mock("@/hooks/use-providers-snapshot", () => ({
-  useProvidersSnapshot: () => ({
-    entries: snapshotState.entries,
-    isLoading: snapshotState.isLoading,
-    isFetching: false,
-    isRefreshing: snapshotState.isRefreshing,
-    error: null,
-    supportsSnapshot: true,
-    refresh: vi.fn(async () => {}),
-    refetchIfStale: vi.fn(),
-  }),
+  useProvidersSnapshot: (serverId: string) => {
+    providerSnapshotServerIds.push(serverId);
+    return {
+      entries: snapshotState.entries,
+      isLoading: snapshotState.isLoading,
+      isFetching: false,
+      isRefreshing: snapshotState.isRefreshing,
+      error: null,
+      supportsSnapshot: true,
+      refresh: vi.fn(async () => {}),
+      refetchIfStale: vi.fn(),
+    };
+  },
 }));
 
 vi.mock("@/hooks/use-daemon-config", () => ({
-  useDaemonConfig: () => ({
-    config: configState.config,
-    isLoading: false,
-    patchConfig: patchConfigMock,
-  }),
+  useDaemonConfig: (serverId: string) => {
+    daemonConfigServerIds.push(serverId);
+    return {
+      config: configState.config,
+      isLoading: configState.isLoading,
+      patchConfig: (patch: unknown) => patchConfigMock(serverId, patch),
+    };
+  },
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
-  useHostRuntimeIsConnected: () => true,
+  useHostRuntimeIsConnected: (serverId: string) => {
+    connectedServerIds.push(serverId);
+    return true;
+  },
 }));
 
 vi.mock("@/runtime/host-features", () => ({
-  useHostFeature: () => false,
+  useHostFeature: (serverId: string, feature: string) => {
+    featureRequests.push({ serverId, feature });
+    return false;
+  },
 }));
 
 vi.mock("@/utils/confirm-dialog", () => ({
@@ -285,6 +344,7 @@ const claudeEntry: ProviderSnapshotEntry = {
   description: "Claude Code",
   defaultModeId: null,
   modes: [],
+  accounts: { envVar: "CLAUDE_CONFIG_DIR", directoryExample: "/home/you/.claude-work" },
   models: [
     { provider: "claude", id: "claude-opus-4-7", label: "Claude Opus 4.7" },
     { provider: "claude", id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
@@ -342,9 +402,14 @@ describe("ProvidersSection", () => {
     snapshotState.isLoading = false;
     snapshotState.isRefreshing = false;
     configState.config = null;
+    configState.isLoading = false;
     patchConfigMock.mockReset();
     patchConfigMock.mockResolvedValue(undefined);
     openProviderSettingsMock.mockReset();
+    daemonConfigServerIds.length = 0;
+    providerSnapshotServerIds.length = 0;
+    connectedServerIds.length = 0;
+    featureRequests.length = 0;
   });
 
   afterEach(() => {
@@ -393,6 +458,30 @@ describe("ProvidersSection", () => {
     expect(indexOfText(codexNodes, "Codex")).toBeGreaterThanOrEqual(0);
     expect(indexOfText(codexNodes, "codex")).toBe(-1);
     expect(indexOfText(codexNodes, "Disabled")).toBeGreaterThanOrEqual(0);
+  });
+
+  it("scopes provider reads, feature gates, and config writes to the requested host", async () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+
+    render();
+
+    expect(daemonConfigServerIds).toContain("server-1");
+    expect(providerSnapshotServerIds).toContain("server-1");
+    expect(connectedServerIds).toContain("server-1");
+    expect(featureRequests).toEqual(
+      expect.arrayContaining([{ serverId: "server-1", feature: "providerRemoval" }]),
+    );
+
+    const switchEl =
+      findRow("Claude provider details").querySelector<HTMLElement>('[role="switch"]');
+    await act(async () => {
+      switchEl?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(patchConfigMock).toHaveBeenCalledWith("server-1", {
+      providers: { claude: { enabled: false } },
+    });
   });
 
   it("composes the row as chevron, icon, label, status, model count, then switch", () => {
@@ -454,8 +543,61 @@ describe("ProvidersSection", () => {
     });
 
     expect(patchConfigMock).toHaveBeenCalledTimes(1);
-    expect(patchConfigMock).toHaveBeenCalledWith({
+    expect(patchConfigMock).toHaveBeenCalledWith("server-1", {
       providers: { claude: { enabled: false } },
     });
+  });
+
+  it("adds an account through the same flow that adds a provider", () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+
+    render();
+
+    const addAccount = container?.querySelector<HTMLElement>('[data-testid="add-account-claude"]');
+    expect(addAccount).not.toBeNull();
+    act(() => {
+      addAccount?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container?.querySelector('[data-testid="claude-account-form-sheet"]')).not.toBeNull();
+  });
+
+  it("withholds account actions until the host config lands", () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = null;
+    configState.isLoading = true;
+
+    render();
+
+    expect(container?.querySelector('[data-testid="add-account-claude"]')).toBeNull();
+  });
+
+  it("offers no account option for providers that did not report support", () => {
+    snapshotState.entries = [disabledCodexEntry];
+    configState.config = makeConfig();
+
+    render();
+
+    expect(container?.querySelector('[data-testid="add-account-codex"]')).toBeNull();
+  });
+
+  it("hands the form every taken provider id so a new account cannot collide", () => {
+    snapshotState.entries = [claudeEntry, disabledCodexEntry];
+    configState.config = makeConfig({ "claude-work": { extends: "claude" } });
+
+    render();
+
+    act(() => {
+      container
+        ?.querySelector<HTMLElement>('[data-testid="add-account-claude"]')
+        ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(
+      container
+        ?.querySelector('[data-testid="claude-account-form-sheet"]')
+        ?.getAttribute("data-existing-provider-ids"),
+    ).toBe("claude,claude-work,codex");
   });
 });

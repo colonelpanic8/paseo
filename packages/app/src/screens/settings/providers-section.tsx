@@ -34,6 +34,11 @@ import {
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { ProviderAccountFormSheet } from "@/provider-accounts/provider-account-form-sheet";
+import {
+  listProviderAccountBases,
+  type ProviderAccountBase,
+} from "@/provider-accounts/provider-account-config";
 import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react-native";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
@@ -325,15 +330,33 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const isConnected = useHostRuntimeIsConnected(serverId);
   const supportsProviderRemoval = useHostFeature(serverId, "providerRemoval");
   const { entries, isLoading, refresh } = useProvidersSnapshot(serverId);
-  const { patchConfig } = useDaemonConfig(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
   const openProviderSettings = useProviderSettingsStore((state) => state.open);
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [removingProviderId, setRemovingProviderId] = useState<string | null>(null);
   const removingProviderIdRef = useRef<string | null>(null);
   const [installingProviderId, setInstallingProviderId] = useState<string | null>(null);
+  const [accountBase, setAccountBase] = useState<ProviderAccountBase | null>(null);
 
   const providerDefinitions = useMemo(() => buildProviderDefinitions(entries), [entries]);
   const hasServer = serverId.length > 0;
+
+  // Only providers that reported `accounts` can be added twice, so an older
+  // daemon simply lists none and the option never appears. Held back until the
+  // config lands, since the form needs it to reject a duplicate directory.
+  const accountBases = useMemo(
+    () => (config ? listProviderAccountBases(entries) : []),
+    [config, entries],
+  );
+  const existingProviderIds = useMemo(
+    () =>
+      new Set([
+        ...(entries?.map((entry) => entry.provider) ?? []),
+        ...Object.keys(config?.providers ?? {}),
+      ]),
+    [config?.providers, entries],
+  );
+  const handleCloseAccountForm = useCallback(() => setAccountBase(null), []);
 
   const handleOpenProviderSettings = useCallback(
     (providerId: string) => {
@@ -409,7 +432,6 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     },
     [installingProviderId, patchConfig, refresh, t],
   );
-
   return (
     <>
       <SettingsSection
@@ -462,8 +484,22 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
             serverId={serverId}
             installingProviderId={installingProviderId}
             onInstall={handleInstall}
+            accountBases={accountBases}
+            onAddAccount={setAccountBase}
           />
         </SettingsSection>
+      ) : null}
+
+      {accountBase && config ? (
+        <ProviderAccountFormSheet
+          key={`${serverId}:${accountBase.providerId}`}
+          base={accountBase}
+          config={config}
+          existingProviderIds={existingProviderIds}
+          patchConfig={patchConfig}
+          refreshProviders={refresh}
+          onClose={handleCloseAccountForm}
+        />
       ) : null}
     </>
   );

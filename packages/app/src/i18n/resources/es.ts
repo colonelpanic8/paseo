@@ -2101,6 +2101,22 @@ export const es: TranslationResources = {
     providers: {
       title: "Proveedores",
       addProvider: "Agregar proveedor",
+      accounts: {
+        addTitle: "Añadir cuenta de {{provider}}",
+        rowTitle: "Cuenta de {{provider}}",
+        rowDescription: "Otra cuenta con sus propias credenciales e historial",
+        add: "Añadir cuenta",
+        name: "Nombre de la cuenta",
+        namePlaceholder: "p. ej., Trabajo",
+        directory: "Directorio de la cuenta",
+        directoryHint: "Asigna a {{envVar}} esta ruta absoluta en el host.",
+        errors: {
+          nameRequired: "Introduce un nombre para la cuenta.",
+          directoryRequired: "Introduce un directorio para la cuenta.",
+          directoryAbsolute: "Introduce una ruta absoluta en este host.",
+          directoryDuplicate: "Ese directorio de cuenta ya está configurado.",
+        },
+      },
       providerDetails: "Detalles del proveedor{{name}}",
       enableProvider: "Habilitar{{name}}",
       unavailable: "Conéctese a este host para ver proveedores",

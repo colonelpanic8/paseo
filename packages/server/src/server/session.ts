@@ -54,7 +54,7 @@ import {
   createWorkspaceScriptsService,
   type WorkspaceScriptsService,
 } from "./session/workspace-scripts/workspace-scripts-service.js";
-import type { DaemonConfigStore } from "./daemon-config-store.js";
+import { toClientMutableDaemonConfig, type DaemonConfigStore } from "./daemon-config-store.js";
 import { loadPersistedConfig } from "./persisted-config.js";
 import { releaseWorkspaceServicePortPlan } from "./workspace-service-port-registry.js";
 import { getErrorMessage, getErrorMessageOr } from "@getpaseo/protocol/error-utils";
@@ -1970,7 +1970,10 @@ export class Session {
       case "get_daemon_config_request":
         this.emit({
           type: "get_daemon_config_response",
-          payload: { requestId: msg.requestId, config: this.daemonConfigStore.get() },
+          payload: {
+            requestId: msg.requestId,
+            config: toClientMutableDaemonConfig(this.daemonConfigStore.get()),
+          },
         });
         return undefined;
       case "daemon.get_status.request":
@@ -1985,15 +1988,17 @@ export class Session {
         return this.daemonSession.handleDiagnosticsRequest(msg);
       case "daemon.update.request":
         return this.daemonSession.handleUpdateRequest(msg);
-      case "set_daemon_config_request":
+      case "set_daemon_config_request": {
+        const config = this.daemonConfigStore.patch(msg.config);
         this.emit({
           type: "set_daemon_config_response",
           payload: {
             requestId: msg.requestId,
-            config: this.daemonConfigStore.patch(msg.config),
+            config: toClientMutableDaemonConfig(config),
           },
         });
         return undefined;
+      }
       case "read_project_config_request":
         return this.projectConfigSession.handleReadProjectConfigRequest(msg);
       case "write_project_config_request":

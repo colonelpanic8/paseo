@@ -2089,6 +2089,22 @@ export const ru: TranslationResources = {
     providers: {
       title: "Провайдеры",
       addProvider: "Добавить провайдера",
+      accounts: {
+        addTitle: "Добавить учётную запись {{provider}}",
+        rowTitle: "Учётная запись {{provider}}",
+        rowDescription: "Ещё одна учётная запись с собственными учётными данными и историей",
+        add: "Добавить",
+        name: "Название учётной записи",
+        namePlaceholder: "например, Работа",
+        directory: "Каталог учётной записи",
+        directoryHint: "Укажите этот абсолютный путь хоста в {{envVar}}.",
+        errors: {
+          nameRequired: "Введите название учётной записи.",
+          directoryRequired: "Введите каталог учётной записи.",
+          directoryAbsolute: "Введите абсолютный путь на этом хосте.",
+          directoryDuplicate: "Этот каталог учётной записи уже настроен.",
+        },
+      },
       providerDetails: "Подробности о провайдере{{name}}",
       enableProvider: "Включить{{name}}",
       unavailable: "Подключитесь к этому хосту, чтобы увидеть поставщиков",

@@ -2023,6 +2023,22 @@ export const zhCN: TranslationResources = {
     providers: {
       title: "Providers",
       addProvider: "添加 Provider",
+      accounts: {
+        addTitle: "添加 {{provider}} 账户",
+        rowTitle: "{{provider}} 账户",
+        rowDescription: "另一个拥有独立凭据和历史记录的账户",
+        add: "添加账户",
+        name: "账户名称",
+        namePlaceholder: "例如：工作",
+        directory: "账户目录",
+        directoryHint: "将 {{envVar}} 设为此主机上的绝对路径。",
+        errors: {
+          nameRequired: "请输入账户名称。",
+          directoryRequired: "请输入账户目录。",
+          directoryAbsolute: "请输入此主机上的绝对路径。",
+          directoryDuplicate: "该账户目录已配置。",
+        },
+      },
       providerDetails: "{{name}} Provider 详情",
       enableProvider: "启用 {{name}}",
       unavailable: "连接到这个 Host 以查看 Providers",
