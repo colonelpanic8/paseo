@@ -22,6 +22,7 @@ class PaseoTerminalView(context: Context, appContext: AppContext) : ExpoView(con
   private val terminalCanvas = TerminalCanvasView(context)
   private val inputView = EditText(context)
   private val onInput by EventDispatcher()
+  private val onTerminalKey by EventDispatcher()
   private val onResize by EventDispatcher()
   private val onFocus by EventDispatcher()
   private val onSwipeLeft by EventDispatcher()
@@ -274,16 +275,31 @@ class PaseoTerminalView(context: Context, appContext: AppContext) : ExpoView(con
     }
     inputView.setOnKeyListener { _, keyCode, event ->
       if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+      val terminalKey = when (keyCode) {
+        KeyEvent.KEYCODE_DEL -> "Backspace"
+        KeyEvent.KEYCODE_FORWARD_DEL -> "Delete"
+        KeyEvent.KEYCODE_ESCAPE -> "Escape"
+        KeyEvent.KEYCODE_TAB -> "Tab"
+        KeyEvent.KEYCODE_DPAD_UP -> "ArrowUp"
+        KeyEvent.KEYCODE_DPAD_DOWN -> "ArrowDown"
+        KeyEvent.KEYCODE_DPAD_LEFT -> "ArrowLeft"
+        KeyEvent.KEYCODE_DPAD_RIGHT -> "ArrowRight"
+        KeyEvent.KEYCODE_MOVE_HOME -> "Home"
+        KeyEvent.KEYCODE_MOVE_END -> "End"
+        KeyEvent.KEYCODE_INSERT -> "Insert"
+        KeyEvent.KEYCODE_PAGE_UP -> "PageUp"
+        KeyEvent.KEYCODE_PAGE_DOWN -> "PageDown"
+        in KeyEvent.KEYCODE_F1..KeyEvent.KEYCODE_F12 ->
+          "F${keyCode - KeyEvent.KEYCODE_F1 + 1}"
+        else -> null
+      }
       when {
-        keyCode == KeyEvent.KEYCODE_DEL -> {
-          onInput(mapOf("data" to "\u007F"))
+        terminalKey != null -> {
+          emitTerminalKey(terminalKey, event)
           true
         }
-        // Hardware keyboard Ctrl+A..Z -> control bytes 0x01..0x1A (Ctrl+C, Ctrl+Z, ...).
         event.isCtrlPressed && keyCode in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> {
-          onInput(
-            mapOf("data" to (keyCode - KeyEvent.KEYCODE_A + 1).toChar().toString()),
-          )
+          emitTerminalKey((keyCode - KeyEvent.KEYCODE_A + 'a'.code).toChar().toString(), event)
           true
         }
         else -> false
@@ -310,6 +326,18 @@ class PaseoTerminalView(context: Context, appContext: AppContext) : ExpoView(con
           clearingInput = false
         }
       },
+    )
+  }
+
+  private fun emitTerminalKey(key: String, event: KeyEvent) {
+    onTerminalKey(
+      mapOf(
+        "key" to key,
+        "ctrl" to event.isCtrlPressed,
+        "shift" to event.isShiftPressed,
+        "alt" to event.isAltPressed,
+        "meta" to event.isMetaPressed,
+      ),
     )
   }
 

@@ -10,7 +10,7 @@ class PaseoTerminalModule : Module() {
     // Bumped when native hardware-keyboard handling changes; surfaced in the JS debug
     // logs so a stale native binary is distinguishable from a broken key pipeline.
     Constants(
-      "hardwareKeyRevision" to 2,
+      "hardwareKeyRevision" to 3,
     )
 
     View(PaseoTerminalView::class) {
@@ -82,7 +82,15 @@ class PaseoTerminalModule : Module() {
         view.refresh()
       }
 
-      Events("onInput", "onResize", "onFocus", "onSwipeLeft", "onSwipeRight")
+      Events(
+        "onInput",
+        "onTerminalKey",
+        "onResize",
+        "onFocus",
+        "onSwipeLeft",
+        "onSwipeRight",
+        "onSurfaceCreationError",
+      )
 
       OnViewDestroys { view: PaseoTerminalView ->
         view.cleanup()

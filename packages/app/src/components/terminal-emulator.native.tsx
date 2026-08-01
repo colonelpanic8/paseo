@@ -5,6 +5,7 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
   type ComponentType,
 } from "react";
 import { Keyboard, NativeModules, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
@@ -47,10 +48,14 @@ interface NativeTerminalSurfaceProps {
   foregroundColor: string;
   mutedForegroundColor: string;
   onInput: (event: { nativeEvent: { data: string } }) => void;
+  onTerminalKey: (event: {
+    nativeEvent: { key: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean };
+  }) => void;
   onResize: (event: { nativeEvent: { cols: number; rows: number } }) => void;
   onFocus: () => void;
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
+  onSurfaceCreationError: () => void;
 }
 
 type NativeOperation = (surface: NativeTerminalSurfaceRef) => Promise<void>;
@@ -129,6 +134,7 @@ function NativeTerminalEmulator({
   onInput,
   onFocus,
   onResize,
+  onTerminalKey,
   onInputModeChange,
   onRendererReadyChange,
   swipeGesturesEnabled = false,
@@ -136,7 +142,8 @@ function NativeTerminalEmulator({
   onSwipeRight,
   focusRequestToken = 0,
   resizeRequestToken = 0,
-}: TerminalEmulatorProps) {
+  onSurfaceCreationError,
+}: TerminalEmulatorProps & { onSurfaceCreationError: () => void }) {
   const surfaceRef = useRef<NativeTerminalSurfaceRef | null>(null);
   const outputDecoderRef = useRef(new TextDecoder());
   const readyRef = useRef(false);
@@ -149,6 +156,7 @@ function NativeTerminalEmulator({
     onInput,
     onFocus,
     onResize,
+    onTerminalKey,
     onInputModeChange,
     onRendererReadyChange,
     onSwipeLeft,
@@ -158,6 +166,7 @@ function NativeTerminalEmulator({
     onInput,
     onFocus,
     onResize,
+    onTerminalKey,
     onInputModeChange,
     onRendererReadyChange,
     onSwipeLeft,
@@ -291,6 +300,14 @@ function NativeTerminalEmulator({
   const handleInput = useCallback((event: { nativeEvent: { data: string } }) => {
     callbacksRef.current.onInput?.(event.nativeEvent.data);
   }, []);
+  const handleTerminalKey = useCallback(
+    (event: {
+      nativeEvent: { key: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean };
+    }) => {
+      callbacksRef.current.onTerminalKey?.(event.nativeEvent);
+    },
+    [],
+  );
   const handleFocus = useCallback(() => {
     callbacksRef.current.onFocus?.();
   }, []);
@@ -318,10 +335,12 @@ function NativeTerminalEmulator({
       foregroundColor={foregroundColor}
       mutedForegroundColor={mutedForegroundColor}
       onInput={handleInput}
+      onTerminalKey={handleTerminalKey}
       onResize={handleResize}
       onFocus={handleFocus}
       onSwipeLeft={handleSwipeLeft}
       onSwipeRight={handleSwipeRight}
+      onSurfaceCreationError={onSurfaceCreationError}
     />
   );
 }
@@ -335,8 +354,16 @@ const styles = StyleSheet.create({
 });
 
 export default function TerminalEmulator(props: TerminalEmulatorProps) {
-  if (!NativeTerminalSurface) {
+  const [nativeSurfaceFailed, setNativeSurfaceFailed] = useState(false);
+  const handleSurfaceCreationError = useCallback(() => setNativeSurfaceFailed(true), []);
+  if (!NativeTerminalSurface || nativeSurfaceFailed) {
     return <WebViewTerminalEmulator {...props} />;
   }
-  return <NativeTerminalEmulator key={props.streamKey} {...props} />;
+  return (
+    <NativeTerminalEmulator
+      key={props.streamKey}
+      {...props}
+      onSurfaceCreationError={handleSurfaceCreationError}
+    />
+  );
 }

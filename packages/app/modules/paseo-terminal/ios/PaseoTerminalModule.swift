@@ -79,7 +79,15 @@ public class PaseoTerminalModule: Module {
         view.refresh()
       }
 
-      Events("onInput", "onResize", "onFocus", "onSwipeLeft", "onSwipeRight")
+      Events(
+        "onInput",
+        "onTerminalKey",
+        "onResize",
+        "onFocus",
+        "onSwipeLeft",
+        "onSwipeRight",
+        "onSurfaceCreationError"
+      )
     }
   }
 }

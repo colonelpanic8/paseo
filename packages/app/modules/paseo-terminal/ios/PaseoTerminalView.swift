@@ -217,10 +217,12 @@ public final class PaseoTerminalView: ExpoView, UITextFieldDelegate {
   private var backgroundColorValue = UIColor(hexString: "#24292e")
 
   let onInput = EventDispatcher()
+  let onTerminalKey = EventDispatcher()
   let onResize = EventDispatcher()
   let onFocus = EventDispatcher()
   let onSwipeLeft = EventDispatcher()
   let onSwipeRight = EventDispatcher()
+  let onSurfaceCreationError = EventDispatcher()
 
   var terminalKey: String = "" {
     didSet {
@@ -502,7 +504,7 @@ public final class PaseoTerminalView: ExpoView, UITextFieldDelegate {
     guard surface == nil, app == nil, !isCreatingSurface, !surfaceCreationFailed else { return }
     guard terminalViewport.bounds.width > 0, terminalViewport.bounds.height > 0 else { return }
     guard GhosttyRuntime.ensureInitialized() else {
-      surfaceCreationFailed = true
+      failSurfaceCreation()
       return
     }
 
@@ -521,7 +523,7 @@ public final class PaseoTerminalView: ExpoView, UITextFieldDelegate {
     )
 
     guard let config = ghostty_config_new() else {
-      surfaceCreationFailed = true
+      failSurfaceCreation()
       return
     }
     loadThemeConfig(into: config)
@@ -529,7 +531,7 @@ public final class PaseoTerminalView: ExpoView, UITextFieldDelegate {
     defer { ghostty_config_free(config) }
 
     guard let createdApp = ghostty_app_new(&runtimeConfig, config) else {
-      surfaceCreationFailed = true
+      failSurfaceCreation()
       return
     }
 
@@ -544,7 +546,7 @@ public final class PaseoTerminalView: ExpoView, UITextFieldDelegate {
 
     guard let createdSurface = ghostty_surface_new(createdApp, &surfaceConfig) else {
       ghostty_app_free(createdApp)
-      surfaceCreationFailed = true
+      failSurfaceCreation()
       return
     }
 
@@ -554,6 +556,11 @@ public final class PaseoTerminalView: ExpoView, UITextFieldDelegate {
     ghostty_surface_set_color_scheme(createdSurface, appearance.ghosttyColorScheme)
     resizeSurface()
     feedBuffer(initialBuffer)
+  }
+
+  private func failSurfaceCreation() {
+    surfaceCreationFailed = true
+    onSurfaceCreationError([:])
   }
 
   private func resetSurface() {
