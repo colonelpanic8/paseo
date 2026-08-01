@@ -47,15 +47,13 @@ import {
   invalidateServerDataQueriesAfterReconnect,
   mountServerDataPushRouter,
 } from "@/data/push-router";
-import { mountBrowserAutomationDaemonClientHandler } from "@/browser-automation/handler";
 import { mountLiveVoiceCrossHostRouter } from "@/live-voice/live-voice-cross-host-router";
 import { isAuthorizedLiveVoiceRoute } from "@/live-voice/live-voice-route-authority";
+import { mountBrowserAutomationDaemonClientHandler } from "@/desktop/browser/automation/handler";
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
-import { sendQueuedComposerMessageNow } from "@/composer/actions";
-import {
-  resolveComposerAttachmentSubmitFormat,
-  splitComposerAttachmentsForSubmit,
-} from "@/composer/attachments/submit";
+import { dispatchComposerAgentMessage, sendQueuedComposerMessageNow } from "@/composer/actions";
+import { createMessageSubmissionWriter } from "@/composer/submission/writer";
+import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
 import { encodeImages } from "@/utils/encode-images";
 import { DirectorySync, type RefreshAgentDirectoryResult } from "@/runtime/directory-sync";
 import { ReplicaCache } from "@/runtime/replica-cache";
@@ -1435,6 +1433,7 @@ interface AgentDirectoryRefreshInput {
 export class HostRuntimeStore {
   private controllers = new Map<string, HostRuntimeController>();
   private serverListeners = new Map<string, Set<() => void>>();
+  private agentStoppedRunningListeners = new Map<string, Set<(agentId: string) => void>>();
   private globalListeners = new Set<() => void>();
   private hostListListeners = new Set<() => void>();
   private version = 0;
@@ -1679,11 +1678,12 @@ export class HostRuntimeStore {
     rekeyMap(this.controllers, oldServerId, newServerId);
     rekeyMap(this.lastConnectionStatusByServer, oldServerId, newServerId);
     rekeyMap(this.directoryBootstrapInFlight, oldServerId, newServerId);
+    rekeyMap(this.agentStoppedRunningListeners, oldServerId, newServerId);
     this.replicaCache.reconcileServerId(oldServerId, newServerId);
     this.directorySyncByServer.get(oldServerId)?.dispose();
     this.directorySyncByServer.delete(oldServerId);
     const directory = new DirectorySync(newServerId, {
-      drainQueuedAgentMessage: (agentId) => this.drainQueuedAgentMessage(newServerId, agentId),
+      onAgentStoppedRunning: (agentId) => this.onAgentStoppedRunning(newServerId, agentId),
       markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
       markAgentReady: () => controller.markAgentDirectorySyncReady(),
       markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2020,8 +2020,7 @@ export class HostRuntimeStore {
       this.directorySyncByServer.set(
         host.serverId,
         new DirectorySync(host.serverId, {
-          drainQueuedAgentMessage: (agentId) =>
-            this.drainQueuedAgentMessage(host.serverId, agentId),
+          onAgentStoppedRunning: (agentId) => this.onAgentStoppedRunning(host.serverId, agentId),
           markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
           markAgentReady: () => controller.markAgentDirectorySyncReady(),
           markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2164,14 +2163,16 @@ export class HostRuntimeStore {
       submitMessage: async ({ text, attachments }) => {
         const supportsForgeAttachments =
           useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.forgeSearch === true;
-        const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
-          format: resolveComposerAttachmentSubmitFormat({ supportsForgeAttachments }),
-        });
-        const images = await encodeImages(wirePayload.images);
-        await client.sendAgentMessage(agentId, text, {
-          messageId: next.id,
-          ...(images && images.length > 0 ? { images } : {}),
-          attachments: wirePayload.attachments,
+        await dispatchComposerAgentMessage({
+          client,
+          agentId,
+          text,
+          attachments,
+          attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
+            supportsForgeAttachments,
+          }),
+          encodeImages,
+          submission: createMessageSubmissionWriter(serverId),
         });
       },
     })
@@ -2219,6 +2220,18 @@ export class HostRuntimeStore {
       if (set.size === 0) {
         this.serverListeners.delete(serverId);
       }
+    };
+  }
+
+  subscribeAgentStoppedRunning(serverId: string, listener: (agentId: string) => void): () => void {
+    const listeners = this.agentStoppedRunningListeners.get(serverId) ?? new Set();
+    listeners.add(listener);
+    this.agentStoppedRunningListeners.set(serverId, listeners);
+    return () => {
+      const current = this.agentStoppedRunningListeners.get(serverId);
+      if (!current) return;
+      current.delete(listener);
+      if (current.size === 0) this.agentStoppedRunningListeners.delete(serverId);
     };
   }
 
@@ -2328,6 +2341,13 @@ export class HostRuntimeStore {
     }
     for (const listener of this.globalListeners) {
       listener();
+    }
+  }
+
+  private onAgentStoppedRunning(serverId: string, agentId: string): void {
+    this.drainQueuedAgentMessage(serverId, agentId);
+    for (const listener of this.agentStoppedRunningListeners.get(serverId) ?? []) {
+      listener(agentId);
     }
   }
 }

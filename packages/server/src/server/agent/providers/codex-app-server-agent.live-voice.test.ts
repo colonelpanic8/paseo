@@ -4,6 +4,7 @@ import type { AgentSession, AgentSessionConfig } from "../agent-sdk-types.js";
 import { asAgentRealtimeVoiceSession } from "../agent-realtime-voice.js";
 import type { AgentRealtimeVoiceEvent } from "../agent-realtime-voice.js";
 import { CodexAppServerAgentSession } from "./codex-app-server-agent.js";
+import { createFakeCodexAppServer } from "./codex/test-utils/fake-app-server.js";
 import { createTestLogger } from "../../../test-utils/test-logger.js";
 
 const THREAD_ID = "thread-live-voice";
@@ -193,5 +194,37 @@ describe("codex live voice", () => {
     session.handleNotification("thread/realtime/closed", "not-an-object");
 
     expect(realtimeEvents).toEqual([{ kind: "closed", reason: null }]);
+  });
+
+  test("an unexpected app-server exit closes the realtime transport exactly once", async () => {
+    const appServer = createFakeCodexAppServer();
+    const session = new CodexAppServerAgentSession(
+      createConfig(),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+      {},
+      false,
+      false,
+      false,
+      "agent-live-voice",
+      undefined,
+      true,
+    );
+    const realtimeEvents: AgentRealtimeVoiceEvent[] = [];
+    session.subscribeRealtimeEvents((event) => realtimeEvents.push(event));
+    await session.connect();
+
+    appServer.child.stderr.write("provider crashed");
+    appServer.child.emit("exit", 17, null);
+    appServer.child.emit("exit", 17, null);
+
+    expect(realtimeEvents).toEqual([
+      {
+        kind: "transport_closed",
+        reason: "Codex app-server exited with code 17 and signal null",
+      },
+    ]);
+    await session.close();
   });
 });

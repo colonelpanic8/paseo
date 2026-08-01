@@ -57,6 +57,7 @@ import { LiveVoiceFooterButton } from "@/live-voice/live-voice-footer-button";
 import { SidebarLiveVoiceSlot } from "@/live-voice/live-voice-sidebar-card";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
+import { useIsMobilePanelPresented } from "@/mobile-panels/provider";
 import {
   buildOpenProjectRoute,
   buildNewWorkspaceRoute,
@@ -622,6 +623,7 @@ function MobileSidebar({
   const isSessionsActive = pathname.includes("/sessions");
   const isSchedulesActive = pathname.includes("/schedules");
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
+  const dragGestureHostPresented = useIsMobilePanelPresented("agent-list");
 
   const handleViewMore = useCallback(() => {
     closeSidebar();
@@ -717,6 +719,7 @@ function MobileSidebar({
             onWorkspacePress={handleWorkspacePress}
             onAddProject={handleOpenProject}
             parentGestureRef={closeGestureRef}
+            dragGestureHostPresented={dragGestureHostPresented}
             listHeaderComponent={workspacesSectionHeaderElement}
           />
         )}
