@@ -14,7 +14,8 @@ import {
   getWorkspaceIndexJumpModifierKey,
   isShortcutModifierDown,
 } from "@/keyboard/keyboard-shortcuts";
-import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
+import { ownsListNavigationKeys, resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
+import { resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 import {
   buildBrowserKeyboardPolicy,
   parseBrowserShortcutInput,
@@ -325,6 +326,13 @@ export function useKeyboardShortcuts({
           state.setCmdOrCtrlDown(false);
         }
         state.setControlShortcutModifierDown(false);
+      }
+
+      // This listener runs at window capture, so a menu that navigates its own
+      // result list never sees Ctrl+N/Ctrl+P (new workspace / switch project on
+      // non-mac) unless we stand down here.
+      if (resolveListSearchKeyAction(event) !== null && ownsListNavigationKeys(event.target)) {
+        return;
       }
 
       const focusScope = resolveKeyboardFocusScope({
