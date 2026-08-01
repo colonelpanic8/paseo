@@ -11,6 +11,7 @@ import {
   normalizeStoredHostProfile,
   upsertHostConnectionInProfiles,
   registryHasConnection,
+  type HostColor,
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
@@ -1374,6 +1375,7 @@ export class HostRuntimeStore {
   private queuedAgentDrainInFlight = new Set<string>();
   private directorySyncByServer = new Map<string, DirectorySync>();
   private configuredOverrideBootstrapInFlight: Promise<void> | null = null;
+  private hostRegistryWriteQueue: Promise<void> = Promise.resolve();
   private bootStarted = false;
   private storage: HostRuntimeStorage;
   private replicaCache: ReplicaCache;
@@ -1885,6 +1887,33 @@ export class HostRuntimeStore {
     await this.persistHosts();
   }
 
+  async setHostColor(serverId: string, color: HostColor | null): Promise<void> {
+    let targetConnectionIds: readonly string[] | null = null;
+    while (true) {
+      const baseHosts = this.hosts;
+      const target = baseHosts.find(
+        (host) =>
+          host.serverId === serverId ||
+          targetConnectionIds?.some((connectionId) =>
+            host.connections.some((connection) => connection.id === connectionId),
+          ) === true,
+      );
+      if (!target) {
+        throw new Error(`Host ${serverId} no longer exists.`);
+      }
+      targetConnectionIds ??= target.connections.map((connection) => connection.id);
+      const next = baseHosts.map((host) =>
+        host === target ? { ...host, color, updatedAt: new Date().toISOString() } : host,
+      );
+      await this.writeHosts(next);
+      if (this.hosts !== baseHosts) {
+        continue;
+      }
+      this.setHostsAndSync(next);
+      return;
+    }
+  }
+
   async removeHost(serverId: string): Promise<void> {
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     this.setHostsAndSync(remaining);
@@ -1963,10 +1992,19 @@ export class HostRuntimeStore {
 
   private async persistHosts(): Promise<void> {
     try {
-      await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(this.hosts));
+      await this.writeHosts(this.hosts);
     } catch (error) {
       console.error("[HostRuntime] Failed to persist host registry", error);
     }
+  }
+
+  private async writeHosts(hosts: readonly HostProfile[]): Promise<void> {
+    const serializedHosts = JSON.stringify(hosts);
+    const write = this.hostRegistryWriteQueue.then(() =>
+      this.storage.setItem(REGISTRY_STORAGE_KEY, serializedHosts),
+    );
+    this.hostRegistryWriteQueue = write.catch(() => undefined);
+    await write;
   }
 
   private emitHostList(): void {
@@ -2516,6 +2554,7 @@ export interface HostMutations {
     label?: string,
   ) => Promise<HostProfile>;
   renameHost: (serverId: string, label: string) => Promise<void>;
+  setHostColor: (serverId: string, color: HostColor | null) => Promise<void>;
   removeHost: (serverId: string) => Promise<void>;
   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
 }
@@ -2530,6 +2569,7 @@ export function useHostMutations(): HostMutations {
       upsertConnectionFromOffer: (offer, label) => store.upsertConnectionFromOffer(offer, label),
       upsertConnectionFromOfferUrl: (url, label) => store.upsertConnectionFromOfferUrl(url, label),
       renameHost: (serverId, label) => store.renameHost(serverId, label),
+      setHostColor: (serverId, color) => store.setHostColor(serverId, color),
       removeHost: (serverId) => store.removeHost(serverId),
       removeConnection: (serverId, connectionId) => store.removeConnection(serverId, connectionId),
     }),
