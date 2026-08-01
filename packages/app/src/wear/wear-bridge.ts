@@ -7,7 +7,7 @@ import { buildWearTranscript, isTranscriptEntry, MAX_TRANSCRIPT_ENTRIES } from "
 export interface WearBridgeTransport {
   publishSnapshot(payload: string): Promise<boolean>;
   /** Publishes to a per-agent path, so open transcripts don't clobber each other. */
-  publishTranscript(agentId: string, payload: string): Promise<boolean>;
+  publishTranscript(serverId: string, agentId: string, payload: string): Promise<boolean>;
   /** Publishes one project's icon bytes, keyed by the snapshot's projectKey. */
   publishProjectIcon(projectKey: string, dataBase64: string, mimeType: string): Promise<boolean>;
   addCommandListener(listener: (payload: string) => void): { remove(): void };
@@ -417,7 +417,7 @@ export class WearBridge {
     // The DataItem path stays keyed by agent id alone — that is the wire contract the
     // watch reads, and it only ever talks to one phone.
     await this.deps.transport
-      .publishTranscript(agentId, JSON.stringify(transcript))
+      .publishTranscript(serverId, agentId, JSON.stringify(transcript))
       .catch((error: unknown) => {
         this.deps.logger?.warn(`Failed to publish wear transcript for agent ${agentId}`, error);
         return false;

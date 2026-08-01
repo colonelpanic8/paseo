@@ -36,6 +36,8 @@ fun Map<String, Transcript>.retainingAgentsIn(
   workspaces: List<Workspace>,
 ): Map<String, Transcript> {
   if (isEmpty()) return this
-  val live = workspaces.flatMapTo(mutableSetOf()) { workspace -> workspace.agents.map { it.id } }
+  val live = workspaces.flatMapTo(mutableSetOf()) { workspace ->
+    workspace.agents.map { "${workspace.serverId}\u0000${it.id}" }
+  }
   return filterKeys { it in live }
 }
