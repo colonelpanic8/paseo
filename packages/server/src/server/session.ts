@@ -301,6 +301,10 @@ function beginAgentDeleteIfSupported(agentStorage: AgentStorage, agentId: string
 
 const FETCH_AGENTS_SORT_KEYS = ["status_priority", "created_at", "updated_at", "title"] as const;
 
+// The archived list backs an undo affordance, not an archive browser. Cap it so a
+// long-lived daemon never streams thousands of stale records to every client.
+const ARCHIVED_WORKSPACES_LIMIT = 25;
+
 export function resolveWaitForFinishError(options: {
   status: "permission" | "error" | "idle";
   final: AgentSnapshotPayload | null;
@@ -2153,6 +2157,8 @@ export class Session {
         return this.handleWorkspaceRecoveryInspectRequest(msg);
       case "workspace.recovery.restore.request":
         return this.handleWorkspaceRecoveryRestoreRequest(msg);
+      case "workspace.archived.list.request":
+        return this.handleWorkspaceArchivedListRequest(msg);
       default:
         return undefined;
     }
@@ -3013,6 +3019,55 @@ export class Session {
       payload: {
         requestId: request.requestId,
         state,
+      },
+    });
+  }
+
+  /**
+   * Recently-archived workspaces, newest archive first. Deliberately not part of
+   * the workspace directory: these records are archived, so they must never reach
+   * the live descriptor map that drives project mode, switchers, or counts. The
+   * caller gets a flat capped list and nothing else.
+   *
+   * Workspaces whose owning project is archived are omitted — unarchiving one
+   * would surface a workspace under a project the user cannot see.
+   */
+  private async handleWorkspaceArchivedListRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.archived.list.request" }>,
+  ): Promise<void> {
+    const [workspaces, projects] = await Promise.all([
+      this.workspaceRegistry.list(),
+      this.projectRegistry.list(),
+    ]);
+    const activeProjects = new Map(
+      projects
+        .filter((project) => !project.archivedAt)
+        .map((project) => [project.projectId, project] as const),
+    );
+
+    const entries = workspaces
+      .flatMap((workspace) => {
+        const archivedAt = workspace.archivedAt;
+        if (!archivedAt) return [];
+        const project = activeProjects.get(workspace.projectId);
+        if (!project) return [];
+        return [
+          {
+            id: workspace.workspaceId,
+            projectDisplayName: resolveProjectDisplayName(project),
+            name: resolveWorkspaceDisplayName(workspace),
+            archivedAt,
+          },
+        ];
+      })
+      .sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
+      .slice(0, ARCHIVED_WORKSPACES_LIMIT);
+
+    this.emit({
+      type: "workspace.archived.list.response",
+      payload: {
+        requestId: request.requestId,
+        entries,
       },
     });
   }

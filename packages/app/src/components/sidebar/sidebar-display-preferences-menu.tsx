@@ -27,6 +27,7 @@ const GROUP_MODE_ITEMS: Array<{ value: SidebarGroupMode; label: string }> = [
 const WORKSPACE_TITLE_SOURCE_ITEMS: Array<{ value: WorkspaceTitleSource; label: string }> = [
   { value: "title", label: "Title" },
   { value: "branch", label: "Branch name" },
+  { value: "worktree", label: "Worktree suffix" },
 ];
 
 interface DisplayPreferenceOption<Value extends string> {
