@@ -303,3 +303,107 @@ describe("resolveSubagentRowLabel", () => {
     expect(resolveSubagentRowLabel(providerRow({ id: "a" }))).toBe(null);
   });
 });
+
+describe("buildSubagentRowPresentationData for provider rows", () => {
+  function providerPresentationRow(
+    overrides: Partial<ProviderSubagentRow> = {},
+  ): ProviderSubagentRow {
+    return {
+      kind: "provider",
+      id: overrides.id ?? "toolu_1",
+      parentAgentId: "parent",
+      provider: "claude",
+      title: "title" in overrides ? (overrides.title ?? null) : "general-purpose",
+      description: overrides.description ?? null,
+      subtitle: overrides.subtitle ?? null,
+      status: overrides.status ?? "running",
+      requiresAttention: false,
+      createdAt: overrides.createdAt ?? new Date("2026-07-26T00:00:00.000Z"),
+      model: overrides.model ?? null,
+      runtimeModelId: overrides.runtimeModelId ?? null,
+      thinkingOptionId: overrides.thinkingOptionId ?? null,
+      effectiveThinkingOptionId: overrides.effectiveThinkingOptionId,
+    };
+  }
+
+  it("names the row after the task and demotes the subagent type", () => {
+    const presentation = buildSubagentRowPresentationData(
+      providerPresentationRow({ title: "general-purpose", description: "Reply with banana" }),
+    );
+    expect(presentation.label).toBe("Reply with banana");
+    expect(presentation.subtitle).toBe("general-purpose");
+  });
+
+  it("tells two siblings of the same type apart", () => {
+    const left = buildSubagentRowPresentationData(
+      providerPresentationRow({ id: "a", description: "Summarize the docs" }),
+    );
+    const right = buildSubagentRowPresentationData(
+      providerPresentationRow({ id: "b", description: "Reply with banana" }),
+    );
+    expect(left.label).not.toBe(right.label);
+  });
+
+  it("keeps type-as-label and an empty subtitle when a provider reports no task", () => {
+    const presentation = buildSubagentRowPresentationData(
+      providerPresentationRow({ title: "Provider child", description: null }),
+    );
+    expect(presentation.label).toBe("Provider child");
+    expect(presentation.subtitle).toBe("");
+  });
+
+  it("stays in the loading state when neither field is known", () => {
+    const presentation = buildSubagentRowPresentationData(
+      providerPresentationRow({ title: null, description: null }),
+    );
+    expect(presentation.titleState).toBe("loading");
+  });
+
+  it("leaves managed subagent rows with no subtitle", () => {
+    expect(buildSubagentRowPresentationData(row({ id: "a", title: "Managed" })).subtitle).toBe("");
+  });
+});
+
+describe("provider-owned row subtitles", () => {
+  function providerSubtitleRow(overrides: Partial<ProviderSubagentRow> = {}): ProviderSubagentRow {
+    return {
+      kind: "provider",
+      id: "toolu_1",
+      parentAgentId: "parent",
+      provider: "claude",
+      title: "general-purpose",
+      description: "Reply with banana",
+      subtitle: null,
+      status: "running",
+      requiresAttention: false,
+      createdAt: new Date("2026-07-26T00:00:00.000Z"),
+      model: null,
+      runtimeModelId: null,
+      thinkingOptionId: null,
+      effectiveThinkingOptionId: undefined,
+      ...overrides,
+    };
+  }
+
+  it("displays provider context without interpreting it", () => {
+    expect(
+      buildSubagentRowPresentationData(
+        providerSubtitleRow({ subtitle: "general-purpose · Opus 5 · High · 16.5k tokens" }),
+      ).subtitle,
+    ).toBe("general-purpose · Opus 5 · High · 16.5k tokens");
+  });
+
+  it("falls back to the type when an older provider sends no subtitle", () => {
+    expect(buildSubagentRowPresentationData(providerSubtitleRow()).subtitle).toBe(
+      "general-purpose",
+    );
+  });
+
+  it("does not duplicate the type when it is already the primary label", () => {
+    expect(
+      buildSubagentRowPresentationData(
+        providerSubtitleRow({ description: null, subtitle: null, title: "general-purpose" }),
+      ).subtitle,
+    ).toBe("");
+  });
+});
