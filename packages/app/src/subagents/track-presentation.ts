@@ -16,6 +16,8 @@ export interface SubagentRowPresentationData {
   key: string;
   kind: "agent";
   label: string;
+  /** Secondary provider context rendered after the row label. */
+  subtitle: string;
   /**
    * Trailing muted detail rendered after the title — "Model · Thinking". Null
    * when nothing is known, so the row renders no empty slot.
@@ -30,12 +32,21 @@ export function buildSubagentRowPresentationData(
   row: SubagentRow,
   modelDisplay?: AgentModelDisplay | null,
 ): SubagentRowPresentationData {
-  const label = resolveSubagentRowLabel(row);
+  // The task distinguishes siblings in a fan-out, so it names the row when present. Providers
+  // own the compact secondary context because model, effort, and usage semantics differ.
+  const description = row.kind === "provider" ? resolveRowLabel(row.description) : null;
+  const title = resolveRowLabel(row.title);
+  const label = description ?? title;
+  const subtitle =
+    row.kind === "provider"
+      ? (resolveRowLabel(row.subtitle) ?? (description ? title : null))
+      : null;
   const status = presentationStatus(row);
   return {
     key: `${row.kind}_subagent_${row.id}`,
     kind: "agent",
     label: label ?? "",
+    subtitle: subtitle ?? "",
     meta: modelDisplay ? formatAgentModelDisplayMeta(modelDisplay) : null,
     tooltip: resolveSubagentRowTooltip(row, label),
     titleState: label ? "ready" : "loading",

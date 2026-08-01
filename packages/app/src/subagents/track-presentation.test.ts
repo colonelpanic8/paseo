@@ -37,6 +37,7 @@ function providerRow(
     provider: overrides.provider ?? "claude",
     title: overrides.title ?? null,
     description: overrides.description ?? null,
+    subtitle: overrides.subtitle ?? null,
     status: overrides.status ?? "running",
     requiresAttention: overrides.requiresAttention ?? false,
     createdAt: overrides.createdAt ?? new Date("2026-04-20T00:00:00.000Z"),
@@ -225,7 +226,30 @@ describe("buildSubagentRowPresentationData", () => {
     );
 
     expect(presentation.label).toBe("Find hover bugs");
+    expect(presentation.subtitle).toBe("general-purpose");
     expect(presentation.titleState).toBe("ready");
+  });
+
+  it("displays provider-owned runtime context without interpreting it", () => {
+    const presentation = buildSubagentRowPresentationData(
+      providerRow({
+        id: "a",
+        title: "explorer",
+        description: "Find hover bugs",
+        subtitle: "explorer · GPT-5.6-Sol · High",
+      }),
+    );
+
+    expect(presentation.subtitle).toBe("explorer · GPT-5.6-Sol · High");
+  });
+
+  it("does not duplicate the type when it is already the provider row label", () => {
+    const presentation = buildSubagentRowPresentationData(
+      providerRow({ id: "a", title: "explorer", description: null, subtitle: null }),
+    );
+
+    expect(presentation.label).toBe("explorer");
+    expect(presentation.subtitle).toBe("");
   });
 
   it("keeps the subagent type available in the provider row tooltip", () => {
