@@ -42,6 +42,7 @@ import {
   useFormPreferences,
 } from "@/hooks/use-form-preferences";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
+import { SEARCHABLE_OPTION_THRESHOLD } from "@/components/ui/combobox-options";
 import {
   AgentModeControl,
   useLiveAgentModeControl,
@@ -800,8 +801,6 @@ interface DesktopAgentControlsContentProps {
   modelSelectorServerId: string | null;
 }
 
-const DESKTOP_SEARCH_THRESHOLD = 6;
-
 function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -882,7 +881,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             options={comboboxProviderOptions}
             value={selectedProviderId ?? ""}
             onSelect={handleProviderSelect}
-            searchable={comboboxProviderOptions.length > DESKTOP_SEARCH_THRESHOLD}
+            searchable={comboboxProviderOptions.length > SEARCHABLE_OPTION_THRESHOLD}
             open={openSelector === "provider"}
             onOpenChange={handleProviderOpenChange}
             anchorRef={providerAnchorRef}
@@ -950,7 +949,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             options={comboboxThinkingOptions}
             value={selectedThinkingOptionId ?? ""}
             onSelect={handleThinkingSelect}
-            searchable={comboboxThinkingOptions.length > DESKTOP_SEARCH_THRESHOLD}
+            searchable={comboboxThinkingOptions.length > SEARCHABLE_OPTION_THRESHOLD}
             open={openSelector === "thinking"}
             onOpenChange={handleThinkingOpenChange}
             anchorRef={thinkingAnchorRef}
