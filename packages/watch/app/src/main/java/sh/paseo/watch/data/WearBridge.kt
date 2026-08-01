@@ -54,7 +54,13 @@ object WearBridge {
 
   /** DataClient path for one agent's transcript. */
   fun transcriptPath(serverId: String, agentId: String): String =
-    "$TRANSCRIPT_PATH_PREFIX/${Uri.encode(serverId)}/${Uri.encode(agentId)}"
+    transcriptPathWithEncoder(serverId, agentId, Uri::encode)
+
+  internal fun transcriptPathWithEncoder(
+    serverId: String,
+    agentId: String,
+    encode: (String) -> String,
+  ): String = "$TRANSCRIPT_PATH_PREFIX/${encode(serverId)}/${encode(agentId)}"
 
   /**
    * DataClient path prefix for per-project icons: `/paseo/icon/<Uri.encode(projectKey)>`.

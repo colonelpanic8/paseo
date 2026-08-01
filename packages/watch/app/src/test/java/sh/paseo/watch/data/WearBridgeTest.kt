@@ -246,8 +246,9 @@ class WearBridgeTest {
 
   @Test
   fun `transcript path is per agent under the shared prefix`() {
-    assertEquals("/paseo/transcript/agent-1", WearBridge.transcriptPath("agent-1"))
-    assertTrue(WearBridge.transcriptPath("agent-1").startsWith(WearBridge.TRANSCRIPT_PATH_PREFIX))
+    val path = WearBridge.transcriptPathWithEncoder("srv-1", "agent-1") { it }
+    assertEquals("/paseo/transcript/srv-1/agent-1", path)
+    assertTrue(path.startsWith(WearBridge.TRANSCRIPT_PATH_PREFIX))
   }
 
   @Test
