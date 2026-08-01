@@ -3,6 +3,7 @@ import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import { normalizeAgentSnapshot } from "./agent-snapshots";
 
+// oxlint-disable-next-line complexity
 function createSnapshot(
   input: Partial<Omit<AgentSnapshotPayload, "labels">> & {
     labels?: Record<string, unknown>;
