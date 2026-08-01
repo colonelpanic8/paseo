@@ -22,7 +22,6 @@ export {
   getHostPickerLabel,
 };
 
-const SEARCHABLE_THRESHOLD = 10;
 type RenderHostOption = NonNullable<ComboboxProps["renderOption"]>;
 interface HostPickerHost {
   serverId: string;
@@ -174,6 +173,7 @@ export interface HostPickerProps {
   onEnableBuiltInDaemon?: () => void;
   showActiveConnection?: boolean;
   onOpenHostSettings?: (serverId: string) => void;
+  /** Host pickers search by default; pass `false` for a picker that is always short. */
   searchable?: boolean;
   title?: string;
   desktopPlacement?: ComboboxProps["desktopPlacement"];
@@ -197,7 +197,7 @@ export function HostPicker({
   onEnableBuiltInDaemon,
   showActiveConnection,
   onOpenHostSettings,
-  searchable,
+  searchable = true,
   title,
   desktopPlacement = "bottom-start",
   desktopMinWidth,
@@ -222,8 +222,6 @@ export function HostPicker({
       });
     return hostOptions;
   }, [orderedHosts, includeAllHost, includeAddHost, includeEnableBuiltInDaemon]);
-
-  const isSearchable = searchable === true && orderedHosts.length > SEARCHABLE_THRESHOLD;
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -304,7 +302,7 @@ export function HostPicker({
         value={value}
         onSelect={handleSelect}
         renderOption={renderOption}
-        searchable={isSearchable}
+        searchable={searchable}
         searchPlaceholder="Search hosts"
         title={title ?? "Host"}
         open={open}
