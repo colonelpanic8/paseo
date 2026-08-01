@@ -567,6 +567,8 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+    maxWidth: "100%",
+    flexShrink: 1,
   },
   copyButton: {
     alignSelf: "center",
@@ -578,6 +580,8 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
   label: {
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
+    flexShrink: 1,
+    minWidth: 0,
   },
 }));
 
