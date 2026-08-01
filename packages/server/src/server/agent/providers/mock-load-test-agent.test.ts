@@ -49,6 +49,35 @@ describe("MockLoadTestAgentClient", () => {
     });
   });
 
+  test("lists mock skills for draft and live sessions", async () => {
+    const client = new MockLoadTestAgentClient();
+    const config = {
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    } as const;
+    const expectedCommands = [
+      {
+        name: "HOME",
+        description: "Exercise shell-variable collisions in development.",
+        argumentHint: "",
+        kind: "skill",
+      },
+      {
+        name: "release-beta",
+        description: "Simulate a provider skill in development.",
+        argumentHint: "",
+        kind: "skill",
+      },
+    ];
+
+    await expect(client.listCommands(config)).resolves.toEqual(expectedCommands);
+
+    const session = await client.createSession(config);
+    await expect(session.listCommands?.()).resolves.toEqual(expectedCommands);
+  });
+
+
   test("returns schema-shaped JSON for structured branch-name generation", async () => {
     vi.useFakeTimers();
     const client = new MockLoadTestAgentClient();
