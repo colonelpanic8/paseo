@@ -1841,6 +1841,11 @@ export const es: TranslationResources = {
     },
     settings: {
       title: "Voz en vivo",
+      voice: {
+        label: "Voz",
+        description: "Se usa en llamadas nuevas. Una llamada activa conserva su voz actual.",
+        default: "Predeterminada",
+      },
       agentReports: {
         label: "Informar actividad de agentes",
         description:
