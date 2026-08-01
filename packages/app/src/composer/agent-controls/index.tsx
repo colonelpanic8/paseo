@@ -1543,6 +1543,19 @@ function ThinkingComboboxOption({
   );
 }
 
+function resolveSliceModelSelection(
+  agent: AgentControlsSlice,
+  models: AgentModelDefinition[] | null,
+) {
+  return resolveAgentModelSelection({
+    models,
+    runtimeModelId: agent?.runtimeModelId,
+    configuredModelId: agent?.model,
+    explicitThinkingOptionId: agent?.thinkingOptionId,
+    effectiveThinkingOptionId: agent?.effectiveThinkingOptionId,
+  });
+}
+
 export const AgentControls = memo(function AgentControls({
   agentId,
   serverId,
@@ -1594,13 +1607,7 @@ export const AgentControls = memo(function AgentControls({
     });
   }, [agentProviderDefinitions, agentProviderModels, snapshotSelectedEntry]);
 
-  const modelSelection = resolveAgentModelSelection({
-    models,
-    runtimeModelId: agent?.runtimeModelId,
-    configuredModelId: agent?.model,
-    explicitThinkingOptionId: agent?.thinkingOptionId,
-    effectiveThinkingOptionId: agent?.effectiveThinkingOptionId,
-  });
+  const modelSelection = resolveSliceModelSelection(agent, models);
 
   const modelOptions = useMemo<AgentControlOption[]>(() => {
     return (models ?? []).map((model) => ({ id: model.id, label: model.label }));
