@@ -147,6 +147,11 @@ function serializeAgent(agent: Agent): StoredAgent {
     model: agent.model,
     ...(agent.features ? { features: agent.features } : {}),
     thinkingOptionId: agent.thinkingOptionId ?? null,
+    // Only written when known, so a replay through normalizeAgentSnapshot keeps the
+    // "daemon never sent it" case distinct from an explicit null.
+    ...(agent.effectiveThinkingOptionId === undefined
+      ? {}
+      : { effectiveThinkingOptionId: agent.effectiveThinkingOptionId }),
     createdAt: agent.createdAt.toISOString(),
     updatedAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt?.toISOString() ?? null,

@@ -514,6 +514,157 @@ describe("Codex app-server provider", () => {
     expect((startCall!.params as Record<string, unknown>).ephemeral).toBeUndefined();
   });
 
+  test("reports configured runtime values until Codex observes thread runtime values", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "test-thread",
+      model: "gpt-configured",
+      thinkingOptionId: "medium",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
+  test("captures observed model and reasoning effort from thread/start", async () => {
+    const session = new CodexAppServerAgentSession(
+      createConfig({ model: "gpt-configured", thinkingOptionId: "medium" }),
+      null,
+      createTestLogger(),
+      () => {
+        throw new Error("Test session cannot spawn Codex app-server");
+      },
+    ) as CodexTestSession;
+    session.connected = true;
+    session.client = {
+      request: async (method) => {
+        if (method === "thread/start") {
+          return {
+            thread: { id: "observed-thread" },
+            model: "gpt-observed",
+            modelProvider: "openai",
+            reasoningEffort: " xhigh ",
+          };
+        }
+        throw new Error(`Unexpected request: ${method}`);
+      },
+    };
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "observed-thread",
+      model: "gpt-observed",
+      thinkingOptionId: "xhigh",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
+  test("captures observed model and reasoning effort from thread/resume", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+    session.client = {
+      request: async (method) => {
+        if (method === "thread/loaded/list") {
+          return { data: [] };
+        }
+        if (method === "thread/resume") {
+          return {
+            thread: { id: "test-thread" },
+            model: "gpt-resumed",
+            modelProvider: "openai",
+            reasoningEffort: "high",
+          };
+        }
+        throw new Error(`Unexpected request: ${method}`);
+      },
+    };
+
+    await asInternals(session).ensureThreadLoaded();
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "test-thread",
+      model: "gpt-resumed",
+      thinkingOptionId: "high",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
+  test("retains absent notification effort and clears explicitly null effort", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: {
+        id: "test-thread",
+        model: "gpt-thread",
+        reasoningEffort: "high",
+      },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-thread",
+      thinkingOptionId: "high",
+    });
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "turn-without-effort", model: "gpt-turn" },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-turn",
+      thinkingOptionId: "high",
+    });
+
+    asInternals(session).handleNotification("turn/completed", {
+      threadId: "test-thread",
+      turn: { status: "completed", reasoningEffort: null },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-turn",
+      thinkingOptionId: "medium",
+    });
+  });
+
+  test("setThinkingOption and setModel clear stale observations", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: {
+        id: "test-thread",
+        model: "gpt-observed",
+        reasoningEffort: "high",
+      },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-observed",
+      thinkingOptionId: "high",
+    });
+
+    await session.setThinkingOption("low");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-observed",
+      thinkingOptionId: "low",
+    });
+
+    await session.setModel("gpt-selected");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-selected",
+      thinkingOptionId: "low",
+    });
+  });
+
+  test("omits unknown model and thinking option keys", async () => {
+    const session = createSession({ model: undefined, thinkingOptionId: undefined });
+
+    await expect(session.getRuntimeInfo()).resolves.toEqual({
+      provider: "codex",
+      sessionId: "test-thread",
+      modeId: "auto",
+      extra: undefined,
+    });
+  });
+
   test("disposes an unresponsive app-server child with SIGKILL", async () => {
     vi.useFakeTimers();
     const child = new EventEmitter() as ChildProcessWithoutNullStreams;
@@ -4555,6 +4706,166 @@ describe("Codex app-server provider", () => {
         item: { type: "assistant_message", text: "lo", messageId: "assistant-item-1" },
       },
     ]);
+  });
+
+  test("stamps Codex assistant messages with the active turn's observed runtime", () => {
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: {
+        id: "observed-turn",
+        model: "gpt-observed",
+        reasoningEffort: " xhigh ",
+      },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "observed-assistant-message",
+      delta: "Observed output.",
+    });
+
+    expect(events.at(-1)).toEqual({
+      type: "timeline",
+      provider: "codex",
+      turnId: "test-turn",
+      item: {
+        type: "assistant_message",
+        text: "Observed output.",
+        messageId: "observed-assistant-message",
+        model: "gpt-observed",
+        thinkingOptionId: "xhigh",
+      },
+    });
+  });
+
+  test("does not fall back to configured Codex runtime values for turn attribution", () => {
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "unobserved-turn" },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "unobserved-assistant-message",
+      delta: "No observed runtime.",
+    });
+
+    const item = events.at(-1)?.type === "timeline" ? events.at(-1)?.item : undefined;
+    expect(item).toEqual({
+      type: "assistant_message",
+      text: "No observed runtime.",
+      messageId: "unobserved-assistant-message",
+    });
+    expect(item).not.toHaveProperty("model");
+    expect(item).not.toHaveProperty("thinkingOptionId");
+  });
+
+  test("attributes turns from the thread observation when turn notifications omit it", () => {
+    // The real app-server reports model/effort on the thread response and often
+    // sends turn/started without them; the thread observation is still something
+    // Codex reported, so the turn is attributable.
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: { id: "test-thread", model: "gpt-thread-observed", reasoningEffort: "high" },
+    });
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "turn-without-runtime" },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "thread-observed-message",
+      delta: "Thread-observed output.",
+    });
+
+    const item = events.at(-1)?.type === "timeline" ? events.at(-1)?.item : undefined;
+    expect(item).toMatchObject({
+      type: "assistant_message",
+      model: "gpt-thread-observed",
+      thinkingOptionId: "high",
+    });
+  });
+
+  test("prefers the turn's own observation over the thread observation", () => {
+    const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: { id: "test-thread", model: "gpt-thread-observed", reasoningEffort: "high" },
+    });
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: { id: "turn-with-runtime", model: "gpt-turn-observed", reasoningEffort: "low" },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "test-thread",
+      itemId: "turn-observed-message",
+      delta: "Turn-observed output.",
+    });
+
+    const item = events.at(-1)?.type === "timeline" ? events.at(-1)?.item : undefined;
+    expect(item).toMatchObject({
+      type: "assistant_message",
+      model: "gpt-turn-observed",
+      thinkingOptionId: "low",
+    });
+  });
+
+  test("does not stamp Codex child messages with the parent turn runtime", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "test-thread",
+      turn: {
+        id: "parent-turn",
+        model: "gpt-parent",
+        reasoningEffort: "high",
+      },
+    });
+    asInternals(session).handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "subAgentActivity",
+        id: "spawn-attribution-child",
+        kind: "started",
+        agentThreadId: "attribution-child-thread",
+        agentPath: "/root/attribution-child",
+      },
+    });
+    asInternals(session).handleNotification("item/agentMessage/delta", {
+      threadId: "attribution-child-thread",
+      itemId: "child-attribution-message",
+      delta: "Child output.",
+    });
+
+    const childAssistantItems = events.flatMap((event) =>
+      event.type === "provider_subagent" &&
+      event.event.type === "timeline" &&
+      event.event.item.type === "assistant_message"
+        ? [event.event.item]
+        : [],
+    );
+    expect(childAssistantItems).toEqual([
+      {
+        type: "assistant_message",
+        text: "Child output.",
+        messageId: "child-attribution-message",
+      },
+    ]);
+    expect(childAssistantItems[0]).not.toHaveProperty("model");
+    expect(childAssistantItems[0]).not.toHaveProperty("thinkingOptionId");
   });
 
   test("emits only the missing assistant suffix when completed text extends streamed deltas", () => {
