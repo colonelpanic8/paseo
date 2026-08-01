@@ -2526,6 +2526,7 @@ describe("create_agent MCP tool", () => {
       const created = await createTool.handler({
         isolation: "worktree",
         path: repoDir,
+        mode: "branch-off",
         worktreeSlug: "archive-tool-worktree",
         baseBranch: "main",
       });
@@ -2639,6 +2640,7 @@ describe("create_agent MCP tool", () => {
       const created = await createTool.handler({
         isolation: "worktree",
         path: repoDir,
+        mode: "branch-off",
         worktreeSlug: "archive-multi-worktree",
         baseBranch: "main",
       });
