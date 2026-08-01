@@ -1050,9 +1050,6 @@ function ChatAgentContent({
     if (!agentId) {
       return;
     }
-    if (agentState.archivedAt) {
-      return;
-    }
     if (agentState.id && hasAppliedAuthoritativeHistory) {
       if (
         missingAgentState.kind === "resolving" ||
@@ -1118,7 +1115,6 @@ function ChatAgentContent({
       });
   }, [
     agentState.id,
-    agentState.archivedAt,
     hasAppliedAuthoritativeHistory,
     agentId,
     client,
