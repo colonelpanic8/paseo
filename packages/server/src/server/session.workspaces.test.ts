@@ -7811,6 +7811,143 @@ test("workspace.pin.set.request stores the pin timestamp and emits an updated de
   });
 });
 
+function createSnoozeSessionFixture() {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = asTestSession(
+    createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) }),
+  );
+  const project = createPersistedProjectRecord({
+    projectId: "proj-1",
+    rootPath: REPO_CWD,
+    kind: "git",
+    displayName: "acme/repo",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: "ws-1",
+    projectId: project.projectId,
+    cwd: REPO_CWD,
+    kind: "local_checkout",
+    displayName: "main",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+  const workspaces = new Map([[workspace.workspaceId, workspace]]);
+  session.projectRegistry.get = async (id: string) => (id === project.projectId ? project : null);
+  session.projectRegistry.list = async () => [project];
+  session.workspaceRegistry.list = async () => Array.from(workspaces.values());
+  session.workspaceRegistry.update = async (id, updater) => {
+    const existing = workspaces.get(id);
+    if (!existing) return null;
+    const updated = updater(existing);
+    workspaces.set(id, updated);
+    return updated;
+  };
+  session.workspaceUpdatesSubscription = {
+    subscriptionId: "sub-workspaces",
+    filter: {},
+    isBootstrapping: false,
+    lastEmittedByWorkspaceId: new Map(),
+    pendingUpdatesByWorkspaceId: new Map(),
+  };
+  return { emitted, session, workspace, workspaces };
+}
+
+test("workspace.snooze.set.request stores the snooze pair and emits an updated descriptor", async () => {
+  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+  const snoozedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: workspace.workspaceId,
+    snoozedUntil,
+    requestId: "req-snooze-1",
+  });
+
+  const response = findByType(emitted, "workspace.snooze.set.response");
+  expect(response?.payload).toMatchObject({
+    requestId: "req-snooze-1",
+    workspaceId: "ws-1",
+    accepted: true,
+    error: null,
+  });
+  expect(response?.payload.snoozeStatus).toEqual({
+    snoozedAt: expect.any(String),
+    snoozedUntil,
+  });
+  expect(workspaces.get("ws-1")?.snoozeStatus).toEqual(response?.payload.snoozeStatus);
+  expect(findByType(emitted, "workspace_update")?.payload).toMatchObject({
+    kind: "upsert",
+    workspace: {
+      id: "ws-1",
+      snoozeStatus: response?.payload.snoozeStatus,
+    },
+  });
+});
+
+test("workspace.snooze.set.request with null wakes the workspace", async () => {
+  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+  workspaces.set(workspace.workspaceId, {
+    ...workspace,
+    snoozeStatus: {
+      snoozedAt: "2026-03-01T13:00:00.000Z",
+      snoozedUntil: "2099-03-02T13:00:00.000Z",
+    },
+  });
+
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: workspace.workspaceId,
+    snoozedUntil: null,
+    requestId: "req-snooze-2",
+  });
+
+  const response = findByType(emitted, "workspace.snooze.set.response");
+  expect(response?.payload).toMatchObject({
+    requestId: "req-snooze-2",
+    workspaceId: "ws-1",
+    accepted: true,
+    snoozeStatus: null,
+    error: null,
+  });
+  expect(workspaces.get("ws-1")?.snoozeStatus).toBeNull();
+});
+
+test("workspace.snooze.set.request rejects past wake times and unknown workspaces", async () => {
+  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: workspace.workspaceId,
+    snoozedUntil: "2020-01-01T00:00:00.000Z",
+    requestId: "req-snooze-3",
+  });
+  const pastResponse = findByType(emitted, "workspace.snooze.set.response");
+  expect(pastResponse?.payload).toMatchObject({
+    requestId: "req-snooze-3",
+    accepted: false,
+    snoozeStatus: null,
+  });
+  expect(pastResponse?.payload.error).toMatch(/future/i);
+  expect(workspaces.get("ws-1")?.snoozeStatus).toBeNull();
+
+  emitted.length = 0;
+  await session.handleMessage({
+    type: "workspace.snooze.set.request",
+    workspaceId: "missing-ws",
+    snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    requestId: "req-snooze-4",
+  });
+  expect(findByType(emitted, "workspace.snooze.set.response")?.payload).toMatchObject({
+    requestId: "req-snooze-4",
+    workspaceId: "missing-ws",
+    accepted: false,
+    snoozeStatus: null,
+    error: "Workspace not found",
+  });
+});
+
 test("workspace.title.set.request with whitespace-only title clears the title", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const session = asTestSession(
@@ -8986,4 +9123,127 @@ test("workspace.create.request reports an archived explicit project", async () =
     workspace: null,
     errorCode: "archived_project",
   });
+});
+
+test("workspace.archived.list returns archived workspaces newest first", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const project = createPersistedProjectRecord({
+    projectId: "prj_active",
+    rootPath: REPO_CWD,
+    kind: "git",
+    displayName: "repo",
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
+    archivedAt: null,
+  });
+  const makeWorkspace = (input: { id: string; name: string; archivedAt: string | null }) =>
+    createPersistedWorkspaceRecord({
+      workspaceId: input.id,
+      projectId: project.projectId,
+      cwd: path.join(REPO_CWD, input.id),
+      kind: "worktree",
+      displayName: input.name,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
+      archivedAt: input.archivedAt,
+    });
+
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.projectRegistry.list = async () => [project];
+  session.workspaceRegistry.list = async () => [
+    makeWorkspace({ id: "ws-old", name: "old", archivedAt: "2026-03-02T00:00:00.000Z" }),
+    makeWorkspace({ id: "ws-active", name: "active", archivedAt: null }),
+    makeWorkspace({ id: "ws-newest", name: "newest", archivedAt: "2026-03-05T00:00:00.000Z" }),
+    makeWorkspace({ id: "ws-middle", name: "middle", archivedAt: "2026-03-03T00:00:00.000Z" }),
+  ];
+
+  await session.handleMessage({
+    type: "workspace.archived.list.request",
+    requestId: "req-archived-list",
+  });
+
+  const payload = findByType(emitted, "workspace.archived.list.response")?.payload;
+  expect(payload?.requestId).toBe("req-archived-list");
+  expect(payload?.entries.map((entry) => entry.id)).toEqual(["ws-newest", "ws-middle", "ws-old"]);
+  expect(payload?.entries[0]).toMatchObject({
+    name: "newest",
+    projectDisplayName: "repo",
+    archivedAt: "2026-03-05T00:00:00.000Z",
+  });
+});
+
+test("workspace.archived.list caps its response", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const project = createPersistedProjectRecord({
+    projectId: "prj_active",
+    rootPath: REPO_CWD,
+    kind: "git",
+    displayName: "repo",
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
+    archivedAt: null,
+  });
+
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.projectRegistry.list = async () => [project];
+  session.workspaceRegistry.list = async () =>
+    Array.from({ length: 30 }, (_, index) => String(index + 1).padStart(2, "0")).map((day) =>
+      createPersistedWorkspaceRecord({
+        workspaceId: `ws-${day}`,
+        projectId: project.projectId,
+        cwd: path.join(REPO_CWD, day),
+        kind: "worktree",
+        displayName: `ws-${day}`,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+        archivedAt: `2026-03-${day}T00:00:00.000Z`,
+      }),
+    );
+
+  await session.handleMessage({
+    type: "workspace.archived.list.request",
+    requestId: "req-archived-limit",
+  });
+
+  const ids = findByType(emitted, "workspace.archived.list.response")?.payload.entries.map(
+    (entry) => entry.id,
+  );
+  expect(ids).toHaveLength(25);
+  expect(ids?.slice(0, 2)).toEqual(["ws-30", "ws-29"]);
+  expect(ids?.at(-1)).toBe("ws-06");
+});
+
+test("workspace.archived.list omits workspaces whose project is archived", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const archivedProject = createPersistedProjectRecord({
+    projectId: "prj_archived",
+    rootPath: REPO_CWD,
+    kind: "git",
+    displayName: "gone",
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
+    archivedAt: "2026-03-02T00:00:00.000Z",
+  });
+
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.projectRegistry.list = async () => [archivedProject];
+  session.workspaceRegistry.list = async () => [
+    createPersistedWorkspaceRecord({
+      workspaceId: "ws-in-archived-project",
+      projectId: archivedProject.projectId,
+      cwd: REPO_CWD,
+      kind: "worktree",
+      displayName: "orphan",
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
+      archivedAt: "2026-03-03T00:00:00.000Z",
+    }),
+  ];
+
+  await session.handleMessage({
+    type: "workspace.archived.list.request",
+    requestId: "req-archived-project-filter",
+  });
+
+  expect(findByType(emitted, "workspace.archived.list.response")?.payload.entries).toEqual([]);
 });
