@@ -1485,7 +1485,6 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         open={host.openState}
         onOpenChange={host.onOpenChange}
         anchorRef={host.anchorRef}
-        searchable={false}
         title="Host"
         desktopPlacement="bottom-start"
         desktopMinWidth={200}
