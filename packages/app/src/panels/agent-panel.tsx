@@ -242,6 +242,17 @@ function renderChatAgentNonReadyView(args: {
   return null;
 }
 
+function formatProviderLabel(provider: Agent["provider"]): string {
+  if (!provider) {
+    return "Agent";
+  }
+  return provider
+    .split(/[-_\s]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function resolveWorkspaceAgentTabLabel(title: string | null | undefined): string | null {
   if (typeof title !== "string") {
     return null;
