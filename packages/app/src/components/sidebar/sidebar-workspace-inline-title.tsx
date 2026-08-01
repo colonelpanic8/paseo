@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Text,
@@ -42,15 +42,25 @@ export function SidebarWorkspaceInlineTitle({
   const toast = useToast();
   const [state, setState] = useState<InlineRenameState>({ kind: "idle" });
   const inputRef = useRef<TextInput>(null);
+  const titleRef = useRef<View>(null);
   const cancelledRef = useRef(false);
   const submittingRef = useRef(false);
   const lastTitlePointerDownAtRef = useRef<number | null>(null);
 
-  const handleTitlePointerDown = useCallback(
-    (event: PointerEvent) => {
-      if (!isWeb || !editable) {
-        return;
-      }
+  // The row wraps this title in a Pressable, and React Native Web's press
+  // responder stops `pointerdown` before it reaches React's root delegate — a
+  // `View`-level `onPointerDown` prop never fires from real input. Listen on
+  // the node itself, in the capture phase, where the event still arrives.
+  useEffect(() => {
+    if (!isWeb || !editable || state.kind !== "idle") {
+      return;
+    }
+    const node = titleRef.current as unknown as HTMLElement | null;
+    if (!node) {
+      return;
+    }
+
+    const handleTitlePointerDown = (event: globalThis.PointerEvent) => {
       const previousPointerDownAt = lastTitlePointerDownAtRef.current;
       lastTitlePointerDownAtRef.current = event.timeStamp;
       if (
@@ -60,13 +70,19 @@ export function SidebarWorkspaceInlineTitle({
         return;
       }
 
+      // Keep the second click from reaching the row's press handler.
       event.stopPropagation();
+      event.preventDefault();
       lastTitlePointerDownAtRef.current = null;
       cancelledRef.current = false;
       setState({ kind: "editing", draft: renameValue });
-    },
-    [editable, renameValue],
-  );
+    };
+
+    node.addEventListener("pointerdown", handleTitlePointerDown, true);
+    return () => {
+      node.removeEventListener("pointerdown", handleTitlePointerDown, true);
+    };
+  }, [editable, renameValue, state.kind]);
 
   const handleChangeText = useCallback((draft: string) => {
     setState({ kind: "editing", draft });
@@ -149,7 +165,7 @@ export function SidebarWorkspaceInlineTitle({
   }
 
   return (
-    <View style={styles.titleClickTarget} onPointerDown={handleTitlePointerDown} testID={testID}>
+    <View ref={titleRef} style={styles.titleClickTarget} testID={testID}>
       <Text style={style} numberOfLines={1}>
         {displayValue}
       </Text>
