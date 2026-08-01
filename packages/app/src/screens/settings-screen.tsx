@@ -4,6 +4,7 @@ import {
   Alert,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
@@ -84,6 +85,18 @@ import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater"
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
+import {
+  useLiveVoiceAvailability,
+  useLiveVoiceHostAvailability,
+} from "@/live-voice/live-voice-availability";
+import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
+import { resolveLiveVoiceUnavailableMessage } from "@/live-voice/live-voice-unavailable-message";
+import {
+  LIVE_VOICE_OPTIONS,
+  MAX_AMBIENT_AGENT_GUIDANCE_LENGTH,
+  type LiveVoiceVoice,
+  useLiveVoiceSettingsStore,
+} from "@/stores/live-voice-settings-store";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
 import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
@@ -242,6 +255,13 @@ function getServiceUrlBehaviorLabel(t: TFunction, value: ServiceUrlBehavior): st
 function getActiveLocale(language: string | undefined): SupportedLocale {
   const parsed = parseAppLanguage(language);
   return parsed && parsed !== "system" ? parsed : "en";
+}
+
+function getLiveVoiceVoiceLabel(t: TFunction, voice: LiveVoiceVoice | null): string {
+  if (voice === null) {
+    return t("liveVoice.settings.voice.default");
+  }
+  return `${voice.charAt(0).toUpperCase()}${voice.slice(1)}`;
 }
 
 const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
@@ -447,7 +467,118 @@ function GeneralSection({
           />
         </View>
       </View>
+      <Text style={styles.diagnosticsGroupTitle}>{t("liveVoice.settings.title")}</Text>
+      <LiveVoiceSettingsCard />
     </SettingsSection>
+  );
+}
+
+/**
+ * What a Live Voice call is allowed to interrupt with.
+ *
+ * The guidance field is free text on purpose: what is worth being told about
+ * mid-conversation depends on what the user is doing, and no set of checkboxes
+ * gets there. It goes to the model as written and only appears when reports are
+ * on, since it has nothing to shape otherwise.
+ */
+function LiveVoiceSettingsCard() {
+  const { t } = useTranslation();
+  const voice = useLiveVoiceSettingsStore((state) => state.voice);
+  const ambientAgentReports = useLiveVoiceSettingsStore((state) => state.ambientAgentReports);
+  const ambientAgentGuidance = useLiveVoiceSettingsStore((state) => state.ambientAgentGuidance);
+  const setAmbientAgentReports = useLiveVoiceSettingsStore((state) => state.setAmbientAgentReports);
+  const setVoice = useLiveVoiceSettingsStore((state) => state.setVoice);
+  const setAmbientAgentGuidance = useLiveVoiceSettingsStore(
+    (state) => state.setAmbientAgentGuidance,
+  );
+
+  return (
+    <View style={settingsStyles.card}>
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("liveVoice.settings.voice.label")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("liveVoice.settings.voice.description")}</Text>
+        </View>
+        <DropdownMenu>
+          <DropdownTrigger
+            accessibilityRole="button"
+            accessibilityLabel={t("liveVoice.settings.voice.label")}
+            style={themeTriggerStyle}
+            testID="live-voice-voice-picker"
+          >
+            <Text style={styles.themeTriggerText}>{getLiveVoiceVoiceLabel(t, voice)}</Text>
+          </DropdownTrigger>
+          <DropdownMenuContent side="bottom" align="end" width={200}>
+            <LiveVoiceVoiceMenuItem value={null} selected={voice === null} onChange={setVoice} />
+            {LIVE_VOICE_OPTIONS.map((value) => (
+              <LiveVoiceVoiceMenuItem
+                key={value}
+                value={value}
+                selected={voice === value}
+                onChange={setVoice}
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("liveVoice.settings.agentReports.label")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("liveVoice.settings.agentReports.description")}
+          </Text>
+        </View>
+        <Switch
+          value={ambientAgentReports}
+          onValueChange={setAmbientAgentReports}
+          accessibilityLabel={t("liveVoice.settings.agentReports.label")}
+          testID="live-voice-agent-reports-toggle"
+        />
+      </View>
+      {ambientAgentReports ? (
+        <View style={[settingsStyles.row, settingsStyles.rowBorder, styles.liveVoiceGuidanceRow]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("liveVoice.settings.agentReportGuidance.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("liveVoice.settings.agentReportGuidance.description")}
+            </Text>
+            <TextInput
+              value={ambientAgentGuidance}
+              onChangeText={setAmbientAgentGuidance}
+              placeholder={t("liveVoice.settings.agentReportGuidance.placeholder")}
+              multiline
+              maxLength={MAX_AMBIENT_AGENT_GUIDANCE_LENGTH}
+              style={styles.liveVoiceGuidanceInput}
+              accessibilityLabel={t("liveVoice.settings.agentReportGuidance.label")}
+              testID="live-voice-agent-report-guidance"
+            />
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function LiveVoiceVoiceMenuItem({
+  value,
+  selected,
+  onChange,
+}: {
+  value: LiveVoiceVoice | null;
+  selected: boolean;
+  onChange: (value: LiveVoiceVoice | null) => void;
+}) {
+  const { t } = useTranslation();
+  const handleSelect = useCallback(() => {
+    onChange(value);
+  }, [onChange, value]);
+
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {getLiveVoiceVoiceLabel(t, value)}
+    </DropdownMenuItem>
   );
 }
 
@@ -500,7 +631,96 @@ function DiagnosticsSection({
           </Button>
         </View>
       </View>
+      <Text style={styles.diagnosticsGroupTitle}>{t("liveVoice.diagnostics.title")}</Text>
+      <LiveVoiceDiagnosticsCard />
     </SettingsSection>
+  );
+}
+
+/**
+ * Why live voice can or cannot start, per host. This is the only place the
+ * per-host facts are shown — the launcher menu stays a short human sentence.
+ */
+function LiveVoiceDiagnosticsCard() {
+  const { t } = useTranslation();
+  const availability = useLiveVoiceAvailability();
+  const hosts = useLiveVoiceHostAvailability();
+
+  const unavailableMessage =
+    availability.kind === "unavailable"
+      ? resolveLiveVoiceUnavailableMessage(availability.reason, t)
+      : null;
+
+  return (
+    <View style={settingsStyles.card} testID="live-voice-diagnostics">
+      {unavailableMessage ? (
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("liveVoice.diagnostics.statusTitle")}</Text>
+            <Text style={settingsStyles.rowHint}>{unavailableMessage}</Text>
+          </View>
+        </View>
+      ) : null}
+      {hosts.length === 0 ? (
+        <View style={[settingsStyles.row, unavailableMessage && settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowHint}>{t("liveVoice.diagnostics.noHosts")}</Text>
+          </View>
+        </View>
+      ) : (
+        hosts.map((host, index) => (
+          <LiveVoiceDiagnosticsRow
+            key={host.serverId}
+            host={host}
+            showBorder={index > 0 || unavailableMessage !== null}
+          />
+        ))
+      )}
+    </View>
+  );
+}
+
+function LiveVoiceDiagnosticsRow({
+  host,
+  showBorder,
+}: {
+  host: LiveVoiceHostAvailability;
+  showBorder: boolean;
+}) {
+  const { t } = useTranslation();
+  const rowStyle = useMemo(
+    () => [settingsStyles.row, showBorder && settingsStyles.rowBorder],
+    [showBorder],
+  );
+
+  let support: string;
+  if (host.supportsLiveVoice === true) {
+    support = t("liveVoice.diagnostics.supported");
+  } else if (host.supportsLiveVoice === false) {
+    support = t("liveVoice.diagnostics.unsupported");
+  } else {
+    support = t("liveVoice.diagnostics.supportUnknown");
+  }
+
+  return (
+    <View style={rowStyle} testID={`live-voice-diagnostics-${host.serverId}`}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+          {host.label}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("liveVoice.diagnostics.hostSummary", {
+            version: host.version
+              ? formatVersionWithPrefix(host.version)
+              : t("liveVoice.diagnostics.unknownVersion"),
+            support,
+          })}
+        </Text>
+      </View>
+      <Text style={styles.aboutValue}>
+        {t(`liveVoice.diagnostics.connection.${host.connectionStatus}`)}
+      </Text>
+    </View>
   );
 }
 
@@ -1559,6 +1779,13 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
+  diagnosticsGroupTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    marginTop: theme.spacing[4],
+    marginBottom: theme.spacing[2],
+    marginLeft: theme.spacing[1],
+  },
   aboutVersionMismatch: {
     color: theme.colors.palette.amber[500],
   },
@@ -1588,6 +1815,24 @@ const styles = StyleSheet.create((theme) => ({
   themeTriggerText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
+  },
+  liveVoiceGuidanceRow: {
+    // The input sits under its own label rather than beside it: this is a
+    // sentence the user writes, not a value they pick.
+    alignItems: "stretch",
+  },
+  liveVoiceGuidanceInput: {
+    marginTop: theme.spacing[2],
+    minHeight: 72,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    textAlignVertical: "top",
   },
   terminalScrollbackInput: {
     width: 112,
