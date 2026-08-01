@@ -22,7 +22,6 @@ export {
   getHostPickerLabel,
 };
 
-const SEARCHABLE_THRESHOLD = 10;
 type RenderHostOption = NonNullable<ComboboxProps["renderOption"]>;
 interface HostPickerHost {
   serverId: string;
@@ -174,6 +173,7 @@ export interface HostPickerProps {
   onEnableBuiltInDaemon?: () => void;
   showActiveConnection?: boolean;
   onOpenHostSettings?: (serverId: string) => void;
+  /** Host pickers search by default; pass `false` for a picker that is always short. */
   searchable?: boolean;
   title?: string;
   desktopPlacement?: ComboboxProps["desktopPlacement"];
@@ -197,7 +197,7 @@ export function HostPicker({
   onEnableBuiltInDaemon,
   showActiveConnection,
   onOpenHostSettings,
-  searchable,
+  searchable = true,
   title,
   desktopPlacement = "bottom-start",
   desktopMinWidth,
@@ -212,18 +212,21 @@ export function HostPicker({
   );
 
   const options = useMemo(() => {
-    const hostOptions = orderedHosts.map((host) => ({ id: host.serverId, label: host.label }));
+    const hostOptions: ComboboxProps["options"] = orderedHosts.map((host) => ({
+      id: host.serverId,
+      label: host.label,
+    }));
     if (includeAllHost) hostOptions.unshift({ id: ALL_HOSTS_OPTION_ID, label: "All hosts" });
-    if (includeAddHost) hostOptions.push({ id: ADD_HOST_OPTION_ID, label: "Add host" });
+    if (includeAddHost)
+      hostOptions.push({ id: ADD_HOST_OPTION_ID, label: "Add host", alwaysVisible: true });
     if (includeEnableBuiltInDaemon)
       hostOptions.push({
         id: ENABLE_BUILT_IN_DAEMON_OPTION_ID,
         label: "Enable built-in daemon",
+        alwaysVisible: true,
       });
     return hostOptions;
   }, [orderedHosts, includeAllHost, includeAddHost, includeEnableBuiltInDaemon]);
-
-  const isSearchable = searchable === true && orderedHosts.length > SEARCHABLE_THRESHOLD;
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -305,7 +308,7 @@ export function HostPicker({
         value={value}
         onSelect={handleSelect}
         renderOption={renderOption}
-        searchable={isSearchable}
+        searchable={searchable}
         searchPlaceholder="Search hosts"
         title={title ?? "Host"}
         open={open}
