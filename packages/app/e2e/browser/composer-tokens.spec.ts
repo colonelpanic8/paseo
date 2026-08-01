@@ -1,7 +1,7 @@
-import { test, expect } from "./fixtures";
-import { composerLocator } from "./helpers/composer";
-import { openSettings } from "./helpers/app";
-import { clickSettingsBackToWorkspace } from "./helpers/settings";
+import { test, expect } from "../support/fixtures";
+import { composerLocator } from "../support/helpers/composer";
+import { openSettings } from "../support/helpers/app";
+import { clickSettingsBackToWorkspace } from "../support/helpers/settings";
 
 const APP_SETTINGS_KEY = "@paseo:app-settings";
 
@@ -38,12 +38,17 @@ test("composer token pills and trigger settings stay aligned", async ({
   await composer.fill("check $HOME");
   await expect(composer).not.toHaveAttribute("data-composer-tokenized", "");
   await expect(page.locator("[data-composer-token-mirror]")).toHaveCount(0);
+  const autocomplete = page.getByTestId("composer-autocomplete-popover");
+  await expect(autocomplete.getByText("$HOME", { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
   await composer.press("Enter");
   const shellVariableMessage = page.getByTestId("user-message").last();
   await expect(shellVariableMessage).toContainText("check $HOME");
   await expect(shellVariableMessage).not.toContainText("check /HOME");
 
   await composer.fill("please run $release-beta");
+  await expect(autocomplete.getByText("$release-beta", { exact: true }).first()).toBeVisible();
   await composer.press("Enter");
   await expect(composer).toHaveValue("please run /release-beta ");
   await expect(composer).toHaveAttribute("data-composer-tokenized", "");
