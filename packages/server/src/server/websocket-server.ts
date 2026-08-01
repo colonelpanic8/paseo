@@ -33,6 +33,8 @@ import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
+import { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
+import { LiveVoiceDaemonContextProvider } from "./live-voice/live-voice-daemon-context.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
 import type { HubExecutionAgents } from "./hub/daemon-executions.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
@@ -89,6 +91,8 @@ import {
   type BrowserAutomationHostCapability,
 } from "@getpaseo/protocol/browser-automation/capabilities";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
+import { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
 import type { DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import {
   APPLICATION_SOCKET_LEASE_CHECK_INTERVAL_MS,
@@ -506,6 +510,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly daemonVersion: string;
   private readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   private readonly agentManager: AgentManager;
+  private readonly liveVoiceCoordinator: LiveVoiceCoordinator;
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
@@ -554,6 +559,9 @@ export class VoiceAssistantWebSocketServer {
   private readonly providerUsageService: ProviderUsageService;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
+  private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker;
+  private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor;
+  private readonly liveVoiceToolExecutionAvailable: boolean;
   private readonly hubRelationships: HubRelationshipManagement | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private acceptingConnections = true;
@@ -603,6 +611,8 @@ export class VoiceAssistantWebSocketServer {
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
+    liveVoiceRouteBroker?: LiveVoiceRouteBroker,
+    liveVoiceToolExecutor?: LiveVoiceToolExecutor,
     hubRelationships?: HubRelationshipManagement | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
@@ -615,6 +625,15 @@ export class VoiceAssistantWebSocketServer {
     this.daemonVersion = daemonVersion.trim();
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.browserToolsBroker = browserToolsBroker ?? null;
+    this.liveVoiceToolExecutionAvailable = liveVoiceToolExecutor !== undefined;
+    this.liveVoiceRouteBroker = liveVoiceRouteBroker ?? new LiveVoiceRouteBroker();
+    this.liveVoiceToolExecutor =
+      liveVoiceToolExecutor ??
+      new LiveVoiceToolExecutor({
+        createCatalog: async () => {
+          throw new Error("Live Voice routed tool execution is not configured");
+        },
+      });
     this.hubRelationships = hubRelationships ?? null;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
@@ -684,6 +703,22 @@ export class VoiceAssistantWebSocketServer {
 
     this.providerUsageService = new ProviderUsageService({
       logger: this.logger,
+    });
+
+    // Daemon-global: a call belongs to the daemon, not to an agent, and each one
+    // runs on a hidden host session the coordinator spawns for it.
+    this.liveVoiceCoordinator = new LiveVoiceCoordinator({
+      agents: this.agentManager,
+      logger: this.logger,
+      routeBroker: this.liveVoiceRouteBroker,
+      // Teaches the voice model what Paseo is and what is currently running. The
+      // host session carries Paseo's MCP tools, so this is what turns "can talk"
+      // into "can act on Paseo".
+      context: new LiveVoiceDaemonContextProvider({
+        agents: this.agentManager,
+        workspaces: this.workspaceRegistry,
+        logger: this.logger,
+      }),
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
@@ -960,6 +995,7 @@ export class VoiceAssistantWebSocketServer {
     this.unsubscribeDaemonConfigChange = null;
     this.unsubscribeTerminalActivity?.();
     this.unsubscribeTerminalActivity = null;
+    this.liveVoiceCoordinator.dispose();
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
       this.runtimeMetricsInterval = null;
@@ -1356,6 +1392,9 @@ export class VoiceAssistantWebSocketServer {
       voice: {
         turnDetection: () => this.speech?.resolveTurnDetection() ?? null,
       },
+      liveVoiceCoordinator: this.liveVoiceCoordinator,
+      liveVoiceRouteBroker: this.liveVoiceRouteBroker,
+      liveVoiceToolExecutor: this.liveVoiceToolExecutor,
       voiceBridge: {
         registerVoiceSpeakHandler: (agentId, handler) => {
           this.voiceSpeakHandlers.set(agentId, handler);
@@ -1596,6 +1635,10 @@ export class VoiceAssistantWebSocketServer {
         selectiveAgentTimeline: true,
         // COMPAT(stableProjectIdentity): added in v0.1.109, remove gate after 2027-01-15.
         stableProjectIdentity: true,
+        // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
+        liveVoice: true,
+        // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
+        liveVoiceToolExecution: this.liveVoiceToolExecutionAvailable,
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: true,
         // COMPAT(projectCustomIcon): added in v0.2.0, remove after 2027-01-20.
@@ -1722,6 +1765,9 @@ export class VoiceAssistantWebSocketServer {
     }
     connection.sockets.delete(ws);
     connection.session.clearAgentTimelineSubscription(ws);
+    // Live voice must die with its socket, not after the reconnect grace below:
+    // the WebRTC media path is already gone.
+    connection.session.releaseLiveVoiceForSource(ws);
     this.socketIdentities.delete(ws);
 
     if (connection.sockets.size === 0) {

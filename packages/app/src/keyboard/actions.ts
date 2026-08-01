@@ -61,6 +61,7 @@ export type KeyboardActionId =
   | "message-input.mode.pick"
   | "message-input.fast-mode.toggle"
   | "message-input.plan-mode.toggle"
+  | "live-voice.mute.toggle"
   | "message-input.action";
 
 export type KeyboardShortcutPayload =
