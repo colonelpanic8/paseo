@@ -2137,6 +2137,90 @@ describe("Codex app-server provider", () => {
     });
   });
 
+  test("reports the model and reasoning effort observed on a Codex child thread", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "collabAgentToolCall",
+        id: "call-runtime-child",
+        tool: "spawnAgent",
+        status: "completed",
+        prompt: "Inspect the runtime path.",
+        receiverThreadIds: ["runtime-child-thread"],
+        agentsStates: {
+          "runtime-child-thread": { status: "pendingInit", message: null },
+        },
+      },
+    });
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "runtime-child-thread",
+      turn: {
+        id: "runtime-child-turn",
+        model: "gpt-5.6-sol",
+        reasoningEffort: "xhigh",
+      },
+    });
+
+    const providerUpserts = events.flatMap((event) =>
+      event.type === "provider_subagent" && event.event.type === "upsert" ? [event.event] : [],
+    );
+    expect(providerUpserts.at(-1)).toMatchObject({
+      id: "runtime-child-thread",
+      title: "Sub-agent",
+      description: "Inspect the runtime path.",
+      subtitle: "Sub-agent · GPT-5.6-Sol · Extra High",
+      status: "running",
+    });
+  });
+
+  test("retains omitted Codex child runtime fields and clears explicit nulls", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "collabAgentToolCall",
+        id: "call-sticky-runtime-child",
+        tool: "spawnAgent",
+        status: "completed",
+        prompt: "Inspect sticky runtime fields.",
+        receiverThreadIds: ["sticky-runtime-child-thread"],
+        agentsStates: {
+          "sticky-runtime-child-thread": { status: "pendingInit", message: null },
+        },
+      },
+    });
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "sticky-runtime-child-thread",
+      turn: { id: "child-turn-1", model: "gpt-5.6-luna", reasoningEffort: "medium" },
+    });
+    asInternals(session).handleNotification("turn/completed", {
+      threadId: "sticky-runtime-child-thread",
+      turn: { status: "completed" },
+    });
+
+    const beforeClear = events.flatMap((event) =>
+      event.type === "provider_subagent" && event.event.type === "upsert" ? [event.event] : [],
+    );
+    expect(beforeClear.at(-1)?.subtitle).toBe("Sub-agent · GPT-5.6-Luna · Medium");
+
+    asInternals(session).handleNotification("turn/started", {
+      threadId: "sticky-runtime-child-thread",
+      turn: { id: "child-turn-2", model: null, reasoningEffort: null },
+    });
+
+    const afterClear = events.flatMap((event) =>
+      event.type === "provider_subagent" && event.event.type === "upsert" ? [event.event] : [],
+    );
+    expect(afterClear.at(-1)?.subtitle).toBeNull();
+  });
+
   test("updates a registered child with its later native activity name", () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];

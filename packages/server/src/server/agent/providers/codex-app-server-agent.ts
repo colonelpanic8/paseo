@@ -366,6 +366,57 @@ function readCodexObservedRuntimeInfo(...values: unknown[]): CodexObservedRuntim
   return runtimeInfo;
 }
 
+function mergeCodexObservedRuntimeInfo(
+  previous: CodexObservedRuntimeInfo | undefined,
+  next: CodexObservedRuntimeInfo,
+): CodexObservedRuntimeInfo {
+  const merged = { ...previous };
+  if (Object.prototype.hasOwnProperty.call(next, "model")) {
+    const model = normalizeCodexModelId(next.model);
+    if (model) merged.model = model;
+    else delete merged.model;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "reasoningEffort")) {
+    const reasoningEffort = normalizeCodexThinkingOptionId(next.reasoningEffort);
+    if (reasoningEffort) merged.reasoningEffort = reasoningEffort;
+    else delete merged.reasoningEffort;
+  }
+  return merged;
+}
+
+function formatCodexSubagentModel(modelId: string): string {
+  return modelId
+    .replace(/^gpt(?=-|$)/iu, "GPT")
+    .replace(/-(codex|luna|sol|spark|terra)\b/giu, (_match, name: string) => {
+      return `-${name.charAt(0).toUpperCase()}${name.slice(1).toLowerCase()}`;
+    });
+}
+
+function formatCodexSubagentEffort(effort: string): string {
+  if (effort === "xhigh") return "Extra High";
+  return effort
+    .split(/[-_\s]+/u)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function buildCodexSubagentSubtitle(
+  title: string,
+  runtimeInfo: CodexObservedRuntimeInfo | undefined,
+): string | null {
+  const model = normalizeCodexModelId(runtimeInfo?.model);
+  const effort = normalizeCodexThinkingOptionId(runtimeInfo?.reasoningEffort);
+  if (!model && !effort) return null;
+  return [
+    title,
+    model ? formatCodexSubagentModel(model) : null,
+    effort ? formatCodexSubagentEffort(effort) : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+}
+
 function normalizeCodexModelLabel(displayName: string): string {
   return displayName.replace(/\bgpt\b/gi, "GPT");
 }
@@ -454,6 +505,7 @@ interface PersistedSubAgentRoute {
 interface CodexThreadHistoryProjection {
   timeline: PersistedTimelineEntry[];
   subAgentRoutes: PersistedSubAgentRoute[];
+  runtimeInfo: CodexObservedRuntimeInfo;
 }
 
 function mergeCodexConfiguredDefaults(
@@ -1954,7 +2006,11 @@ async function loadCodexThreadHistoryTimeline(params: {
         : [];
     },
   );
-  return { timeline, subAgentRoutes };
+  return {
+    timeline,
+    subAgentRoutes,
+    runtimeInfo: readCodexObservedRuntimeInfo(response.thread, response),
+  };
 }
 
 function readCodexThread(client: CodexAppServerClientLike, threadId: string): Promise<unknown> {
@@ -3133,6 +3189,7 @@ interface CodexSubAgentCallState {
   childItemOrder: string[];
   childItems: Map<string, AgentTimelineItem>;
   childThreadIds: Set<string>;
+  runtimeInfoByChildThreadId: Map<string, CodexObservedRuntimeInfo>;
 }
 
 interface CodexPendingPermissionHandler {
@@ -3664,6 +3721,11 @@ export class CodexAppServerAgentSession implements AgentSession {
           cwd: this.config.cwd ?? null,
           requestThread: (childThreadId) => readCodexThread(client, childThreadId),
         });
+        this.captureSubAgentObservedRuntimeInfo(
+          next.route.childThreadId,
+          next.route.toolCall.callId,
+          childHistory.runtimeInfo,
+        );
         for (const entry of childHistory.timeline) {
           this.emitProviderSubagentTimeline(next.route.childThreadId, entry.item, entry.timestamp);
         }
@@ -4877,6 +4939,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private dispatchSubAgentNotification(parsed: ParsedCodexNotification, callId: string): void {
     switch (parsed.kind) {
       case "thread_started":
+        this.captureSubAgentObservedRuntimeInfo(parsed.threadId, callId, parsed.runtimeInfo);
         this.emitSubAgentActivityUpdate(callId, "running");
         return;
       case "turn_started":
@@ -5080,6 +5143,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         childItemOrder: [],
         childItems: new Map<string, AgentTimelineItem>(),
         childThreadIds: new Set<string>(),
+        runtimeInfoByChildThreadId: new Map<string, CodexObservedRuntimeInfo>(),
       } satisfies CodexSubAgentCallState);
 
     state.toolCall = {
@@ -5304,10 +5368,33 @@ export class CodexAppServerAgentSession implements AgentSession {
         id: childThreadId,
         title: detail.subAgentType ?? "Codex subagent",
         description: detail.description ?? null,
+        subtitle: buildCodexSubagentSubtitle(
+          detail.subAgentType ?? "Codex subagent",
+          state.runtimeInfoByChildThreadId.get(childThreadId),
+        ),
         status: providerStatus,
         toolCallId: state.callId,
       },
     });
+  }
+
+  private captureSubAgentObservedRuntimeInfo(
+    childThreadId: string,
+    callId: string,
+    runtimeInfo: CodexObservedRuntimeInfo,
+  ): void {
+    const state = this.subAgentCallsByCallId.get(callId);
+    if (!state) return;
+    const previousRuntimeInfo = state.runtimeInfoByChildThreadId.get(childThreadId);
+    const nextRuntimeInfo = mergeCodexObservedRuntimeInfo(previousRuntimeInfo, runtimeInfo);
+    if (
+      previousRuntimeInfo?.model === nextRuntimeInfo.model &&
+      previousRuntimeInfo?.reasoningEffort === nextRuntimeInfo.reasoningEffort
+    ) {
+      return;
+    }
+    state.runtimeInfoByChildThreadId.set(childThreadId, nextRuntimeInfo);
+    this.emitProviderSubagentUpsert(childThreadId, state, state.toolCall.status);
   }
 
   private emitProviderSubagentTimeline(
@@ -5525,6 +5612,13 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
     if (subAgentCallId) {
+      if (parsed.threadId) {
+        this.captureSubAgentObservedRuntimeInfo(
+          parsed.threadId,
+          subAgentCallId,
+          parsed.runtimeInfo,
+        );
+      }
       this.emitSubAgentActivityUpdate(subAgentCallId, "running");
       return;
     }
@@ -5548,6 +5642,13 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
     if (subAgentCallId) {
+      if (parsed.threadId) {
+        this.captureSubAgentObservedRuntimeInfo(
+          parsed.threadId,
+          subAgentCallId,
+          parsed.runtimeInfo,
+        );
+      }
       let status: ToolCallTimelineItem["status"] = "completed";
       if (parsed.status === "failed") {
         status = "failed";
