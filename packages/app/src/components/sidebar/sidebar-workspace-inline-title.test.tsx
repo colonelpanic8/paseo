@@ -64,6 +64,33 @@ describe("SidebarWorkspaceInlineTitle", () => {
     });
   });
 
+  it("opens even when an ancestor swallows the event before React's root delegate", () => {
+    // The sidebar row's Pressable stops `pointerdown` from bubbling, so a
+    // `View`-level onPointerDown prop never fires from real input.
+    const onSubmit = vi.fn(async () => undefined);
+    const swallow = (event: Event) => {
+      event.stopPropagation();
+    };
+    render(
+      <div data-testid="row">
+        <SidebarWorkspaceInlineTitle
+          displayValue="main"
+          renameValue="main"
+          editable
+          onSubmit={onSubmit}
+          style={titleStyle}
+          testID="workspace-title"
+        />
+      </div>,
+    );
+    screen.getByTestId("row").addEventListener("pointerdown", swallow);
+
+    fireEvent.pointerDown(screen.getByTestId("workspace-title"));
+    fireEvent.pointerDown(screen.getByTestId("workspace-title"));
+
+    expect(screen.getByTestId("workspace-title-input")).toHaveProperty("value", "main");
+  });
+
   it("does not edit when the displayed source is not the workspace title", () => {
     const onSubmit = vi.fn(async () => undefined);
     render(
