@@ -201,14 +201,33 @@ function SubagentsTrackRow({
         {({ pressed }) => (
           <View style={hovered || pressed ? styles.rowActive : styles.row}>
             <WorkspaceTabIcon presentation={presentation} />
-            <Text style={styles.rowLabel} numberOfLines={1}>
-              {displayLabel}
-            </Text>
-            {presentation.subtitle ? (
-              <Text style={styles.rowSubtitle} numberOfLines={1}>
-                {presentation.subtitle}
-              </Text>
-            ) : null}
+            {row.kind === "paseo" ? (
+              <View style={styles.managedRowText}>
+                <Text style={styles.managedRowLabel} numberOfLines={1}>
+                  {displayLabel}
+                </Text>
+                {presentation.subtitle ? (
+                  <Text
+                    style={styles.managedRowSummary}
+                    numberOfLines={1}
+                    testID={`subagents-track-summary-${row.id}`}
+                  >
+                    {presentation.subtitle}
+                  </Text>
+                ) : null}
+              </View>
+            ) : (
+              <>
+                <Text style={styles.rowLabel} numberOfLines={1}>
+                  {displayLabel}
+                </Text>
+                {presentation.subtitle ? (
+                  <Text style={styles.rowSubtitle} numberOfLines={1}>
+                    {presentation.subtitle}
+                  </Text>
+                ) : null}
+              </>
+            )}
             {row.kind === "paseo" ? (
               <SubagentRowActions
                 rowId={row.id}
@@ -389,6 +408,19 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     backgroundColor: theme.colors.surface2,
+  },
+  managedRowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  managedRowLabel: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foreground,
+  },
+  managedRowSummary: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   rowLabel: {
     flex: 1,

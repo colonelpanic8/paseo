@@ -732,6 +732,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastError: z.string().optional(),
   lastFailure: AgentFailureSchema.optional(),
   title: z.string().nullable(),
+  summary: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
@@ -748,6 +749,7 @@ export const AgentListItemPayloadSchema = z.object({
   title: z.string().nullable(),
   workspaceId: z.string().optional(),
   workspaceName: z.string().optional(),
+  summary: z.string().nullable().optional(),
   provider: AgentProviderSchema,
   model: z.string().nullable(),
   thinkingOptionId: z.string().nullable().optional(),
@@ -3088,6 +3090,9 @@ export const ServerInfoStatusPayloadSchema = z
         // 2027-02-28. Covers both legs: this daemon watches routed background
         // work and reports it, and it speaks notifications into a call it hosts.
         liveVoiceAgentNotifications: z.boolean().optional(),
+        // COMPAT(agentPurposeSummary): added in v0.2.5, remove after 2027-01-30
+        // once the daemon floor is >= v0.2.5.
+        agentPurposeSummary: z.boolean().optional(),
       })
       .optional(),
   })
