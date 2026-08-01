@@ -1812,6 +1812,11 @@ export const ar: TranslationResources = {
     },
     settings: {
       title: "الصوت المباشر",
+      voice: {
+        label: "الصوت",
+        description: "يُستخدم للمكالمات الجديدة. تحتفظ المكالمة النشطة بصوتها الحالي.",
+        default: "الافتراضي",
+      },
       agentReports: {
         label: "الإبلاغ عن نشاط الوكلاء",
         description:
