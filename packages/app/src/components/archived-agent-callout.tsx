@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { FOOTER_HEIGHT } from "@/constants/layout";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { KeyboardTranslateView } from "@/keyboard/shift";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -16,11 +17,16 @@ interface ArchivedAgentCalloutProps {
 
 export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCalloutProps) {
   const { t } = useTranslation();
+  const screenBottomInset = useScreenBottomInset();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [unarchiveError, setUnarchiveError] = useState<string | null>(null);
 
+  const containerStyle = useMemo(
+    () => [styles.container, { paddingBottom: screenBottomInset }],
+    [screenBottomInset],
+  );
   const handleUnarchive = useCallback(async () => {
     if (!client || !isConnected || isUnarchiving) return;
     setIsUnarchiving(true);
