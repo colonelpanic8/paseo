@@ -339,6 +339,84 @@ function normalizeCodexModelId(modelId: string | null | undefined): string | und
   return normalized;
 }
 
+interface CodexObservedRuntimeInfo {
+  model?: string | null;
+  reasoningEffort?: string | null;
+}
+
+function readCodexObservedRuntimeInfo(...values: unknown[]): CodexObservedRuntimeInfo {
+  const runtimeInfo: CodexObservedRuntimeInfo = {};
+  for (const value of values) {
+    if (!isRecord(value)) {
+      continue;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(value, "model") &&
+      (typeof value.model === "string" || value.model === null)
+    ) {
+      runtimeInfo.model = value.model;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(value, "reasoningEffort") &&
+      (typeof value.reasoningEffort === "string" || value.reasoningEffort === null)
+    ) {
+      runtimeInfo.reasoningEffort = value.reasoningEffort;
+    }
+  }
+  return runtimeInfo;
+}
+
+function mergeCodexObservedRuntimeInfo(
+  previous: CodexObservedRuntimeInfo | undefined,
+  next: CodexObservedRuntimeInfo,
+): CodexObservedRuntimeInfo {
+  const merged = { ...previous };
+  if (Object.prototype.hasOwnProperty.call(next, "model")) {
+    const model = normalizeCodexModelId(next.model);
+    if (model) merged.model = model;
+    else delete merged.model;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "reasoningEffort")) {
+    const reasoningEffort = normalizeCodexThinkingOptionId(next.reasoningEffort);
+    if (reasoningEffort) merged.reasoningEffort = reasoningEffort;
+    else delete merged.reasoningEffort;
+  }
+  return merged;
+}
+
+function formatCodexSubagentModel(modelId: string): string {
+  return modelId
+    .replace(/^gpt(?=-|$)/iu, "GPT")
+    .replace(/-(codex|luna|sol|spark|terra)\b/giu, (_match, name: string) => {
+      return `-${name.charAt(0).toUpperCase()}${name.slice(1).toLowerCase()}`;
+    });
+}
+
+function formatCodexSubagentEffort(effort: string): string {
+  if (effort === "xhigh") return "Extra High";
+  return effort
+    .split(/[-_\s]+/u)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function buildCodexSubagentSubtitle(
+  title: string,
+  runtimeInfo: CodexObservedRuntimeInfo | undefined,
+): string | null {
+  const model = normalizeCodexModelId(runtimeInfo?.model);
+  const effort = normalizeCodexThinkingOptionId(runtimeInfo?.reasoningEffort);
+  if (!model && !effort) return null;
+  return [
+    title,
+    model ? formatCodexSubagentModel(model) : null,
+    effort ? formatCodexSubagentEffort(effort) : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+}
+
 function normalizeCodexModelLabel(displayName: string): string {
   return displayName.replace(/\bgpt\b/gi, "GPT");
 }
@@ -427,6 +505,7 @@ interface PersistedSubAgentRoute {
 interface CodexThreadHistoryProjection {
   timeline: PersistedTimelineEntry[];
   subAgentRoutes: PersistedSubAgentRoute[];
+  runtimeInfo: CodexObservedRuntimeInfo;
 }
 
 function mergeCodexConfiguredDefaults(
@@ -1927,7 +2006,11 @@ async function loadCodexThreadHistoryTimeline(params: {
         : [];
     },
   );
-  return { timeline, subAgentRoutes };
+  return {
+    timeline,
+    subAgentRoutes,
+    runtimeInfo: readCodexObservedRuntimeInfo(response.thread, response),
+  };
 }
 
 function readCodexThread(client: CodexAppServerClientLike, threadId: string): Promise<unknown> {
@@ -2260,13 +2343,23 @@ const CodexEventThreadRolledBackNotificationSchema = z
   .passthrough();
 
 type ParsedCodexNotification =
-  | { kind: "thread_started"; threadId: string }
-  | { kind: "turn_started"; turnId: string; threadId: string | null }
+  | {
+      kind: "thread_started";
+      threadId: string;
+      runtimeInfo: CodexObservedRuntimeInfo;
+    }
+  | {
+      kind: "turn_started";
+      turnId: string;
+      threadId: string | null;
+      runtimeInfo: CodexObservedRuntimeInfo;
+    }
   | {
       kind: "turn_completed";
       status: string;
       errorMessage: string | null;
       threadId: string | null;
+      runtimeInfo: CodexObservedRuntimeInfo;
     }
   | {
       kind: "plan_updated";
@@ -2386,6 +2479,7 @@ const CodexNotificationSchema = z.union([
       ({ params }): ParsedCodexNotification => ({
         kind: "thread_started",
         threadId: params.thread.id,
+        runtimeInfo: readCodexObservedRuntimeInfo(params.thread, params),
       }),
     ),
   z.object({ method: z.literal("thread/started"), params: z.unknown() }).transform(
@@ -2400,6 +2494,7 @@ const CodexNotificationSchema = z.union([
       kind: "turn_started",
       turnId: params.turn.id,
       threadId: params.threadId ?? null,
+      runtimeInfo: readCodexObservedRuntimeInfo(params.turn, params),
     }),
   ),
   z.object({ method: z.literal("turn/started"), params: z.unknown() }).transform(
@@ -2417,6 +2512,7 @@ const CodexNotificationSchema = z.union([
         status: params.turn.status,
         errorMessage: params.turn.error?.message ?? null,
         threadId: params.threadId ?? null,
+        runtimeInfo: readCodexObservedRuntimeInfo(params.turn, params),
       }),
     ),
   z.object({ method: z.literal("turn/completed"), params: z.unknown() }).transform(
@@ -2837,6 +2933,7 @@ const CodexNotificationSchema = z.union([
         status: "interrupted",
         errorMessage: null,
         threadId: getCodexEventThreadId(params),
+        runtimeInfo: {},
       }),
     ),
   z.object({ method: z.literal("codex/event/turn_aborted"), params: z.unknown() }).transform(
@@ -2857,6 +2954,7 @@ const CodexNotificationSchema = z.union([
         status: "completed",
         errorMessage: null,
         threadId: getCodexEventThreadId(params),
+        runtimeInfo: {},
       }),
     ),
   z.object({ method: z.literal("codex/event/task_complete"), params: z.unknown() }).transform(
@@ -3091,6 +3189,7 @@ interface CodexSubAgentCallState {
   childItemOrder: string[];
   childItems: Map<string, AgentTimelineItem>;
   childThreadIds: Set<string>;
+  runtimeInfoByChildThreadId: Map<string, CodexObservedRuntimeInfo>;
 }
 
 interface CodexPendingPermissionHandler {
@@ -3120,6 +3219,10 @@ export class CodexAppServerAgentSession implements AgentSession {
   private activeForegroundTurnId: string | null = null;
   private activeClientMessageId: string | null = null;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
+  private observedModel: string | undefined;
+  private observedThinkingOptionId: string | undefined;
+  private activeTurnObservedModel: string | undefined;
+  private activeTurnObservedThinkingOptionId: string | undefined;
   private serviceTier: "fast" | null = null;
   private planModeEnabled = false;
   private historyPending = false;
@@ -3618,6 +3721,11 @@ export class CodexAppServerAgentSession implements AgentSession {
           cwd: this.config.cwd ?? null,
           requestThread: (childThreadId) => readCodexThread(client, childThreadId),
         });
+        this.captureSubAgentObservedRuntimeInfo(
+          next.route.childThreadId,
+          next.route.toolCall.callId,
+          childHistory.runtimeInfo,
+        );
         for (const entry of childHistory.timeline) {
           this.emitProviderSubagentTimeline(next.route.childThreadId, entry.item, entry.timestamp);
         }
@@ -3655,7 +3763,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (codexConfig) {
         params.config = codexConfig;
       }
-      await this.client.request("thread/resume", params);
+      const response = await this.client.request("thread/resume", params);
+      const responseRecord = toObjectRecord(response);
+      this.captureObservedRuntimeInfo(
+        readCodexObservedRuntimeInfo(responseRecord?.thread, responseRecord),
+      );
     } catch (error) {
       const threadId = this.currentThreadId;
       const message = error instanceof Error ? error.message : String(error);
@@ -3930,6 +4042,7 @@ export class CodexAppServerAgentSession implements AgentSession {
 
       const turnStart = await this.buildTurnStartParams(effectivePrompt, options);
       const turnId = this.createTurnId();
+      this.resetActiveTurnObservedRuntimeInfo();
       this.activeForegroundTurnId = turnId;
       this.activeClientMessageId = options?.clientMessageId ?? null;
       this.currentTurnId = null;
@@ -4031,6 +4144,60 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
+  private captureObservedRuntimeInfo(
+    runtimeInfo: CodexObservedRuntimeInfo,
+    options?: { activeTurn?: boolean },
+  ): void {
+    let changed = false;
+    if (Object.prototype.hasOwnProperty.call(runtimeInfo, "model")) {
+      const model = normalizeCodexModelId(runtimeInfo.model);
+      if (options?.activeTurn) {
+        this.activeTurnObservedModel = model;
+      }
+      if (model !== this.observedModel) {
+        this.observedModel = model;
+        changed = true;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(runtimeInfo, "reasoningEffort")) {
+      const thinkingOptionId = normalizeCodexThinkingOptionId(runtimeInfo.reasoningEffort);
+      if (options?.activeTurn) {
+        this.activeTurnObservedThinkingOptionId = thinkingOptionId;
+      }
+      if (thinkingOptionId !== this.observedThinkingOptionId) {
+        this.observedThinkingOptionId = thinkingOptionId;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.cachedRuntimeInfo = null;
+    }
+  }
+
+  private resetActiveTurnObservedRuntimeInfo(): void {
+    this.activeTurnObservedModel = undefined;
+    this.activeTurnObservedThinkingOptionId = undefined;
+  }
+
+  private stampActiveTurnAttribution(item: AgentTimelineItem): void {
+    if (item.type !== "assistant_message") {
+      return;
+    }
+    // Turn notifications carry model/effort only sometimes; the thread-level
+    // observation is the usual source. Both are things Codex reported, so
+    // falling back keeps attribution honest — prefer the turn's own value when
+    // it exists so a mid-session change is attributed to the right turn.
+    const model = this.activeTurnObservedModel ?? this.observedModel;
+    const thinkingOptionId =
+      this.activeTurnObservedThinkingOptionId ?? this.observedThinkingOptionId;
+    if (model) {
+      item.model = model;
+    }
+    if (thinkingOptionId) {
+      item.thinkingOptionId = thinkingOptionId;
+    }
+  }
+
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
     if (this.cachedRuntimeInfo) return { ...this.cachedRuntimeInfo };
     if (!this.connected) {
@@ -4039,11 +4206,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.currentThreadId) {
       await this.ensureThread();
     }
+    const model = this.observedModel ?? normalizeCodexModelId(this.config.model);
+    const thinkingOptionId =
+      this.observedThinkingOptionId ?? normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
     const info: AgentRuntimeInfo = {
       provider: CODEX_PROVIDER,
       sessionId: this.currentThreadId,
-      model: this.config.model ?? null,
-      thinkingOptionId: normalizeCodexThinkingOptionId(this.config.thinkingOptionId) ?? null,
+      ...(model ? { model } : {}),
+      ...(thinkingOptionId ? { thinkingOptionId } : {}),
       modeId: this.currentMode ?? null,
       extra: this.resolvedCollaborationMode
         ? { collaborationMode: this.resolvedCollaborationMode.name }
@@ -4079,12 +4249,18 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.serviceTier = null;
     }
     this.refreshResolvedCollaborationMode();
+    // Observations predate this selection; without a reset, `observed ?? config`
+    // would keep reporting the old values until a notification re-observes them.
+    // The effort observation is invalidated too: it was made under the old model.
+    this.observedModel = undefined;
+    this.observedThinkingOptionId = undefined;
     this.cachedRuntimeInfo = null;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void | AgentProviderNotice> {
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(thinkingOptionId);
     this.refreshResolvedCollaborationMode();
+    this.observedThinkingOptionId = undefined;
     this.cachedRuntimeInfo = null;
     if (this.activeForegroundTurnId) {
       return THINKING_APPLIES_NEXT_TURN_NOTICE;
@@ -4645,6 +4821,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const rawResponse = await this.client.request("thread/start", params);
     const response = toObjectRecord(rawResponse);
     const threadRecord = toObjectRecord(response?.thread);
+    this.captureObservedRuntimeInfo(readCodexObservedRuntimeInfo(threadRecord, response));
     const threadId = typeof threadRecord?.id === "string" ? threadRecord.id : undefined;
     if (!threadId) {
       throw new Error("Codex app-server did not return thread id");
@@ -4762,6 +4939,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private dispatchSubAgentNotification(parsed: ParsedCodexNotification, callId: string): void {
     switch (parsed.kind) {
       case "thread_started":
+        this.captureSubAgentObservedRuntimeInfo(parsed.threadId, callId, parsed.runtimeInfo);
         this.emitSubAgentActivityUpdate(callId, "running");
         return;
       case "turn_started":
@@ -4965,6 +5143,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         childItemOrder: [],
         childItems: new Map<string, AgentTimelineItem>(),
         childThreadIds: new Set<string>(),
+        runtimeInfoByChildThreadId: new Map<string, CodexObservedRuntimeInfo>(),
       } satisfies CodexSubAgentCallState);
 
     state.toolCall = {
@@ -5189,10 +5368,33 @@ export class CodexAppServerAgentSession implements AgentSession {
         id: childThreadId,
         title: detail.subAgentType ?? "Codex subagent",
         description: detail.description ?? null,
+        subtitle: buildCodexSubagentSubtitle(
+          detail.subAgentType ?? "Codex subagent",
+          state.runtimeInfoByChildThreadId.get(childThreadId),
+        ),
         status: providerStatus,
         toolCallId: state.callId,
       },
     });
+  }
+
+  private captureSubAgentObservedRuntimeInfo(
+    childThreadId: string,
+    callId: string,
+    runtimeInfo: CodexObservedRuntimeInfo,
+  ): void {
+    const state = this.subAgentCallsByCallId.get(callId);
+    if (!state) return;
+    const previousRuntimeInfo = state.runtimeInfoByChildThreadId.get(childThreadId);
+    const nextRuntimeInfo = mergeCodexObservedRuntimeInfo(previousRuntimeInfo, runtimeInfo);
+    if (
+      previousRuntimeInfo?.model === nextRuntimeInfo.model &&
+      previousRuntimeInfo?.reasoningEffort === nextRuntimeInfo.reasoningEffort
+    ) {
+      return;
+    }
+    state.runtimeInfoByChildThreadId.set(childThreadId, nextRuntimeInfo);
+    this.emitProviderSubagentUpsert(childThreadId, state, state.toolCall.status);
   }
 
   private emitProviderSubagentTimeline(
@@ -5328,17 +5530,19 @@ export class CodexAppServerAgentSession implements AgentSession {
         return;
       }
       const isFirstDeltaForItem = prev.length === 0;
+      const timelineItem: AgentTimelineItem = {
+        type: "assistant_message",
+        messageId: parsed.itemId,
+        text:
+          isFirstDeltaForItem && this.pendingAssistantMessageBoundary
+            ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
+            : parsed.delta,
+      };
+      this.stampActiveTurnAttribution(timelineItem);
       this.emitEvent({
         type: "timeline",
         provider: CODEX_PROVIDER,
-        item: {
-          type: "assistant_message",
-          messageId: parsed.itemId,
-          text:
-            isFirstDeltaForItem && this.pendingAssistantMessageBoundary
-              ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
-              : parsed.delta,
-        },
+        item: timelineItem,
       });
       if (isFirstDeltaForItem) {
         this.pendingAssistantMessageBoundary = false;
@@ -5394,6 +5598,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handleThreadStartedNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "thread_started" }>,
   ): void {
+    this.captureObservedRuntimeInfo(parsed.runtimeInfo);
     this.currentThreadId = parsed.threadId;
     this.emitEvent({
       type: "thread_started",
@@ -5407,9 +5612,18 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
     if (subAgentCallId) {
+      if (parsed.threadId) {
+        this.captureSubAgentObservedRuntimeInfo(
+          parsed.threadId,
+          subAgentCallId,
+          parsed.runtimeInfo,
+        );
+      }
       this.emitSubAgentActivityUpdate(subAgentCallId, "running");
       return;
     }
+    this.resetActiveTurnObservedRuntimeInfo();
+    this.captureObservedRuntimeInfo(parsed.runtimeInfo, { activeTurn: true });
     this.currentTurnId = parsed.turnId;
     const pendingIdentification = this.pendingForegroundTurnIdentification;
     if (
@@ -5428,6 +5642,13 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
     if (subAgentCallId) {
+      if (parsed.threadId) {
+        this.captureSubAgentObservedRuntimeInfo(
+          parsed.threadId,
+          subAgentCallId,
+          parsed.runtimeInfo,
+        );
+      }
       let status: ToolCallTimelineItem["status"] = "completed";
       if (parsed.status === "failed") {
         status = "failed";
@@ -5437,6 +5658,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitSubAgentActivityUpdate(subAgentCallId, status);
       return;
     }
+    this.captureObservedRuntimeInfo(parsed.runtimeInfo, { activeTurn: true });
     if (parsed.status === "failed") {
       this.emitEvent({
         type: "turn_failed",
@@ -5462,6 +5684,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.pendingForegroundTurnIdentification = null;
     this.pendingSubAgentNotificationsByThreadId.clear();
     this.resetTurnTrackingState();
+    this.resetActiveTurnObservedRuntimeInfo();
   }
 
   private resetTurnTrackingState(): void {
@@ -5775,6 +5998,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.replayPendingSubAgentNotifications(registeredChildThreadIds);
       return;
     }
+    this.stampActiveTurnAttribution(timelineItem);
     const normalizedItemType = normalizeCodexThreadItemType(
       typeof parsed.item.type === "string" ? parsed.item.type : undefined,
     );
@@ -5811,6 +6035,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.pendingAssistantMessageBoundary = true;
     }
     for (const imageItem of imageItems) {
+      this.stampActiveTurnAttribution(imageItem);
       this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: imageItem });
       this.pendingAssistantMessageBoundary = true;
     }
@@ -5865,6 +6090,10 @@ export class CodexAppServerAgentSession implements AgentSession {
           type: timelineItem.type,
           text: suffix,
           ...(timelineItem.messageId ? { messageId: timelineItem.messageId } : {}),
+          ...(timelineItem.model ? { model: timelineItem.model } : {}),
+          ...(timelineItem.thinkingOptionId
+            ? { thinkingOptionId: timelineItem.thinkingOptionId }
+            : {}),
         }
       : { type: timelineItem.type, text: suffix };
   }
