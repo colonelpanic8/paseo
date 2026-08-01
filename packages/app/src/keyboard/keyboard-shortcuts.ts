@@ -1552,6 +1552,20 @@ export function getWorkspaceIndexJumpModifierKey(platform: {
   return platform.isMac ? "Meta" : "Control";
 }
 
+export function isShortcutModifierDown(
+  event: Pick<KeyboardShortcutInput, "altKey" | "ctrlKey" | "metaKey">,
+  modifierKey: "Alt" | "Meta" | "Control",
+): boolean {
+  switch (modifierKey) {
+    case "Alt":
+      return event.altKey;
+    case "Meta":
+      return event.metaKey;
+    case "Control":
+      return event.ctrlKey;
+  }
+}
+
 export function buildKeyboardShortcutHelpSections(
   input: KeyboardShortcutPlatformContext,
   bindings: readonly ParsedShortcutBinding[] = DEFAULT_BINDINGS,
