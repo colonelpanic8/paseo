@@ -6,6 +6,7 @@ import {
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  shouldSubmitShellVariable,
 } from "./agent-command-autocomplete";
 
 describe("filterAndRankCommandAutocompleteEntries", () => {
@@ -219,6 +220,43 @@ describe("applySlashCommandReplacement", () => {
         commandName: "release-beta",
       }),
     ).toBe("run /release-beta ");
+  });
+});
+
+describe("shouldSubmitShellVariable", () => {
+  const shellVariable = {
+    start: 6,
+    end: 11,
+    query: "HOME",
+    position: "inline",
+    menu: "skill",
+    sigil: "$",
+  } as const;
+
+  it("reserves Enter for shell-variable-shaped dollar triggers", () => {
+    expect(shouldSubmitShellVariable({ key: "Enter", command: shellVariable })).toBe(true);
+    expect(
+      shouldSubmitShellVariable({
+        key: "Enter",
+        command: { ...shellVariable, query: "XDG_CONFIG_HOME" },
+      }),
+    ).toBe(true);
+  });
+
+  it("allows explicit selection and ordinary configured triggers", () => {
+    expect(shouldSubmitShellVariable({ key: "Tab", command: shellVariable })).toBe(false);
+    expect(
+      shouldSubmitShellVariable({
+        key: "Enter",
+        command: { ...shellVariable, query: "release-beta" },
+      }),
+    ).toBe(false);
+    expect(
+      shouldSubmitShellVariable({
+        key: "Enter",
+        command: { ...shellVariable, sigil: "!" },
+      }),
+    ).toBe(false);
   });
 });
 
