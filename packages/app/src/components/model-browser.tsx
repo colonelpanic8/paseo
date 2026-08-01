@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
@@ -16,23 +25,46 @@ import {
 import { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { AlertTriangle, Check, ChevronRight, Search, Settings, Star } from "lucide-react-native";
+import {
+  AlertTriangle,
+  Check,
+  ChevronRight,
+  Layers,
+  Search,
+  Settings,
+  Star,
+} from "lucide-react-native";
 import type { AgentProvider } from "@getpaseo/protocol/agent-types";
-import type { SheetHeader } from "@/components/adaptive-modal-sheet";
+import type { SheetHeader, SheetSearchKeyPressEvent } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
+import { useAppSettings } from "@/hooks/use-settings";
 import {
   buildSelectedTriggerLabel,
-  filterAndRankModelRows,
   getAllProviderModelRows,
   getProviderModelRows,
   resolveSelectedModelLabel,
   type ProviderSelectionModelRow,
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
+import {
+  buildAllModelsListItems,
+  buildModelRowDescription,
+  buildProviderModelListItems,
+  countAllModels,
+  normalizeModelSearchQuery,
+  type ModelBrowserHeadingStatus,
+  type ModelBrowserListItem,
+} from "@/components/model-browser-rows";
+import { moveModelHighlight, resolveModelSubmitRow } from "@/components/model-browser-keyboard";
+import {
+  LIST_SEARCH_SELECTOR,
+  resolveListSearchKeyAction,
+  type ListSearchKeyEvent,
+} from "@/keyboard/list-search-keys";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -40,6 +72,8 @@ import {
   resolveInitialModelBrowserView,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
+
+const EMPTY_LIST_ITEMS: ModelBrowserListItem[] = [];
 
 const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
@@ -49,6 +83,7 @@ const DESKTOP_MODEL_ROW_HEIGHT = 40;
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedCheck = withUnistyles(Check);
 const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedLayers = withUnistyles(Layers);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedSearch = withUnistyles(Search);
 const ThemedSettings = withUnistyles(Settings);
@@ -92,6 +127,10 @@ const foregroundMutedMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
 
+const foregroundMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+
 const headerSettingsMapping = (disabled: boolean) => (theme: Theme) => ({
   color: disabled ? theme.colors.border : theme.colors.foregroundMuted,
 });
@@ -115,6 +154,7 @@ interface ModelBrowserInput {
   selectedModel: string;
   isLoading: boolean;
   favoriteKeys: Set<string>;
+  onSelect: (provider: string, modelId: string) => void;
   serverId?: string | null;
 }
 
@@ -124,20 +164,25 @@ export interface ModelBrowserState {
   selectedModel: string;
   favoriteKeys: Set<string>;
   view: ModelBrowserView;
-  searchQuery: string;
+  /** Rows of the current model list view; empty in the provider-group view. */
+  items: ModelBrowserListItem[];
+  highlightedKey: string | null;
   header: SheetHeader;
   selectedModelLabel: string;
   triggerLabel: string;
   desktopFixedHeight: number | undefined;
-  isProviderView: boolean;
+  isModelListView: boolean;
+  onSelect: (provider: string, modelId: string) => void;
   prepareToOpen: () => void;
   reset: () => void;
   drillDown: (providerId: string, providerLabel: string) => void;
+  showAllModels: () => void;
+  /** Web: keyboard navigation for whichever overlay hosts the browser. */
+  handleOverlayKeyDown: (event: KeyboardEvent) => boolean;
 }
 
 interface ModelBrowserProps {
   state: ModelBrowserState;
-  onSelect: (provider: string, modelId: string) => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
   onRetryProvider?: (provider: AgentProvider) => void;
   isRetryingProvider?: boolean;
@@ -149,9 +194,12 @@ interface ModelBrowserContentProps extends Omit<ModelBrowserProps, "state" | "sc
   providers: ProviderSelectorProvider[];
   selectedProvider: string;
   selectedModel: string;
-  searchQuery: string;
+  items: ModelBrowserListItem[];
+  highlightedKey: string | null;
   favoriteKeys: Set<string>;
+  onSelect: (provider: string, modelId: string) => void;
   onDrillDown: (providerId: string, providerLabel: string) => void;
+  onShowAllModels: () => void;
   scrolling: "sheet" | "independent";
 }
 
@@ -201,10 +249,23 @@ function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { ho
   ];
 }
 
+function clampDesktopListHeight(rowCount: number): number {
+  return Math.min(
+    Math.max(
+      DESKTOP_PROVIDER_VIEW_MIN_HEIGHT,
+      DESKTOP_PROVIDER_VIEW_BASE_HEIGHT + rowCount * DESKTOP_MODEL_ROW_HEIGHT,
+    ),
+    DESKTOP_PROVIDER_VIEW_MAX_HEIGHT,
+  );
+}
+
 function resolveDesktopFixedHeight(
   view: ModelBrowserView,
   providers: ProviderSelectorProvider[],
 ): number | undefined {
+  if (view.kind === "allModels") {
+    return clampDesktopListHeight(countAllModels(providers) + providers.length);
+  }
   if (view.kind !== "provider") {
     return undefined;
   }
@@ -212,14 +273,7 @@ function resolveDesktopFixedHeight(
   if (!provider || provider.modelSelection.kind !== "models") {
     return DESKTOP_PROVIDER_VIEW_MIN_HEIGHT;
   }
-  const modelCount = getProviderModelRows(provider).length;
-  return Math.min(
-    Math.max(
-      DESKTOP_PROVIDER_VIEW_MIN_HEIGHT,
-      DESKTOP_PROVIDER_VIEW_BASE_HEIGHT + modelCount * DESKTOP_MODEL_ROW_HEIGHT,
-    ),
-    DESKTOP_PROVIDER_VIEW_MAX_HEIGHT,
-  );
+  return clampDesktopListHeight(getProviderModelRows(provider).length);
 }
 
 export function useModelBrowser({
@@ -228,11 +282,15 @@ export function useModelBrowser({
   selectedModel,
   isLoading,
   favoriteKeys,
+  onSelect,
   serverId = null,
 }: ModelBrowserInput): ModelBrowserState {
   const { t } = useTranslation();
+  const { settings } = useAppSettings();
+  const startWithAllModels = settings.modelPickerStartsWithAllModels;
   const [view, setView] = useState<ModelBrowserView>({ kind: "all" });
   const [searchQuery, setSearchQuery] = useState("");
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [searchResetKey, bumpSearchResetKey] = useReducer((key: number) => key + 1, 0);
 
   const initialView = useMemo(
@@ -242,8 +300,9 @@ export function useModelBrowser({
         selectedProvider,
         selectedModel,
         favoriteKeys,
+        startWithAllModels,
       }),
-    [favoriteKeys, providers, selectedModel, selectedProvider],
+    [favoriteKeys, providers, selectedModel, selectedProvider, startWithAllModels],
   );
 
   const prepareToOpen = useCallback(() => {
@@ -252,6 +311,7 @@ export function useModelBrowser({
 
   const reset = useCallback(() => {
     setSearchQuery("");
+    setHighlightedKey(null);
     bumpSearchResetKey();
   }, []);
 
@@ -260,18 +320,106 @@ export function useModelBrowser({
     reset();
   }, [reset]);
 
-  const drillDown = useCallback((providerId: string, providerLabel: string) => {
-    setView({ kind: "provider", providerId, providerLabel });
-  }, []);
+  // Every navigation clears the query: each view owns a differently scoped
+  // search, so carrying a stale one across would silently filter the new list.
+  const drillDown = useCallback(
+    (providerId: string, providerLabel: string) => {
+      setView({ kind: "provider", providerId, providerLabel });
+      reset();
+    },
+    [reset],
+  );
 
+  const showAllModels = useCallback(() => {
+    setView({ kind: "allModels" });
+    reset();
+  }, [reset]);
+
+  // Retyping re-ranks the list, so the highlight starts over: Enter then commits
+  // the top result until the user moves the highlight again.
   const handleSearchQueryChange = useCallback((value: string) => {
     setSearchQuery(value);
+    setHighlightedKey(null);
   }, []);
+
+  const normalizedQuery = useMemo(() => normalizeModelSearchQuery(searchQuery), [searchQuery]);
+  const favoritesLabel = t("modelSelector.favorites");
+  const items = useMemo<ModelBrowserListItem[]>(() => {
+    if (view.kind === "allModels") {
+      return buildAllModelsListItems({ providers, favoriteKeys, favoritesLabel, normalizedQuery });
+    }
+    if (view.kind !== "provider") return EMPTY_LIST_ITEMS;
+    const provider = providers.find((entry) => entry.id === view.providerId);
+    if (!provider) return EMPTY_LIST_ITEMS;
+    return buildProviderModelListItems({ provider, favoriteKeys, normalizedQuery });
+  }, [favoriteKeys, favoritesLabel, normalizedQuery, providers, view]);
+
+  const handleListSearchKey = useCallback(
+    (event: ListSearchKeyEvent): boolean => {
+      const action = resolveListSearchKeyAction(event);
+      if (!action) return false;
+      if (action === "submit") {
+        const row = resolveModelSubmitRow(items, highlightedKey);
+        if (!row) return false;
+        onSelect(row.provider, row.modelId);
+        return true;
+      }
+      const nextKey = moveModelHighlight({ items, highlightedKey, direction: action });
+      if (!nextKey) return false;
+      setHighlightedKey(nextKey);
+      return true;
+    },
+    [highlightedKey, items, onSelect],
+  );
+
+  // The overlay hears every key in the sheet, and the composer's sheet also
+  // hosts the agent controls below the list — only claim keys typed into the
+  // search field itself.
+  const handleOverlayKeyDown = useCallback(
+    (event: KeyboardEvent): boolean => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.closest(LIST_SEARCH_SELECTOR)) return false;
+      if (!handleListSearchKey(event)) return false;
+      event.preventDefault();
+      return true;
+    },
+    [handleListSearchKey],
+  );
+
+  // Fallback for hosts without a web overlay registration (the compact-width
+  // sheet). On native only Enter arrives, and it arrives via onSubmitEditing.
+  const handleSearchKeyPress = useCallback(
+    (event: SheetSearchKeyPressEvent) => {
+      if (handleListSearchKey(event.nativeEvent)) event.preventDefault();
+    },
+    [handleListSearchKey],
+  );
+
+  const handleSearchSubmit = useCallback(() => {
+    handleListSearchKey({ key: "Enter" });
+  }, [handleListSearchKey]);
 
   const singleProviderView = providers.length === 1;
   const header = useMemo<SheetHeader>(() => {
     if (view.kind === "all") {
       return { title: t("modelSelector.title") };
+    }
+    if (view.kind === "allModels") {
+      return {
+        title: t("modelSelector.allModels"),
+        leading: <ThemedLayers size={ICON_SIZE.md} uniProps={foregroundMapping} />,
+        back: { onPress: handleBackToAll },
+        search: {
+          onChange: handleSearchQueryChange,
+          resetKey: `all-models:${searchResetKey}`,
+          placeholder: t("modelSelector.searchAllModelsPlaceholder"),
+          autoFocus: isWeb,
+          testID: "model-search-input",
+          onKeyPress: handleSearchKeyPress,
+          onSubmit: handleSearchSubmit,
+          ownsListNavigation: true,
+        },
+      };
     }
     return {
       title: view.providerLabel,
@@ -294,11 +442,16 @@ export function useModelBrowser({
         placeholder: t("modelSelector.searchPlaceholder"),
         autoFocus: isWeb,
         testID: "model-search-input",
+        onKeyPress: handleSearchKeyPress,
+        onSubmit: handleSearchSubmit,
+        ownsListNavigation: true,
       },
     };
   }, [
     handleBackToAll,
+    handleSearchKeyPress,
     handleSearchQueryChange,
+    handleSearchSubmit,
     searchResetKey,
     serverId,
     singleProviderView,
@@ -335,36 +488,20 @@ export function useModelBrowser({
     selectedModel,
     favoriteKeys,
     view,
-    searchQuery,
+    items,
+    highlightedKey,
     header,
     selectedModelLabel,
     triggerLabel,
     desktopFixedHeight,
-    isProviderView: view.kind === "provider",
+    isModelListView: view.kind !== "all",
+    onSelect,
     prepareToOpen,
     reset,
     drillDown,
+    showAllModels,
+    handleOverlayKeyDown,
   };
-}
-
-function normalizeSearchQuery(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function sortFavoritesFirst(
-  rows: ProviderSelectionModelRow[],
-  favoriteKeys: Set<string>,
-): ProviderSelectionModelRow[] {
-  const favorites: ProviderSelectionModelRow[] = [];
-  const rest: ProviderSelectionModelRow[] = [];
-  for (const row of rows) {
-    if (favoriteKeys.has(row.favoriteKey)) {
-      favorites.push(row);
-    } else {
-      rest.push(row);
-    }
-  }
-  return [...favorites, ...rest];
 }
 
 interface ModelBrowserPressableProps {
@@ -458,13 +595,33 @@ function ModelBrowserPressable({
 
 type ModelBrowserRowTone = "default" | "elevated" | "drillDown";
 
+/**
+ * Keeps the keyboard-highlighted row visible. Highlight moves are clamped to
+ * neighbouring rows (see model-browser-keyboard.ts), so the target row is always
+ * mounted and `block: "nearest"` scrolls the smallest amount that reveals it.
+ * Web-only: the keys that drive the highlight need a hardware keyboard.
+ */
+function useScrollHighlightIntoView(highlighted: boolean | undefined) {
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    if (!isWeb || !highlighted) return;
+    const node = ref.current as unknown as {
+      scrollIntoView?: (options?: ScrollIntoViewOptions) => void;
+    } | null;
+    node?.scrollIntoView?.({ block: "nearest" });
+  }, [highlighted]);
+  return ref;
+}
+
 function ModelBrowserRow({
   label,
   description,
   leadingSlot,
   trailingSlot,
+  accessory,
   selected = false,
   selectionIndicator = false,
+  highlighted,
   tone = "default",
   spacing = "model",
   onPress,
@@ -474,22 +631,30 @@ function ModelBrowserRow({
   description?: string;
   leadingSlot: React.ReactNode;
   trailingSlot?: React.ReactNode;
+  accessory?: React.ReactNode;
   selected?: boolean;
   selectionIndicator?: boolean;
+  /** Undefined for rows the keyboard never highlights (provider drill-downs). */
+  highlighted?: boolean;
   tone?: ModelBrowserRowTone;
   spacing?: "model" | "provider";
   onPress: () => void;
   testID?: string;
 }) {
+  const highlightRef = useScrollHighlightIntoView(highlighted);
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.browserRow,
+      Boolean(accessory) && styles.browserRowWithAccessory,
       spacing === "model" && styles.browserModelRow,
       Boolean(hovered) &&
         (tone === "elevated" ? styles.browserRowHoveredElevated : styles.browserRowHovered),
+      // Painted after hover so the keyboard highlight wins when the pointer
+      // happens to rest on a different row than the one being navigated.
+      highlighted && styles.browserRowHighlighted,
       pressed && (tone === "default" ? styles.browserRowPressed : styles.browserRowPressedElevated),
     ],
-    [spacing, tone],
+    [accessory, highlighted, spacing, tone],
   );
   const contentStyle = useMemo(
     () => [styles.browserRowText, description && styles.browserRowTextInline],
@@ -497,9 +662,11 @@ function ModelBrowserRow({
   );
   const hasTrailing = selected || trailingSlot;
 
-  return (
+  const row = (
     <ModelBrowserPressable onPress={onPress} style={pressableStyle} testID={testID}>
-      <View style={styles.browserRowContent}>
+      <View
+        style={[styles.browserRowContent, accessory ? styles.browserRowContentWithAccessory : null]}
+      >
         <View style={styles.browserRowLeading}>{leadingSlot}</View>
         <View style={contentStyle}>
           <Text numberOfLines={1} style={styles.browserRowLabel}>
@@ -526,20 +693,42 @@ function ModelBrowserRow({
       </View>
     </ModelBrowserPressable>
   );
+
+  const rowWithAccessory = accessory ? (
+    <View style={styles.browserRowContainer}>
+      {row}
+      <View style={styles.browserRowAccessory}>{accessory}</View>
+    </View>
+  ) : (
+    row
+  );
+
+  if (highlighted === undefined) return rowWithAccessory;
+  // Anchor for scroll-into-view: ModelBrowserPressable renders a Pressable or a
+  // GestureDetector depending on platform, neither of which forwards a ref.
+  return (
+    <View ref={highlightRef} collapsable={false}>
+      {rowWithAccessory}
+    </View>
+  );
 }
 
 function ModelRow({
   row,
   isSelected,
+  isHighlighted = false,
   isFavorite,
   elevated = false,
+  showProvider = false,
   onPress,
   onToggleFavorite,
 }: {
   row: ProviderSelectionModelRow;
   isSelected: boolean;
+  isHighlighted?: boolean;
   isFavorite: boolean;
   elevated?: boolean;
+  showProvider?: boolean;
   onPress: () => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
 }) {
@@ -573,13 +762,14 @@ function ModelRow({
   return (
     <ModelBrowserRow
       label={row.modelLabel}
-      description={row.description}
+      description={buildModelRowDescription(row, showProvider)}
       selected={isSelected}
       selectionIndicator
+      highlighted={isHighlighted}
       tone={elevated ? "elevated" : "default"}
       onPress={onPress}
       leadingSlot={leadingSlot}
-      trailingSlot={trailingSlot}
+      accessory={trailingSlot}
     />
   );
 }
@@ -587,15 +777,19 @@ function ModelRow({
 function SelectableModelRow({
   row,
   isSelected,
+  isHighlighted,
   isFavorite,
   elevated,
+  showProvider,
   onSelect,
   onToggleFavorite,
 }: {
   row: ProviderSelectionModelRow;
   isSelected: boolean;
+  isHighlighted?: boolean;
   isFavorite: boolean;
   elevated?: boolean;
+  showProvider?: boolean;
   onSelect: (provider: string, modelId: string) => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
 }) {
@@ -606,11 +800,74 @@ function SelectableModelRow({
     <ModelRow
       row={row}
       isSelected={isSelected}
+      isHighlighted={isHighlighted}
       isFavorite={isFavorite}
       elevated={elevated}
+      showProvider={showProvider}
       onPress={handlePress}
       onToggleFavorite={onToggleFavorite}
     />
+  );
+}
+
+function headingPressableStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    styles.sectionHeading,
+    Boolean(hovered) && styles.browserRowHovered,
+    pressed && styles.browserRowPressed,
+  ];
+}
+
+function ModelGroupHeading({
+  label,
+  status,
+  providerId,
+  onDrillDown,
+}: {
+  label: string;
+  status?: ModelBrowserHeadingStatus;
+  providerId?: string;
+  onDrillDown: (providerId: string, providerLabel: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => {
+    if (providerId) onDrillDown(providerId, label);
+  }, [label, onDrillDown, providerId]);
+  const statusNode = status ? (
+    <Text style={styles.sectionHeadingStatus}>
+      {t(status === "loading" ? "modelSelector.loadingShort" : "modelSelector.error")}
+    </Text>
+  ) : null;
+
+  // A failed provider's retry lives in its own view, so the flat catalog would
+  // otherwise dead-end on "Error" with no way to act on it.
+  if (status === "error" && providerId) {
+    return (
+      <ModelBrowserPressable
+        onPress={handlePress}
+        style={headingPressableStyle}
+        accessibilityLabel={`${label} — ${t("modelSelector.error")}`}
+        testID={`model-group-heading-${label}`}
+      >
+        <Text style={styles.sectionHeadingText} numberOfLines={1}>
+          {label}
+        </Text>
+        {statusNode}
+        <ThemedChevronRight size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+      </ModelBrowserPressable>
+    );
+  }
+
+  return (
+    <View style={styles.sectionHeading} accessibilityRole="header">
+      <Text style={styles.sectionHeadingText} numberOfLines={1}>
+        {label}
+      </Text>
+      {statusNode}
+    </View>
   );
 }
 
@@ -648,6 +905,39 @@ function FavoritesSection({
         />
       ))}
     </View>
+  );
+}
+
+function AllModelsButton({ count, onPress }: { count: number; onPress: () => void }) {
+  const { t } = useTranslation();
+  const leadingSlot = useMemo(
+    () => <ThemedLayers size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />,
+    [],
+  );
+  const trailingSlot = useMemo(
+    () => (
+      <View style={styles.drillDownTrailing}>
+        <Text style={styles.drillDownCount}>
+          {t(count === 1 ? "modelSelector.modelCount" : "modelSelector.modelCountPlural", {
+            count,
+          })}
+        </Text>
+        <ThemedChevronRight size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+      </View>
+    ),
+    [count, t],
+  );
+
+  return (
+    <ModelBrowserRow
+      label={t("modelSelector.allModels")}
+      leadingSlot={leadingSlot}
+      trailingSlot={trailingSlot}
+      tone="drillDown"
+      spacing="provider"
+      onPress={onPress}
+      testID="model-all-models"
+    />
   );
 }
 
@@ -762,18 +1052,18 @@ function IndependentScrollBoundary({ children }: { children: React.ReactElement 
 }
 
 function IndependentModelList({
-  rows,
+  items,
   renderItem,
 }: {
-  rows: ProviderSelectionModelRow[];
-  renderItem: ({ item }: { item: ProviderSelectionModelRow }) => React.ReactElement;
+  items: ModelBrowserListItem[];
+  renderItem: ({ item }: { item: ModelBrowserListItem }) => React.ReactElement;
 }) {
   return (
     <IndependentScrollBoundary>
       <FlatList
-        data={rows}
+        data={items}
         renderItem={renderItem}
-        keyExtractor={getModelRowKey}
+        keyExtractor={getModelListItemKey}
         style={styles.virtualizedModelList}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -785,8 +1075,8 @@ function IndependentModelList({
   );
 }
 
-function getModelRowKey(row: ProviderSelectionModelRow): string {
-  return row.favoriteKey;
+function getModelListItemKey(item: ModelBrowserListItem): string {
+  return item.key;
 }
 
 function IndependentProviderList({ children }: { children: React.ReactNode }) {
@@ -809,54 +1099,73 @@ function IndependentProviderList({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ProviderModelRows({
-  rows,
+function ModelListBody({
+  items,
   selectedProvider,
   selectedModel,
+  highlightedKey,
   favoriteKeys,
   onSelect,
   onToggleFavorite,
-  normalizedQuery,
+  onDrillDown,
   scrolling,
 }: {
-  rows: ProviderSelectionModelRow[];
+  items: ModelBrowserListItem[];
   selectedProvider: string;
   selectedModel: string;
+  highlightedKey: string | null;
   favoriteKeys: Set<string>;
   onSelect: (provider: string, modelId: string) => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
-  normalizedQuery: string;
+  onDrillDown: (providerId: string, providerLabel: string) => void;
   scrolling: "sheet" | "independent";
 }) {
   const isCompact = useIsCompactFormFactor();
-  const displayRows = useMemo(
-    () => (normalizedQuery ? rows : sortFavoritesFirst(rows, favoriteKeys)),
-    [favoriteKeys, normalizedQuery, rows],
-  );
   const renderItem = useCallback(
-    ({ item }: { item: ProviderSelectionModelRow }) => (
-      <SelectableModelRow
-        row={item}
-        isSelected={item.provider === selectedProvider && item.modelId === selectedModel}
-        isFavorite={favoriteKeys.has(item.favoriteKey)}
-        onSelect={onSelect}
-        onToggleFavorite={onToggleFavorite}
-      />
-    ),
-    [favoriteKeys, onSelect, onToggleFavorite, selectedModel, selectedProvider],
+    ({ item }: { item: ModelBrowserListItem }) => {
+      if (item.kind === "heading") {
+        return (
+          <ModelGroupHeading
+            label={item.label}
+            status={item.status}
+            providerId={item.providerId}
+            onDrillDown={onDrillDown}
+          />
+        );
+      }
+      return (
+        <SelectableModelRow
+          row={item.row}
+          isSelected={item.row.provider === selectedProvider && item.row.modelId === selectedModel}
+          isHighlighted={item.key === highlightedKey}
+          isFavorite={favoriteKeys.has(item.row.favoriteKey)}
+          showProvider={item.showProvider}
+          onSelect={onSelect}
+          onToggleFavorite={onToggleFavorite}
+        />
+      );
+    },
+    [
+      favoriteKeys,
+      highlightedKey,
+      onDrillDown,
+      onSelect,
+      onToggleFavorite,
+      selectedModel,
+      selectedProvider,
+    ],
   );
-  const keyExtractor = useCallback((row: ProviderSelectionModelRow) => row.favoriteKey, []);
 
   if (scrolling === "independent") {
-    return <IndependentModelList rows={displayRows} renderItem={renderItem} />;
+    return <IndependentModelList items={items} renderItem={renderItem} />;
   }
 
   if (isCompact && isNative) {
     return (
       <BottomSheetFlatList
-        data={displayRows}
+        data={items}
         renderItem={renderItem}
-        keyExtractor={keyExtractor}
+        keyExtractor={getModelListItemKey}
         style={styles.virtualizedModelList}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -867,8 +1176,8 @@ function ProviderModelRows({
 
   return (
     <View>
-      {displayRows.map((row) => (
-        <View key={row.favoriteKey}>{renderItem({ item: row })}</View>
+      {items.map((item) => (
+        <View key={item.key}>{renderItem({ item })}</View>
       ))}
     </View>
   );
@@ -907,30 +1216,24 @@ function ModelBrowserContent({
   providers,
   selectedProvider,
   selectedModel,
-  searchQuery,
+  items,
+  highlightedKey,
   favoriteKeys,
   onSelect,
   onToggleFavorite,
   onDrillDown,
+  onShowAllModels,
   onRetryProvider,
   isRetryingProvider = false,
   scrolling,
 }: ModelBrowserContentProps) {
   const { t } = useTranslation();
-  const normalizedQuery = useMemo(() => normalizeSearchQuery(searchQuery), [searchQuery]);
   const selectedViewProvider = useMemo(
     () =>
       view.kind === "provider"
         ? providers.find((provider) => provider.id === view.providerId)
         : null,
     [providers, view],
-  );
-  const visibleRows = useMemo(
-    () =>
-      selectedViewProvider
-        ? filterAndRankModelRows(getProviderModelRows(selectedViewProvider), normalizedQuery)
-        : [],
-    [normalizedQuery, selectedViewProvider],
   );
   const favoriteRows = useMemo(
     () => getAllProviderModelRows(providers).filter((row) => favoriteKeys.has(row.favoriteKey)),
@@ -943,6 +1246,23 @@ function ModelBrowserContent({
       <Text style={styles.emptyStateText}>{t("modelSelector.noMatches")}</Text>
     </View>
   );
+
+  if (view.kind === "allModels") {
+    if (items.length === 0) return emptyState;
+    return (
+      <ModelListBody
+        items={items}
+        selectedProvider={selectedProvider}
+        selectedModel={selectedModel}
+        highlightedKey={highlightedKey}
+        favoriteKeys={favoriteKeys}
+        onSelect={onSelect}
+        onToggleFavorite={onToggleFavorite}
+        onDrillDown={onDrillDown}
+        scrolling={scrolling}
+      />
+    );
+  }
 
   if (view.kind === "provider") {
     if (!selectedViewProvider) return emptyState;
@@ -967,16 +1287,17 @@ function ModelBrowserContent({
         />
       );
     }
-    if (visibleRows.length === 0) return emptyState;
+    if (items.length === 0) return emptyState;
     return (
-      <ProviderModelRows
-        rows={visibleRows}
+      <ModelListBody
+        items={items}
         selectedProvider={selectedProvider}
         selectedModel={selectedModel}
+        highlightedKey={highlightedKey}
         favoriteKeys={favoriteKeys}
         onSelect={onSelect}
         onToggleFavorite={onToggleFavorite}
-        normalizedQuery={normalizedQuery}
+        onDrillDown={onDrillDown}
         scrolling={scrolling}
       />
     );
@@ -992,6 +1313,12 @@ function ModelBrowserContent({
         onSelect={onSelect}
         onToggleFavorite={onToggleFavorite}
       />
+      {providers.length > 1 ? (
+        <>
+          <AllModelsButton count={countAllModels(providers)} onPress={onShowAllModels} />
+          <View style={styles.separator} />
+        </>
+      ) : null}
       {providers.length > 0 ? (
         <GroupedProviderRows providers={providers} onDrillDown={onDrillDown} />
       ) : null}
@@ -1008,7 +1335,6 @@ function ModelBrowserContent({
 
 export function ModelBrowser({
   state,
-  onSelect,
   onToggleFavorite,
   onRetryProvider,
   isRetryingProvider = false,
@@ -1020,11 +1346,13 @@ export function ModelBrowser({
       providers={state.providers}
       selectedProvider={state.selectedProvider}
       selectedModel={state.selectedModel}
-      searchQuery={state.searchQuery}
+      items={state.items}
+      highlightedKey={state.highlightedKey}
       favoriteKeys={state.favoriteKeys}
-      onSelect={onSelect}
+      onSelect={state.onSelect}
       onToggleFavorite={onToggleFavorite}
       onDrillDown={state.drillDown}
+      onShowAllModels={state.showAllModels}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
       scrolling={scrolling}
@@ -1054,11 +1382,23 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
+    flexShrink: 1,
+  },
+  sectionHeadingStatus: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    marginLeft: "auto",
   },
   browserRow: {
     flexDirection: "row",
     paddingVertical: theme.spacing[2],
     minHeight: 36,
+  },
+  browserRowWithAccessory: {
+    flex: 1,
+  },
+  browserRowContainer: {
+    flexDirection: "row",
   },
   browserModelRow: isWeb ? {} : { marginBottom: theme.spacing[1] },
   browserRowHovered: {
@@ -1066,6 +1406,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   browserRowHoveredElevated: {
     backgroundColor: theme.colors.surface2,
+  },
+  browserRowHighlighted: {
+    backgroundColor: theme.colors.surface3,
   },
   browserRowPressed: {
     backgroundColor: theme.colors.surface1,
@@ -1079,6 +1422,14 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: isWeb ? theme.spacing[3] : theme.spacing[6],
+  },
+  browserRowContentWithAccessory: {
+    paddingRight: 0,
+  },
+  browserRowAccessory: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: isWeb ? theme.spacing[3] : theme.spacing[6],
   },
   browserRowLeading: {
     width: 16,
