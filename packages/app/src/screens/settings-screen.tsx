@@ -4,6 +4,7 @@ import {
   Alert,
   Pressable,
   ScrollView,
+  Switch as NativeSwitch,
   Text,
   View,
   type PressableStateCallbackType,
@@ -689,7 +690,7 @@ function LiveVoiceSettingsCard() {
             {t("liveVoice.settings.agentReports.description")}
           </Text>
         </View>
-        <Switch
+        <NativeSwitch
           value={ambientAgentReports}
           onValueChange={setAmbientAgentReports}
           accessibilityLabel={t("liveVoice.settings.agentReports.label")}
