@@ -95,7 +95,7 @@ describe("selectSubagentsForParent", () => {
     ).toEqual(["provider-child"]);
   });
 
-  it("keeps the provider title and description separate and reports no model yet", () => {
+  it("keeps provider identity and provider-owned runtime context separate", () => {
     useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
       kind: "upsert",
       subagent: {
@@ -104,6 +104,7 @@ describe("selectSubagentsForParent", () => {
         provider: "claude",
         title: "general-purpose",
         description: "Find the hover regression",
+        subtitle: "general-purpose · Opus 5 · High",
         status: "running",
         createdAt: "2026-03-08T10:01:00.000Z",
         updatedAt: "2026-03-08T10:02:00.000Z",
@@ -120,6 +121,7 @@ describe("selectSubagentsForParent", () => {
     expect(child).toMatchObject({
       title: "general-purpose",
       description: "Find the hover regression",
+      subtitle: "general-purpose · Opus 5 · High",
       model: null,
       runtimeModelId: null,
       thinkingOptionId: null,
