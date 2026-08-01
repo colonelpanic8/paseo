@@ -105,12 +105,12 @@ class ExpoWearBridgeModule : Module() {
      * Each agent gets its own path so opening a second agent doesn't overwrite the
      * first, and so the watch can observe just the one it is showing.
      */
-    AsyncFunction("publishTranscript").SuspendBody<Boolean, String, String> { agentId, payload ->
+    AsyncFunction("publishTranscript").SuspendBody<Boolean, String, String, String> { serverId, agentId, payload ->
       val context = appContext.reactContext
       if (context == null) {
         false
       } else {
-        runCatching { putTranscript(context, agentId, payload) }
+        runCatching { putTranscript(context, serverId, agentId, payload) }
           .onFailure { Log.w(TAG, "publishTranscript failed", it) }
           .getOrDefault(false)
       }
@@ -171,9 +171,9 @@ class ExpoWearBridgeModule : Module() {
     return true
   }
 
-  private suspend fun putTranscript(context: Context, agentId: String, payload: String): Boolean {
+  private suspend fun putTranscript(context: Context, serverId: String, agentId: String, payload: String): Boolean {
     val request =
-      PutDataMapRequest.create("$TRANSCRIPT_PATH_PREFIX/$agentId").apply {
+      PutDataMapRequest.create("$TRANSCRIPT_PATH_PREFIX/${Uri.encode(serverId)}/${Uri.encode(agentId)}").apply {
         dataMap.putString(SNAPSHOT_KEY, payload)
         // Same reason as putSnapshot: DataClient drops a byte-identical put, and
         // re-requesting an unchanged transcript must still reach the watch.

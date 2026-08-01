@@ -190,7 +190,7 @@ fun PaseoWatchApp(
             AgentScreen(
               workspace = workspace,
               agent = agent,
-              transcript = transcripts[agent.id],
+              transcript = transcripts["${workspace.serverId}\u0000${agent.id}"],
               // No reply screen: Reply opens the recognizer in place and the words
               // come back here.
               onSubmit = { text -> scope.launch { repository.sendPrompt(agent.id, text) } },
