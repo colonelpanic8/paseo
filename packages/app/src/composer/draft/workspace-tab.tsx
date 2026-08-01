@@ -3,8 +3,8 @@ import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "re
 import { useTranslation } from "react-i18next";
 import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
@@ -336,7 +336,7 @@ export function WorkspaceDraftAgentTab({
   onOpenImportSheet,
 }: WorkspaceDraftAgentTabProps) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
+  const screenBottomInset = useScreenBottomInset();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
@@ -635,10 +635,10 @@ export function WorkspaceDraftAgentTab({
   const inputAreaWrapperStyle = useMemo(
     () => [
       animatedStaticStyles.inputAreaWrapper,
-      { paddingBottom: insets.bottom },
+      { paddingBottom: screenBottomInset },
       composerKeyboardStyle,
     ],
-    [insets.bottom, composerKeyboardStyle],
+    [screenBottomInset, composerKeyboardStyle],
   );
 
   const handleDropdownCloseFocus = useCallback(() => {
