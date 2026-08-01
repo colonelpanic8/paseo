@@ -246,9 +246,10 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "done") {
+  // Snoozed rows carry no status indicator, same as done.
+  if (bucket === "done" || bucket === "snoozed") {
     return reserveIdleSpace ? (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done" />
+      <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`} />
     ) : null;
   }
 
@@ -392,6 +393,7 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
     case "attention":
       return styles.statusDotAttention;
     case "done":
+    case "snoozed":
       return null;
   }
 }

@@ -2108,6 +2108,12 @@ export class Session {
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      case "workspace.snooze.set.request":
+        return this.handleWorkspaceSnoozeSetRequest(
+          msg.workspaceId,
+          msg.snoozedUntil,
+          msg.requestId,
+        );
       default:
         return undefined;
     }
@@ -2934,6 +2940,67 @@ export class Session {
         },
       });
       emitResponse(false, null, getErrorMessageOr(error, "Failed to pin workspace"));
+    }
+  }
+
+  private async handleWorkspaceSnoozeSetRequest(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId: string,
+  ): Promise<void> {
+    const logContext = { workspaceId, snoozedUntil, requestId };
+    this.sessionLogger.info(logContext, "session: workspace.snooze.set.request");
+    const emitResponse = (
+      accepted: boolean,
+      snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null,
+      error: string | null,
+    ) => {
+      this.emit({
+        type: "workspace.snooze.set.response",
+        payload: { requestId, workspaceId, accepted, snoozeStatus, error },
+      });
+    };
+
+    try {
+      const now = new Date();
+      if (snoozedUntil !== null && !(Date.parse(snoozedUntil) > now.getTime())) {
+        emitResponse(false, null, "Workspace snooze wake time must be a valid future timestamp");
+        return;
+      }
+      const nextSnoozeStatus =
+        snoozedUntil === null
+          ? null
+          : {
+              snoozedAt: now.toISOString(),
+              snoozedUntil: new Date(Date.parse(snoozedUntil)).toISOString(),
+            };
+      const updatedAt = now.toISOString();
+      const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
+        ...existing,
+        snoozeStatus: nextSnoozeStatus,
+        updatedAt,
+      }));
+      if (!updated) {
+        emitResponse(false, null, "Workspace not found");
+        return;
+      }
+      emitResponse(true, nextSnoozeStatus, null);
+      await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
+    } catch (error) {
+      this.sessionLogger.error(
+        { ...logContext, err: error },
+        "session: workspace.snooze.set.request error",
+      );
+      this.emit({
+        type: "activity_log",
+        payload: {
+          id: uuidv4(),
+          timestamp: new Date(),
+          type: "error",
+          content: `Failed to snooze workspace: ${getErrorMessage(error)}`,
+        },
+      });
+      emitResponse(false, null, getErrorMessageOr(error, "Failed to snooze workspace"));
     }
   }
 
@@ -4288,6 +4355,7 @@ export class Session {
       name: resolveWorkspaceDisplayName(workspace),
       title: workspace.title,
       pinnedAt: workspace.pinnedAt,
+      snoozeStatus: workspace.snoozeStatus,
       archivingAt: null,
       status: "done",
       statusEnteredAt: null,
@@ -4379,6 +4447,7 @@ export class Session {
       }),
       title: result.workspace.title,
       pinnedAt: result.workspace.pinnedAt,
+      snoozeStatus: result.workspace.snoozeStatus,
       archivingAt: null,
       status: "done",
       statusEnteredAt: result.workspace.createdAt,
