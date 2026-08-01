@@ -31,6 +31,9 @@ describe("routeKeyboardShortcut — dispatch passthroughs", () => {
     ["workspace.tab.new", { id: "workspace.tab.new", scope: "workspace" }],
     ["workspace.new", { id: "workspace.new", scope: "sidebar" }],
     ["workspace.project.pick", { id: "workspace.project.pick", scope: "workspace" }],
+    ["workspace.isolation.toggle", { id: "workspace.isolation.toggle", scope: "workspace" }],
+    ["workspace.ref.pick", { id: "workspace.ref.pick", scope: "workspace" }],
+    ["workspace.host.pick", { id: "workspace.host.pick", scope: "workspace" }],
     ["workspace.archive", { id: "workspace.archive", scope: "sidebar" }],
     ["workspace.pin", { id: "workspace.pin", scope: "sidebar" }],
     ["worktree.new", { id: "worktree.new", scope: "sidebar" }],
@@ -49,6 +52,17 @@ describe("routeKeyboardShortcut — dispatch passthroughs", () => {
     ["workspace.pane.move-tab.down", { id: "workspace.pane.move-tab.down", scope: "workspace" }],
     ["workspace.pane.close", { id: "workspace.pane.close", scope: "workspace" }],
     ["view.toggle.focus", { id: "workspace.focus.toggle", scope: "workspace" }],
+    ["message-input.model.pick", { id: "message-input.model.pick", scope: "message-input" }],
+    ["message-input.thinking.pick", { id: "message-input.thinking.pick", scope: "message-input" }],
+    ["message-input.mode.pick", { id: "message-input.mode.pick", scope: "message-input" }],
+    [
+      "message-input.fast-mode.toggle",
+      { id: "message-input.fast-mode.toggle", scope: "message-input" },
+    ],
+    [
+      "message-input.plan-mode.toggle",
+      { id: "message-input.plan-mode.toggle", scope: "message-input" },
+    ],
   ])("%s → dispatch %j", (action, expected) => {
     expect(routeKeyboardShortcut({ action, payload: null }, makeCtx())).toEqual({
       kind: "dispatch",
