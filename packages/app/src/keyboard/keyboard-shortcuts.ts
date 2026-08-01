@@ -175,6 +175,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "toggle-plan-mode": "settings.shortcuts.help.togglePlanMode",
   "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
   "dictation-toggle": "settings.shortcuts.help.startStopDictation",
+  "stash-prompt": "settings.shortcuts.help.stashPrompt",
   "agent-interrupt": "settings.shortcuts.help.interruptAgent",
   "voice-mute-toggle": "settings.shortcuts.help.muteUnmuteVoiceMode",
 };
@@ -1103,6 +1104,34 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "agent-input",
       label: "Cycle agent mode",
       keys: ["shift", "Tab"],
+    },
+  },
+  {
+    id: "message-input-stash-cmd-s-mac",
+    action: "message-input.action",
+    combo: "Cmd+S",
+    repeat: false,
+    when: { mac: true, commandCenter: false, terminal: false },
+    payload: { type: "message-input", kind: "stash" },
+    help: {
+      id: "stash-prompt",
+      section: "agent-input",
+      label: "Stash prompt",
+      keys: ["mod", "S"],
+    },
+  },
+  {
+    id: "message-input-stash-ctrl-s-non-mac",
+    action: "message-input.action",
+    combo: "Ctrl+S",
+    repeat: false,
+    when: { mac: false, commandCenter: false, terminal: false },
+    payload: { type: "message-input", kind: "stash" },
+    help: {
+      id: "stash-prompt",
+      section: "agent-input",
+      label: "Stash prompt",
+      keys: ["mod", "S"],
     },
   },
   {
