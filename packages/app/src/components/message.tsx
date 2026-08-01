@@ -575,6 +575,8 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+    maxWidth: "100%",
+    flexShrink: 1,
   },
   copyButton: {
     alignSelf: "center",
@@ -583,20 +585,11 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     marginTop: 0,
     marginLeft: -theme.spacing[1],
   },
-  labelWrapper: {
-    position: "relative",
-  },
-  labelSizer: {
+  label: {
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
-    opacity: 0,
-  },
-  labelOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    color: theme.colors.foregroundMuted,
-    fontSize: STREAM_METADATA_FONT_SIZE,
+    flexShrink: 1,
+    minWidth: 0,
   },
   meta: {
     flexShrink: 1,
@@ -606,13 +599,10 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
   },
 }));
 
-const TIMESTAMP_REVEAL_MS = 3000;
-
 /**
  * Footer rendered next to the copy button at the end of an assistant turn.
- * Always shows the turn duration; swaps to the end timestamp on hover (web)
- * or tap (native). The hidden sizer keeps the label width stable while the
- * visible text swaps.
+ * Shows both the elapsed duration and the time the turn completed, matching
+ * the timestamp available for submitted user messages.
  */
 export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   getContent,
@@ -621,44 +611,14 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   meta,
   onFork,
 }: AssistantTurnFooterProps) {
-  const [hovered, setHovered] = useState(false);
-  const [pressedReveal, setPressedReveal] = useState(false);
-  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (revealTimerRef.current) {
-        clearTimeout(revealTimerRef.current);
-        revealTimerRef.current = null;
-      }
-    };
-  }, []);
-
   const durationLabel = useMemo(
     () => (durationMs !== undefined ? `Worked for ${formatDuration(durationMs)}` : ""),
     [durationMs],
   );
-  const timestampLabel = useMemo(
-    () => (completedAt ? formatMessageTimestamp(completedAt) : ""),
+  const completionLabel = useMemo(
+    () => (completedAt ? `Completed ${formatMessageTimestamp(completedAt)}` : ""),
     [completedAt],
   );
-
-  const canSwap = Boolean(timestampLabel);
-  const showTimestamp = canSwap && (isWeb ? hovered : pressedReveal);
-
-  const handleHoverIn = useCallback(() => setHovered(true), []);
-  const handleHoverOut = useCallback(() => setHovered(false), []);
-  const handlePress = useCallback(() => {
-    if (isWeb || !canSwap) return;
-    if (revealTimerRef.current) {
-      clearTimeout(revealTimerRef.current);
-    }
-    setPressedReveal((prev) => !prev);
-    revealTimerRef.current = setTimeout(() => {
-      setPressedReveal(false);
-      revealTimerRef.current = null;
-    }, TIMESTAMP_REVEAL_MS);
-  }, [canSwap]);
   const handleFork = useCallback(
     (target: AssistantForkTarget) => {
       return onFork?.(target);
@@ -674,25 +634,10 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
         containerStyle={assistantTurnFooterStylesheet.copyButton}
       />
       {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
-      {durationLabel ? (
-        <Pressable
-          onPress={handlePress}
-          onHoverIn={handleHoverIn}
-          onHoverOut={handleHoverOut}
-          accessibilityRole={canSwap ? "button" : undefined}
-          accessibilityLabel={canSwap ? `${durationLabel}, ended ${timestampLabel}` : durationLabel}
-        >
-          <View style={assistantTurnFooterStylesheet.labelWrapper}>
-            {/* Sizer reserves space for whichever label is longer so the
-                container width is stable across hover transitions. */}
-            <Text style={assistantTurnFooterStylesheet.labelSizer} aria-hidden>
-              {durationLabel.length >= timestampLabel.length ? durationLabel : timestampLabel}
-            </Text>
-            <Text style={assistantTurnFooterStylesheet.labelOverlay}>
-              {showTimestamp ? timestampLabel : durationLabel}
-            </Text>
-          </View>
-        </Pressable>
+      {durationLabel || completionLabel ? (
+        <Text style={assistantTurnFooterStylesheet.label} testID="assistant-turn-completion">
+          {[durationLabel, completionLabel].filter(Boolean).join(" · ")}
+        </Text>
       ) : null}
       {meta ? (
         // Outside the duration/timestamp swap: this label doesn't change on
