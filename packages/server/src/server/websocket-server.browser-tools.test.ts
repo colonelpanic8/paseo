@@ -283,6 +283,7 @@ function createVoiceAssistantWebSocketServer(params: {
   const agentManager = {
     setAgentAttentionCallback() {},
     onAgentClosing: () => () => {},
+    hasPaseoMcpInjection: () => true,
     subscribe: () => () => {},
     getMetricsSnapshot: () => ({
       total: 0,
