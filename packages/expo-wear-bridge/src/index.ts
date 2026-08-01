@@ -13,7 +13,7 @@ interface ExpoWearBridgeNativeModule {
   isAvailable(): Promise<boolean>;
   getConnectedNodes(): Promise<WearNode[]>;
   publishSnapshot(payload: string): Promise<boolean>;
-  publishTranscript(agentId: string, payload: string): Promise<boolean>;
+  publishTranscript(serverId: string, agentId: string, payload: string): Promise<boolean>;
   publishProjectIcon(projectKey: string, dataBase64: string, mimeType: string): Promise<boolean>;
   clearSnapshot(): Promise<boolean>;
   drainPendingCommands(): Promise<string[]>;
@@ -53,9 +53,9 @@ export async function publishWearSnapshot(payload: string): Promise<boolean> {
  * Publish one agent's transcript. Each agent gets its own DataItem path, so opening
  * a second agent on the watch doesn't overwrite the first.
  */
-export async function publishWearTranscript(agentId: string, payload: string): Promise<boolean> {
+export async function publishWearTranscript(serverId: string, agentId: string, payload: string): Promise<boolean> {
   if (!native) return false;
-  return native.publishTranscript(agentId, payload);
+  return native.publishTranscript(serverId, agentId, payload);
 }
 
 /**
