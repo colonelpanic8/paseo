@@ -246,6 +246,7 @@ function createServer(options?: {
       subscribe: vi.fn(() => () => {}),
       setAgentAttentionCallback: vi.fn(),
       onAgentClosing: vi.fn(() => () => {}),
+      hasPaseoMcpInjection: vi.fn(() => true),
       getAgent: vi.fn(() => null),
       getMetricsSnapshot: vi.fn(() => ({
         totalAgents: 0,
@@ -962,6 +963,7 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.canonicalSubmittedPrompts).toBe(true);
     expect(serverInfo.features?.["terminal-input-mode-replay"]).toBe(true);
     expect(serverInfo.features?.["terminal-size-ownership"]).toBe(true);
+    expect(serverInfo.features?.agentPaseoTools).toBe(true);
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
     await server.close();
   });

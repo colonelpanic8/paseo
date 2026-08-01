@@ -695,6 +695,7 @@ export class VoiceAssistantWebSocketServer {
       );
       this.agentManager.updateProviderRegistry(nextAgentManagerState);
       this.broadcastDaemonConfigChanged(config);
+      this.broadcastCapabilitiesUpdate();
     });
 
     const pushLogger = this.logger.child({ module: "push" });
@@ -1648,6 +1649,8 @@ export class VoiceAssistantWebSocketServer {
         stableProjectIdentity: true,
         // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
         liveVoice: true,
+        // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
+        agentPaseoTools: this.agentManager.hasPaseoMcpInjection(),
         // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
         liveVoiceToolExecution: this.liveVoiceToolExecutionAvailable,
         // COMPAT(liveVoiceAgentNotifications): added in v0.2.6, remove after 2027-02-28.
