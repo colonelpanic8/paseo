@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -34,6 +34,9 @@ interface CompactModelSheetProps {
   serverId?: string | null;
   glyphSize: number;
   children: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showShortcutHint?: boolean;
 }
 
 function shortModelLabel(label: string): string {
@@ -57,10 +60,14 @@ export function CompactModelSheet({
   serverId = null,
   glyphSize,
   children,
+  open: controlledOpen,
+  onOpenChange,
+  showShortcutHint = false,
 }: CompactModelSheetProps) {
   const { t } = useTranslation();
   const usesBottomSheet = useIsCompactFormFactor();
-  const [isOpen, setIsOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = controlledOpen ?? uncontrolledOpen;
   const browser = useModelBrowser({
     providers,
     selectedProvider,
@@ -70,6 +77,7 @@ export function CompactModelSheet({
     serverId,
   });
   const { prepareToOpen, reset } = browser;
+  const previousOpenRef = useRef(isOpen);
   const ProviderIcon =
     selectedProvider.trim().length > 0 ? getProviderIcon(selectedProvider) : null;
   const compactFooter = useMemo(
@@ -84,17 +92,29 @@ export function CompactModelSheet({
   );
 
   const open = useCallback(() => {
-    Keyboard.dismiss();
-    prepareToOpen();
-    setIsOpen(true);
-    onOpen?.();
-  }, [onOpen, prepareToOpen]);
+    setUncontrolledOpen(true);
+    onOpenChange?.(true);
+  }, [onOpenChange]);
 
   const close = useCallback(() => {
-    setIsOpen(false);
+    setUncontrolledOpen(false);
+    onOpenChange?.(false);
+  }, [onOpenChange]);
+
+  // Layout effect so a controlled open prepares the browser before the first
+  // paint — a plain effect would flash the previous browser view for a frame.
+  useLayoutEffect(() => {
+    if (previousOpenRef.current === isOpen) return;
+    previousOpenRef.current = isOpen;
+    if (isOpen) {
+      Keyboard.dismiss();
+      prepareToOpen();
+      onOpen?.();
+      return;
+    }
     reset();
     onClose?.();
-  }, [onClose, reset]);
+  }, [isOpen, onClose, onOpen, prepareToOpen, reset]);
 
   const handleSelect = useCallback(
     (provider: string, modelId: string) => {
@@ -135,6 +155,8 @@ export function CompactModelSheet({
         })}
         testID="combined-model-selector"
         chevron={null}
+        shortcutActionId="select-model"
+        showShortcutHint={showShortcutHint}
       >
         {ProviderIcon ? (
           <ComposerToolbarGlyph size={glyphSize}>
