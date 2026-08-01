@@ -12,6 +12,7 @@ import {
   resolveKeyboardShortcut,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
+  isShortcutModifierDown,
 } from "@/keyboard/keyboard-shortcuts";
 import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
 import {
@@ -376,6 +377,10 @@ export function useKeyboardShortcuts({
     }
     if (key === controlShortcutModifierKey) {
       useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(false);
+    }
+    if (key === "Shift") {
+      setBadgeModifierDown(isShortcutModifierDown(event, badgeModifierKey));
+      useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(event.altKey);
     }
   });
 
