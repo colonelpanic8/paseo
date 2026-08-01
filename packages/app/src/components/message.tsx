@@ -47,7 +47,7 @@ import {
   FileSymlink,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import Animated, {
   Easing,
@@ -1034,9 +1034,9 @@ export const TurnCopyButton = memo(function TurnCopyButton({
           ? turnCopyButtonStylesheet.iconHoveredColor.color
           : turnCopyButtonStylesheet.iconColor.color;
         return copied ? (
-          <Check size={16} color={iconColor} />
+          <Check size={ICON_SIZE.sm} color={iconColor} />
         ) : (
-          <Copy size={16} color={iconColor} />
+          <Copy size={ICON_SIZE.sm} color={iconColor} />
         );
       }}
     </Pressable>
