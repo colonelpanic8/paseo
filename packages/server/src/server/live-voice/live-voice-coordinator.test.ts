@@ -24,9 +24,16 @@ interface FakeStartParams {
   includeStartupContext?: boolean;
 }
 
+interface FakeAppendTextParams {
+  text: string;
+  role?: "user" | "developer" | "assistant";
+}
+
 interface FakeProviderSession {
   realtimeStart(params: FakeStartParams): Promise<void>;
   realtimeStop(): Promise<void>;
+  realtimeAppendText(params: FakeAppendTextParams): Promise<void>;
+  readonly appendedText: FakeAppendTextParams[];
   subscribeRealtimeEvents(callback: (event: AgentRealtimeVoiceEvent) => void): () => void;
   emit(event: AgentRealtimeVoiceEvent): void;
   readonly startCalls: FakeStartParams[];
@@ -41,16 +48,19 @@ interface FakeProviderSession {
 function createFakeProviderSession(options?: {
   onStart?: (emit: (event: AgentRealtimeVoiceEvent) => void) => void;
   startError?: Error;
+  appendTextError?: Error;
 }): FakeProviderSession {
   const subscribers = new Set<(event: AgentRealtimeVoiceEvent) => void>();
   const startCalls: FakeStartParams[] = [];
   const stopCalls: number[] = [];
+  const appendedText: FakeAppendTextParams[] = [];
   const emit = (event: AgentRealtimeVoiceEvent): void => {
     for (const subscriber of Array.from(subscribers)) subscriber(event);
   };
   return {
     startCalls,
     stopCalls,
+    appendedText,
     subscriberCount: () => subscribers.size,
     emit,
     async realtimeStart(params) {
@@ -60,6 +70,10 @@ function createFakeProviderSession(options?: {
     },
     async realtimeStop() {
       stopCalls.push(stopCalls.length);
+    },
+    async realtimeAppendText(params) {
+      if (options?.appendTextError) throw options.appendTextError;
+      appendedText.push(params);
     },
     subscribeRealtimeEvents(callback) {
       subscribers.add(callback);
@@ -91,7 +105,7 @@ interface Harness {
   routeRequests: unknown[];
   routingRegisteredDuringCreate: boolean[];
   updates: LiveVoiceUpdate[];
-  owner: { sessionKey: object; sourceKey: object };
+  owner: { sessionKey: object };
   triggerAgentClosing: (agentId: string) => void;
 }
 
@@ -183,7 +197,7 @@ function createHarness(options?: {
     routeRequests,
     routingRegisteredDuringCreate,
     updates,
-    owner: { sessionKey: {}, sourceKey: {} },
+    owner: { sessionKey: {} },
     triggerAgentClosing: notifyClosing,
   };
 }
@@ -288,7 +302,7 @@ describe("LiveVoiceCoordinator", () => {
   it("lets a different client hold its own concurrent call on its own host session", async () => {
     const harness = createHarness();
     const first = await startCall(harness);
-    const second = await startCall(harness, { sessionKey: {}, sourceKey: {} });
+    const second = await startCall(harness, { sessionKey: {} });
 
     expect(first.accepted).toBe(true);
     expect(second).toMatchObject({ accepted: true });
@@ -357,33 +371,6 @@ describe("LiveVoiceCoordinator", () => {
     expect(harness.closedHostIds).toEqual(["host-1"]);
     expect(harness.coordinator.hasActiveCall(result.liveSessionId)).toBe(false);
     expect(harness.routeBroker.isRegisteredHost("host-1")).toBe(false);
-  });
-
-  it("tears the call and its host session down when the owning socket detaches", async () => {
-    const harness = createHarness();
-    const result = await startCall(harness);
-    if (!result.accepted) throw new Error("expected the call to be accepted");
-
-    harness.coordinator.closeForSource(harness.owner.sourceKey);
-
-    expect(harness.updates.at(-1)?.event).toMatchObject({
-      kind: "closed",
-      cause: "owner_disconnected",
-    });
-    expect(harness.coordinator.hasActiveCall(result.liveSessionId)).toBe(false);
-    expect(harness.provider().stopCalls).toHaveLength(1);
-    expect(harness.closedHostIds).toEqual(["host-1"]);
-  });
-
-  it("leaves calls owned by other sockets alone on detach", async () => {
-    const harness = createHarness();
-    const result = await startCall(harness);
-    if (!result.accepted) throw new Error("expected the call to be accepted");
-
-    harness.coordinator.closeForSource({});
-
-    expect(harness.coordinator.hasActiveCall(result.liveSessionId)).toBe(true);
-    expect(harness.closedHostIds).toEqual([]);
   });
 
   it("tears every call of a session down when the whole client session goes away", async () => {
@@ -538,7 +525,7 @@ describe("LiveVoiceCoordinator", () => {
     expect(harness.routingRegisteredDuringCreate).toEqual([true]);
     // The call exists from the moment it is accepted, so the detach lands while
     // the host is still spawning.
-    harness.coordinator.closeForSource(harness.owner.sourceKey);
+    harness.coordinator.closeForSession(harness.owner.sessionKey);
     releaseSpawn();
 
     expect(await pending).toMatchObject({ accepted: false, errorCode: "start_failed" });
@@ -554,7 +541,7 @@ describe("LiveVoiceCoordinator", () => {
     const harness = createHarness({ availabilityGate: gate });
 
     const pending = startCall(harness);
-    harness.coordinator.closeForSource(harness.owner.sourceKey);
+    harness.coordinator.closeForSession(harness.owner.sessionKey);
     releaseAvailability();
 
     expect(await pending).toMatchObject({ accepted: false, errorCode: "start_failed" });
@@ -566,7 +553,7 @@ describe("LiveVoiceCoordinator", () => {
   it("closes every call and host session on dispose", async () => {
     const harness = createHarness();
     const first = await startCall(harness);
-    const second = await startCall(harness, { sessionKey: {}, sourceKey: {} });
+    const second = await startCall(harness, { sessionKey: {} });
     if (!first.accepted || !second.accepted) throw new Error("expected both calls to be accepted");
 
     harness.coordinator.dispose();
@@ -616,5 +603,72 @@ describe("LiveVoiceCoordinator", () => {
     expect(harness.provider().startCalls[0]).not.toHaveProperty("prompt");
     expect(harness.provider().startCalls[0]).not.toHaveProperty("initialItems");
     expect(harness.provider().startCalls[0]).not.toHaveProperty("includeStartupContext");
+  });
+  it("speaks into a call for its owning client session", async () => {
+    const harness = createHarness();
+    const result = await startCall(harness);
+    if (!result.accepted) throw new Error("call was not accepted");
+
+    await expect(
+      harness.coordinator.say({
+        liveSessionId: result.liveSessionId,
+        sessionKey: harness.owner.sessionKey,
+        text: "The session finished.",
+      }),
+    ).resolves.toEqual({ delivered: true });
+    expect(harness.provider().appendedText).toEqual([
+      { text: "The session finished.", role: "developer" },
+    ]);
+  });
+
+  it("refuses to speak into a call owned by another client session", async () => {
+    const harness = createHarness();
+    const result = await startCall(harness);
+    if (!result.accepted) throw new Error("call was not accepted");
+
+    const otherSession = {};
+    await expect(
+      harness.coordinator.say({
+        liveSessionId: result.liveSessionId,
+        sessionKey: otherSession,
+        text: "The session finished.",
+      }),
+    ).resolves.toMatchObject({ delivered: false, errorCode: "unknown_call" });
+    expect(harness.provider().appendedText).toEqual([]);
+  });
+
+  it("refuses to speak into a call that has already closed", async () => {
+    const harness = createHarness();
+    const result = await startCall(harness);
+    if (!result.accepted) throw new Error("call was not accepted");
+    harness.coordinator.stop({ liveSessionId: result.liveSessionId });
+
+    await expect(
+      harness.coordinator.say({
+        liveSessionId: result.liveSessionId,
+        sessionKey: harness.owner.sessionKey,
+        text: "The session finished.",
+      }),
+    ).resolves.toMatchObject({ delivered: false, errorCode: "unknown_call" });
+  });
+
+  it("reports a provider failure instead of throwing at the caller", async () => {
+    const harness = createHarness({
+      makeProvider: () =>
+        createFakeProviderSession({
+          onStart: (emit) => emit({ kind: "sdp", sdp: ANSWER_SDP }),
+          appendTextError: new Error("codex says no"),
+        }),
+    });
+    const result = await startCall(harness);
+    if (!result.accepted) throw new Error("call was not accepted");
+
+    await expect(
+      harness.coordinator.say({
+        liveSessionId: result.liveSessionId,
+        sessionKey: harness.owner.sessionKey,
+        text: "The session finished.",
+      }),
+    ).resolves.toMatchObject({ delivered: false, errorCode: "append_failed" });
   });
 });

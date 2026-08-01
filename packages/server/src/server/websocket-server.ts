@@ -93,6 +93,7 @@ import {
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
 import { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
+import { LiveVoiceAgentNotifier } from "./live-voice/live-voice-agent-notifier.js";
 import type { DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import {
   APPLICATION_SOCKET_LEASE_CHECK_INTERVAL_MS,
@@ -562,6 +563,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker;
   private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor;
   private readonly liveVoiceToolExecutionAvailable: boolean;
+  private readonly liveVoiceAgentNotifier: LiveVoiceAgentNotifier;
   private readonly hubRelationships: HubRelationshipManagement | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private acceptingConnections = true;
@@ -634,6 +636,11 @@ export class VoiceAssistantWebSocketServer {
           throw new Error("Live Voice routed tool execution is not configured");
         },
       });
+    this.liveVoiceAgentNotifier = new LiveVoiceAgentNotifier({
+      agentManager,
+      agentStorage,
+      logger: this.logger,
+    });
     this.hubRelationships = hubRelationships ?? null;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
@@ -996,6 +1003,7 @@ export class VoiceAssistantWebSocketServer {
     this.unsubscribeTerminalActivity?.();
     this.unsubscribeTerminalActivity = null;
     this.liveVoiceCoordinator.dispose();
+    this.liveVoiceAgentNotifier.dispose();
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
       this.runtimeMetricsInterval = null;
@@ -1395,6 +1403,7 @@ export class VoiceAssistantWebSocketServer {
       liveVoiceCoordinator: this.liveVoiceCoordinator,
       liveVoiceRouteBroker: this.liveVoiceRouteBroker,
       liveVoiceToolExecutor: this.liveVoiceToolExecutor,
+      liveVoiceAgentNotifier: this.liveVoiceAgentNotifier,
       voiceBridge: {
         registerVoiceSpeakHandler: (agentId, handler) => {
           this.voiceSpeakHandlers.set(agentId, handler);
@@ -1639,6 +1648,8 @@ export class VoiceAssistantWebSocketServer {
         liveVoice: true,
         // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
         liveVoiceToolExecution: this.liveVoiceToolExecutionAvailable,
+        // COMPAT(liveVoiceAgentNotifications): added in v0.2.6, remove after 2027-02-28.
+        liveVoiceAgentNotifications: this.liveVoiceToolExecutionAvailable,
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: true,
         // COMPAT(projectCustomIcon): added in v0.2.0, remove after 2027-01-20.
@@ -1766,25 +1777,16 @@ export class VoiceAssistantWebSocketServer {
     }
     connection.sockets.delete(ws);
     connection.session.clearAgentTimelineSubscription(ws);
-    // Live voice must die with its socket, not after the reconnect grace below:
-    // the WebRTC media path is already gone.
-    connection.session.releaseLiveVoiceForSource(ws);
+    // Socket-scoped background-work watches cannot follow a replacement socket.
+    // Live Voice itself is session-scoped: on mobile the control socket may be
+    // suspended while native WebRTC remains healthy.
+    connection.session.releaseLiveVoiceSocketResources(ws);
     this.socketIdentities.delete(ws);
 
     if (connection.sockets.size === 0) {
       this.unregisterBrowserToolsClient(connection.clientId);
       this.incrementRuntimeCounter("sessionDisconnectedWaitingReconnect");
-      if (connection.externalDisconnectCleanupTimeout) {
-        clearTimeout(connection.externalDisconnectCleanupTimeout);
-      }
-      const timeout = setTimeout(() => {
-        if (connection.externalDisconnectCleanupTimeout !== timeout) {
-          return;
-        }
-        connection.externalDisconnectCleanupTimeout = null;
-        void this.cleanupConnection(connection, "Client disconnected (grace timeout)");
-      }, EXTERNAL_SESSION_DISCONNECT_GRACE_MS);
-      connection.externalDisconnectCleanupTimeout = timeout;
+      this.scheduleExternalDisconnectCleanup(connection);
 
       connection.connectionLogger.info(
         {
@@ -1813,6 +1815,24 @@ export class VoiceAssistantWebSocketServer {
     }
 
     await this.cleanupConnection(connection, "Client disconnected");
+  }
+
+  private scheduleExternalDisconnectCleanup(connection: TrustedSessionConnection): void {
+    if (connection.externalDisconnectCleanupTimeout) {
+      clearTimeout(connection.externalDisconnectCleanupTimeout);
+    }
+    const timeout = setTimeout(() => {
+      if (connection.externalDisconnectCleanupTimeout !== timeout) {
+        return;
+      }
+      connection.externalDisconnectCleanupTimeout = null;
+      if (connection.session.hasActiveLiveVoiceCall()) {
+        this.scheduleExternalDisconnectCleanup(connection);
+        return;
+      }
+      void this.cleanupConnection(connection, "Client disconnected (grace timeout)");
+    }, EXTERNAL_SESSION_DISCONNECT_GRACE_MS);
+    connection.externalDisconnectCleanupTimeout = timeout;
   }
 
   private async cleanupConnection(

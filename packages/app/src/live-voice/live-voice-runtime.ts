@@ -109,16 +109,16 @@ export interface LiveVoiceRuntime {
   /** Retry autoplay-blocked playback. Must be driven by a user gesture. */
   resumeAudio(): Promise<void>;
   /**
-   * Clear a terminal error/ended state — and its retained transcript — so the
-   * call surface can disappear. No-op while a call is live.
+   * Clear a terminal error/ended state and its retained transcript from the
+   * footer control. No-op while a call is live.
    */
   dismiss(): void;
   isActiveForServer(serverId: string): boolean;
   /**
-   * The daemon connection this call was placed over is gone (socket dropped, or
-   * the host swapped in a new client). Tears the local half down: the daemon has
-   * already released its side as `owner_disconnected`, and that update can never
-   * reach us over the connection that just died.
+   * The host replaced the exact pinned client this call was placed over. Tears
+   * the local half down because the replacement cannot address the retained
+   * daemon session. A transient socket disconnect on the same client is handled
+   * by that client's reconnect loop and must not call this method.
    */
   handleConnectionLost(serverId: string): void;
   destroy(): Promise<void>;
@@ -536,7 +536,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
         serverId,
         sessionMode: snapshot.sessionMode,
         transcripts,
-        // Same cause the daemon reports for this teardown, so the UI has one story.
+        // The old client session eventually reports the same cause when it expires.
         closedCause: "owner_disconnected",
       });
     },
