@@ -14,6 +14,7 @@ import {
   type ChordState,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
+  isShortcutModifierDown,
 } from "@/keyboard/keyboard-shortcuts";
 import { shouldPublishBrowserShortcutPolicy } from "@/keyboard/internal/sources/electron-browser";
 import type { KeyboardShortcutPayload } from "@/keyboard/actions";
@@ -265,6 +266,10 @@ export function useKeyboardShortcuts({
     }
     if (key === controlShortcutModifierKey) {
       useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(false);
+    }
+    if (key === "Shift") {
+      setBadgeModifierDown(isShortcutModifierDown(event, badgeModifierKey));
+      useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(event.altKey);
     }
   });
 

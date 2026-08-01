@@ -10,6 +10,7 @@ import {
   getBindingIdForAction,
   getDefaultKeysForAction,
   getWorkspaceIndexJumpModifierKey,
+  isShortcutModifierDown,
   parseBindingChord,
   resolveKeyboardShortcut,
   resolveShortcutKeysForAction,
@@ -1387,7 +1388,6 @@ describe("unassigned shortcuts", () => {
     });
   });
 });
-
 describe("direct new-tab target shortcuts", () => {
   const desktopNonMac = { isMac: false, usesDesktopBindings: true };
   const targetCases = [
@@ -1505,5 +1505,28 @@ describe("shortcut capture completion", () => {
     expect(isShortcutCaptureComplete("show-shortcuts", [])).toBe(false);
     expect(isShortcutCaptureComplete("show-shortcuts", ["Ctrl+K"])).toBe(true);
     expect(isShortcutCaptureComplete("show-shortcuts", ["Ctrl+0"])).toBe(true);
+  });
+});
+
+describe("isShortcutModifierDown", () => {
+  it("keeps the active modifier held when Shift is released", () => {
+    const shiftRelease = keyboardInput({
+      key: "Shift",
+      altKey: true,
+      ctrlKey: true,
+      metaKey: true,
+    });
+
+    expect(isShortcutModifierDown(shiftRelease, "Alt")).toBe(true);
+    expect(isShortcutModifierDown(shiftRelease, "Meta")).toBe(true);
+    expect(isShortcutModifierDown(shiftRelease, "Control")).toBe(true);
+  });
+
+  it("does not restore a modifier that is no longer held", () => {
+    const shiftRelease = keyboardInput({ key: "Shift" });
+
+    expect(isShortcutModifierDown(shiftRelease, "Alt")).toBe(false);
+    expect(isShortcutModifierDown(shiftRelease, "Meta")).toBe(false);
+    expect(isShortcutModifierDown(shiftRelease, "Control")).toBe(false);
   });
 });
