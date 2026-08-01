@@ -6,11 +6,7 @@ import { useSessionStore, type Agent } from "@/stores/session-store";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@getpaseo/protocol/messages";
 
-/**
- * What a row needs to say which model and thinking level it is running. Provider
- * subagents carry no model data on the wire yet, so their fields are null today;
- * the shape exists so they light up the moment the descriptor grows them.
- */
+/** What a managed row needs to say which model and thinking level it is running. */
 export interface SubagentRowRuntime {
   /** Configured model id. */
   model: string | null;
@@ -40,6 +36,8 @@ export interface ProviderSubagentRow extends SubagentRowRuntime {
   title: string | null;
   /** Provider-supplied task summary. Preferred over `title` as the row label. */
   description: string | null;
+  /** Compact provider-owned context. The app displays it without interpreting its contents. */
+  subtitle: string | null;
   status: ProviderSubagentDescriptorPayload["status"];
   requiresAttention: boolean;
   createdAt: Date;
@@ -121,6 +119,7 @@ export function selectProviderSubagentsForParent(
       provider: subagent.provider,
       title: subagent.title,
       description: subagent.description,
+      subtitle: subagent.subtitle ?? null,
       status: subagent.status,
       requiresAttention: subagent.status === "failed",
       createdAt: new Date(subagent.createdAt),
