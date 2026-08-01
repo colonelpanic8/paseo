@@ -2,10 +2,9 @@ import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list"
 import type { WorkspaceTitleSource } from "@/hooks/use-settings";
 
 export function resolveSidebarWorkspacePrimaryLabel(input: {
-  workspace: Pick<
-    SidebarWorkspaceEntry,
-    "name" | "currentBranch" | "workspaceDirectory" | "workspaceKind"
-  >;
+  workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch" | "workspaceKind"> & {
+    workspaceDirectory?: string;
+  };
   workspaceTitleSource: WorkspaceTitleSource;
 }): string {
   if (input.workspaceTitleSource === "branch") {
@@ -27,7 +26,7 @@ export function resolveSidebarWorkspacePrimaryLabel(input: {
  * than showing the last path segment of a checkout the user never sees as a slug.
  */
 function resolveWorktreeSuffix(
-  workspace: Pick<SidebarWorkspaceEntry, "workspaceDirectory" | "workspaceKind">,
+  workspace: Pick<SidebarWorkspaceEntry, "workspaceKind"> & { workspaceDirectory?: string },
 ): string | null {
   if (workspace.workspaceKind !== "worktree") {
     return null;
