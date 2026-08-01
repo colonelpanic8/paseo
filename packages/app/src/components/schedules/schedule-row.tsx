@@ -2,6 +2,7 @@ import { MoreVertical, Pause, Pencil, Play, RotateCw, Trash2 } from "lucide-reac
 import { useCallback, useState, type ReactElement } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useMinuteTick } from "@/hooks/use-minute-tick";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -160,6 +161,8 @@ export function ScheduleRow({
   const title = resolveScheduleTitle(schedule);
   const productName = scheduleProductName(schedule);
   const badge = stateBadge(state);
+  // Keeps the "Created/Last run Xm ago" meta from freezing while the pane sits open.
+  useMinuteTick();
   const meta = buildMeta(schedule, state, serverName, singleHost ?? false);
   const canRun = schedule.target.type === "new-agent" && (state === "active" || state === "paused");
 

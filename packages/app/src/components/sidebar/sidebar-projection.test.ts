@@ -33,6 +33,8 @@ function makeWorkspace(id: string, statusBucket: SidebarWorkspaceEntry["statusBu
     scripts: [],
     hasRunningScripts: false,
     snoozeWakeAt: null,
+    remoteUrl: null,
+    providers: [],
   };
   return { placement, entry };
 }
