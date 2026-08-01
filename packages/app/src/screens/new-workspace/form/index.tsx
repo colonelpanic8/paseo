@@ -225,7 +225,6 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
       includeAddHost
       onAddHost={host.onAddHost}
       addHostTestID="new-workspace-host-picker-add-host"
-      searchable={false}
       title={t("newWorkspace.fields.host")}
       desktopPlacement="bottom-start"
       desktopMinWidth={200}
