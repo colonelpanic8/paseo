@@ -67,7 +67,7 @@ function buildRowView(
       key: data.key,
       kind: data.kind,
       label: data.label,
-      subtitle: "",
+      subtitle: data.subtitle,
       tooltip: data.tooltip,
       titleState: data.titleState,
       statusBucket: data.statusBucket,
@@ -474,6 +474,14 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
+  },
+  // Keep provider context secondary and bounded so the task remains readable on compact screens.
+  rowSubtitle: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: "45%",
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   rowMeta: {
     flexShrink: 1,

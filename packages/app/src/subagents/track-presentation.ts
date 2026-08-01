@@ -16,6 +16,8 @@ export interface SubagentRowPresentationData {
   key: string;
   kind: "agent";
   label: string;
+  /** Secondary task or purpose context rendered beneath the row label. */
+  subtitle: string;
   /**
    * Trailing muted detail rendered after the title — "Model · Thinking". Null
    * when nothing is known, so the row renders no empty slot.
@@ -38,12 +40,13 @@ export function buildSubagentRowPresentationData(
   const subtitle =
     row.kind === "paseo"
       ? row.summary
-      : resolveRowLabel(row.subtitle) ?? (description ? title : null);
+      : (resolveRowLabel(row.subtitle) ?? (description ? title : null));
   const status = presentationStatus(row);
   return {
     key: `${row.kind}_subagent_${row.id}`,
     kind: "agent",
     label: label ?? "",
+    subtitle: subtitle ?? "",
     meta: modelDisplay ? formatAgentModelDisplayMeta(modelDisplay) : null,
     tooltip: resolveSubagentRowTooltip(row, label),
     titleState: label ? "ready" : "loading",
