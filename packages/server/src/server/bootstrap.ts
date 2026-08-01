@@ -1355,6 +1355,7 @@ export async function createPaseoDaemon(
     enableVoiceTools: runtime.enableVoiceTools,
     voiceOnly: runtime.voiceOnly,
     onBackgroundAgentStarted: runtime.onBackgroundAgentStarted,
+    defaultAgentWorkToBackground: runtime.defaultAgentWorkToBackground,
     resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
     resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
