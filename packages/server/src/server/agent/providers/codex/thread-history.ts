@@ -75,11 +75,11 @@ const CodexItemsPageSchema = z
 export async function readCodexThreadHistoryMode(
   client: CodexThreadHistoryClient,
   threadId: string,
+  onMetadata?: (metadata: unknown) => void,
 ): Promise<CodexThreadHistoryMode> {
-  const response = CodexThreadMetadataSchema.parse(
-    await client.request("thread/read", { threadId, includeTurns: false }),
-  );
-  return response.thread.historyMode ?? "legacy";
+  const metadata = await client.request("thread/read", { threadId, includeTurns: false });
+  onMetadata?.(metadata);
+  return CodexThreadMetadataSchema.parse(metadata).thread.historyMode ?? "legacy";
 }
 
 /**
@@ -90,8 +90,9 @@ export async function readCodexThreadHistoryMode(
 export async function* readCodexThreadHistory(
   client: CodexThreadHistoryClient,
   threadId: string,
+  options?: { onMetadata?: (metadata: unknown) => void },
 ): AsyncGenerator<CodexHistoryRow> {
-  if ((await readCodexThreadHistoryMode(client, threadId)) === "paginated") {
+  if ((await readCodexThreadHistoryMode(client, threadId, options?.onMetadata)) === "paginated") {
     yield* readPaginatedHistory(client, threadId);
   } else {
     yield* readLegacyHistory(client, threadId);
