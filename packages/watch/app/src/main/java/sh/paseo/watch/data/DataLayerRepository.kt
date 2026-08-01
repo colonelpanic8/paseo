@@ -247,8 +247,9 @@ class DataLayerRepository(
       return
     }
     val incoming = wire.toTranscript()
-    if (!shouldApplyTranscript(transcriptState.value[wire.agentId], incoming)) return
-    transcriptState.value = transcriptState.value + (wire.agentId to incoming)
+    val key = transcriptKey(wire.serverId, wire.agentId)
+    if (!shouldApplyTranscript(transcriptState.value[key], incoming)) return
+    transcriptState.value = transcriptState.value + (key to incoming)
   }
 
   private fun applySnapshot(raw: String?) {
@@ -277,6 +278,8 @@ class DataLayerRepository(
     // wake every collector on each snapshot.
     if (kept.size != current.size) transcriptState.value = kept
   }
+
+  private fun transcriptKey(serverId: String, agentId: String): String = "$serverId\u0000$agentId"
 
   /** Same rationale, keyed on project instead of agent. See [retainingProjectsIn]. */
   private fun pruneIcons(workspaces: List<Workspace>) {

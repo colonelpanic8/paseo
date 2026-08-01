@@ -17,7 +17,6 @@ import {
 const MAX_WORKSPACES = 24;
 const MAX_AGENTS_PER_WORKSPACE = 8;
 const MAX_SUMMARY_LENGTH = 160;
-const MAX_DETAIL_LENGTH = 200;
 
 export interface WearSnapshotInput {
   serverId: string;
@@ -91,7 +90,9 @@ function permissionFor(agent: Agent): WearAgent["permission"] {
   return {
     id: request.id,
     title: request.title ?? titleForKind(request.kind, request.name),
-    detail: truncate(detail, MAX_DETAIL_LENGTH),
+    // Authorization is keyed by request id, so the watch must show the complete
+    // operation rather than a misleading prefix that hides a destructive suffix.
+    detail: detail.replace(/\s+/g, " ").trim(),
   };
 }
 
