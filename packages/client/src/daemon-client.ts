@@ -147,6 +147,7 @@ import type {
 import type {
   LiveVoiceJsonObject,
   VoiceLiveAgentNotification,
+  VoiceLiveRouteError,
   VoiceLiveRouteRequest,
   VoiceLiveRouteResponse,
   VoiceLiveToolResult,
@@ -3397,6 +3398,10 @@ export class DaemonClient {
     offerSdp: string;
     voice?: string;
     requestId?: string;
+    /** This client will report agents the call did not start. */
+    ambientAgentReports?: boolean;
+    /** The user's standing instruction for those reports. */
+    ambientAgentGuidance?: string;
   }): Promise<AcceptedLiveVoiceStart> {
     const payload = await this.sendNamespacedCorrelatedSessionRequest<"voice.live.start.response">({
       ...(input.requestId ? { requestId: input.requestId } : {}),
@@ -3404,6 +3409,8 @@ export class DaemonClient {
         type: "voice.live.start.request",
         offerSdp: input.offerSdp,
         ...(input.voice ? { voice: input.voice } : {}),
+        ...(input.ambientAgentReports ? { ambientAgentReports: true } : {}),
+        ...(input.ambientAgentGuidance ? { ambientAgentGuidance: input.ambientAgentGuidance } : {}),
       },
       // The daemon awaits the provider's answer SDP before responding.
       timeout: LIVE_VOICE_START_TIMEOUT_MS,
@@ -3492,6 +3499,33 @@ export class DaemonClient {
         },
       });
     return { delivered: payload.delivered };
+  }
+
+  /**
+   * Ask this daemon to report every agent on it, not only work a routed Live
+   * Voice tool call started.
+   *
+   * The watch belongs to this connection and dies with it, so a caller that
+   * reconnects has to ask again. Reports arrive as `voice.live.agent.update`
+   * with `notification.unsolicited` set and a requestId that matches no routed
+   * call, because none of them came from one.
+   */
+  async setLiveVoiceAgentWatch(input: {
+    enabled: boolean;
+    requestId?: string;
+  }): Promise<{ enabled: boolean; error?: VoiceLiveRouteError }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"voice.live.agent.watch.response">({
+        ...(input.requestId ? { requestId: input.requestId } : {}),
+        message: {
+          type: "voice.live.agent.watch.request",
+          enabled: input.enabled,
+        },
+      });
+    return {
+      enabled: payload.enabled,
+      ...(payload.error ? { error: payload.error } : {}),
+    };
   }
 
   /** Reply to a server-initiated Live Voice route request on this exact client. */
