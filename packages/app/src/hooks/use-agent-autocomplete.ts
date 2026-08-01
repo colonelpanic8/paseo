@@ -18,6 +18,7 @@ import {
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  shouldSubmitShellVariable,
   type SlashCommandRange,
 } from "@/utils/agent-command-autocomplete";
 import {
@@ -518,8 +519,13 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         : undefined,
   });
   const onKeyPress = useCallback(
-    (event: { key: string; preventDefault: () => void }) => onAutocompleteKeyPress(event),
-    [onAutocompleteKeyPress],
+    (event: { key: string; preventDefault: () => void }) => {
+      if (shouldSubmitShellVariable({ key: event.key, command: activeSlashCommand })) {
+        return false;
+      }
+      return onAutocompleteKeyPress(event);
+    },
+    [activeSlashCommand, onAutocompleteKeyPress],
   );
 
   const isLoading = resolveAutocompleteIsLoading({
