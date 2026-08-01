@@ -79,6 +79,10 @@ internal class BackgroundCallService : Service() {
         }
         isForeground = true
         Log.i(LOG_TAG, "Foreground service started")
+        // Only once the service is actually in the foreground: taking the
+        // communication route is what makes the microphone hot, and doing it before
+        // the promotion is what Android 14's background-mic rules exist to stop.
+        CallAudioRouter.attach(this)
         return START_NOT_STICKY
     }
 
@@ -89,6 +93,10 @@ internal class BackgroundCallService : Service() {
 
     override fun onDestroy() {
         Log.i(LOG_TAG, "Foreground service destroyed")
+        // Before stopping the foreground: releasing the route restores the device's
+        // audio mode, and leaving that until after teardown leaves every other app
+        // ducked for as long as it takes the service to finish dying.
+        CallAudioRouter.detach()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
