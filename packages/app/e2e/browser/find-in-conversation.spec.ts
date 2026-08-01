@@ -1,5 +1,5 @@
-import { expect, test } from "./fixtures";
-import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { expect, test } from "../support/fixtures";
+import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 const FIND_MODIFIER = process.platform === "darwin" ? "Meta" : "Control";
 
@@ -29,9 +29,13 @@ test.describe("Find in conversation", () => {
         workspace.agentId,
         "third prompt about zebra and zebra again",
       );
-      await expect(
-        page.getByTestId("user-message").filter({ hasText: "third prompt" }),
-      ).toBeVisible({ timeout: 30_000 });
+      const firstMatchMessage = page
+        .getByTestId("user-message")
+        .filter({ hasText: "first prompt" });
+      const thirdMatchMessage = page
+        .getByTestId("user-message")
+        .filter({ hasText: "third prompt" });
+      await expect(thirdMatchMessage).toBeVisible({ timeout: 30_000 });
 
       const findBar = page.getByTestId("session-find-bar");
       await expect(findBar).toBeHidden();
@@ -45,20 +49,25 @@ test.describe("Find in conversation", () => {
       // One occurrence in the first message, two in the third.
       const count = page.getByTestId("session-find-count");
       await expect(count).toHaveText("1/3");
+      await expect(firstMatchMessage).toBeInViewport();
 
       await page.getByTestId("session-find-next").click();
       await expect(count).toHaveText("2/3");
+      await expect(thirdMatchMessage).toBeInViewport();
 
       await page.getByTestId("session-find-next").click();
       await expect(count).toHaveText("3/3");
+      await expect(thirdMatchMessage).toBeInViewport();
 
       // Forward from the last match wraps to the first.
       await page.getByTestId("session-find-next").click();
       await expect(count).toHaveText("1/3");
+      await expect(firstMatchMessage).toBeInViewport();
 
       // Backward from the first match wraps to the last.
       await page.getByTestId("session-find-previous").click();
       await expect(count).toHaveText("3/3");
+      await expect(thirdMatchMessage).toBeInViewport();
 
       await page.keyboard.press("Escape");
       await expect(findBar).toBeHidden();
