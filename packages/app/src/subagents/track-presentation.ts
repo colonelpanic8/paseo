@@ -29,7 +29,7 @@ export function buildSubagentRowPresentationData(row: SubagentRow): SubagentRowP
   const subtitle =
     row.kind === "paseo"
       ? row.summary
-      : resolveRowLabel(row.subtitle) ?? (description ? title : null);
+      : (resolveRowLabel(row.subtitle) ?? (description ? title : null));
   const status = presentationStatus(row);
   return {
     key: `${row.kind}_subagent_${row.id}`,
