@@ -6,6 +6,10 @@ import {
 
 export type ComboboxOptionKind = "directory" | "file";
 
+// Pickers whose option count varies with the model or provider turn search on
+// past this length. Below it the search row costs more than it saves.
+export const SEARCHABLE_OPTION_THRESHOLD = 6;
+
 export interface ComboboxOptionModel {
   id: string;
   label: string;
@@ -13,6 +17,7 @@ export interface ComboboxOptionModel {
   /** Additional text to match without displaying it in the option row. */
   searchText?: string;
   kind?: ComboboxOptionKind;
+  alwaysVisible?: boolean;
 }
 
 const SECONDARY_TEXT_FALLBACK_TIER = 99;
@@ -62,7 +67,12 @@ export function filterAndRankComboboxOptions(
 ): ComboboxOptionModel[] {
   if (!search) return options;
   const scored: { opt: ComboboxOptionModel; score: MatchScore }[] = [];
+  const alwaysVisible: ComboboxOptionModel[] = [];
   for (const opt of options) {
+    if (opt.alwaysVisible) {
+      alwaysVisible.push(opt);
+      continue;
+    }
     const score = scoreOption(opt, search);
     if (score) scored.push({ opt, score });
   }
@@ -71,7 +81,7 @@ export function filterAndRankComboboxOptions(
     if (cmp !== 0) return cmp;
     return a.opt.label.localeCompare(b.opt.label);
   });
-  return scored.map((entry) => entry.opt);
+  return [...scored.map((entry) => entry.opt), ...alwaysVisible];
 }
 
 export function buildVisibleComboboxOptions(
