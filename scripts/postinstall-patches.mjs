@@ -1,6 +1,7 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join, relative } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, relative } from "node:path";
 
 // In CI we often install a single workspace (e.g. server/relay/website). Only apply patches
 // when the patched dependency is actually present.
@@ -57,8 +58,48 @@ if (patchFilesByCwd.size === 0) {
   process.exit(0);
 }
 
-const isWindows = process.platform === "win32";
-const cmd = isWindows ? "patch-package.cmd" : "patch-package";
+// patch-package is a devDependency, so it is absent from installs that explicitly omit dev
+// dependencies or inherit NODE_ENV=production. Those installs cannot apply these patches.
+function devDependenciesOmitted() {
+  const toList = (value) => (value ?? "").split(/[\s,]+/).filter(Boolean);
+  if (toList(process.env.npm_config_omit).includes("dev")) {
+    return true;
+  }
+  return (
+    process.env.NODE_ENV === "production" && !toList(process.env.npm_config_include).includes("dev")
+  );
+}
+
+// Resolve the real entrypoint instead of relying on npm adding node_modules/.bin to PATH. This
+// also avoids platform-specific .cmd/.ps1 shims when the script runs from a workspace cwd.
+function resolvePatchPackageEntry() {
+  const require = createRequire(import.meta.url);
+  let manifestPath;
+  try {
+    manifestPath = require.resolve("patch-package/package.json");
+  } catch {
+    return undefined;
+  }
+  const { bin } = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const binPath = typeof bin === "string" ? bin : bin?.["patch-package"];
+  return binPath === undefined ? undefined : join(dirname(manifestPath), binPath);
+}
+
+const patchPackageEntry = resolvePatchPackageEntry();
+
+if (patchPackageEntry === undefined) {
+  if (devDependenciesOmitted()) {
+    console.warn(
+      "postinstall-patches: skipping patches, dev dependencies were omitted from this install.",
+    );
+    process.exit(0);
+  }
+  console.error(
+    "postinstall-patches: patch-package is not installed, so dependency patches were not applied.\n" +
+      "  Reinstall with dev dependencies (`npm ci --include=dev`).",
+  );
+  process.exit(1);
+}
 
 let groupIndex = 0;
 for (const [cwd, files] of patchFilesByCwd) {
@@ -72,12 +113,15 @@ for (const [cwd, files] of patchFilesByCwd) {
 
   let result;
   try {
-    result = spawnSync(cmd, ["--patch-dir", relative(cwd, tempPatchDir)], {
-      cwd,
-      shell: isWindows,
-      stdio: "inherit",
-      windowsHide: true,
-    });
+    result = spawnSync(
+      process.execPath,
+      [patchPackageEntry, "--patch-dir", relative(cwd, tempPatchDir)],
+      {
+        cwd,
+        stdio: "inherit",
+        windowsHide: true,
+      },
+    );
   } finally {
     rmSync(tempPatchDir, { recursive: true, force: true });
   }
