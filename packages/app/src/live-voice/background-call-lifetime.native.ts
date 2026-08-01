@@ -20,6 +20,10 @@ function getOptionalBackgroundCallModule(): PaseoBackgroundCallModule | null {
   return requireOptionalNativeModule<PaseoBackgroundCallModule>("PaseoBackgroundCall");
 }
 
+function getOptionalBackgroundCallModule(): PaseoBackgroundCallModule | null {
+  return requireOptionalNativeModule<PaseoBackgroundCallModule>("PaseoBackgroundCall");
+}
+
 function getBackgroundCallModule(): PaseoBackgroundCallModule {
   const backgroundCallModule = getOptionalBackgroundCallModule();
   if (!backgroundCallModule) {
