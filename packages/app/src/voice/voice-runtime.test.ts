@@ -66,6 +66,8 @@ function createServerInfo(): DaemonServerInfo {
   };
 }
 
+const activeRuntimes = new Set<ReturnType<typeof createVoiceRuntime>>();
+
 function createRuntime(options?: {
   engine?: AudioEngine;
   getServerInfo?: (serverId: string) => DaemonServerInfo | null;
@@ -77,6 +79,7 @@ function createRuntime(options?: {
     activateKeepAwake: vi.fn().mockResolvedValue(undefined),
     deactivateKeepAwake: vi.fn().mockResolvedValue(undefined),
   });
+  activeRuntimes.add(runtime);
 
   return { runtime, engine };
 }
@@ -86,7 +89,9 @@ describe("voice runtime", () => {
     vi.useFakeTimers();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await Promise.all([...activeRuntimes].map((runtime) => runtime.destroy()));
+    activeRuntimes.clear();
     vi.useRealTimers();
   });
 
