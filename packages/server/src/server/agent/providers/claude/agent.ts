@@ -32,7 +32,7 @@ import {
 import {
   findClaudeModel,
   getClaudeModelsWithSettings,
-  normalizeClaudeRuntimeModelId,
+  resolveObservedClaudeModelId,
 } from "./models.js";
 import {
   CLAUDE_DISABLED_THINKING_OPTION_ID,
@@ -1079,6 +1079,7 @@ interface TimelineMessageState {
   id: string;
   assistantText: string;
   reasoningText: string;
+  model?: string;
   emittedAssistantLength: number;
   emittedReasoningLength: number;
   stopped: boolean;
@@ -1120,6 +1121,7 @@ class TimelineAssembler {
       return [];
     }
     const state = this.ensureMessageState(messageId, runId);
+    this.captureMessageModel(state, message.message?.model);
     const fragments = this.extractFragments(message.message?.content);
     return this.applyAbsoluteFragments(state, fragments);
   }
@@ -1142,7 +1144,12 @@ class TimelineAssembler {
       if (!messageId) {
         return [];
       }
-      this.ensureMessageState(messageId, runId);
+      const state = this.ensureMessageState(messageId, runId);
+      const eventMessage = toObjectRecord(event.message);
+      this.captureMessageModel(
+        state,
+        typeof eventMessage?.model === "string" ? eventMessage.model : undefined,
+      );
       return [];
     }
 
@@ -1256,7 +1263,12 @@ class TimelineAssembler {
       !isClaudeTranscriptNoiseText(nextAssistantText)
     ) {
       state.emittedAssistantLength = state.assistantText.length;
-      items.push({ type: "assistant_message", text: nextAssistantText, messageId: state.id });
+      items.push({
+        type: "assistant_message",
+        text: nextAssistantText,
+        messageId: state.id,
+        ...(state.model ? { model: state.model } : {}),
+      });
     }
 
     const nextReasoningText = state.reasoningText.slice(state.emittedReasoningLength);
@@ -1289,6 +1301,14 @@ class TimelineAssembler {
       this.activeMessageByRun.set(runId, messageId);
     }
     return created;
+  }
+
+  private captureMessageModel(state: TimelineMessageState, runtimeModel: unknown): void {
+    const observedModel =
+      typeof runtimeModel === "string" ? resolveObservedClaudeModelId(runtimeModel) : null;
+    if (observedModel) {
+      state.model = observedModel;
+    }
   }
 
   private resolveMessageId(input: {
@@ -2084,11 +2104,8 @@ class ClaudeAgentSession implements AgentSession {
     });
   }
 
-  async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
-    if (this.cachedRuntimeInfo) {
-      return { ...this.cachedRuntimeInfo };
-    }
-    const info: AgentRuntimeInfo = {
+  private buildRuntimeInfo(): AgentRuntimeInfo {
+    return {
       provider: "claude",
       sessionId: this.claudeSessionId,
       model: this.lastOptionsModel,
@@ -2101,6 +2118,13 @@ class ClaudeAgentSession implements AgentSession {
           }
         : {}),
     };
+  }
+
+  async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
+    if (this.cachedRuntimeInfo) {
+      return { ...this.cachedRuntimeInfo };
+    }
+    const info = this.buildRuntimeInfo();
     this.cachedRuntimeInfo = info;
     return { ...info };
   }
@@ -2115,12 +2139,7 @@ class ClaudeAgentSession implements AgentSession {
       reduceFinalText: appendOrReplaceGrowingAssistantMessage,
     });
 
-    this.cachedRuntimeInfo = {
-      provider: "claude",
-      sessionId: this.claudeSessionId,
-      model: this.lastOptionsModel,
-      modeId: this.currentMode ?? null,
-    };
+    this.cachedRuntimeInfo = this.buildRuntimeInfo();
 
     if (!this.claudeSessionId) {
       throw new Error("Session ID not set after run completed");
@@ -3779,18 +3798,12 @@ class ClaudeAgentSession implements AgentSession {
         this.appendUserMessageEvents(message, events);
         this.appendSidechainResultEvents(message, events);
         break;
-      case "assistant": {
-        const timelineItems = this.mapBlocksToTimeline(message.message.content, {
-          suppressAssistantText: options?.suppressAssistantText ?? false,
-          suppressReasoning: options?.suppressReasoning ?? false,
-        });
-        for (const item of timelineItems) {
-          events.push({ type: "timeline", item, provider: "claude" });
-        }
+      case "assistant":
+        this.appendAssistantMessageEvents(message, events, options);
         this.appendSidechainResultEvents(message, events);
         break;
-      }
       case "stream_event":
+        this.captureStreamEventRuntimeModel(message);
         this.appendStreamEventEvents(message, events, options);
         break;
       case "result":
@@ -3801,6 +3814,41 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     return events;
+  }
+
+  private appendAssistantMessageEvents(
+    message: Extract<SDKMessage, { type: "assistant" }>,
+    events: AgentStreamEvent[],
+    options: { suppressAssistantText?: boolean; suppressReasoning?: boolean } | undefined,
+  ): void {
+    const observedModel = resolveObservedClaudeModelId(message.message.model);
+    if (message.message.model) {
+      this.captureRuntimeModel(message.message.model, "assistant message");
+    }
+    const timelineItems = this.mapBlocksToTimeline(message.message.content, {
+      suppressAssistantText: options?.suppressAssistantText ?? false,
+      suppressReasoning: options?.suppressReasoning ?? false,
+    });
+    for (const item of timelineItems) {
+      events.push({
+        type: "timeline",
+        item:
+          item.type === "assistant_message" && observedModel
+            ? { ...item, model: observedModel }
+            : item,
+        provider: "claude",
+      });
+    }
+  }
+
+  private captureStreamEventRuntimeModel(
+    message: Extract<SDKMessage, { type: "stream_event" }>,
+  ): void {
+    const streamEvent = toObjectRecord(message.event);
+    const streamMessage = toObjectRecord(streamEvent?.message);
+    if (streamEvent?.type === "message_start" && typeof streamMessage?.model === "string") {
+      this.captureRuntimeModel(streamMessage.model, "stream message start");
+    }
   }
 
   /**
@@ -4205,20 +4253,39 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.persistence = null;
     if (message.model) {
-      const normalizedRuntimeModel = normalizeClaudeRuntimeModelId(message.model);
-      this.logger.debug(
-        { runtimeModel: message.model, normalizedRuntimeModel },
-        "Captured runtime model from SDK init",
-      );
-      if (normalizedRuntimeModel) {
-        this.lastOptionsModel = normalizedRuntimeModel;
-      } else if (!this.lastOptionsModel) {
-        this.lastOptionsModel = this.config.model ?? null;
-      }
-      this.lastRuntimeModel = message.model;
-      this.cachedRuntimeInfo = null;
+      this.captureRuntimeModel(message.model, "SDK init");
     }
     return { threadStartedSessionId, notice };
+  }
+
+  private captureRuntimeModel(
+    runtimeModel: string,
+    source: "SDK init" | "assistant message" | "stream message start",
+  ): void {
+    if (runtimeModel === this.lastRuntimeModel) {
+      // Every assistant message repeats the model; only a change is worth the
+      // log line and the cache invalidation.
+      return;
+    }
+    const observedModel = resolveObservedClaudeModelId(runtimeModel);
+    if (!observedModel) {
+      // A placeholder such as "<synthetic>" is not an observation.
+      return;
+    }
+    this.logger.debug(
+      { runtimeModel, observedModel, source },
+      "Captured runtime model from Claude",
+    );
+    this.lastOptionsModel = observedModel;
+    this.lastRuntimeModel = runtimeModel;
+    this.cachedRuntimeInfo = null;
+    // Push the observation to the manager immediately. Claude pre-assigns its
+    // session id, so `thread_started` never fires for it, and without this the
+    // manager's runtimeInfo would only refresh at turn completion — leaving
+    // running agents (exactly the ones the subagents track shows) modelless.
+    this.dispatchEvents([
+      { type: "model_changed", provider: "claude", runtimeInfo: this.buildRuntimeInfo() },
+    ]);
   }
 
   private readMissingResumedConversationError(message: SDKMessage): string | null {
@@ -4555,6 +4622,21 @@ class ClaudeAgentSession implements AgentSession {
     }
     if (entry.type === "assistant" && typeof entry.uuid === "string") {
       this.rememberRewindAssistantAnchor(entry.uuid);
+    }
+    if (entry.type === "assistant") {
+      // Re-seed the runtime observation from the transcript so a daemon
+      // restart doesn't blank the observed model until the next turn
+      // completes. Entries replay in order, so the last assistant wins.
+      // No model_changed dispatch here: nothing is subscribed during load,
+      // and the manager refreshes runtime info when it attaches.
+      const rawModel = toObjectRecord(entry.message)?.model;
+      const observedModel =
+        typeof rawModel === "string" ? resolveObservedClaudeModelId(rawModel) : null;
+      if (observedModel && typeof rawModel === "string") {
+        this.lastOptionsModel = observedModel;
+        this.lastRuntimeModel = rawModel;
+        this.cachedRuntimeInfo = null;
+      }
     }
 
     if (items.length > 0) {
@@ -5462,13 +5544,13 @@ function mapAssistantHistoryBlocksWithMessageId(
   const items = mapBlocks(content);
   const assistantMessageId =
     typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null;
-  if (!assistantMessageId) {
-    return items;
-  }
+  const rawHistoryModel = typeof entry.message?.model === "string" ? entry.message.model : null;
+  const model = resolveObservedClaudeModelId(rawHistoryModel);
   for (const item of items) {
     if (item.type === "assistant_message" && !item.messageId) {
-      item.messageId = assistantMessageId;
+      if (assistantMessageId) item.messageId = assistantMessageId;
     }
+    if (item.type === "assistant_message" && model) item.model = model;
   }
   return items;
 }
