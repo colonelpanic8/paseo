@@ -1901,6 +1901,11 @@ export const en = {
     },
     settings: {
       title: "Live voice",
+      voice: {
+        label: "Voice",
+        description: "Used for new calls. An active call keeps its current voice.",
+        default: "Default",
+      },
       agentReports: {
         label: "Report agent activity",
         description:
