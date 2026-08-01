@@ -191,7 +191,11 @@ function SidebarWorkspaceMenuItems({
         </WorkspaceMenuItem>
       ) : null}
       {snooze ? (
-        <SidebarWorkspaceSnoozeItems surface={surface} workspaceKey={workspaceKey} snooze={snooze} />
+        <SidebarWorkspaceSnoozeItems
+          surface={surface}
+          workspaceKey={workspaceKey}
+          snooze={snooze}
+        />
       ) : null}
       <OpenInFileManagerMenuItem
         surface={surface}
