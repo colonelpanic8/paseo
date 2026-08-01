@@ -1548,7 +1548,7 @@ export class AgentManager {
     if (this.agents.has(record.id)) {
       this.notifyAgentState(record.id);
     } else if (!archivedRecord.internal) {
-      this.dispatchArchivedStoredAgent(archivedRecord);
+      this.dispatchStoredAgentState(archivedRecord);
     }
 
     await this.fireAgentArchived(record.id);
@@ -1568,7 +1568,7 @@ export class AgentManager {
     }
   }
 
-  private dispatchArchivedStoredAgent(record: StoredAgentRecord): void {
+  private dispatchStoredAgentState(record: StoredAgentRecord): void {
     const updatedAt = new Date(record.updatedAt);
     this.dispatch({
       type: "agent_state",
@@ -1859,7 +1859,7 @@ export class AgentManager {
     } else {
       this.discardRetainedAgentState(agentId);
       if (!nextRecord.internal) {
-        this.dispatchArchivedStoredAgent(nextRecord);
+        this.dispatchStoredAgentState(nextRecord);
       }
     }
 
@@ -1881,16 +1881,24 @@ export class AgentManager {
 
     await this.unarchiveNativeSession(record.provider, record.persistence);
 
-    await registry.upsert({
+    const restoredRecord: StoredAgentRecord = {
       ...record,
       ...(updates?.workspaceId ? { workspaceId: updates.workspaceId } : {}),
       ...(updates?.labels ? { labels: applyLabelPatch(record.labels, updates.labels) } : {}),
       archivedAt: null,
+      // Once an agent is back, it is no longer owed to any workspace-archive
+      // gesture — a later workspace restore must not touch it again.
+      archivedWithWorkspaceId: null,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await registry.upsert(restoredRecord);
 
     if (this.getAgent(agentId)) {
       this.notifyAgentState(agentId);
+    } else if (!restoredRecord.internal) {
+      // Archived agents were closed, so there is no live agent to notify.
+      // Dispatch the stored record so every connected client sees it return.
+      this.dispatchStoredAgentState(restoredRecord);
     }
     return true;
   }
