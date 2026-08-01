@@ -14,6 +14,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { getProviderIcon } from "@/components/provider-icons";
 import { formatTimeAgo } from "@/utils/time";
+import { useMinuteTick } from "@/hooks/use-minute-tick";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostFeature } from "@/runtime/host-features";
 import { i18n } from "@/i18n/i18next";
@@ -206,6 +207,9 @@ function ImportSessionSheetRow({
   const { t } = useTranslation();
   const title = getSessionTitle(entry);
   const promptPreview = getPromptPreview(entry);
+  // The list is static once fetched, so tick to keep "Xm ago" honest while the
+  // sheet sits open — it is the field you pick the right session by.
+  useMinuteTick();
   const lastActivity = formatTimeAgo(new Date(entry.lastActivityAt));
   const ProviderIcon = getProviderIcon(entry.providerId);
   const accessibilityState = useMemo(
