@@ -2841,6 +2841,36 @@ const ServerInfoVersionSchema = z.unknown().transform((value): string | null => 
   return trimmed.length > 0 ? trimmed : null;
 });
 
+/**
+ * Provenance for a build: the exact source commit it was assembled from.
+ * Populated at build time (see nix/package.nix); absent for builds that were
+ * produced without it, so every consumer must tolerate `undefined`.
+ */
+export const BuildInfoSchema = z
+  .object({
+    commit: z.string().trim().min(1),
+    /** ISO-8601 timestamp of the commit itself, not of the build. */
+    commitDate: z.string().trim().min(1).nullish(),
+    /** Subject line of the commit, for display alongside the sha. */
+    commitMessage: z.string().trim().min(1).nullish(),
+    /** Web root of the repository the commit is reachable from. */
+    repoUrl: z.string().trim().min(1).nullish(),
+  })
+  .passthrough();
+
+export type BuildInfo = z.infer<typeof BuildInfoSchema>;
+
+const BuildInfoFromUnknownSchema = z
+  .unknown()
+  .optional()
+  .transform((value): BuildInfo | undefined => {
+    if (value === undefined) {
+      return undefined;
+    }
+    const parsed = BuildInfoSchema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
+  });
+
 const ServerCapabilitiesFromUnknownSchema = z
   .unknown()
   .optional()
@@ -2861,6 +2891,8 @@ export const ServerInfoStatusPayloadSchema = z
     serverId: z.string().trim().min(1),
     hostname: ServerInfoHostnameSchema.optional(),
     version: ServerInfoVersionSchema.optional(),
+    // COMPAT(build): daemons built without provenance omit this entirely.
+    build: BuildInfoFromUnknownSchema.optional(),
     // COMPAT(desktopManaged): added in v0.1.X, remove optional parsing after 2027-01-16.
     desktopManaged: z.boolean().optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
