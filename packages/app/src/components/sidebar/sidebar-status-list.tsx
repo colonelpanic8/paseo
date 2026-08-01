@@ -141,9 +141,7 @@ export function SidebarStatusWorkspaceList({
                 <StatusWorkspaceRow
                   key={workspace.workspaceKey}
                   workspace={workspace}
-                  iconDataUri={
-                    projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null
-                  }
+                  iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
                   hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
                   hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
                   shortcutNumber={statusShortcutIndex.get(workspace.workspaceKey) ?? null}
@@ -310,10 +308,10 @@ function StatusGroupRows({
       </Animated.View>
       {!collapsed
         ? visibleWorkspaces.map((workspace) => (
-             <StatusWorkspaceRow
-               key={workspace.workspaceKey}
-               workspace={workspace}
-               iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
+            <StatusWorkspaceRow
+              key={workspace.workspaceKey}
+              workspace={workspace}
+              iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
               hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
               hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
               shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}

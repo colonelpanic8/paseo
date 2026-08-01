@@ -1,10 +1,10 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
-import { gotoAppShell } from "./helpers/app";
-import { seedWorkspace } from "./helpers/seed-client";
-import { getServerId } from "./helpers/server-id";
-import { archiveWorkspaceFromSidebar } from "./helpers/sidebar";
-import { waitForSidebarHydration } from "./helpers/workspace-ui";
+import { expect, test } from "../support/fixtures";
+import { gotoAppShell } from "../support/helpers/app";
+import { seedWorkspace } from "../support/helpers/seed-client";
+import { getServerId } from "../support/helpers/server-id";
+import { archiveWorkspaceFromSidebar } from "../support/helpers/sidebar";
+import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 
 async function wasRecentlyArchivedPendingSeen(page: Page): Promise<boolean> {
   return page.evaluate(

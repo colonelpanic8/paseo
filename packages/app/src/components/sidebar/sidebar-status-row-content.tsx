@@ -315,7 +315,7 @@ function StatusRowLeadingVisual({
       <ProjectIconView
         iconDataUri={iconDataUri}
         initial={workspace.projectName.charAt(0).toUpperCase()}
-        projectKey={workspace.projectKey}
+        projectViewKey={workspace.projectViewKey}
         imageStyle={styles.projectIcon}
         fallbackStyle={styles.projectIconFallback}
         textStyle={styles.projectIconFallbackText}
