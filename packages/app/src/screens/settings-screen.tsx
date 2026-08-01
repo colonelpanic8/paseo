@@ -1253,7 +1253,6 @@ function HostPicker({
       includeEnableBuiltInDaemon={enableBuiltInDaemonOption.visible}
       onEnableBuiltInDaemon={enableBuiltInDaemonOption.onPress}
       showActiveConnection
-      searchable={false}
       title={t("settings.hostPicker.switchHost")}
       desktopMinWidth={240}
       addHostTestID="settings-add-host"
