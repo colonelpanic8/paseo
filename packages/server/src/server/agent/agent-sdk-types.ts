@@ -730,6 +730,10 @@ export interface ProviderCatalog {
   defaultModeId?: string | null;
 }
 
+export interface LiveVoiceVoiceCatalog {
+  voices: string[];
+}
+
 export interface ResolveAgentDefaultModeInput {
   config: AgentSessionConfig;
   env?: Record<string, string>;
@@ -768,6 +772,7 @@ export interface AgentClient {
   ): Promise<ProviderCatalog>;
   /** Apply provider-owned defaults to a model supplied through provider configuration. */
   resolveConfiguredModel?(model: AgentModelDefinition): AgentModelDefinition;
+  listLiveVoiceVoices?(): Promise<LiveVoiceVoiceCatalog>;
   resolveDefaultModeId?(input: ResolveAgentDefaultModeInput): Promise<string | undefined>;
   resolveCreateConfig?(input: ResolveAgentCreateConfigInput): ResolveAgentCreateConfigResult;
   isCreateConfigUnattended?(input: AgentCreateConfigUnattendedInput): boolean;
