@@ -3,7 +3,7 @@
  * their thresholds can't drift apart; they differ only in how much room they have to say it.
  *
  * `elapsed` takes an "ago" in prose, `now` and `date` read as absolutes and never do.
- * The finest granularity is one minute because sidebar callers refresh once a minute.
+ * The finest granularity is one minute because sidebar callers refresh through useMinuteNow.
  */
 type Elapsed =
   | { kind: "now" }

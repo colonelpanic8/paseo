@@ -59,6 +59,7 @@ class WorkspaceStatus {
   private readonly workspaces = [this.workspace];
 
   private readonly agents: AgentSnapshotPayload[] = [];
+  private readonly agentActivityAtOverrides = new Map<string, string>();
   private readonly providerSubagents: ProviderSubagentWorkspaceActivity[] = [];
   private readonly terminals: Array<{
     cwd: string;
@@ -78,6 +79,13 @@ class WorkspaceStatus {
       workspaceRegistry: { list: async () => this.workspaces },
       getBucketHistory: () => this.daemonBucketHistory,
       listAgentPayloads: async () => this.agents,
+      listAgentActivityAt: async () =>
+        new Map(
+          this.agents.map(
+            (agent) =>
+              [agent.id, this.agentActivityAtOverrides.get(agent.id) ?? agent.updatedAt] as const,
+          ),
+        ),
       listProviderSubagentActivity: async () => this.providerSubagents,
       listTerminalActivityContributions: async () => this.terminals,
       isProviderVisibleToClient: () => true,
@@ -123,6 +131,10 @@ class WorkspaceStatus {
         workspaceId: this.workspace.workspaceId,
       }),
     );
+  }
+
+  hasAgentActivityAt(agentId: string, activityAt: string): void {
+    this.agentActivityAtOverrides.set(agentId, activityAt);
   }
 
   hasSiblingWorkspaceSameCwd(): void {
@@ -625,6 +637,20 @@ describe("WorkspaceDirectory", () => {
     expect(descriptor.status).toBe("needs_input");
     expect(descriptor.activityAt).toBe("2026-05-01T10:00:00.000Z");
   });
+
+  test("agent lifecycle updates do not advance workspace activity", async () => {
+    const workspace = new WorkspaceStatus();
+
+    workspace.hasRootAgent({
+      id: "opened-agent",
+      status: "idle",
+      updatedAt: "2026-06-01T10:05:00.000Z",
+    });
+    workspace.hasAgentActivityAt("opened-agent", "2026-06-01T09:30:00.000Z");
+
+    const descriptor = await workspace.workspaceDescriptor();
+    expect(descriptor.activityAt).toBe("2026-06-01T09:30:00.000Z");
+  });
 });
 
 describe("WorkspaceDirectory empty projects", () => {
@@ -637,6 +663,7 @@ describe("WorkspaceDirectory empty projects", () => {
       projectRegistry: { list: async () => input.projects },
       workspaceRegistry: { list: async () => input.workspaces },
       listAgentPayloads: async () => [],
+      listAgentActivityAt: async () => new Map(),
       listProviderSubagentActivity: async () => [],
       listTerminalActivityContributions: async () => [],
       isProviderVisibleToClient: () => true,

@@ -2726,17 +2726,27 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     },
   };
 
-  const resumed = await manager.resumeAgentFromPersistence(handle, {
-    cwd: workdir,
-    systemPrompt: "new prompt",
-    mcpServers: {
-      paseo: {
-        type: "stdio",
-        command: "node",
-        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
+  const lastActivityAt = new Date("2025-01-02T03:04:05.000Z");
+  const resumed = await manager.resumeAgentFromPersistence(
+    handle,
+    {
+      cwd: workdir,
+      systemPrompt: "new prompt",
+      mcpServers: {
+        paseo: {
+          type: "stdio",
+          command: "node",
+          args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
+        },
       },
     },
-  });
+    undefined,
+    {
+      createdAt: lastActivityAt,
+      updatedAt: lastActivityAt,
+      lastActivityAt,
+    },
+  );
 
   expect(resumed.config.systemPrompt).toBe("new prompt");
   expect(resumed.config.mcpServers).toEqual({
@@ -2765,6 +2775,8 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
       PASEO_AGENT_CWD: workdir,
     },
   });
+  expect(resumed.lastActivityAt).toEqual(lastActivityAt);
+  expect(resumed.updatedAt.getTime()).toBeGreaterThan(lastActivityAt.getTime());
 });
 
 test("importProviderSession imports the selected session without listing and publishes ready state", async () => {
@@ -2875,6 +2887,7 @@ test("importProviderSession imports the selected session without listing and pub
   });
   expect(imported.lifecycle).toBe("idle");
   expect(imported.historyPrimed).toBe(true);
+  expect(imported.lastActivityAt.toISOString()).toBe("2026-01-02T00:00:02.000Z");
   expect(manager.getTimeline(imported.id)).toEqual([
     { type: "user_message", text: "Trace provider imports" },
     { type: "assistant_message", text: "Done" },
@@ -8274,7 +8287,7 @@ test("hydrateTimeline keeps provider user_message items when no canonical user h
   expect(assistantMessages).toHaveLength(2);
 });
 
-test("hydrateTimeline preserves provider replay timestamps and marks missing ones untrusted", async () => {
+test("hydrateTimeline preserves provider replay timestamps without changing agent activity", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-history-timestamps-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -8339,6 +8352,7 @@ test("hydrateTimeline preserves provider replay timestamps and marks missing one
     item: { type: "user_message", text: "hello", messageId: "msg_history_1" },
   });
   expect(timeline[1]?.timestamp).toEqual(expect.any(String));
+  expect(manager.getAgent(snapshot.id)?.lastActivityAt).toEqual(snapshot.lastActivityAt);
 });
 
 test("provider user_message is recorded from the live stream", async () => {

@@ -4,6 +4,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatCompactRelativeTime } from "@/utils/time";
 
 vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -11,10 +12,10 @@ const MINUTE = 60_000;
 
 // Every case re-imports the module so the shared interval and cached minute
 // start clean; the tick state is module-level by design.
-async function loadHook(): Promise<() => number> {
+async function loadHook(): Promise<() => Date> {
   vi.resetModules();
   const module = await import("./use-minute-tick");
-  return module.useMinuteTick;
+  return module.useMinuteNow;
 }
 
 interface Probe {
@@ -22,18 +23,22 @@ interface Probe {
   unmount(): void;
   readonly renders: number;
   readonly minute: number | null;
+  readonly relativeLabel: string | null;
 }
 
-function createProbe(useMinuteTick: () => number): Probe {
+function createProbe(useMinuteNow: () => Date, activityAt?: Date): Probe {
   const container = document.createElement("div");
   document.body.appendChild(container);
   let root: Root | null = null;
   let renders = 0;
   let minute: number | null = null;
+  let relativeLabel: string | null = null;
 
   function Probe() {
     renders += 1;
-    minute = useMinuteTick();
+    const now = useMinuteNow();
+    minute = Math.floor(now.getTime() / MINUTE);
+    relativeLabel = activityAt ? formatCompactRelativeTime(activityAt, now) : null;
     return null;
   }
 
@@ -53,10 +58,13 @@ function createProbe(useMinuteTick: () => number): Probe {
     get minute() {
       return minute;
     },
+    get relativeLabel() {
+      return relativeLabel;
+    },
   };
 }
 
-describe("useMinuteTick", () => {
+describe("useMinuteNow", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-16T12:00:00.000Z"));
@@ -67,8 +75,8 @@ describe("useMinuteTick", () => {
   });
 
   it("re-renders once the wall-clock minute changes", async () => {
-    const useMinuteTick = await loadHook();
-    const probe = createProbe(useMinuteTick);
+    const useMinuteNow = await loadHook();
+    const probe = createProbe(useMinuteNow);
     probe.mount();
     const initialRenders = probe.renders;
 
@@ -82,10 +90,23 @@ describe("useMinuteTick", () => {
     probe.unmount();
   });
 
+  it("ages a relative label after its initial now minute", async () => {
+    const useMinuteNow = await loadHook();
+    const activityAt = new Date("2026-07-16T12:00:00.000Z");
+    const probe = createProbe(useMinuteNow, activityAt);
+    probe.mount();
+    expect(probe.relativeLabel).toBe("now");
+
+    act(() => void vi.advanceTimersByTime(5 * MINUTE));
+    expect(probe.relativeLabel).toBe("5m");
+
+    probe.unmount();
+  });
+
   it("keeps one interval for many subscribers and stops it when the last unmounts", async () => {
-    const useMinuteTick = await loadHook();
-    const first = createProbe(useMinuteTick);
-    const second = createProbe(useMinuteTick);
+    const useMinuteNow = await loadHook();
+    const first = createProbe(useMinuteNow);
+    const second = createProbe(useMinuteNow);
 
     first.mount();
     const withOne = vi.getTimerCount();
@@ -100,8 +121,8 @@ describe("useMinuteTick", () => {
   });
 
   it("serves a fresh minute to a subscriber that arrives after the ticker stopped", async () => {
-    const useMinuteTick = await loadHook();
-    const first = createProbe(useMinuteTick);
+    const useMinuteNow = await loadHook();
+    const first = createProbe(useMinuteNow);
     first.mount();
     const startMinute = first.minute;
     first.unmount();
@@ -109,7 +130,7 @@ describe("useMinuteTick", () => {
     // Nothing is subscribed here, so the cached minute goes stale.
     act(() => void vi.advanceTimersByTime(5 * MINUTE));
 
-    const second = createProbe(useMinuteTick);
+    const second = createProbe(useMinuteNow);
     second.mount();
     expect(second.minute).toBe((startMinute ?? 0) + 5);
 
