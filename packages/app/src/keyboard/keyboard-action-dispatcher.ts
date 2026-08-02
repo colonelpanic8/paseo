@@ -43,7 +43,8 @@ export type KeyboardActionId =
   | "message-input.thinking.pick"
   | "message-input.mode.pick"
   | "message-input.fast-mode.toggle"
-  | "message-input.plan-mode.toggle";
+  | "message-input.plan-mode.toggle"
+  | "live-voice.mute-toggle";
 
 export type KeyboardActionDefinition =
   | { id: "agent.interrupt"; scope: KeyboardActionScope }
@@ -88,7 +89,8 @@ export type KeyboardActionDefinition =
   | { id: "message-input.thinking.pick"; scope: KeyboardActionScope }
   | { id: "message-input.mode.pick"; scope: KeyboardActionScope }
   | { id: "message-input.fast-mode.toggle"; scope: KeyboardActionScope }
-  | { id: "message-input.plan-mode.toggle"; scope: KeyboardActionScope };
+  | { id: "message-input.plan-mode.toggle"; scope: KeyboardActionScope }
+  | { id: "live-voice.mute-toggle"; scope: KeyboardActionScope };
 
 export interface KeyboardActionHandler {
   handlerId: string;

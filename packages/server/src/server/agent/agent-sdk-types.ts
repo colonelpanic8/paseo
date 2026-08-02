@@ -683,6 +683,10 @@ export interface ProviderCatalog {
   defaultModeId?: string | null;
 }
 
+export interface LiveVoiceVoiceCatalog {
+  voices: string[];
+}
+
 export interface ResolveAgentDefaultModeInput {
   config: AgentSessionConfig;
   env?: Record<string, string>;
@@ -709,6 +713,7 @@ export interface AgentClient {
    * The registry is responsible for merging configured model overrides.
    */
   fetchCatalog(options: FetchCatalogOptions): Promise<ProviderCatalog>;
+  listLiveVoiceVoices?(): Promise<LiveVoiceVoiceCatalog>;
   resolveDefaultModeId?(input: ResolveAgentDefaultModeInput): Promise<string | undefined>;
   resolveCreateConfig?(input: ResolveAgentCreateConfigInput): ResolveAgentCreateConfigResult;
   isCreateConfigUnattended?(input: AgentCreateConfigUnattendedInput): boolean;
