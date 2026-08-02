@@ -952,6 +952,11 @@ export const VoiceLiveStopRequestSchema = z.object({
   liveSessionId: z.string(),
 });
 
+export const VoiceLiveVoicesRequestSchema = z.object({
+  type: z.literal("voice.live.voices.request"),
+  requestId: z.string(),
+});
+
 export const GitHubPrAttachmentSchema = z.object({
   type: z.literal("github_pr"),
   mimeType: z.literal("application/github-pr"),
@@ -1722,6 +1727,14 @@ export const VoiceLiveStopResponseSchema = z.object({
   type: z.literal("voice.live.stop.response"),
   payload: z.object({
     requestId: z.string(),
+  }),
+});
+
+export const VoiceLiveVoicesResponseSchema = z.object({
+  type: z.literal("voice.live.voices.response"),
+  payload: z.object({
+    requestId: z.string(),
+    voices: z.array(z.string()),
   }),
 });
 
@@ -2632,6 +2645,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetVoiceModeMessageSchema,
   VoiceLiveStartRequestSchema,
   VoiceLiveStopRequestSchema,
+  VoiceLiveVoicesRequestSchema,
   VoiceLiveRouteResponseSchema,
   VoiceLiveToolExecuteRequestSchema,
   VoiceLiveAgentNotifyRequestSchema,
@@ -3022,6 +3036,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceScriptManagement: z.boolean().optional(),
         // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
         liveVoice: z.boolean().optional(),
+        // COMPAT(liveVoiceVoiceCatalog): added in v0.2.6, remove after 2027-02-28.
+        liveVoiceVoiceCatalog: z.boolean().optional(),
         // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
         // Reports whether newly launched agents receive Paseo's own tools.
         agentPaseoTools: z.boolean().optional(),
@@ -5461,6 +5477,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetVoiceModeResponseMessageSchema,
   VoiceLiveStartResponseSchema,
   VoiceLiveStopResponseSchema,
+  VoiceLiveVoicesResponseSchema,
   VoiceLiveUpdateSchema,
   VoiceLiveRouteRequestSchema,
   VoiceLiveToolExecuteResponseSchema,
@@ -5665,6 +5682,7 @@ export type SendAgentMessageResponseMessage = z.infer<typeof SendAgentMessageRes
 export type SetVoiceModeResponseMessage = z.infer<typeof SetVoiceModeResponseMessageSchema>;
 export type VoiceLiveStartResponse = z.infer<typeof VoiceLiveStartResponseSchema>;
 export type VoiceLiveStopResponse = z.infer<typeof VoiceLiveStopResponseSchema>;
+export type VoiceLiveVoicesResponse = z.infer<typeof VoiceLiveVoicesResponseSchema>;
 export type VoiceLiveEvent = z.infer<typeof VoiceLiveEventSchema>;
 export type VoiceLiveUpdate = z.infer<typeof VoiceLiveUpdateSchema>;
 export type SetAgentModeResponseMessage = z.infer<typeof SetAgentModeResponseMessageSchema>;
@@ -5759,6 +5777,7 @@ export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
 export type VoiceAudioChunkMessage = z.infer<typeof VoiceAudioChunkMessageSchema>;
 export type VoiceLiveStartRequest = z.infer<typeof VoiceLiveStartRequestSchema>;
 export type VoiceLiveStopRequest = z.infer<typeof VoiceLiveStopRequestSchema>;
+export type VoiceLiveVoicesRequest = z.infer<typeof VoiceLiveVoicesRequestSchema>;
 export type FetchAgentsRequestMessage = z.infer<typeof FetchAgentsRequestMessageSchema>;
 export type FetchAgentHistoryRequestMessage = z.infer<typeof FetchAgentHistoryRequestMessageSchema>;
 export type FetchRecentProviderSessionsRequestMessage = z.infer<
