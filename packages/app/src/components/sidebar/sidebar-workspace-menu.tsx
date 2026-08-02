@@ -1,8 +1,18 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Archive, CircleCheck, Copy, MoreVertical, Pencil, Pin, PinOff } from "lucide-react-native";
+import {
+  Archive,
+  CircleCheck,
+  Copy,
+  Moon,
+  MoreVertical,
+  Pencil,
+  Pin,
+  PinOff,
+  Sun,
+} from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
@@ -14,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
+import type { SidebarWorkspaceSnoozeActions } from "@/workspace-snooze/use-workspace-snooze-menu";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -27,6 +38,8 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
+const ThemedMoon = withUnistyles(Moon);
+const ThemedSun = withUnistyles(Sun);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
@@ -36,6 +49,8 @@ const markAsReadLeadingIcon = (
 const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
 const pinLeadingIcon = <ThemedPin size={14} uniProps={foregroundMutedColorMapping} />;
 const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={foregroundMutedColorMapping} />;
+const snoozeLeadingIcon = <ThemedMoon size={14} uniProps={foregroundMutedColorMapping} />;
+const wakeLeadingIcon = <ThemedSun size={14} uniProps={foregroundMutedColorMapping} />;
 
 function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
@@ -59,6 +74,9 @@ interface SidebarWorkspaceMenuProps {
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
+  // Present only when the host supports workspaceSnooze; the capability gate
+  // lives in the caller (like pin's onTogglePin).
+  snooze?: SidebarWorkspaceSnoozeActions;
   openInFileManagerPath?: string | null;
 }
 
@@ -75,6 +93,7 @@ export function SidebarWorkspaceMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  snooze,
   openInFileManagerPath,
 }: SidebarWorkspaceMenuProps) {
   const { t } = useTranslation();
@@ -140,6 +159,9 @@ export function SidebarWorkspaceMenu({
             {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
           </DropdownMenuItem>
         ) : null}
+        {snooze ? (
+          <SidebarWorkspaceSnoozeItems workspaceKey={workspaceKey} snooze={snooze} />
+        ) : null}
         <OpenInFileManagerMenuItem
           path={openInFileManagerPath}
           testID={`sidebar-workspace-menu-open-folder-${workspaceKey}`}
@@ -156,6 +178,68 @@ export function SidebarWorkspaceMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function SidebarWorkspaceSnoozeItems({
+  workspaceKey,
+  snooze,
+}: {
+  workspaceKey: string;
+  snooze: SidebarWorkspaceSnoozeActions;
+}) {
+  if (snooze.isSnoozed) {
+    return (
+      <DropdownMenuItem
+        testID={`sidebar-workspace-menu-wake-${workspaceKey}`}
+        leading={wakeLeadingIcon}
+        onSelect={snooze.onWake}
+      >
+        {snooze.wakeLabel}
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <>
+      {snooze.presets.map((preset) => (
+        <SidebarWorkspaceSnoozePresetItem
+          key={preset.id}
+          workspaceKey={workspaceKey}
+          preset={preset}
+          onSnooze={snooze.onSnooze}
+        />
+      ))}
+      <DropdownMenuItem
+        testID={`sidebar-workspace-menu-snooze-custom-${workspaceKey}`}
+        leading={snoozeLeadingIcon}
+        onSelect={snooze.onCustom}
+      >
+        {snooze.customLabel}
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+function SidebarWorkspaceSnoozePresetItem({
+  workspaceKey,
+  preset,
+  onSnooze,
+}: {
+  workspaceKey: string;
+  preset: SidebarWorkspaceSnoozeActions["presets"][number];
+  onSnooze: SidebarWorkspaceSnoozeActions["onSnooze"];
+}) {
+  const handleSelect = useCallback(() => {
+    void onSnooze(preset);
+  }, [onSnooze, preset]);
+  return (
+    <DropdownMenuItem
+      testID={`sidebar-workspace-menu-snooze-${preset.id}-${workspaceKey}`}
+      leading={snoozeLeadingIcon}
+      onSelect={handleSelect}
+    >
+      {preset.label}
+    </DropdownMenuItem>
   );
 }
 
