@@ -36,7 +36,7 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
 describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
   it("includes the visible host badge with the workspace title", () => {
     const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search" },
+      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
       workspaceTitleSource: "title",
       hostBadgeLabel: "Build host",
     });
@@ -46,12 +46,27 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
 
   it("includes hoisted project and host identity with the branch title", () => {
     const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search" },
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        statusBucket: "running",
+      },
       workspaceTitleSource: "branch",
       leadingProjectName: "Search project",
       hostBadgeLabel: "Build host",
     });
 
-    expect(label).toBe("Search project, fix/search, Build host");
+    expect(label).toBe("Search project, fix/search, Build host, Working");
+  });
+
+  it("omits the idle status from the workspace label", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
+      workspaceTitleSource: "title",
+      leadingProjectName: "Search project",
+      hostBadgeLabel: "Build host",
+    });
+
+    expect(label).toBe("Search project, Investigate search, Build host");
   });
 });
