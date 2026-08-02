@@ -6,6 +6,7 @@ import { identityColor } from "@/styles/identity-colors";
 import type { Theme } from "@/styles/theme";
 
 const ThemedServer = withUnistyles(Server);
+const MAX_NAMED_BADGE_WIDTH = 96;
 
 // The identity table is theme-independent, so its icon mapping is fixed for the life of the
 // module. It must not be rebuilt per render: a fresh `uniProps` identity makes withUnistyles
@@ -61,9 +62,9 @@ export function HostBadge({
 }
 
 const hostBadgeStyles = StyleSheet.create((theme) => ({
-  // Sized off the title's 20pt line box so the pill never grows the row. Fully rounded and
-  // flexShrink:0 so a long workspace title truncates before the host does — the host is the
-  // disambiguator, so losing it defeats the point of showing it.
+  // Sized off the title's 20pt line box so the pill never grows the row. A named badge must
+  // leave room for the workspace title and trailing actions, even when a host has an arbitrary
+  // custom label. The full host name remains in the row's accessible label and hover card.
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -73,19 +74,24 @@ const hostBadgeStyles = StyleSheet.create((theme) => ({
     paddingRight: 6,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.surface2,
-    flexShrink: 0,
+    maxWidth: MAX_NAMED_BADGE_WIDTH,
+    minWidth: 0,
+    flexShrink: 1,
   },
   // Icon-only drops the label, so the asymmetric padding that made room for text leaves a
   // lopsided pill. Symmetric padding recenters the icon.
   badgeIconOnly: {
     paddingLeft: 4,
     paddingRight: 4,
+    flexShrink: 0,
   },
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 14,
     color: theme.colors.foregroundMuted,
+    flexShrink: 1,
+    minWidth: 0,
   },
   hiddenText: {
     position: "absolute",
