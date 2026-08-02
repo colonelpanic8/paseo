@@ -61,7 +61,6 @@ export function HostFilter({
       onOpenChange={setIsFilterOpen}
       anchorRef={filterAnchorRef}
       includeAllHost
-      searchable={false}
       title="Filter by host"
       desktopPlacement="bottom-start"
     >
