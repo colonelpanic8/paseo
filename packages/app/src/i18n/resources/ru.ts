@@ -2393,8 +2393,41 @@ export const ru: TranslationResources = {
       updateErrorTitle: "Невозможно обновить провайдера",
       actions: {
         menu: "{{name}} actions",
+        addAccount: "Добавить аккаунт",
         remove: "Remove provider",
         removing: "Removing...",
+      },
+      account: {
+        title: "Добавить аккаунт {{provider}}",
+        errorTitle: "Не удалось добавить аккаунт",
+        submit: "Добавить аккаунт",
+        fields: {
+          label: "Название",
+          providerId: "ID провайдера",
+          description: "Описание",
+          env: "Переменные окружения",
+          envKey: "Имя переменной",
+          envValue: "Значение переменной",
+        },
+        placeholders: {
+          label: "{{provider}} (Работа)",
+          providerId: "claude-work",
+          description: "Необязательно",
+          envKey: "ИМЯ",
+          envValue: "Значение",
+        },
+        actions: {
+          addVariable: "Добавить переменную",
+          removeVariable: "Удалить переменную",
+        },
+        errors: {
+          labelRequired: "Введите название.",
+          idRequired: "Введите ID провайдера.",
+          idInvalid: "Используйте строчные буквы, цифры и дефисы, начиная с буквы.",
+          idTaken: "Этот ID провайдера уже занят.",
+          envKeyRequired: "Введите имя переменной.",
+          envDuplicate: "Эта переменная уже задана.",
+        },
       },
       remove: {
         confirmTitle: "Remove {{name}}?",
