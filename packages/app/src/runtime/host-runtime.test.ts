@@ -1999,6 +1999,10 @@ describe("HostRuntimeStore", () => {
         getClientId: async () => "cid_legacy_transitions",
       },
     });
+    const observedCompletions: Array<[string, string]> = [];
+    const unsubscribeCompletions = store.subscribeAllAgentStoppedRunning((serverId, agentId) => {
+      observedCompletions.push([serverId, agentId]);
+    });
     const sessionStore = useSessionStore.getState();
     sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
     sessionStore.updateSessionServerInfo(host.serverId, {
@@ -2041,6 +2045,10 @@ describe("HostRuntimeStore", () => {
       ["legacy-snapshot", "snapshot"],
       ["legacy-buffered", "buffered"],
     ]);
+    expect(observedCompletions).toEqual([
+      [host.serverId, "legacy-snapshot"],
+      [host.serverId, "legacy-buffered"],
+    ]);
     expect(
       Array.from(useSessionStore.getState().sessions[host.serverId]?.agents.values() ?? []).map(
         ({ id, status, workspaceId }) => [id, status, workspaceId],
@@ -2050,6 +2058,7 @@ describe("HostRuntimeStore", () => {
       ["legacy-buffered", "idle", "/legacy/repo"],
     ]);
 
+    unsubscribeCompletions();
     store.syncHosts([]);
     useSessionStore.getState().clearSession(host.serverId);
   });
