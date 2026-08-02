@@ -10,3 +10,18 @@ export function resolveSidebarWorkspacePrimaryLabel(input: {
   }
   return input.workspace.name;
 }
+
+export function resolveSidebarWorkspaceAccessibilityLabel(input: {
+  workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch">;
+  workspaceTitleSource: WorkspaceTitleSource;
+  leadingProjectName?: string | null;
+  hostBadgeLabel?: string | null;
+}): string {
+  return [
+    input.leadingProjectName,
+    resolveSidebarWorkspacePrimaryLabel(input),
+    input.hostBadgeLabel,
+  ]
+    .filter((label): label is string => Boolean(label))
+    .join(", ");
+}

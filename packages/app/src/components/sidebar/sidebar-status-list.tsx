@@ -682,6 +682,7 @@ function StatusWorkspaceRowInner({
               onContextMenuOpenChange={onContextMenuOpenChange}
               workspace={workspace}
               leadingProjectName={projectName}
+              hostBadgeLabel={hostBadge?.label}
               workspaceKey={workspace.workspaceKey}
               onCopyPath={onCopyPath}
               onCopyBranchName={onCopyBranchName}

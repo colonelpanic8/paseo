@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import {
+  resolveSidebarWorkspaceAccessibilityLabel,
+  resolveSidebarWorkspacePrimaryLabel,
+} from "@/components/sidebar/sidebar-workspace-title";
 
 describe("resolveSidebarWorkspacePrimaryLabel", () => {
   it("uses the workspace name in title mode", () => {
@@ -27,5 +30,28 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
     });
 
     expect(label).toBe("Local folder");
+  });
+});
+
+describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
+  it("includes the visible host badge with the workspace title", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: { name: "Investigate search", currentBranch: "fix/search" },
+      workspaceTitleSource: "title",
+      hostBadgeLabel: "Build host",
+    });
+
+    expect(label).toBe("Investigate search, Build host");
+  });
+
+  it("includes hoisted project and host identity with the branch title", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: { name: "Investigate search", currentBranch: "fix/search" },
+      workspaceTitleSource: "branch",
+      leadingProjectName: "Search project",
+      hostBadgeLabel: "Build host",
+    });
+
+    expect(label).toBe("Search project, fix/search, Build host");
   });
 });

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
-import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -246,6 +246,7 @@ export function SidebarWorkspaceContextMenu({
   onContextMenuOpenChange,
   workspace,
   leadingProjectName,
+  hostBadgeLabel,
   workspaceKey,
   onCopyPath,
   onCopyBranchName,
@@ -268,15 +269,18 @@ export function SidebarWorkspaceContextMenu({
       onContextMenuOpenChange: (open: boolean) => void;
       workspace: SidebarWorkspaceEntry;
       leadingProjectName?: string | null;
+      hostBadgeLabel?: string | null;
     }
 >) {
   const {
     settings: { workspaceTitleSource },
   } = useAppSettings();
-  const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
-  const rowAccessibilityLabel = leadingProjectName
-    ? `${leadingProjectName}, ${workspaceLabel}`
-    : workspaceLabel;
+  const rowAccessibilityLabel = resolveSidebarWorkspaceAccessibilityLabel({
+    workspace,
+    workspaceTitleSource,
+    leadingProjectName,
+    hostBadgeLabel,
+  });
 
   return (
     <ContextMenu open={contextMenuOpen} onOpenChange={onContextMenuOpenChange}>

@@ -1104,6 +1104,7 @@ function WorkspaceRowInner({
               onContextMenuOpenChange={onContextMenuOpenChange}
               workspace={workspace}
               leadingProjectName={leadingProjectName}
+              hostBadgeLabel={hostBadge?.label}
               workspaceKey={workspace.workspaceKey}
               onCopyPath={onCopyPath}
               onCopyBranchName={onCopyBranchName}
