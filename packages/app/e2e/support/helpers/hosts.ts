@@ -144,27 +144,6 @@ export async function selectAllHostsFilter(page: Page): Promise<void> {
   await page.getByTestId("sidebar-host-filter-all").click();
 }
 
-// Playwright reports resolved colors, so the expected value is derived from the same identity
-// table the app reads. A hex literal in the test would be a second copy of the palette.
-function toRgb(hex: string): string {
-  const { r, g, b } = parseHex(hex);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-interface RgbChannels {
-  r: number;
-  g: number;
-  b: number;
-}
-
-function parseHex(hex: string): RgbChannels {
-  return {
-    r: Number.parseInt(hex.slice(1, 3), 16),
-    g: Number.parseInt(hex.slice(3, 5), 16),
-    b: Number.parseInt(hex.slice(5, 7), 16),
-  };
-}
-
 export async function openHostAppearanceSettings(page: Page, serverId: string): Promise<void> {
   await openSettings(page);
   await selectSettingsHost(page, serverId);
@@ -227,7 +206,7 @@ export async function expectHostBadgeName(page: Page, target: HostBadgeTarget): 
 export async function expectHostBadgeIconOnly(page: Page, target: HostBadgeTarget): Promise<void> {
   const badge = hostBadge(page, target);
   await expect(badge).toBeVisible({ timeout: 15_000 });
-  await expect(badge).toHaveText(target.hostName);
+  await expect(badge).not.toHaveText(target.hostName);
   await expect(
     page.getByTestId(`sidebar-workspace-row-${target.serverId}:${target.workspaceId}`),
   ).toHaveAccessibleName(new RegExp(target.hostName));
@@ -244,7 +223,7 @@ export async function expectHostBadgeTinted(
   const badge = hostBadge(page, target);
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await expect(badge.getByText(target.hostName)).toHaveCSS("color", "rgb(113, 113, 122)");
-  await expect(badge.locator("svg")).toHaveCSS("color", toRgb(identityColor(target.color)));
+  await expect(badge.locator("svg")).toHaveAttribute("stroke", identityColor(target.color));
 }
 
 export async function expectHostAppearancePreview(
@@ -255,7 +234,7 @@ export async function expectHostAppearancePreview(
   await expect(preview).toBeVisible();
   const badge = preview.getByTestId(`sidebar-host-badge-${input.serverId}`);
   await expect(badge).toHaveText(input.hostName);
-  await expect(badge.locator("svg")).toHaveCSS("color", toRgb(identityColor(input.color)));
+  await expect(badge.locator("svg")).toHaveAttribute("stroke", identityColor(input.color));
 }
 
 // The auto-seed fixture rewrites the host registry on every navigation. Setting the

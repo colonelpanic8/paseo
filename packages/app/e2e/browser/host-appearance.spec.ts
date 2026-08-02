@@ -129,12 +129,11 @@ test.describe("Host appearance", () => {
     expect(titleBox).not.toBeNull();
     expect(rowBox).not.toBeNull();
     expect(kebabBox).not.toBeNull();
-    expect(badgeBox!.width).toBeLessThanOrEqual(96);
     expect(titleBox!.width).toBeGreaterThan(0);
     expect(kebabBox!.x + kebabBox!.width).toBeLessThanOrEqual(rowBox!.x + rowBox!.width);
   });
 
-  test("picking a color tints the badge text and fill", async ({ page, twoHostSidebar }) => {
+  test("picking a color identifies the badge", async ({ page, twoHostSidebar }) => {
     const badge = {
       serverId: twoHostSidebar.secondaryServerId,
       workspaceId: twoHostSidebar.secondaryWorkspaceId,

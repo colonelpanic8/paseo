@@ -44,7 +44,7 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
     expect(label).toBe("Investigate search, Build host");
   });
 
-  it("includes hoisted project and host identity with the branch title", () => {
+  it("owns every visual row contributor in one accessible label", () => {
     const label = resolveSidebarWorkspaceAccessibilityLabel({
       workspace: {
         name: "Investigate search",
@@ -54,9 +54,13 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
       workspaceTitleSource: "branch",
       leadingProjectName: "Search project",
       hostBadgeLabel: "Build host",
+      pullRequestLabel: "Pull request 42",
+      scriptLabel: "Scripts available",
     });
 
-    expect(label).toBe("Search project, fix/search, Build host, Working");
+    expect(label).toBe(
+      "Search project, fix/search, Build host, Pull request 42, Scripts available, Working",
+    );
   });
 
   it("omits the idle status from the workspace label", () => {

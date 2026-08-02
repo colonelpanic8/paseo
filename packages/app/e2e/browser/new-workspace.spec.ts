@@ -116,7 +116,13 @@ async function startTrackingSidebarStatusGroups(page: import("@playwright/test")
 
     capture();
     const observer = new MutationObserver(capture);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["data-testid"],
+    });
     win.__workspaceStatusGroupObserver = observer;
   });
 }

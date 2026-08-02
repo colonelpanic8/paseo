@@ -4,6 +4,7 @@ import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Archive, CircleCheck, Copy, MoreVertical, Pencil, Pin, PinOff } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
+import { getForgePresentation, normalizeForge } from "@/git/forge";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
@@ -247,6 +248,7 @@ export function SidebarWorkspaceContextMenu({
   workspace,
   leadingProjectName,
   hostBadgeLabel,
+  scriptIconKind,
   workspaceKey,
   onCopyPath,
   onCopyBranchName,
@@ -270,16 +272,26 @@ export function SidebarWorkspaceContextMenu({
       workspace: SidebarWorkspaceEntry;
       leadingProjectName?: string | null;
       hostBadgeLabel?: string | null;
+      scriptIconKind?: "service" | "command" | null;
     }
 >) {
   const {
     settings: { workspaceTitleSource },
   } = useAppSettings();
+  const { t } = useTranslation();
+  const pullRequestLabel = workspace.prHint
+    ? t("workspace.git.pr.accessibility.pullRequest", {
+        number: workspace.prHint.number,
+        context: getForgePresentation(normalizeForge(workspace.prHint.forge)).changeRequestContext,
+      })
+    : null;
   const rowAccessibilityLabel = resolveSidebarWorkspaceAccessibilityLabel({
     workspace,
     workspaceTitleSource,
     leadingProjectName,
     hostBadgeLabel,
+    pullRequestLabel,
+    scriptLabel: scriptIconKind ? t("workspace.status.scriptsAvailable") : null,
   });
 
   return (

@@ -17,11 +17,15 @@ export function resolveSidebarWorkspaceAccessibilityLabel(input: {
   workspaceTitleSource: WorkspaceTitleSource;
   leadingProjectName?: string | null;
   hostBadgeLabel?: string | null;
+  pullRequestLabel?: string | null;
+  scriptLabel?: string | null;
 }): string {
   return [
     input.leadingProjectName,
     resolveSidebarWorkspacePrimaryLabel(input),
     input.hostBadgeLabel,
+    input.pullRequestLabel,
+    input.scriptLabel,
     input.workspace.statusBucket === "done"
       ? null
       : STATUS_BUCKET_LABELS[input.workspace.statusBucket],

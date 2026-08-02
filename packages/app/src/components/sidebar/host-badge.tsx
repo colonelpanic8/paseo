@@ -29,8 +29,6 @@ const ICON_MAPPINGS = buildIconMappings();
  * setups — see selectHostBadges. It's a badge rather than a second line of text because the
  * row has to stay scannable at one line per workspace.
  *
- * The label remains a descendant in every mode, so the workspace row has one accessible name
- * that still identifies the host when the pill is icon-only.
  */
 export function HostBadge({
   serverId,
@@ -49,14 +47,11 @@ export function HostBadge({
       testID={`sidebar-host-badge-${serverId}`}
     >
       <ThemedServer size={9} uniProps={ICON_MAPPINGS[color]} />
-      <Text
-        style={
-          showLabel ? hostBadgeStyles.text : [hostBadgeStyles.text, hostBadgeStyles.hiddenText]
-        }
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+      {showLabel ? (
+        <Text style={hostBadgeStyles.text} numberOfLines={1}>
+          {label}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -92,9 +87,5 @@ const hostBadgeStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
     minWidth: 0,
-  },
-  hiddenText: {
-    position: "absolute",
-    opacity: 0,
   },
 }));

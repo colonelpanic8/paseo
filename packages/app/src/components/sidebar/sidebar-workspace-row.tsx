@@ -307,6 +307,7 @@ function WorkspaceRowBody({
               onContextMenuOpenChange={onContextMenuOpenChange}
               workspace={workspace}
               hostBadgeLabel={hostBadge?.label}
+              scriptIconKind={scriptIconKind}
               workspaceKey={workspace.workspaceKey}
               onCopyPath={onCopyPath}
               onCopyBranchName={onCopyBranchName}

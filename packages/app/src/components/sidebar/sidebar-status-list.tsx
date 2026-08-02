@@ -683,6 +683,7 @@ function StatusWorkspaceRowInner({
               workspace={workspace}
               leadingProjectName={projectName}
               hostBadgeLabel={hostBadge?.label}
+              scriptIconKind={scriptIconKind}
               workspaceKey={workspace.workspaceKey}
               onCopyPath={onCopyPath}
               onCopyBranchName={onCopyBranchName}
