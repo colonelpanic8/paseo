@@ -169,6 +169,10 @@ test.describe("Host appearance", () => {
     await renameHostFromSettings(page, "Build Box");
     await chooseHostColor(page, "Emerald");
 
-    await expectHostAppearancePreview(page, { hostName: "Build Box", color: "emerald" });
+    await expectHostAppearancePreview(page, {
+      serverId: twoHostSidebar.secondaryServerId,
+      hostName: "Build Box",
+      color: "emerald",
+    });
   });
 });

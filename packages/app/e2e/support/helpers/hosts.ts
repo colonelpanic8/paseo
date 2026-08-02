@@ -204,12 +204,12 @@ export async function chooseHostBadgeDisplay(
   await expect(page.getByRole("button", { name: `Sidebar badge, ${option}` })).toBeVisible();
 }
 
-// The badge is a pill with no semantic role, so it is located by its accessible name inside the
-// workspace row that owns it — the row test ID is existing sidebar vocabulary.
+// The badge is visual-only; the workspace row owns its accessible name. Test IDs keep visual
+// assertions from coupling to that row-level accessibility contract.
 function hostBadge(page: Page, input: HostBadgeTarget) {
   return page
     .getByTestId(`sidebar-workspace-row-${input.serverId}:${input.workspaceId}`)
-    .getByLabel(input.hostName);
+    .getByTestId(`sidebar-host-badge-${input.serverId}`);
 }
 
 interface HostBadgeTarget {
@@ -227,7 +227,10 @@ export async function expectHostBadgeName(page: Page, target: HostBadgeTarget): 
 export async function expectHostBadgeIconOnly(page: Page, target: HostBadgeTarget): Promise<void> {
   const badge = hostBadge(page, target);
   await expect(badge).toBeVisible({ timeout: 15_000 });
-  await expect(badge).toHaveText("");
+  await expect(badge).toHaveText(target.hostName);
+  await expect(
+    page.getByTestId(`sidebar-workspace-row-${target.serverId}:${target.workspaceId}`),
+  ).toHaveAccessibleName(new RegExp(target.hostName));
 }
 
 export async function expectNoHostBadge(page: Page, target: HostBadgeTarget): Promise<void> {
@@ -246,11 +249,11 @@ export async function expectHostBadgeTinted(
 
 export async function expectHostAppearancePreview(
   page: Page,
-  input: { hostName: string; color: IdentityColorName },
+  input: { serverId: string; hostName: string; color: IdentityColorName },
 ): Promise<void> {
   const preview = page.getByTestId("host-appearance-preview");
   await expect(preview).toBeVisible();
-  const badge = preview.getByLabel(input.hostName);
+  const badge = preview.getByTestId(`sidebar-host-badge-${input.serverId}`);
   await expect(badge).toHaveText(input.hostName);
   await expect(badge.locator("svg")).toHaveCSS("color", toRgb(identityColor(input.color)));
 }
