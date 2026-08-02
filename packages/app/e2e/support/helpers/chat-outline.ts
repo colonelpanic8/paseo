@@ -91,12 +91,8 @@ export async function expectNoChatOutlinePreviewWhileCrossingToSidebar(page: Pag
     Object.assign(window, { __chatOutlinePreviewObserver: observer });
   });
 
-  // One uninterrupted sweep. The rail suppresses the preview by restarting its
-  // dwell timer on every horizontal move, so the crossing only means what the
-  // test says it means while the moves stay closer together than that timer.
-  // Waiting for a frame between steps handed that spacing to the main thread —
-  // a busy renderer stretched a step past the dwell window and the rail opened a
-  // preview the reader never asked for.
+  // One uninterrupted sweep: waiting for a frame between steps lets a busy
+  // renderer stretch the crossing past the rail's dwell timer, which activates.
   await page.mouse.move(railBox.x - 2, railBox.y + railBox.height / 2, { steps: 12 });
   await page.evaluate(
     () =>
