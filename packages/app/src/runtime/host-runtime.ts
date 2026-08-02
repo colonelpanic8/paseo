@@ -1348,7 +1348,7 @@ export class HostRuntimeStore {
   private hostListVersion = 0;
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
-  private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
+  private hostRegistryMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
   private deps: HostRuntimeControllerDeps;
   private lastConnectionStatusByServer = new Map<string, HostRuntimeConnectionStatus>();
@@ -1463,7 +1463,7 @@ export class HostRuntimeStore {
       this.hostRegistryStatus = "ready";
       this.emitHostList();
       if (shouldPersistHosts) {
-        void this.persistHosts().catch((error) =>
+        void this.enqueueHostRegistryMutation(() => this.persistHosts()).catch((error) =>
           console.error("[HostRuntime] Failed to persist host registry", error),
         );
       }
@@ -1623,16 +1623,16 @@ export class HostRuntimeStore {
       this.serverListeners.set(newServerId, merged);
     }
 
-    this.hosts = this.hosts.map((host) =>
-      host.serverId === oldServerId
-        ? { ...host, serverId: newServerId, updatedAt: new Date().toISOString() }
-        : host,
-    );
-    this.emitHostList();
+    void this.enqueueHostRegistryMutation(async () => {
+      this.hosts = this.hosts.map((host) =>
+        host.serverId === oldServerId
+          ? { ...host, serverId: newServerId, updatedAt: new Date().toISOString() }
+          : host,
+      );
+      this.emitHostList();
+      await this.persistHosts();
+    }).catch((error) => console.error("[HostRuntime] Failed to persist host registry", error));
     this.emit(newServerId);
-    void this.persistHosts().catch((error) =>
-      console.error("[HostRuntime] Failed to persist host registry", error),
-    );
   }
 
   async upsertDirectConnection(input: {
@@ -1793,12 +1793,14 @@ export class HostRuntimeStore {
     serverId: string,
     apply: (host: HostProfile) => HostProfile,
   ): Promise<void> {
-    const updatedAt = new Date().toISOString();
-    const next = this.hosts.map((host) =>
-      host.serverId === serverId ? { ...apply(host), updatedAt } : host,
-    );
-    this.setHostsAndSync(next);
-    await this.persistHosts();
+    await this.enqueueHostRegistryMutation(async () => {
+      const updatedAt = new Date().toISOString();
+      const next = this.hosts.map((host) =>
+        host.serverId === serverId ? { ...apply(host), updatedAt } : host,
+      );
+      this.setHostsAndSync(next);
+      await this.persistHosts();
+    });
   }
 
   async renameHost(serverId: string, label: string): Promise<void> {
@@ -1823,11 +1825,7 @@ export class HostRuntimeStore {
     serverId: string,
     apply: (host: HostProfile) => HostProfile,
   ): Promise<void> {
-    const update = this.hostAppearanceMutationTail.then(() =>
-      this.applyHostAppearance(serverId, apply),
-    );
-    this.hostAppearanceMutationTail = update.catch(() => undefined);
-    return update;
+    return this.enqueueHostRegistryMutation(() => this.applyHostAppearance(serverId, apply));
   }
 
   private async applyHostAppearance(
@@ -1843,34 +1841,38 @@ export class HostRuntimeStore {
   }
 
   async removeHost(serverId: string): Promise<void> {
-    const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
-    this.setHostsAndSync(remaining);
-    await this.persistHosts();
+    await this.enqueueHostRegistryMutation(async () => {
+      const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
+      this.setHostsAndSync(remaining);
+      await this.persistHosts();
+    });
   }
 
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
-    const now = new Date().toISOString();
-    const next = this.hosts
-      .map((daemon) => {
-        if (daemon.serverId !== serverId) return daemon;
-        const remaining = daemon.connections.filter((conn) => conn.id !== connectionId);
-        if (remaining.length === 0) {
-          return null;
-        }
-        const preferred =
-          daemon.preferredConnectionId === connectionId
-            ? (remaining[0]?.id ?? null)
-            : daemon.preferredConnectionId;
-        return {
-          ...daemon,
-          connections: remaining,
-          preferredConnectionId: preferred,
-          updatedAt: now,
-        } satisfies HostProfile;
-      })
-      .filter((entry): entry is HostProfile => entry !== null);
-    this.setHostsAndSync(next);
-    await this.persistHosts();
+    await this.enqueueHostRegistryMutation(async () => {
+      const now = new Date().toISOString();
+      const next = this.hosts
+        .map((daemon) => {
+          if (daemon.serverId !== serverId) return daemon;
+          const remaining = daemon.connections.filter((conn) => conn.id !== connectionId);
+          if (remaining.length === 0) {
+            return null;
+          }
+          const preferred =
+            daemon.preferredConnectionId === connectionId
+              ? (remaining[0]?.id ?? null)
+              : daemon.preferredConnectionId;
+          return {
+            ...daemon,
+            connections: remaining,
+            preferredConnectionId: preferred,
+            updatedAt: now,
+          } satisfies HostProfile;
+        })
+        .filter((entry): entry is HostProfile => entry !== null);
+      this.setHostsAndSync(next);
+      await this.persistHosts();
+    });
   }
 
   private async upsertHostConnection(input: {
@@ -1879,31 +1881,42 @@ export class HostRuntimeStore {
     connection: HostConnection;
     existingClient?: DaemonClient;
   }): Promise<HostProfile> {
-    const now = new Date().toISOString();
-    const next = upsertHostConnectionInProfiles({
-      profiles: this.hosts,
-      serverId: input.serverId,
-      label: input.label,
-      connection: input.connection,
-      now,
+    return this.enqueueHostRegistryMutation(async () => {
+      const now = new Date().toISOString();
+      const next = upsertHostConnectionInProfiles({
+        profiles: this.hosts,
+        serverId: input.serverId,
+        label: input.label,
+        connection: input.connection,
+        now,
+      });
+      this.setHostsAndSync(next, {
+        initialConnectionByServerId: input.existingClient
+          ? new Map([
+              [
+                input.serverId,
+                {
+                  connectionId: input.connection.id,
+                  existingClient: input.existingClient,
+                },
+              ],
+            ])
+          : undefined,
+      });
+      await this.persistHosts().catch((error) =>
+        console.error("[HostRuntime] Failed to persist host registry", error),
+      );
+      return next.find((daemon) => daemon.serverId === input.serverId) as HostProfile;
     });
-    this.setHostsAndSync(next, {
-      initialConnectionByServerId: input.existingClient
-        ? new Map([
-            [
-              input.serverId,
-              {
-                connectionId: input.connection.id,
-                existingClient: input.existingClient,
-              },
-            ],
-          ])
-        : undefined,
-    });
-    void this.persistHosts().catch((error) =>
-      console.error("[HostRuntime] Failed to persist host registry", error),
+  }
+
+  private enqueueHostRegistryMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const mutation = this.hostRegistryMutationTail.then(operation);
+    this.hostRegistryMutationTail = mutation.then(
+      () => undefined,
+      () => undefined,
     );
-    return next.find((daemon) => daemon.serverId === input.serverId) as HostProfile;
+    return mutation;
   }
 
   private setHostsAndSync(
