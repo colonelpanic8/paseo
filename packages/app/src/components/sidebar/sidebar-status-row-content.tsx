@@ -15,7 +15,7 @@ import {
   type SidebarWorkspaceScriptIconKind,
 } from "@/components/sidebar/sidebar-workspace-row-content";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
-import { useMinuteTick } from "@/hooks/use-minute-tick";
+import { useMinuteNow } from "@/hooks/use-minute-tick";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { Theme } from "@/styles/theme";
@@ -107,9 +107,9 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   // Rows are memoized, so without this tick the relative label would freeze
   // until some unrelated state change happened to re-render the row.
-  useMinuteTick();
+  const now = useMinuteNow();
   const activityLabel = workspace.activityAt
-    ? `${formatCompactRelativeTime(workspace.activityAt)} · ${formatClockTime(workspace.activityAt)}`
+    ? `${formatCompactRelativeTime(workspace.activityAt, now)} · ${formatClockTime(workspace.activityAt)}`
     : null;
   // Web swaps the activity label for the quick actions on hover, inside a fixed slot so
   // the row never reflows. Touch platforms have no hover: the kebab is permanent,

@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+const MINUTE_MS = 60_000;
+
 /**
  * Re-renders the subscribing component whenever the wall-clock minute changes,
  * so relative timestamps ("5m ago") never freeze on screen. All subscribers
@@ -43,6 +45,10 @@ function getSnapshot(): number {
   return currentMinute;
 }
 
-export function useMinuteTick(): number {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+export function useMinuteNow(): Date {
+  const minute = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  // The returned value must flow into relative-time formatting. An ignored
+  // subscription can re-render while React Compiler safely reuses a formatted
+  // label whose visible inputs otherwise appear unchanged.
+  return new Date(minute * MINUTE_MS);
 }

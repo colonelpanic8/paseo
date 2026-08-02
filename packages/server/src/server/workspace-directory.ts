@@ -77,6 +77,7 @@ export interface WorkspaceDirectoryDeps {
     list(): Promise<PersistedWorkspaceRecord[]>;
   };
   listAgentPayloads(): Promise<AgentSnapshotPayload[]>;
+  listAgentActivityAt(): Promise<ReadonlyMap<string, string>>;
   listProviderSubagentActivity(): Promise<ProviderSubagentWorkspaceActivity[]>;
   listTerminalActivityContributions(): Promise<
     Array<{ cwd: string; workspaceId?: string; activity: TerminalActivity | null }>
@@ -219,12 +220,14 @@ export class WorkspaceDirectory {
   }): Promise<Map<string, WorkspaceDescriptorPayload>> {
     const [
       agents,
+      agentActivityAtById,
       providerSubagentActivity,
       persistedWorkspaces,
       persistedProjects,
       terminalContributions,
     ] = await Promise.all([
       this.deps.listAgentPayloads(),
+      this.deps.listAgentActivityAt(),
       this.deps.listProviderSubagentActivity(),
       this.deps.workspaceRegistry.list(),
       this.deps.projectRegistry.list(),
@@ -306,6 +309,7 @@ export class WorkspaceDirectory {
       const activityEntries = activityEntriesByWorkspaceId.get(workspaceId) ?? [];
       descriptor.activityAt = this.findNewestActivityTimestamp(
         activityAgentsByWorkspaceId.get(workspaceId) ?? [],
+        agentActivityAtById,
         sourceActivityAtByWorkspaceId.get(workspaceId) ?? null,
       );
       const result = this.resolveStatusEnteredAt({
@@ -579,11 +583,12 @@ export class WorkspaceDirectory {
 
   private findNewestActivityTimestamp(
     contributingAgents: AgentSnapshotPayload[],
+    agentActivityAtById: ReadonlyMap<string, string>,
     sourceActivityAt: string | null,
   ): string | null {
     let latest = sourceActivityAt;
     for (const agent of contributingAgents) {
-      latest = laterTimestamp(latest, agent.updatedAt);
+      latest = laterTimestamp(latest, agentActivityAtById.get(agent.id) ?? agent.updatedAt);
       latest = laterTimestamp(latest, agent.lastUserMessageAt);
       latest = laterTimestamp(latest, agent.attentionTimestamp);
     }

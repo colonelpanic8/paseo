@@ -3,7 +3,7 @@
  * Examples: "just now", "5m ago", "2h ago", "3d ago", "Jan 15"
  *
  * Coarsest granularity is deliberately one minute: callers refresh at most
- * once a minute (see useMinuteTick), and a seconds readout would visibly
+ * once a minute (see useMinuteNow), and a seconds readout would visibly
  * freeze between renders.
  */
 export function formatTimeAgo(date: Date, now: Date = new Date()): string {

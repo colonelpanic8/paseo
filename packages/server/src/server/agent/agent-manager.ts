@@ -328,6 +328,8 @@ interface ManagedAgentBase {
   runtimeInfo?: AgentRuntimeInfo;
   createdAt: Date;
   updatedAt: Date;
+  /** Last user-visible conversation activity; opening or reconfiguring an agent does not advance it. */
+  lastActivityAt: Date;
   availableModes: AgentMode[];
   features?: AgentFeature[];
   currentModeId: string | null;
@@ -497,6 +499,27 @@ function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
   );
 }
 
+function isConversationActivityEvent(event: AgentStreamEvent): boolean {
+  switch (event.type) {
+    case "turn_started":
+    case "turn_completed":
+    case "turn_failed":
+    case "turn_canceled":
+    case "timeline":
+    case "permission_requested":
+    case "permission_resolved":
+    case "attention_required":
+    case "provider_subagent":
+      return true;
+    case "thread_started":
+    case "usage_updated":
+    case "mode_changed":
+    case "model_changed":
+    case "thinking_option_changed":
+      return false;
+  }
+}
+
 function abortMessage(reason: unknown, fallbackMessage: string): string {
   if (typeof reason === "string") return reason;
   if (reason instanceof Error) return reason.message;
@@ -570,6 +593,34 @@ function buildImportedTimelineRows(entries: readonly ImportedTimelineEntry[]): A
     });
   }
   return rows;
+}
+
+function laterExplicitActivityAt(
+  current: Date | undefined,
+  rawTimestamp: string | undefined,
+): Date | undefined {
+  if (!rawTimestamp) {
+    return current;
+  }
+  const timestamp = new Date(rawTimestamp);
+  if (Number.isNaN(timestamp.getTime()) || (current && timestamp <= current)) {
+    return current;
+  }
+  return timestamp;
+}
+
+function resolveLatestExplicitActivityAt(
+  entries: readonly { timestamp?: string }[],
+): Date | undefined {
+  let latest: Date | undefined;
+  for (const entry of entries) {
+    latest = laterExplicitActivityAt(latest, entry.timestamp);
+  }
+  return latest;
+}
+
+function resolveInitialAgentActivityAt(explicit: Date | undefined, updatedAt: Date): Date {
+  return explicit ?? updatedAt;
 }
 
 function resolveImportedAgentTitle(
@@ -775,6 +826,15 @@ export class AgentManager {
     const next = new Date(nextMs);
     agent.updatedAt = next;
     return next;
+  }
+
+  private touchActivityAt(agent: ManagedAgent): Date {
+    const now = new Date();
+    this.touchUpdatedAt(agent);
+    if (now > agent.lastActivityAt) {
+      agent.lastActivityAt = now;
+    }
+    return agent.lastActivityAt;
   }
 
   private nextStoredUpdatedAt(record: StoredAgentRecord): string {
@@ -1114,6 +1174,7 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      lastActivityAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
@@ -1133,6 +1194,7 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      lastActivityAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
@@ -1226,6 +1288,7 @@ export class AgentManager {
       );
       const timelineRows = buildImportedTimelineRows(imported.timeline);
       const initialTitle = resolveImportedAgentTitle(importedConfig, timelineRows);
+      const lastActivityAt = resolveLatestExplicitActivityAt(imported.timeline);
 
       handedToRegistration = true;
       const agent = await this.registerSession(imported.session, importedConfig, resolvedAgentId, {
@@ -1233,6 +1296,7 @@ export class AgentManager {
         workspaceId: input.workspaceId,
         timelineRows,
         timelineNextSeq: timelineRows.length + 1,
+        lastActivityAt,
         persistence: imported.persistence,
         historyPrimed: true,
         initialTitle,
@@ -1328,6 +1392,7 @@ export class AgentManager {
         owner: existing.owner,
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,
+        lastActivityAt: existing.lastActivityAt,
         lastUserMessageAt: existing.lastUserMessageAt,
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
@@ -1572,6 +1637,7 @@ export class AgentManager {
         lifecycle: "closed",
         createdAt: new Date(record.createdAt),
         updatedAt,
+        lastActivityAt: new Date(record.lastActivityAt ?? record.updatedAt),
         availableModes: [],
         features: record.features,
         currentModeId: record.lastModeId ?? null,
@@ -1946,7 +2012,7 @@ export class AgentManager {
       // Persist timeline items so they show up in fetchAgentTimeline; broadcast
       // for live subscribers. Other event types are broadcast only.
       if (event.type === "timeline") {
-        this.touchUpdatedAt(agent);
+        this.touchActivityAt(agent);
         const row = this.recordTimeline(agent.id, event.item);
         this.dispatchStream(agent.id, event, {
           seq: row.seq,
@@ -1975,7 +2041,7 @@ export class AgentManager {
   async appendTimelineItem(agentId: string, item: AgentTimelineItem): Promise<void> {
     const agent = this.requireAgent(agentId);
     item = limitAgentTimelineItemContent(item);
-    this.touchUpdatedAt(agent);
+    this.touchActivityAt(agent);
     const row = this.recordTimeline(agentId, item);
     this.dispatchStream(
       agentId,
@@ -1995,7 +2061,7 @@ export class AgentManager {
 
   async emitLiveTimelineItem(agentId: string, item: AgentTimelineItem): Promise<void> {
     const agent = this.requireAgent(agentId);
-    this.touchUpdatedAt(agent);
+    this.touchActivityAt(agent);
     this.dispatchStream(agentId, {
       type: "timeline",
       item,
@@ -2072,7 +2138,7 @@ export class AgentManager {
       agent.activeForegroundTurnId = turnId;
       this.openActiveTurn(agent, turnId, turnStartedAt);
       agent.lifecycle = "running";
-      this.touchUpdatedAt(agent);
+      this.touchActivityAt(agent);
       // AgentManager owns the accepted-turn boundary. Publish liveness before the canonical
       // prompt so clients can retire optimistic activity without painting an idle frame.
       // The provider's duplicate start for this turn is suppressed at the ingestion boundary.
@@ -2798,6 +2864,7 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      lastActivityAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       timeline?: AgentTimelineItem[];
@@ -2942,6 +3009,7 @@ export class AgentManager {
       | {
           createdAt?: Date;
           updatedAt?: Date;
+          lastActivityAt?: Date;
           lastUserMessageAt?: Date | null;
           labels?: Record<string, string>;
           historyPrimed?: boolean;
@@ -2955,6 +3023,7 @@ export class AgentManager {
       | undefined;
   }): ActiveManagedAgent {
     const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
+    const updatedAt = options?.updatedAt ?? now;
     return {
       id: resolvedAgentId,
       provider: config.provider,
@@ -2967,7 +3036,8 @@ export class AgentManager {
       runtimeInfo: undefined,
       lifecycle: "initializing",
       createdAt: options?.createdAt ?? now,
-      updatedAt: options?.updatedAt ?? now,
+      updatedAt,
+      lastActivityAt: resolveInitialAgentActivityAt(options?.lastActivityAt, updatedAt),
       availableModes: [],
       currentModeId: null,
       pendingPermissions: new Map<string, AgentPermissionRequest>(),
@@ -3457,7 +3527,11 @@ export class AgentManager {
 
     // Only update timestamp for live events, not history replay
     if (!options?.fromHistory) {
-      this.touchUpdatedAt(agent);
+      if (isConversationActivityEvent(event)) {
+        this.touchActivityAt(agent);
+      } else {
+        this.touchUpdatedAt(agent);
+      }
       if (this.agentStreamCoalescer.handle(agent.id, event)) {
         this.traceCoalescerBuffered(agent, event, eventTurnId);
         return false;
@@ -3961,7 +4035,7 @@ export class AgentManager {
     if (this.timelineStore.getSubmittedUserMessage(agent.id, clientMessageId)) {
       return;
     }
-    this.touchUpdatedAt(agent);
+    this.touchActivityAt(agent);
     agent.lastUserMessageAt = new Date();
     const item: AgentTimelineItem = {
       type: "user_message",

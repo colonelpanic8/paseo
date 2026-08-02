@@ -991,6 +991,7 @@ export class Session {
           clientSupportsAllProviders(this.appVersion) ? "all-providers" : "legacy-providers",
         ),
       listAgentPayloads: () => this.listAgentPayloads(),
+      listAgentActivityAt: () => this.listAgentActivityAt(),
       listProviderSubagentActivity: async () => this.agentManager.listProviderSubagentActivity(),
       listTerminalActivityContributions: () => this.listTerminalActivityContributions(),
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
@@ -4066,6 +4067,17 @@ export class Session {
     }
 
     return agents;
+  }
+
+  private async listAgentActivityAt(): Promise<ReadonlyMap<string, string>> {
+    const records = await this.agentStorage.list();
+    const activityAtByAgentId = new Map(
+      records.map((record) => [record.id, record.lastActivityAt ?? record.updatedAt] as const),
+    );
+    for (const agent of this.agentManager.listAgents()) {
+      activityAtByAgentId.set(agent.id, (agent.lastActivityAt ?? agent.updatedAt).toISOString());
+    }
+    return activityAtByAgentId;
   }
 
   private async resolveAgentIdentifier(
