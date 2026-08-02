@@ -96,10 +96,9 @@ import {
 } from "@/live-voice/live-voice-availability";
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
 import { resolveLiveVoiceUnavailableMessage } from "@/live-voice/live-voice-unavailable-message";
+import { useLiveVoiceVoiceOptions } from "@/live-voice/live-voice-voice-catalog";
 import {
-  LIVE_VOICE_OPTIONS,
   MAX_AMBIENT_AGENT_GUIDANCE_LENGTH,
-  type LiveVoiceVoice,
   useLiveVoiceSettingsStore,
 } from "@/stores/live-voice-settings-store";
 import { settingsStyles } from "@/styles/settings";
@@ -272,7 +271,7 @@ function getActiveLocale(language: string | undefined): SupportedLocale {
   return parsed && parsed !== "system" ? parsed : "en";
 }
 
-function getLiveVoiceVoiceLabel(t: TFunction, voice: LiveVoiceVoice | null): string {
+function getLiveVoiceVoiceLabel(t: TFunction, voice: string | null): string {
   if (voice === null) {
     return t("liveVoice.settings.voice.default");
   }
@@ -495,7 +494,9 @@ function GeneralSection({
  */
 function LiveVoiceSettingsCard() {
   const { t } = useTranslation();
-  const voice = useLiveVoiceSettingsStore((state) => state.voice);
+  const voiceOptions = useLiveVoiceVoiceOptions();
+  const storedVoice = useLiveVoiceSettingsStore((state) => state.voice);
+  const voice = storedVoice && voiceOptions.includes(storedVoice) ? storedVoice : null;
   const ambientAgentReports = useLiveVoiceSettingsStore((state) => state.ambientAgentReports);
   const ambientAgentGuidance = useLiveVoiceSettingsStore((state) => state.ambientAgentGuidance);
   const setAmbientAgentReports = useLiveVoiceSettingsStore((state) => state.setAmbientAgentReports);
@@ -522,7 +523,7 @@ function LiveVoiceSettingsCard() {
           </DropdownTrigger>
           <DropdownMenuContent side="bottom" align="end" width={200}>
             <LiveVoiceVoiceMenuItem value={null} selected={voice === null} onChange={setVoice} />
-            {LIVE_VOICE_OPTIONS.map((value) => (
+            {voiceOptions.map((value) => (
               <LiveVoiceVoiceMenuItem
                 key={value}
                 value={value}
@@ -578,9 +579,9 @@ function LiveVoiceVoiceMenuItem({
   selected,
   onChange,
 }: {
-  value: LiveVoiceVoice | null;
+  value: string | null;
   selected: boolean;
-  onChange: (value: LiveVoiceVoice | null) => void;
+  onChange: (value: string | null) => void;
 }) {
   const { t } = useTranslation();
   const handleSelect = useCallback(() => {
