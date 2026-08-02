@@ -16,7 +16,10 @@ export interface SubagentRowPresentationData {
   key: string;
   kind: "agent";
   label: string;
-  /** Secondary provider context rendered after the row label. */
+  /**
+   * Secondary context for the row: the purpose summary for paseo-managed
+   * agents, provider task context otherwise.
+   */
   subtitle: string;
   /**
    * Trailing muted detail rendered after the title — "Model · Thinking". Null
