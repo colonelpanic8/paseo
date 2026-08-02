@@ -6,6 +6,7 @@ import {
   mergeArchivedWorkspaces,
   settleArchivedWorkspaceTransition,
   shouldRefreshArchivedWorkspaces,
+  stabilizeArchivedTimestamps,
   type ArchivedWorkspaceEntry,
   type ArchivedWorkspaceSource,
 } from "./use-archived-workspaces";
@@ -203,6 +204,63 @@ describe("archived workspace transitions", () => {
     expect(queryClient.getQueryData<ArchivedWorkspaceEntry[]>(queryKey)).toEqual([pendingEntry]);
   });
 
+  it("pins a pending row above cached entries even when host clocks run ahead", async () => {
+    const queryClient = new QueryClient();
+    // The other host's daemon clock is ahead of the client clock that stamps
+    // the pending entry.
+    queryClient.setQueryData(archivedWorkspacesQueryKey("b"), [
+      entry({ serverId: "b", workspaceId: "future", archivedAt: "2026-03-04T00:05:00.000Z" }),
+    ]);
+    const pendingEntry = {
+      ...entry({
+        serverId: "a",
+        workspaceId: "workspace",
+        archivedAt: "2026-03-04T00:00:00.000Z",
+      }),
+      phase: "archiving" as const,
+    };
+
+    await beginArchivedWorkspaceTransition({ queryClient, entry: pendingEntry });
+
+    const merged = mergeArchivedWorkspaces([
+      {
+        isOnline: true,
+        entries: queryClient.getQueryData<ArchivedWorkspaceEntry[]>(
+          archivedWorkspacesQueryKey("a"),
+        ),
+      },
+      {
+        isOnline: true,
+        entries: queryClient.getQueryData<ArchivedWorkspaceEntry[]>(
+          archivedWorkspacesQueryKey("b"),
+        ),
+      },
+    ]);
+    expect(merged.map((item) => item.workspaceId)).toEqual(["workspace", "future"]);
+  });
+
+  it("keeps the client timestamp when it is already the newest", async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(archivedWorkspacesQueryKey("a"), [
+      entry({ serverId: "a", workspaceId: "older", archivedAt: "2026-03-03T00:00:00.000Z" }),
+    ]);
+    const pendingEntry = {
+      ...entry({
+        serverId: "a",
+        workspaceId: "workspace",
+        archivedAt: "2026-03-04T00:00:00.000Z",
+      }),
+      phase: "archiving" as const,
+    };
+
+    await beginArchivedWorkspaceTransition({ queryClient, entry: pendingEntry });
+
+    const stored = queryClient.getQueryData<ArchivedWorkspaceEntry[]>(
+      archivedWorkspacesQueryKey("a"),
+    );
+    expect(stored?.[0]?.archivedAt).toEqual(pendingEntry.archivedAt);
+  });
+
   it("removes only the failed pending row when archives overlap", async () => {
     const queryClient = new QueryClient();
     const first = {
@@ -228,6 +286,38 @@ describe("archived workspace transitions", () => {
         .getQueryData<ArchivedWorkspaceEntry[]>(archivedWorkspacesQueryKey("a"))
         ?.map((item) => item.workspaceKey),
     ).toEqual([second.workspaceKey]);
+  });
+});
+
+describe("stabilizeArchivedTimestamps", () => {
+  it("keeps the timestamp a cached row already rendered with", () => {
+    const cached = [
+      {
+        ...entry({ serverId: "a", workspaceId: "w", archivedAt: "2026-03-04T00:00:00.000Z" }),
+        phase: "archiving" as const,
+      },
+    ];
+    const fetched = [
+      entry({ serverId: "a", workspaceId: "w", archivedAt: "2026-03-04T00:00:02.500Z" }),
+    ];
+
+    const result = stabilizeArchivedTimestamps(cached, fetched);
+
+    expect(result[0]?.archivedAt).toEqual(cached[0]?.archivedAt);
+    // Everything else still comes from the server.
+    expect(result[0]?.phase).toBe("archived");
+  });
+
+  it("passes fresh rows through with the server timestamp", () => {
+    const cached = [
+      entry({ serverId: "a", workspaceId: "known", archivedAt: "2026-03-01T00:00:00.000Z" }),
+    ];
+    const fetched = [
+      entry({ serverId: "a", workspaceId: "new", archivedAt: "2026-03-05T00:00:00.000Z" }),
+    ];
+
+    expect(stabilizeArchivedTimestamps(cached, fetched)).toEqual(fetched);
+    expect(stabilizeArchivedTimestamps(undefined, fetched)).toEqual(fetched);
   });
 });
 

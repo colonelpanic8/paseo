@@ -37,7 +37,7 @@ const FETCH_WORKSPACES_SORT_KEYS = [
  * workspace enters its initial `done` bucket at creation time, even before any
  * agent or terminal contributes activity.
  */
-interface WorkspaceBucketHistoryEntry {
+export interface WorkspaceBucketHistoryEntry {
   bucket: WorkspaceStateBucket;
   enteredAt: string;
 }
@@ -82,6 +82,15 @@ export interface WorkspaceDirectoryDeps {
     Array<{ cwd: string; workspaceId?: string; activity: TerminalActivity | null }>
   >;
   isProviderVisibleToClient(provider: string): boolean;
+  /**
+   * Daemon-scoped bucket history shared by every session with the same provider
+   * visibility. A directory instance lives only as long as its client's
+   * connection, so private history would restamp `statusEnteredAt` on every
+   * reload; the shared map keeps the anchor stable across reconnects. Resolved
+   * per recompute because the scope follows the client's app version, which is
+   * only reported after the connection is up.
+   */
+  getBucketHistory?(): Map<string, WorkspaceBucketHistoryEntry>;
   buildWorkspaceDescriptor(input: {
     workspace: PersistedWorkspaceRecord;
     projectRecord?: PersistedProjectRecord | null;
@@ -156,11 +165,15 @@ export function workspaceIdsForProjects(
 export class WorkspaceDirectory {
   private readonly archivingByWorkspaceId = new Map<string, string>();
   /**
-   * Per-workspace last-seen winning bucket + entered-at. Persists across
-   * `buildDescriptorMap` calls inside the daemon process; reset on cold start.
+   * Per-workspace last-seen winning bucket + entered-at. Daemon-lifetime state
+   * (see `WorkspaceDirectoryDeps.getBucketHistory`); reset on cold start.
    * Server-internal; never crosses the wire.
    */
-  private readonly bucketHistoryByWorkspaceId = new Map<string, WorkspaceBucketHistoryEntry>();
+  private readonly fallbackBucketHistory = new Map<string, WorkspaceBucketHistoryEntry>();
+
+  private get bucketHistoryByWorkspaceId(): Map<string, WorkspaceBucketHistoryEntry> {
+    return this.deps.getBucketHistory?.() ?? this.fallbackBucketHistory;
+  }
 
   private readonly pager = new SortablePager<
     WorkspaceDescriptorPayload,

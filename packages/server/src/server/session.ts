@@ -214,6 +214,7 @@ import {
   WorkspaceDirectory,
   type WorkspaceUpdatesFilter,
 } from "./workspace-directory.js";
+import { WorkspaceStatusHistory } from "./workspace-status-history.js";
 import { shouldEmitPendingBootstrapUpdate } from "./workspace-bootstrap-dedupe.js";
 import {
   createPaseoWorktree,
@@ -283,6 +284,13 @@ function isAppVersionAtLeast(appVersion: string | null, minVersion: string): boo
     if (a < b) return false;
   }
   return true;
+}
+
+// Standalone sessions (tests, ad-hoc harnesses) get a private history; the
+// websocket server passes one shared instance so `statusEnteredAt` anchors
+// survive client reconnects.
+function resolveWorkspaceStatusHistory(options: SessionOptions): WorkspaceStatusHistory {
+  return options.workspaceStatusHistory ?? new WorkspaceStatusHistory();
 }
 
 function clientSupportsAllProviders(appVersion: string | null): boolean {
@@ -412,6 +420,7 @@ export interface SessionOptions {
   clientId: string;
   scopes: readonly string[];
   appVersion?: string | null;
+  workspaceStatusHistory?: WorkspaceStatusHistory;
   clientCapabilities?: Record<string, unknown> | null;
   onMessage: (msg: SessionOutboundMessage) => void;
   onMessageToSource?: (source: object, msg: SessionOutboundMessage) => void;
@@ -579,6 +588,7 @@ export class Session {
   private readonly clientId: string;
   private scopes: readonly string[];
   private appVersion: string | null;
+  private readonly workspaceStatusHistory: WorkspaceStatusHistory;
   private clientCapabilities: ReadonlySet<ClientCapability>;
   private readonly sessionId: string;
   private readonly onMessage: (msg: SessionOutboundMessage) => void;
@@ -716,6 +726,7 @@ export class Session {
     this.clientId = clientId;
     this.scopes = [...scopes];
     this.appVersion = appVersion ?? null;
+    this.workspaceStatusHistory = resolveWorkspaceStatusHistory(options);
     this.clientCapabilities = parseClientCapabilities(clientCapabilities);
     this.sessionId = uuidv4();
     this.onMessage = onMessage;
@@ -975,6 +986,10 @@ export class Session {
       logger: this.sessionLogger,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
+      getBucketHistory: () =>
+        this.workspaceStatusHistory.scoped(
+          clientSupportsAllProviders(this.appVersion) ? "all-providers" : "legacy-providers",
+        ),
       listAgentPayloads: () => this.listAgentPayloads(),
       listProviderSubagentActivity: async () => this.agentManager.listProviderSubagentActivity(),
       listTerminalActivityContributions: () => this.listTerminalActivityContributions(),

@@ -26,8 +26,10 @@ export interface ArchivedWorkspaceSource {
   entries: ArchivedWorkspaceEntry[] | undefined;
 }
 
+const ARCHIVED_WORKSPACES_QUERY_SCOPE = "archivedWorkspaces";
+
 export function archivedWorkspacesQueryKey(serverId: string): [string, string] {
-  return ["archivedWorkspaces", serverId];
+  return [ARCHIVED_WORKSPACES_QUERY_SCOPE, serverId];
 }
 
 /**
@@ -65,7 +67,7 @@ export function useArchivedWorkspaces({
           throw new Error("Host disconnected");
         }
         const entries = await client.listArchivedWorkspaces();
-        return entries.map((entry) => ({
+        const fetched = entries.map((entry) => ({
           workspaceKey: `${serverId}:${entry.id}`,
           serverId,
           workspaceId: entry.id,
@@ -74,6 +76,10 @@ export function useArchivedWorkspaces({
           archivedAt: new Date(entry.archivedAt),
           phase: "archived" as const,
         }));
+        return stabilizeArchivedTimestamps(
+          queryClient.getQueryData<ArchivedWorkspaceEntry[]>(archivedWorkspacesQueryKey(serverId)),
+          fetched,
+        );
       },
       enabled: connectionStatuses.get(serverId) === "online",
       staleTimeMs: ARCHIVED_WORKSPACES_STALE_TIME,
@@ -149,10 +155,60 @@ export async function beginArchivedWorkspaceTransition(input: {
 }): Promise<void> {
   const queryKey = archivedWorkspacesQueryKey(input.entry.serverId);
   await input.queryClient.cancelQueries({ queryKey });
+  // The entry arrives stamped with the client clock, but the merged list is
+  // sorted by server timestamps. A daemon clock even slightly ahead would slot
+  // the new row below an older one, and the refetch would then jump it to the
+  // top — a second animation right after the arrival one. Pin it strictly
+  // newest across every host's cached tail so it lands on top and stays there.
+  const pinned = {
+    ...input.entry,
+    archivedAt: pinNewestArchivedAt(input.queryClient, input.entry),
+  };
   input.queryClient.setQueryData<ArchivedWorkspaceEntry[]>(queryKey, (current = []) => [
-    input.entry,
-    ...current.filter((entry) => entry.workspaceKey !== input.entry.workspaceKey),
+    pinned,
+    ...current.filter((entry) => entry.workspaceKey !== pinned.workspaceKey),
   ]);
+}
+
+function pinNewestArchivedAt(queryClient: QueryClient, entry: ArchivedWorkspaceEntry): Date {
+  let newestCached = Number.NEGATIVE_INFINITY;
+  const caches = queryClient.getQueriesData<ArchivedWorkspaceEntry[]>({
+    queryKey: [ARCHIVED_WORKSPACES_QUERY_SCOPE],
+  });
+  for (const [, entries] of caches) {
+    for (const cached of entries ?? []) {
+      if (cached.workspaceKey === entry.workspaceKey) continue;
+      newestCached = Math.max(newestCached, cached.archivedAt.getTime());
+    }
+  }
+  if (entry.archivedAt.getTime() > newestCached) {
+    return entry.archivedAt;
+  }
+  return new Date(newestCached + 1);
+}
+
+/**
+ * A refetch swaps the optimistic client-clock timestamp for the server's, and
+ * would change the sort key of a row that is already on screen — the row jumps
+ * and re-triggers the layout animation. Rows keep the timestamp they first
+ * rendered with for as long as they stay cached; rows the client has never
+ * shown take the server timestamp as-is.
+ */
+export function stabilizeArchivedTimestamps(
+  cached: readonly ArchivedWorkspaceEntry[] | undefined,
+  fetched: ArchivedWorkspaceEntry[],
+): ArchivedWorkspaceEntry[] {
+  if (!cached || cached.length === 0) {
+    return fetched;
+  }
+  const cachedByKey = new Map(cached.map((entry) => [entry.workspaceKey, entry]));
+  return fetched.map((entry) => {
+    const prior = cachedByKey.get(entry.workspaceKey);
+    if (!prior || prior.archivedAt.getTime() === entry.archivedAt.getTime()) {
+      return entry;
+    }
+    return { ...entry, archivedAt: prior.archivedAt };
+  });
 }
 
 export function settleArchivedWorkspaceTransition(input: {

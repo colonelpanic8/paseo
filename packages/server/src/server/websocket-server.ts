@@ -33,6 +33,7 @@ import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
+import { WorkspaceStatusHistory } from "./workspace-status-history.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
 import type { HubExecutionAgents } from "./hub/daemon-executions.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
@@ -508,6 +509,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
+  // Shared across sessions so statusEnteredAt survives client reconnects.
+  private readonly workspaceStatusHistory = new WorkspaceStatusHistory();
   private readonly chatService: FileBackedChatService;
   private readonly loopService: LoopService;
   private readonly scheduleService: ScheduleService;
@@ -1303,6 +1306,7 @@ export class VoiceAssistantWebSocketServer {
     return new Session({
       clientId: options.clientId,
       appVersion: options.appVersion,
+      workspaceStatusHistory: this.workspaceStatusHistory,
       clientCapabilities: options.clientCapabilities,
       scopes: options.scopes,
       onMessage: options.onMessage,
