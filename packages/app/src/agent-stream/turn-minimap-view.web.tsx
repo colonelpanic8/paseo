@@ -276,6 +276,7 @@ const TurnMinimapMarker = memo(function TurnMinimapMarker({
     () => ({
       ...markerStyle,
       top: `${topPercent}%`,
+      transform: `translateY(${resolveMarkerTranslate(topPercent)})`,
       width: resolveMarkerWidth(activeDistance),
     }),
     [activeDistance, topPercent],
@@ -293,6 +294,12 @@ function resolveMarkerWidth(activeDistance: number | null): number {
   if (activeDistance === 1) return 16;
   if (activeDistance === 2) return 10;
   return 8;
+}
+
+function resolveMarkerTranslate(topPercent: number): string {
+  if (topPercent === 0) return "0%";
+  if (topPercent === 100) return "-100%";
+  return "-50%";
 }
 
 function resolvePreviewTranslate(activeIndex: number | null, itemCount: number): string {
@@ -340,7 +347,6 @@ const markerStyle: CSSProperties = {
   left: 0,
   height: 2,
   borderRadius: "var(--border-radius-full, 9999px)",
-  transform: "translateY(-50%)",
   transition: "width 150ms ease, background-color 150ms ease, opacity 150ms ease",
   pointerEvents: "none",
 };

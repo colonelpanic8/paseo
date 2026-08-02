@@ -80,6 +80,21 @@ test.describe("Agent stream UI", () => {
       await rail.hover({ position: { x: 4, y: 1 } });
       await expect(page.getByTestId("turn-minimap-preview")).toContainText(prompts[0]!);
 
+      await page.mouse.move(0, 0);
+      await expect(page.getByTestId("turn-minimap-preview")).toHaveCount(0);
+      const markers = rail.locator("[data-turn-minimap-marker]");
+      const markerCount = await markers.count();
+      const lastMarkerBounds = await markers.nth(markerCount - 1).boundingBox();
+      expect(lastMarkerBounds).not.toBeNull();
+      if (!lastMarkerBounds) {
+        throw new Error("Expected the last turn minimap marker to have bounds");
+      }
+      const lastMarkerCenterX = lastMarkerBounds.x + lastMarkerBounds.width / 2;
+      const lastMarkerCenterY = lastMarkerBounds.y + lastMarkerBounds.height / 2;
+      await page.mouse.move(lastMarkerCenterX, lastMarkerCenterY + 8);
+      await page.mouse.move(lastMarkerCenterX, lastMarkerCenterY);
+      await expect(page.getByTestId("turn-minimap-preview")).toContainText(prompts[2]!);
+
       const scroll = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
       await rail.click({ position: { x: 4, y: 1 } });
       await expect.poll(() => readScrollTop(scroll)).toBeLessThan(100);
