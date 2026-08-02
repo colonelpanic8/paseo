@@ -902,6 +902,14 @@ export const WorkspaceRecoveryRestoreRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Recently-archived workspaces, newest first. This is an undo affordance for the
+// sidebar's status view, not an archive browser: the daemon caps what it returns
+// and the client never merges these into the live workspace directory.
+export const WorkspaceArchivedListRequestSchema = z.object({
+  type: z.literal("workspace.archived.list.request"),
+  requestId: z.string(),
+});
+
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("set_voice_mode"),
   enabled: z.boolean(),
@@ -1640,6 +1648,21 @@ export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
     message: z.string(),
   }),
 ]);
+
+export const ArchivedWorkspacePayloadSchema = z.object({
+  id: z.string(),
+  projectDisplayName: z.string(),
+  name: z.string(),
+  archivedAt: z.string(),
+});
+
+export const WorkspaceArchivedListResponseSchema = z.object({
+  type: z.literal("workspace.archived.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    entries: z.array(ArchivedWorkspacePayloadSchema),
+  }),
+});
 
 export const WorkspaceRecoveryInspectResponseSchema = z.object({
   type: z.literal("workspace.recovery.inspect.response"),
@@ -2541,6 +2564,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceSnoozeSetRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
   WorkspaceRecoveryRestoreRequestSchema,
+  WorkspaceArchivedListRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -2896,6 +2920,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspacePinning: z.boolean().optional(),
         // COMPAT(workspaceSnooze): added in v0.2.4, drop the gate when floor >= v0.2.4.
         workspaceSnooze: z.boolean().optional(),
+        // COMPAT(archivedWorkspacesList): added in v0.2.0, remove gate after 2027-01-28.
+        archivedWorkspacesList: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -5381,6 +5407,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceSnoozeSetResponseSchema,
   WorkspaceRecoveryInspectResponseSchema,
   WorkspaceRecoveryRestoreResponseSchema,
+  WorkspaceArchivedListResponseSchema,
   WaitForFinishResponseMessageSchema,
   AgentPermissionRequestMessageSchema,
   AgentPermissionResolvedMessageSchema,
@@ -5581,6 +5608,7 @@ export type WorkspaceRecoveryInspectResponse = z.infer<
 export type WorkspaceRecoveryRestoreResponse = z.infer<
   typeof WorkspaceRecoveryRestoreResponseSchema
 >;
+export type WorkspaceArchivedListResponse = z.infer<typeof WorkspaceArchivedListResponseSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
@@ -5722,6 +5750,8 @@ export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema
 export type WorkspaceSnoozeSetRequest = z.infer<typeof WorkspaceSnoozeSetRequestSchema>;
 export type WorkspaceRecoveryInspectRequest = z.infer<typeof WorkspaceRecoveryInspectRequestSchema>;
 export type WorkspaceRecoveryRestoreRequest = z.infer<typeof WorkspaceRecoveryRestoreRequestSchema>;
+export type WorkspaceArchivedListRequest = z.infer<typeof WorkspaceArchivedListRequestSchema>;
+export type ArchivedWorkspacePayload = z.infer<typeof ArchivedWorkspacePayloadSchema>;
 export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;
 export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMessageSchema>;
 export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;

@@ -992,6 +992,12 @@ export const ru: TranslationResources = {
         archiving: "Архивирование...",
         hiding: "Скрытие...",
       },
+      archived: {
+        groupTitle: "Недавно архивированные",
+        unarchive: "Разархивировать",
+        unarchiving: "Разархивирование...",
+        unarchiveFailed: "Не удалось разархивировать рабочее пространство",
+      },
       confirmations: {
         hideTitle: "Скрыть рабочее пространство?",
         hideMessage:
@@ -2064,6 +2070,26 @@ export const ru: TranslationResources = {
           title: "Переименовать хост",
           placeholder: "Мой Host",
           submit: "Переименовать",
+        },
+        color: {
+          section: "Оформление",
+          title: "Цвет",
+          hint: "Окрашивает подпись этого хоста на боковой панели",
+          options: {
+            none: "Нет",
+            blue: "Синий",
+            green: "Зелёный",
+            amber: "Янтарный",
+            orange: "Оранжевый",
+            red: "Красный",
+            purple: "Фиолетовый",
+          },
+          custom: {
+            label: "Свой цвет",
+            title: "Свой цвет",
+            submit: "Применить",
+            invalid: "Введите HEX-цвет, например #4f46e5",
+          },
         },
         restart: {
           title: "Перезапустить демон",

@@ -37,6 +37,8 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
     scripts: [],
     hasRunningScripts: false,
     snoozeWakeAt: null,
+    remoteUrl: null,
+    providers: [],
   };
 }
 
