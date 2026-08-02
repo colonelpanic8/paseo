@@ -1,8 +1,15 @@
 {
   "name": "@getpaseo/expo-wear-bridge",
   "version": "0.2.3",
-  "description": "Wearable Data Layer bridge between the Paseo phone app and the Wear OS app",
   "private": true,
+  "description": "Wearable Data Layer bridge between the Paseo phone app and the Wear OS app",
+  "keywords": [
+    "expo",
+    "paseo",
+    "wear-os",
+    "wearable"
+  ],
+  "license": "MIT",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
@@ -10,8 +17,6 @@
     "clean": "node -e \"require('node:fs').rmSync('build', { recursive: true, force: true })\"",
     "typecheck": "tsgo --noEmit"
   },
-  "keywords": ["expo", "wear-os", "wearable", "paseo"],
-  "license": "MIT",
   "peerDependencies": {
     "expo": "*",
     "react-native": "*"
