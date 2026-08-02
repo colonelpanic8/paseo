@@ -5,6 +5,7 @@ import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@getpaseo/protocol/agent-lifecycle";
+import { FALLBACK_LIVE_VOICE_OPTIONS } from "@getpaseo/protocol/live-voice-voices";
 import {
   getParentAgentIdFromLabels,
   hasOpenAgentTab,
@@ -48,6 +49,7 @@ import {
   type ImportedTimelineEntry,
   type ImportableProviderSession,
   type ListImportableSessionsOptions,
+  type LiveVoiceVoiceCatalog,
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
@@ -1105,6 +1107,14 @@ export class AgentManager {
         error: message,
       };
     }
+  }
+
+  async listLiveVoiceVoices(): Promise<LiveVoiceVoiceCatalog> {
+    const client = this.clients.get("codex");
+    if (!client?.listLiveVoiceVoices) {
+      return { voices: [...FALLBACK_LIVE_VOICE_OPTIONS] };
+    }
+    return await client.listLiveVoiceVoices();
   }
 
   async listDraftCommands(config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
