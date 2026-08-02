@@ -894,6 +894,7 @@ export const zhCN: TranslationResources = {
         label: "标题",
         title: "标题",
         branch: "分支名称",
+        worktree: "工作树后缀",
       },
       show: {
         label: "显示",
@@ -993,6 +994,12 @@ export const zhCN: TranslationResources = {
         hideFromSidebar: "从侧边栏隐藏",
         archiving: "正在归档...",
         hiding: "正在隐藏...",
+      },
+      archived: {
+        groupTitle: "最近归档",
+        unarchive: "取消归档",
+        unarchiving: "正在取消归档...",
+        unarchiveFailed: "取消归档 workspace 失败",
       },
       confirmations: {
         hideTitle: "隐藏 workspace？",
@@ -2067,6 +2074,26 @@ export const zhCN: TranslationResources = {
           title: "重命名 Host",
           placeholder: "我的 Host",
           submit: "重命名",
+        },
+        color: {
+          section: "外观",
+          title: "颜色",
+          hint: "在侧边栏中为该 Host 的标签着色",
+          options: {
+            none: "无",
+            blue: "蓝色",
+            green: "绿色",
+            amber: "琥珀色",
+            orange: "橙色",
+            red: "红色",
+            purple: "紫色",
+          },
+          custom: {
+            label: "自定义",
+            title: "自定义颜色",
+            submit: "应用",
+            invalid: "请输入十六进制颜色，例如 #4f46e5",
+          },
         },
         restart: {
           title: "重启 Daemon",

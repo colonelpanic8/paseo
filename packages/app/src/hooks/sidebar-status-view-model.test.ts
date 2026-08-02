@@ -33,6 +33,8 @@ function ws(
     archiveUnpushedCommitCount: null,
     scripts: [],
     hasRunningScripts: false,
+    remoteUrl: null,
+    providers: [],
     workspaceKey: input.workspaceKey,
   };
 }

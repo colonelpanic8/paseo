@@ -924,6 +924,7 @@ export const ptBR: TranslationResources = {
         label: "Título",
         title: "Título",
         branch: "Nome da branch",
+        worktree: "Sufixo da worktree",
       },
       show: {
         label: "Mostrar",
@@ -1025,6 +1026,12 @@ export const ptBR: TranslationResources = {
         hideFromSidebar: "Ocultar da barra lateral",
         archiving: "Arquivando...",
         hiding: "Ocultando...",
+      },
+      archived: {
+        groupTitle: "Arquivados recentemente",
+        unarchive: "Desarquivar",
+        unarchiving: "Desarquivando...",
+        unarchiveFailed: "Falha ao desarquivar o workspace",
       },
       confirmations: {
         hideTitle: "Ocultar workspace?",
@@ -2124,6 +2131,26 @@ export const ptBR: TranslationResources = {
           title: "Renomear host",
           placeholder: "Meu Host",
           submit: "Renomear",
+        },
+        color: {
+          section: "Aparência",
+          title: "Cor",
+          hint: "Colore o rótulo deste host na barra lateral",
+          options: {
+            none: "Nenhuma",
+            blue: "Azul",
+            green: "Verde",
+            amber: "Âmbar",
+            orange: "Laranja",
+            red: "Vermelho",
+            purple: "Roxo",
+          },
+          custom: {
+            label: "Personalizado",
+            title: "Cor personalizada",
+            submit: "Aplicar",
+            invalid: "Informe uma cor hexadecimal como #4f46e5",
+          },
         },
         restart: {
           title: "Reiniciar daemon",

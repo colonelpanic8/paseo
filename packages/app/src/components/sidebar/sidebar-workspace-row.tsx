@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import Animated from "react-native-reanimated";
 import { useMutation } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import type { HostBadgeModel } from "@/hosts/appearance";
@@ -20,6 +21,7 @@ import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-ar
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { isNative as platformIsNative } from "@/constants/platform";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
+import { useArchiveCollapse } from "@/components/sidebar/sidebar-motion";
 import {
   SidebarWorkspaceContextMenu,
   SidebarWorkspaceMenu,
@@ -264,6 +266,7 @@ function WorkspaceRowBody({
 }: WorkspaceRowBodyProps) {
   const isTouchPlatform = platformIsNative;
   const trailing = useSidebarWorkspaceTrailing();
+  const archiveCollapse = useArchiveCollapse(isArchiving);
   const draggable = Boolean(drag);
   const interaction = useLongPressDragInteraction({
     drag: drag ?? noop,
@@ -287,7 +290,8 @@ function WorkspaceRowBody({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
+    <Animated.View onLayout={archiveCollapse.onLayout} style={archiveCollapse.style}>
+      <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
       {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
         const isDesktop = !isTouchPlatform;
         const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
@@ -364,7 +368,8 @@ function WorkspaceRowBody({
           </View>
         );
       }}
-    </SidebarWorkspaceRowFrame>
+      </SidebarWorkspaceRowFrame>
+    </Animated.View>
   );
 }
 

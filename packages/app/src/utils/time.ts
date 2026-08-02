@@ -3,6 +3,7 @@
  * their thresholds can't drift apart; they differ only in how much room they have to say it.
  *
  * `elapsed` takes an "ago" in prose, `now` and `date` read as absolutes and never do.
+ * The finest granularity is one minute because sidebar callers refresh once a minute.
  */
 type Elapsed =
   | { kind: "now" }
@@ -16,8 +17,7 @@ function describeElapsed(date: Date, now: Date): Elapsed {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 10) return { kind: "now" };
-  if (diffMin < 1) return { kind: "elapsed", value: `${diffSec}s` };
+  if (diffMin < 1) return { kind: "now" };
   if (diffHour < 1) return { kind: "elapsed", value: `${diffMin}m` };
   if (diffDay < 1) return { kind: "elapsed", value: `${diffHour}h` };
   if (diffDay < 7) return { kind: "elapsed", value: `${diffDay}d` };

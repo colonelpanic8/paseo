@@ -32,6 +32,7 @@ import {
   type ActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import Animated from "react-native-reanimated";
 import type { Theme } from "@/styles/theme";
 import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
 import { type GestureType } from "react-native-gesture-handler";
@@ -102,6 +103,7 @@ import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
+import { useArchiveCollapse } from "@/components/sidebar/sidebar-motion";
 import {
   SidebarWorkspaceRowFrame,
   SidebarWorkspaceRowContent,
@@ -1057,6 +1059,7 @@ function WorkspaceRowInner({
 }: WorkspaceRowInnerProps) {
   const _isCompact = useIsCompactFormFactor();
   const isTouchPlatform = platformIsNative;
+  const archiveCollapse = useArchiveCollapse(isArchiving);
   const interaction = useLongPressDragInteraction({
     drag,
     menuController,
@@ -1079,7 +1082,8 @@ function WorkspaceRowInner({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
+    <Animated.View onLayout={archiveCollapse.onLayout} style={archiveCollapse.style}>
+      <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
       {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
         const isDesktop = !isTouchPlatform;
         const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
@@ -1162,7 +1166,8 @@ function WorkspaceRowInner({
           </View>
         );
       }}
-    </SidebarWorkspaceRowFrame>
+      </SidebarWorkspaceRowFrame>
+    </Animated.View>
   );
 }
 
