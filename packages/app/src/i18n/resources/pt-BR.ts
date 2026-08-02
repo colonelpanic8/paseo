@@ -1471,6 +1471,108 @@ export const ptBR: TranslationResources = {
       copied: "Copiado",
     },
   },
+  audioSession: {
+    busy: {
+      voiceMode: "O modo de voz está usando o microfone. Pare-o primeiro.",
+      dictation: "O ditado está usando o microfone. Pare-o primeiro.",
+      liveVoice: "A voz ao vivo está usando o microfone. Pare-a primeiro.",
+      unknown: "O microfone está em uso. Pare primeiro o outro recurso de áudio.",
+    },
+  },
+  liveVoice: {
+    label: "Voz ao vivo",
+    menu: {
+      hosts: "Host",
+    },
+    actions: {
+      start: "Iniciar voz ao vivo",
+      startForeground: "Iniciar em primeiro plano",
+      startBackground: "Iniciar em segundo plano",
+      unavailable: "Voz ao vivo indisponível",
+      stop: "Parar voz ao vivo",
+      mute: "Silenciar microfone",
+      unmute: "Ativar microfone",
+      enableAudio: "Toque para ativar o áudio",
+      showTranscript: "Mostrar transcrição",
+      hideTranscript: "Ocultar transcrição",
+      dismiss: "Dispensar",
+    },
+    modes: {
+      foreground: "Modo em primeiro plano",
+      background: "Modo em segundo plano",
+    },
+    unavailable: {
+      platform: "A voz ao vivo não é compatível com este dispositivo.",
+      noHosts: "Adicione um host para usar a voz ao vivo.",
+      connecting: "Conectando aos hosts. A voz ao vivo aparecerá quando um estiver pronto.",
+      offline: "Nenhum host está online. Conecte-se a um host para usar a voz ao vivo.",
+      upgrade: "Os hosts conectados não anunciam voz ao vivo. Atualize seus daemons.",
+      toolsDisabled:
+        "Ative as ferramentas do Paseo nas configurações deste host para usar a voz ao vivo.",
+    },
+    settings: {
+      title: "Voz ao vivo",
+      voice: {
+        label: "Voz",
+        description: "Usada em novas chamadas. Uma chamada ativa mantém a voz atual.",
+        default: "Padrão",
+      },
+      agentReports: {
+        label: "Avisar sobre atividade de agentes",
+        description:
+          "Durante uma chamada, saiba quando qualquer sessão de agente termina, falha ou precisa de permissão — inclusive as que você iniciou fora da chamada, em qualquer host conectado.",
+      },
+      agentReportGuidance: {
+        label: "Quando interromper",
+        description: "Repassado ao agente de voz como está. Deixe vazio para ele decidir.",
+        placeholder: "Só me interrompa para pedidos de permissão e falhas.",
+      },
+    },
+    diagnostics: {
+      title: "Voz ao vivo",
+      statusTitle: "Status",
+      noHosts: "Nenhum host configurado.",
+      hostSummary: "{{version}} · {{support}}",
+      unknownVersion: "Versão desconhecida",
+      supported: "Voz ao vivo compatível",
+      unsupported: "Voz ao vivo incompatível",
+      supportUnknown: "Compatibilidade com voz ao vivo desconhecida",
+      connection: {
+        idle: "Ocioso",
+        connecting: "Conectando",
+        online: "Online",
+        offline: "Offline",
+        error: "Erro",
+      },
+    },
+    status: {
+      connecting: "Conectando...",
+      live: "Ao vivo",
+      audioBlocked: "Áudio bloqueado",
+      stopping: "Parando...",
+      ended: "Chamada encerrada",
+      error: "Falha",
+    },
+    transcript: {
+      empty: "Nada falado ainda.",
+      user: "Você:",
+      assistant: "Agente:",
+    },
+    errors: {
+      busy: "Já existe uma chamada de voz ao vivo ativa neste host.",
+      unsupported: "Este host não suporta voz ao vivo.",
+      startFailed: "Não foi possível iniciar a voz ao vivo.",
+      micBusy: "O microfone está sendo usado por outro recurso.",
+      notConnected: "Este host não está conectado.",
+      alreadyActive: "Já existe uma chamada de voz ao vivo em andamento.",
+      stopping: "A chamada de voz ao vivo anterior ainda está sendo encerrada.",
+      micDenied: "O acesso ao microfone foi negado.",
+      micUnavailable: "Não foi possível abrir o microfone.",
+      backgroundUnavailable: "Não foi possível iniciar o áudio em segundo plano.",
+      iceTimeout: "Não foi possível negociar a conexão em tempo.",
+      connectionLost: "A conexão de voz ao vivo caiu.",
+    },
+  },
   realtimeVoice: {
     actions: {
       mute: "Silenciar voz em tempo real",
@@ -1892,6 +1994,7 @@ export const ptBR: TranslationResources = {
         sendMessage: "Enviar mensagem",
         queueMessage: "Enfileirar mensagem",
         muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
+        muteUnmuteLiveVoice: "Silenciar/ativar voz ao vivo",
         switchProject: "Trocar projeto",
       },
       helpNotes: {

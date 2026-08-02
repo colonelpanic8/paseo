@@ -35,6 +35,7 @@ interface PendingRequest {
 
 type RequestHandler = (params: unknown, requestId: number) => unknown;
 type NotificationHandler = (method: string, params: unknown) => void;
+type CloseHandler = (reason: string) => void;
 type UnexpectedTerminationHandler = (error: Error) => void;
 
 export interface CodexThreadForkParams {
@@ -160,9 +161,11 @@ export class CodexAppServerClient {
   private readonly pending = new Map<number, PendingRequest>();
   private readonly requestHandlers = new Map<string, RequestHandler>();
   private notificationHandler: NotificationHandler | null = null;
+  private readonly closeHandlers = new Set<CloseHandler>();
   private unexpectedTerminationHandler: UnexpectedTerminationHandler | null = null;
   private nextId = 1;
   private disposed = false;
+  private closeNotified = false;
   private stderrBuffer = "";
 
   constructor(
@@ -195,7 +198,7 @@ export class CodexAppServerClient {
           ? "Codex app-server exited"
           : `Codex app-server exited with code ${code ?? "null"} and signal ${signal ?? "null"}`;
       const error = new Error(`${message}\n${this.stderrBuffer}`.trim());
-      this.handleUnexpectedTermination(error);
+      this.handleUnexpectedTermination(error, message);
     });
   }
 
@@ -205,6 +208,37 @@ export class CodexAppServerClient {
 
   setNotificationHandler(handler: NotificationHandler): void {
     this.notificationHandler = handler;
+  }
+
+  /**
+   * Fires exactly once when the transport can no longer deliver anything: child
+   * error, child exit, or `dispose()`. Long-lived consumers that wait on
+   * notifications rather than request replies (live voice) would otherwise hang
+   * forever, since only in-flight requests are rejected on death.
+   */
+  onClose(handler: CloseHandler): () => void {
+    if (this.closeNotified) {
+      handler("Codex app-server client is closed");
+      return () => {};
+    }
+    this.closeHandlers.add(handler);
+    return () => {
+      this.closeHandlers.delete(handler);
+    };
+  }
+
+  private notifyClosed(reason: string): void {
+    if (this.closeNotified) return;
+    this.closeNotified = true;
+    const handlers = [...this.closeHandlers];
+    this.closeHandlers.clear();
+    for (const handler of handlers) {
+      try {
+        handler(reason);
+      } catch (error) {
+        this.logger.warn({ error }, "Codex app-server close handler threw");
+      }
+    }
   }
 
   setRequestHandler(method: string, handler: RequestHandler): void {
@@ -247,6 +281,7 @@ export class CodexAppServerClient {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    this.notifyClosed("Codex app-server client disposed");
     this.unexpectedTerminationHandler = null;
     this.rl.close();
     try {
@@ -272,7 +307,7 @@ export class CodexAppServerClient {
     }
   }
 
-  private handleUnexpectedTermination(error: Error): void {
+  private handleUnexpectedTermination(error: Error, closeReason = error.message): void {
     if (this.disposed) {
       return;
     }
@@ -283,6 +318,7 @@ export class CodexAppServerClient {
       pending.reject(error);
     }
     this.pending.clear();
+    this.notifyClosed(closeReason);
     const handler = this.unexpectedTerminationHandler;
     this.unexpectedTerminationHandler = null;
     if (!handler) {
