@@ -1,6 +1,10 @@
 /**
  * Format a date as a human-friendly relative time string
  * Examples: "just now", "5m ago", "2h ago", "3d ago", "Jan 15"
+ *
+ * Coarsest granularity is deliberately one minute: callers refresh at most
+ * once a minute (see useMinuteTick), and a seconds readout would visibly
+ * freeze between renders.
  */
 export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const diffMs = now.getTime() - date.getTime();
@@ -9,12 +13,8 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 10) {
-    return "just now";
-  }
-
   if (diffMin < 1) {
-    return `${diffSec}s ago`;
+    return "just now";
   }
 
   if (diffHour < 1) {

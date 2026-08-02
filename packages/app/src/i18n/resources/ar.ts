@@ -968,6 +968,12 @@ export const ar: TranslationResources = {
         archiving: "أرشفة...",
         hiding: "إخفاء...",
       },
+      archived: {
+        groupTitle: "المؤرشفة مؤخرًا",
+        unarchive: "إلغاء الأرشفة",
+        unarchiving: "جارٍ إلغاء الأرشفة...",
+        unarchiveFailed: "تعذر إلغاء أرشفة مساحة العمل",
+      },
       confirmations: {
         hideTitle: "إخفاء مساحة العمل؟",
         hideMessage:
@@ -2048,6 +2054,26 @@ export const ar: TranslationResources = {
           title: "إعادة تسمية المضيف",
           placeholder: "بلدي Host",
           submit: "إعادة تسمية",
+        },
+        color: {
+          section: "المظهر",
+          title: "اللون",
+          hint: "يلوّن تسمية هذا المضيف في الشريط الجانبي",
+          options: {
+            none: "بلا",
+            blue: "أزرق",
+            green: "أخضر",
+            amber: "كهرماني",
+            orange: "برتقالي",
+            red: "أحمر",
+            purple: "بنفسجي",
+          },
+          custom: {
+            label: "مخصص",
+            title: "لون مخصص",
+            submit: "تطبيق",
+            invalid: "أدخل لونًا ست عشريًا مثل #4f46e5",
+          },
         },
         restart: {
           title: "إعادة تشغيل البرنامج الخفي",

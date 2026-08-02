@@ -214,6 +214,7 @@ import {
   WorkspaceDirectory,
   type WorkspaceUpdatesFilter,
 } from "./workspace-directory.js";
+import { WorkspaceStatusHistory } from "./workspace-status-history.js";
 import { shouldEmitPendingBootstrapUpdate } from "./workspace-bootstrap-dedupe.js";
 import {
   createPaseoWorktree,
@@ -285,6 +286,13 @@ function isAppVersionAtLeast(appVersion: string | null, minVersion: string): boo
   return true;
 }
 
+// Standalone sessions (tests, ad-hoc harnesses) get a private history; the
+// websocket server passes one shared instance so `statusEnteredAt` anchors
+// survive client reconnects.
+function resolveWorkspaceStatusHistory(options: SessionOptions): WorkspaceStatusHistory {
+  return options.workspaceStatusHistory ?? new WorkspaceStatusHistory();
+}
+
 function clientSupportsAllProviders(appVersion: string | null): boolean {
   return isAppVersionAtLeast(appVersion, MIN_VERSION_ALL_PROVIDERS);
 }
@@ -306,6 +314,10 @@ function beginAgentDeleteIfSupported(agentStorage: AgentStorage, agentId: string
 }
 
 const FETCH_AGENTS_SORT_KEYS = ["status_priority", "created_at", "updated_at", "title"] as const;
+
+// The archived list backs an undo affordance, not an archive browser. Cap it so a
+// long-lived daemon never streams thousands of stale records to every client.
+const ARCHIVED_WORKSPACES_LIMIT = 25;
 
 export function resolveWaitForFinishError(options: {
   status: "permission" | "error" | "idle";
@@ -408,6 +420,7 @@ export interface SessionOptions {
   clientId: string;
   scopes: readonly string[];
   appVersion?: string | null;
+  workspaceStatusHistory?: WorkspaceStatusHistory;
   clientCapabilities?: Record<string, unknown> | null;
   onMessage: (msg: SessionOutboundMessage) => void;
   onMessageToSource?: (source: object, msg: SessionOutboundMessage) => void;
@@ -575,6 +588,7 @@ export class Session {
   private readonly clientId: string;
   private scopes: readonly string[];
   private appVersion: string | null;
+  private readonly workspaceStatusHistory: WorkspaceStatusHistory;
   private clientCapabilities: ReadonlySet<ClientCapability>;
   private readonly sessionId: string;
   private readonly onMessage: (msg: SessionOutboundMessage) => void;
@@ -712,6 +726,7 @@ export class Session {
     this.clientId = clientId;
     this.scopes = [...scopes];
     this.appVersion = appVersion ?? null;
+    this.workspaceStatusHistory = resolveWorkspaceStatusHistory(options);
     this.clientCapabilities = parseClientCapabilities(clientCapabilities);
     this.sessionId = uuidv4();
     this.onMessage = onMessage;
@@ -971,6 +986,10 @@ export class Session {
       logger: this.sessionLogger,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
+      getBucketHistory: () =>
+        this.workspaceStatusHistory.scoped(
+          clientSupportsAllProviders(this.appVersion) ? "all-providers" : "legacy-providers",
+        ),
       listAgentPayloads: () => this.listAgentPayloads(),
       listProviderSubagentActivity: async () => this.agentManager.listProviderSubagentActivity(),
       listTerminalActivityContributions: () => this.listTerminalActivityContributions(),
@@ -2182,6 +2201,8 @@ export class Session {
         return this.handleWorkspaceRecoveryInspectRequest(msg);
       case "workspace.recovery.restore.request":
         return this.handleWorkspaceRecoveryRestoreRequest(msg);
+      case "workspace.archived.list.request":
+        return this.handleWorkspaceArchivedListRequest(msg);
       default:
         return undefined;
     }
@@ -2981,6 +3002,55 @@ export class Session {
       payload: {
         requestId: request.requestId,
         state,
+      },
+    });
+  }
+
+  /**
+   * Recently-archived workspaces, newest archive first. Deliberately not part of
+   * the workspace directory: these records are archived, so they must never reach
+   * the live descriptor map that drives project mode, switchers, or counts. The
+   * caller gets a flat capped list and nothing else.
+   *
+   * Workspaces whose owning project is archived are omitted — unarchiving one
+   * would surface a workspace under a project the user cannot see.
+   */
+  private async handleWorkspaceArchivedListRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.archived.list.request" }>,
+  ): Promise<void> {
+    const [workspaces, projects] = await Promise.all([
+      this.workspaceRegistry.list(),
+      this.projectRegistry.list(),
+    ]);
+    const activeProjects = new Map(
+      projects
+        .filter((project) => !project.archivedAt)
+        .map((project) => [project.projectId, project] as const),
+    );
+
+    const entries = workspaces
+      .flatMap((workspace) => {
+        const archivedAt = workspace.archivedAt;
+        if (!archivedAt) return [];
+        const project = activeProjects.get(workspace.projectId);
+        if (!project) return [];
+        return [
+          {
+            id: workspace.workspaceId,
+            projectDisplayName: resolveProjectDisplayName(project),
+            name: resolveWorkspaceDisplayName(workspace),
+            archivedAt,
+          },
+        ];
+      })
+      .sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
+      .slice(0, ARCHIVED_WORKSPACES_LIMIT);
+
+    this.emit({
+      type: "workspace.archived.list.response",
+      payload: {
+        requestId: request.requestId,
+        entries,
       },
     });
   }

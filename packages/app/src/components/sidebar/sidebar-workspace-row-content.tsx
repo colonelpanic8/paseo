@@ -29,6 +29,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
 import type { PrHint } from "@/git/use-pr-status-query";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
+import { ForgeBrandIcon } from "@/git/forge-icon";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { getStatusDotColor, isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
@@ -97,7 +98,7 @@ function pullRequestIconStyle({
   ];
 }
 
-type SidebarWorkspaceScriptIconKind = "service" | "command";
+export type SidebarWorkspaceScriptIconKind = "service" | "command";
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -241,7 +242,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   );
 });
 
-function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
+export function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
   return (
     <View
       style={styles.workspaceTitleAccessory}
@@ -368,7 +369,7 @@ function StatusDotOverlay({
   return <View style={overlayStyle} />;
 }
 
-function PullRequestIcon({ hint }: { hint: PrHint }) {
+export function PullRequestIcon({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -397,6 +398,41 @@ function PullRequestIcon({ hint }: { hint: PrHint }) {
     </Pressable>
   );
 }
+
+// No longer rendered in the compact row, but the status-grouped card still shows
+// failing-check counts — see sidebar-status-row-content.
+export function ChecksBadge({
+  checks,
+  forge,
+}: {
+  checks: PrHint["checks"];
+  forge: PrHint["forge"];
+}) {
+  if (!checks || checks.length === 0) return null;
+  const failed = checks.filter((check) => check.status === "failure").length;
+  if (failed === 0) return null;
+  const icon = getForgePresentation(normalizeForge(forge)).icon;
+  return (
+    <View style={checksBadgeStyles.badge}>
+      <ForgeBrandIcon iconKind={icon} size={10} uniProps={redColorMapping} />
+      <Text style={checksBadgeStyles.text}>{failed} failed</Text>
+    </View>
+  );
+}
+
+const checksBadgeStyles = StyleSheet.create((theme) => ({
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  text: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+    lineHeight: 14,
+    color: theme.colors.palette.red[500],
+  },
+}));
 
 function getPrIconUniMapping(state: PrHint["state"]) {
   switch (state) {

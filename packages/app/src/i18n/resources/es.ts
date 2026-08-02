@@ -999,6 +999,12 @@ export const es: TranslationResources = {
         archiving: "Archivando...",
         hiding: "Ocultación...",
       },
+      archived: {
+        groupTitle: "Archivados recientemente",
+        unarchive: "Desarchivar",
+        unarchiving: "Desarchivando...",
+        unarchiveFailed: "No se pudo desarchivar el espacio de trabajo",
+      },
       confirmations: {
         hideTitle: "¿Ocultar espacio de trabajo?",
         hideMessage:
@@ -2098,6 +2104,26 @@ export const es: TranslationResources = {
           title: "Cambiar nombre de host",
           placeholder: "MiHost",
           submit: "Cambiar nombre",
+        },
+        color: {
+          section: "Apariencia",
+          title: "Color",
+          hint: "Colorea la etiqueta de este host en la barra lateral",
+          options: {
+            none: "Ninguno",
+            blue: "Azul",
+            green: "Verde",
+            amber: "Ámbar",
+            orange: "Naranja",
+            red: "Rojo",
+            purple: "Morado",
+          },
+          custom: {
+            label: "Personalizado",
+            title: "Color personalizado",
+            submit: "Aplicar",
+            invalid: "Introduce un color hexadecimal como #4f46e5",
+          },
         },
         restart: {
           title: "Reiniciar demonio",

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import { createTestLogger } from "../test-utils/test-logger.js";
 import type { AgentSnapshotPayload, WorkspaceDescriptorPayload } from "./messages.js";
-import { WorkspaceDirectory } from "./workspace-directory.js";
+import { WorkspaceDirectory, type WorkspaceBucketHistoryEntry } from "./workspace-directory.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "./workspace-registry.js";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { ProviderSubagentWorkspaceActivity } from "./workspace-directory.js";
@@ -65,33 +65,55 @@ class WorkspaceStatus {
     workspaceId?: string;
     activity: TerminalActivity | null;
   }> = [];
-  private readonly directory = new WorkspaceDirectory({
-    logger: createTestLogger(),
-    projectRegistry: { list: async () => [this.project] },
-    workspaceRegistry: { list: async () => this.workspaces },
-    listAgentPayloads: async () => this.agents,
-    listProviderSubagentActivity: async () => this.providerSubagents,
-    listTerminalActivityContributions: async () => this.terminals,
-    isProviderVisibleToClient: () => true,
-    buildWorkspaceDescriptor: async ({ workspace }) => ({
-      id: workspace.workspaceId,
-      projectId: workspace.projectId,
-      projectDisplayName: "project",
-      projectCustomName: null,
-      projectRootPath: this.project.rootPath,
-      workspaceDirectory: workspace.cwd,
-      projectKind: "git",
-      workspaceKind: workspace.kind,
-      name: workspace.displayName,
-      archivingAt: null,
-      status: "done",
-      activityAt: null,
-      diffStat: null,
-      scripts: [],
-      gitRuntime: null,
-      githubRuntime: null,
-    }),
-  });
+  // Daemon-lifetime, like the shared map the websocket server hands every
+  // session; a reconnect swaps the directory but keeps this history.
+  private readonly daemonBucketHistory = new Map<string, WorkspaceBucketHistoryEntry>();
+
+  private directory = this.createDirectory();
+
+  private createDirectory(): WorkspaceDirectory {
+    return new WorkspaceDirectory({
+      logger: createTestLogger(),
+      projectRegistry: { list: async () => [this.project] },
+      workspaceRegistry: { list: async () => this.workspaces },
+      getBucketHistory: () => this.daemonBucketHistory,
+      listAgentPayloads: async () => this.agents,
+      listProviderSubagentActivity: async () => this.providerSubagents,
+      listTerminalActivityContributions: async () => this.terminals,
+      isProviderVisibleToClient: () => true,
+      buildWorkspaceDescriptor: async ({ workspace }) => ({
+        id: workspace.workspaceId,
+        projectId: workspace.projectId,
+        projectDisplayName: "project",
+        projectCustomName: null,
+        projectRootPath: this.project.rootPath,
+        workspaceDirectory: workspace.cwd,
+        projectKind: "git",
+        workspaceKind: workspace.kind,
+        name: workspace.displayName,
+        archivingAt: null,
+        status: "done",
+        activityAt: null,
+        diffStat: null,
+        scripts: [],
+        gitRuntime: null,
+        githubRuntime: null,
+      }),
+    });
+  }
+
+  /** A client reload: a fresh session's directory against the same daemon state. */
+  reconnectSession(): void {
+    this.directory = this.createDirectory();
+  }
+
+  resolveAgentPermissions(agentId: string): void {
+    const agent = this.agents.find((entry) => entry.id === agentId);
+    if (!agent) {
+      throw new Error(`No agent ${agentId}`);
+    }
+    agent.pendingPermissions = [];
+  }
 
   hasRootAgent(input: AgentState): void {
     this.agents.push(
@@ -520,6 +542,24 @@ describe("WorkspaceDirectory", () => {
     workspace.hasWorkingTerminal(changedAt);
 
     await expect(workspace.workspaceStatus()).resolves.toBe("needs_input");
+  });
+
+  test("statusEnteredAt survives a client reconnect after an unmask", async () => {
+    const status = new WorkspaceStatus();
+    status.hasRootAgent({ id: "agent-1", status: "running", pendingPermissionCount: 1 });
+    const masked = await status.workspaceDescriptor();
+
+    status.resolveAgentPermissions("agent-1");
+    const unmasked = await status.workspaceDescriptor();
+    expect(unmasked.status).not.toBe(masked.status);
+    // The unmask stamps a fresh entry time; the agent's own updatedAt (NOW)
+    // must not be re-derived for it.
+    expect(unmasked.statusEnteredAt).not.toBe(NOW);
+
+    status.reconnectSession();
+    const reconnected = await status.workspaceDescriptor();
+    expect(reconnected.status).toBe(unmasked.status);
+    expect(reconnected.statusEnteredAt).toBe(unmasked.statusEnteredAt);
   });
 
   test("working terminal statusEnteredAt uses terminal changedAt", async () => {
