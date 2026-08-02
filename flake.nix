@@ -131,11 +131,25 @@
         let
           pkgs = pkgsFor system;
           paseo = pkgs.callPackage ./nix/package.nix buildInfoArgs;
+          versionParts = pkgs.lib.splitString "." paseo.version;
+          sourceRevision = if self ? revCount && self.revCount != null then self.revCount else 0;
+          buildRevision = sourceRevision - (sourceRevision / 10000) * 10000;
+          desktopBuildVersion = pkgs.lib.concatStringsSep "." [
+            (builtins.elemAt versionParts 0)
+            (builtins.elemAt versionParts 1)
+            (toString buildRevision)
+          ];
         in
         {
           default = paseo;
           paseo = paseo;
-          desktop = pkgs.callPackage ./nix/desktop-package.nix (buildInfoArgs // { inherit paseo; });
+          desktop = pkgs.callPackage ./nix/desktop-package.nix (
+            buildInfoArgs
+            // {
+              inherit paseo;
+              buildVersion = desktopBuildVersion;
+            }
+          );
         }
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
           android-sdk = (androidFor system).androidSdk;
