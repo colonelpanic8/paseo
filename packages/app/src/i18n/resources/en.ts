@@ -1965,6 +1965,7 @@ export const en = {
         },
         badge: {
           label: "Sidebar badge",
+          accessibilityLabel: "Sidebar badge, {{value}}",
           options: {
             name: "Name",
             icon: "Icon only",

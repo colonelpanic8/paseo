@@ -2008,6 +2008,7 @@ export const fr: TranslationResources = {
         },
         badge: {
           label: "Badge de la barre latérale",
+          accessibilityLabel: "Badge de la barre latérale, {{value}}",
           options: {
             name: "Nom",
             icon: "Icône seule",

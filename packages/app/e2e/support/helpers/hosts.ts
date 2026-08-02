@@ -201,6 +201,7 @@ export async function chooseHostBadgeDisplay(
 ): Promise<void> {
   await page.getByTestId("host-appearance-badge-display").click();
   await page.getByRole("button", { name: option, exact: true }).click();
+  await expect(page.getByRole("button", { name: `Sidebar badge, ${option}` })).toBeVisible();
 }
 
 // The badge is a pill with no semantic role, so it is located by its accessible name inside the

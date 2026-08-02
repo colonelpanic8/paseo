@@ -1988,6 +1988,7 @@ export const ptBR: TranslationResources = {
         },
         badge: {
           label: "Selo da barra lateral",
+          accessibilityLabel: "Selo da barra lateral, {{value}}",
           options: {
             name: "Nome",
             icon: "Somente ícone",

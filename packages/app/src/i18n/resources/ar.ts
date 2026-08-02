@@ -1954,6 +1954,7 @@ export const ar: TranslationResources = {
         },
         badge: {
           label: "شارة الشريط الجانبي",
+          accessibilityLabel: "شارة الشريط الجانبي، {{value}}",
           options: {
             name: "الاسم",
             icon: "أيقونة فقط",

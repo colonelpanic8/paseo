@@ -169,7 +169,7 @@ function BadgeDisplayRow({
           testID="host-appearance-badge-display"
           style={dropdownTriggerStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("settings.host.appearance.badge.label", {
+          accessibilityLabel={t("settings.host.appearance.badge.accessibilityLabel", {
             value: selectedLabel,
           })}
         >

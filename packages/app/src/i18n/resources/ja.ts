@@ -1973,6 +1973,7 @@ export const ja: TranslationResources = {
         },
         badge: {
           label: "サイドバーのバッジ",
+          accessibilityLabel: "サイドバーのバッジ、{{value}}",
           options: {
             name: "名前",
             icon: "アイコンのみ",

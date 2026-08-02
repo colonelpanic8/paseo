@@ -1932,6 +1932,7 @@ export const zhCN: TranslationResources = {
         },
         badge: {
           label: "侧边栏徽章",
+          accessibilityLabel: "侧边栏徽章，{{value}}",
           options: {
             name: "名称",
             icon: "仅图标",

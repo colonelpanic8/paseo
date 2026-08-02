@@ -2004,6 +2004,7 @@ export const es: TranslationResources = {
         },
         badge: {
           label: "Insignia de la barra lateral",
+          accessibilityLabel: "Insignia de la barra lateral, {{value}}",
           options: {
             name: "Nombre",
             icon: "Solo icono",

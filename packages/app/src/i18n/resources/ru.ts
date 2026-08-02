@@ -1992,6 +1992,7 @@ export const ru: TranslationResources = {
         },
         badge: {
           label: "Значок на боковой панели",
+          accessibilityLabel: "Значок на боковой панели, {{value}}",
           options: {
             name: "Имя",
             icon: "Только значок",
