@@ -1584,6 +1584,27 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
+  it("keeps host appearance unchanged when persistence fails", async () => {
+    const host = makeHost({ serverId: "srv_appearance" });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@paseo:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    storage.setItem = async () => {
+      throw new Error("disk full");
+    };
+
+    await expect(store.setHostColor("srv_appearance", "teal")).rejects.toThrow("disk full");
+    expect(store.getHosts()[0]?.appearance).toEqual(defaultHostAppearance());
+
+    store.syncHosts([]);
+  });
+
   it("bootstraps agent directory subscription when host transitions online", async () => {
     const host = makeHost({
       connections: [

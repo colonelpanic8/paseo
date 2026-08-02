@@ -1462,7 +1462,9 @@ export class HostRuntimeStore {
       this.hostRegistryStatus = "ready";
       this.emitHostList();
       if (shouldPersistHosts) {
-        void this.persistHosts();
+        void this.persistHosts().catch((error) =>
+          console.error("[HostRuntime] Failed to persist host registry", error),
+        );
       }
     }
   }
@@ -1627,7 +1629,9 @@ export class HostRuntimeStore {
     );
     this.emitHostList();
     this.emit(newServerId);
-    void this.persistHosts();
+    void this.persistHosts().catch((error) =>
+      console.error("[HostRuntime] Failed to persist host registry", error),
+    );
   }
 
   async upsertDirectConnection(input: {
@@ -1787,11 +1791,17 @@ export class HostRuntimeStore {
   private async updateHost(
     serverId: string,
     apply: (host: HostProfile) => HostProfile,
+    persistBeforeCommit = false,
   ): Promise<void> {
     const updatedAt = new Date().toISOString();
     const next = this.hosts.map((host) =>
       host.serverId === serverId ? { ...apply(host), updatedAt } : host,
     );
+    if (persistBeforeCommit) {
+      await this.persistHosts(next);
+      this.setHostsAndSync(next);
+      return;
+    }
     this.setHostsAndSync(next);
     await this.persistHosts();
   }
@@ -1801,17 +1811,19 @@ export class HostRuntimeStore {
   }
 
   async setHostColor(serverId: string, color: HostColor): Promise<void> {
-    await this.updateHost(serverId, (host) => ({
-      ...host,
-      appearance: { ...host.appearance, color },
-    }));
+    await this.updateHost(
+      serverId,
+      (host) => ({ ...host, appearance: { ...host.appearance, color } }),
+      true,
+    );
   }
 
   async setHostBadgeDisplay(serverId: string, badgeDisplay: HostBadgeDisplay): Promise<void> {
-    await this.updateHost(serverId, (host) => ({
-      ...host,
-      appearance: { ...host.appearance, badgeDisplay },
-    }));
+    await this.updateHost(
+      serverId,
+      (host) => ({ ...host, appearance: { ...host.appearance, badgeDisplay } }),
+      true,
+    );
   }
 
   async removeHost(serverId: string): Promise<void> {
@@ -1872,7 +1884,9 @@ export class HostRuntimeStore {
           ])
         : undefined,
     });
-    void this.persistHosts();
+    void this.persistHosts().catch((error) =>
+      console.error("[HostRuntime] Failed to persist host registry", error),
+    );
     return next.find((daemon) => daemon.serverId === input.serverId) as HostProfile;
   }
 
@@ -1890,12 +1904,8 @@ export class HostRuntimeStore {
     this.emitHostList();
   }
 
-  private async persistHosts(): Promise<void> {
-    try {
-      await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(this.hosts));
-    } catch (error) {
-      console.error("[HostRuntime] Failed to persist host registry", error);
-    }
+  private async persistHosts(hosts = this.hosts): Promise<void> {
+    await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(hosts));
   }
 
   private emitHostList(): void {

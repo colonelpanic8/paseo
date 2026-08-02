@@ -45,9 +45,13 @@ export function normalizeStoredHostAppearance(value: unknown): HostAppearance {
 export function resolveHostBadgeDisplay(input: {
   appearance: HostAppearance;
   isLocalHost: boolean;
-}): HostBadgeDisplay {
+  localHostResolutionPending?: boolean;
+}): HostBadgeDisplay | null {
   if (input.appearance.badgeDisplay) {
     return input.appearance.badgeDisplay;
+  }
+  if (input.localHostResolutionPending) {
+    return null;
   }
   return input.isLocalHost ? "hidden" : "name";
 }
@@ -69,6 +73,7 @@ export type HostAppearanceSource = Pick<HostProfile, "serverId" | "label" | "app
 export function selectHostBadges(input: {
   hosts: readonly HostAppearanceSource[];
   localServerId: string | null;
+  localHostResolutionPending?: boolean;
   enabled: boolean;
 }): ReadonlyMap<string, HostBadgeModel> {
   const badges = new Map<string, HostBadgeModel>();
@@ -79,8 +84,9 @@ export function selectHostBadges(input: {
     const display = resolveHostBadgeDisplay({
       appearance: host.appearance,
       isLocalHost: host.serverId === input.localServerId,
+      localHostResolutionPending: input.localHostResolutionPending,
     });
-    if (display === "hidden") {
+    if (display === null || display === "hidden") {
       continue;
     }
     badges.set(host.serverId, {

@@ -61,6 +61,23 @@ describe("resolveHostBadgeDisplay", () => {
       }),
     ).toBe("hidden");
   });
+
+  it("defers only the default while local-host detection is unresolved", () => {
+    expect(
+      resolveHostBadgeDisplay({
+        appearance: defaultHostAppearance(),
+        isLocalHost: false,
+        localHostResolutionPending: true,
+      }),
+    ).toBeNull();
+    expect(
+      resolveHostBadgeDisplay({
+        appearance: { color: "none", badgeDisplay: "icon" },
+        isLocalHost: false,
+        localHostResolutionPending: true,
+      }),
+    ).toBe("icon");
+  });
 });
 
 describe("selectHostBadges", () => {
@@ -122,5 +139,15 @@ describe("selectHostBadges", () => {
     });
     expect(badges.has("alpha")).toBe(false);
     expect(badges.get("beta")?.label).toBe("Beta");
+  });
+
+  it("omits untouched badges while local-host detection is unresolved", () => {
+    const badges = selectHostBadges({
+      hosts: [host("alpha", "Alpha"), host("beta", "Beta")],
+      localServerId: null,
+      localHostResolutionPending: true,
+      enabled: true,
+    });
+    expect(badges.size).toBe(0);
   });
 });

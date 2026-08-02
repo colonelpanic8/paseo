@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { HostBadge } from "@/components/sidebar/host-badge";
+import { useToast } from "@/contexts/toast-context";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
   HOST_BADGE_DISPLAYS,
@@ -20,7 +21,7 @@ import {
   type HostBadgeDisplay,
   type HostColor,
 } from "@/hosts/appearance";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { useHostMutations } from "@/runtime/host-runtime";
 import { identityColor } from "@/styles/identity-colors";
 import { settingsStyles } from "@/styles/settings";
@@ -241,21 +242,35 @@ function BadgePreview({
 
 export function HostAppearanceSection({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const { setHostColor, setHostBadgeDisplay } = useHostMutations();
-  const isLocalHost = useIsLocalDaemon(host.serverId);
-  const badgeDisplay = resolveHostBadgeDisplay({ appearance: host.appearance, isLocalHost });
+  const localDaemon = useLocalDaemonServerIdState();
+  const isLocalHost = localDaemon.status === "resolved" && localDaemon.serverId === host.serverId;
+  const badgeDisplay = resolveHostBadgeDisplay({
+    appearance: host.appearance,
+    isLocalHost,
+    localHostResolutionPending: localDaemon.status !== "resolved",
+  });
 
   const handleColorChange = useCallback(
-    (color: HostColor) => {
-      void setHostColor(host.serverId, color);
+    async (color: HostColor) => {
+      try {
+        await setHostColor(host.serverId, color);
+      } catch {
+        toast.error(t("errors.unableToSave"));
+      }
     },
-    [host.serverId, setHostColor],
+    [host.serverId, setHostColor, t, toast],
   );
   const handleBadgeDisplayChange = useCallback(
-    (next: HostBadgeDisplay) => {
-      void setHostBadgeDisplay(host.serverId, next);
+    async (next: HostBadgeDisplay) => {
+      try {
+        await setHostBadgeDisplay(host.serverId, next);
+      } catch {
+        toast.error(t("errors.unableToSave"));
+      }
     },
-    [host.serverId, setHostBadgeDisplay],
+    [host.serverId, setHostBadgeDisplay, t, toast],
   );
 
   return (
@@ -273,8 +288,12 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
           </View>
         </View>
         <ColorRow color={host.appearance.color} onChange={handleColorChange} />
-        <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
-        <BadgePreview host={host} badgeDisplay={badgeDisplay} />
+        {badgeDisplay === null ? null : (
+          <>
+            <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
+            <BadgePreview host={host} badgeDisplay={badgeDisplay} />
+          </>
+        )}
       </View>
     </SettingsSection>
   );
