@@ -292,82 +292,84 @@ function WorkspaceRowBody({
   return (
     <Animated.View onLayout={archiveCollapse.onLayout} style={archiveCollapse.style}>
       <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
-      {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
-        const isDesktop = !isTouchPlatform;
-        const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
-        const workspaceRowStyle = getWorkspaceRowStyle({ isDragging, selected, isHovered });
-        return (
-          <View
-            {...(draggable ? dragAttributes : {})}
-            {...(draggable ? dragHandleProps?.listeners : {})}
-            ref={
-              draggable ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>) : undefined
-            }
-            style={styles.workspaceRowContainer}
-            {...hoverHandlers}
-          >
-            <SidebarWorkspaceContextMenu
-              contextMenuOpen={contextMenuOpen}
-              onContextMenuOpenChange={onContextMenuOpenChange}
-              workspace={workspace}
-              hostBadgeLabel={hostBadge?.label}
-              scriptSummary={scriptSummary}
-              workspaceKey={workspace.workspaceKey}
-              onCopyPath={onCopyPath}
-              onCopyBranchName={onCopyBranchName}
-              onRename={onRename}
-              onMarkAsRead={onMarkAsRead}
-              onArchive={onArchive}
-              archiveLabel={archiveLabel}
-              archiveStatus={archiveStatus}
-              archivePendingLabel={archivePendingLabel}
-              archiveShortcutKeys={archiveShortcutKeys}
-              openInFileManagerPath={workspace.workspaceDirectory}
-              disabled={isArchiving}
-              aria-selected={selected}
-              accessibilityRole="button"
-              accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
-              onPressIn={draggable ? interaction.handlePressIn : undefined}
-              onTouchMove={draggable ? interaction.handleTouchMove : undefined}
-              onPressOut={draggable ? interaction.handlePressOut : undefined}
-              onPress={handlePress}
-              testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
+        {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
+          const isDesktop = !isTouchPlatform;
+          const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
+          const workspaceRowStyle = getWorkspaceRowStyle({ isDragging, selected, isHovered });
+          return (
+            <View
+              {...(draggable ? dragAttributes : {})}
+              {...(draggable ? dragHandleProps?.listeners : {})}
+              ref={
+                draggable
+                  ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>)
+                  : undefined
+              }
+              style={styles.workspaceRowContainer}
+              {...hoverHandlers}
             >
-              <SidebarWorkspaceRowContent
+              <SidebarWorkspaceContextMenu
+                contextMenuOpen={contextMenuOpen}
+                onContextMenuOpenChange={onContextMenuOpenChange}
                 workspace={workspace}
-                hostBadge={hostBadge}
+                hostBadgeLabel={hostBadge?.label}
                 scriptSummary={scriptSummary}
-                backdrop={getSidebarRowBackdrop({ isDragging, selected, isHovered })}
-                isHovered={isHovered}
-                isLoading={isArchiving || isCreating}
-                isCreating={isCreating}
-                shortcutNumber={shortcutNumber}
-                showShortcutBadge={showShortcutBadge}
+                workspaceKey={workspace.workspaceKey}
+                onCopyPath={onCopyPath}
+                onCopyBranchName={onCopyBranchName}
+                onRename={onRename}
+                onMarkAsRead={onMarkAsRead}
+                onArchive={onArchive}
+                archiveLabel={archiveLabel}
+                archiveStatus={archiveStatus}
+                archivePendingLabel={archivePendingLabel}
+                archiveShortcutKeys={archiveShortcutKeys}
+                openInFileManagerPath={workspace.workspaceDirectory}
+                disabled={isArchiving}
+                aria-selected={selected}
+                accessibilityRole="button"
+                accessibilityState={accessibilityState}
+                style={workspaceRowStyle}
+                onPressIn={draggable ? interaction.handlePressIn : undefined}
+                onTouchMove={draggable ? interaction.handleTouchMove : undefined}
+                onPressOut={draggable ? interaction.handlePressOut : undefined}
+                onPress={handlePress}
+                testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
               >
-                <WorkspaceRowTrailingActions
+                <SidebarWorkspaceRowContent
                   workspace={workspace}
-                  trailing={trailing}
+                  hostBadge={hostBadge}
+                  scriptSummary={scriptSummary}
+                  backdrop={getSidebarRowBackdrop({ isDragging, selected, isHovered })}
                   isHovered={isHovered}
-                  isTouchPlatform={isTouchPlatform}
+                  isLoading={isArchiving || isCreating}
                   isCreating={isCreating}
-                  showShortcutBadge={showShortcutBadge}
                   shortcutNumber={shortcutNumber}
-                  archiveLabel={archiveLabel}
-                  archiveStatus={archiveStatus}
-                  archivePendingLabel={archivePendingLabel}
-                  archiveShortcutKeys={archiveShortcutKeys}
-                  onArchive={onArchive}
-                  onCopyBranchName={onCopyBranchName}
-                  onCopyPath={onCopyPath}
-                  onRename={onRename}
-                  onMarkAsRead={onMarkAsRead}
-                />
-              </SidebarWorkspaceRowContent>
-            </SidebarWorkspaceContextMenu>
-          </View>
-        );
-      }}
+                  showShortcutBadge={showShortcutBadge}
+                >
+                  <WorkspaceRowTrailingActions
+                    workspace={workspace}
+                    trailing={trailing}
+                    isHovered={isHovered}
+                    isTouchPlatform={isTouchPlatform}
+                    isCreating={isCreating}
+                    showShortcutBadge={showShortcutBadge}
+                    shortcutNumber={shortcutNumber}
+                    archiveLabel={archiveLabel}
+                    archiveStatus={archiveStatus}
+                    archivePendingLabel={archivePendingLabel}
+                    archiveShortcutKeys={archiveShortcutKeys}
+                    onArchive={onArchive}
+                    onCopyBranchName={onCopyBranchName}
+                    onCopyPath={onCopyPath}
+                    onRename={onRename}
+                    onMarkAsRead={onMarkAsRead}
+                  />
+                </SidebarWorkspaceRowContent>
+              </SidebarWorkspaceContextMenu>
+            </View>
+          );
+        }}
       </SidebarWorkspaceRowFrame>
     </Animated.View>
   );

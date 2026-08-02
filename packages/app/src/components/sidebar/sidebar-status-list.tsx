@@ -34,6 +34,7 @@ import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
 import { SidebarWorkspaceRowFrame } from "@/components/sidebar/sidebar-workspace-row-content";
+import { selectWorkspaceScriptSummary } from "@/components/sidebar/workspace-meta-row";
 import {
   SidebarStatusRowArchiveAction,
   SidebarStatusRowContent,
@@ -676,14 +677,8 @@ function StatusWorkspaceRowInner({
   const archiveCollapse = useArchiveCollapse(isArchiving);
 
   const isDesktop = !isTouchPlatform;
-  const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
-  const hasRunningService = workspace.scripts.some(
-    (s) => s.lifecycle === "running" && (s.type ?? "service") === "service",
-  );
-  let scriptIconKind: "service" | "command" | null = null;
-  if (showScriptsIcon) {
-    scriptIconKind = hasRunningService ? "service" : "command";
-  }
+  const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
+  const scriptIconKind = scriptSummary?.kind ?? null;
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
@@ -716,7 +711,7 @@ function StatusWorkspaceRowInner({
                   workspace={workspace}
                   leadingProjectName={workspace.projectName}
                   hostBadgeLabel={hostBadge?.label}
-                  scriptIconKind={scriptIconKind}
+                  scriptSummary={scriptSummary}
                   workspaceKey={workspace.workspaceKey}
                   onCopyPath={onCopyPath}
                   onCopyBranchName={onCopyBranchName}

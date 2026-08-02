@@ -26,6 +26,7 @@ function ws(
     currentBranch: input.currentBranch ?? null,
     statusBucket: input.statusBucket ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
+    activityAt: input.activityAt ?? null,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -76,22 +77,22 @@ describe("buildStatusGroups", () => {
     expect(groups.map((g) => g.bucket)).toEqual(["running", "done"]);
   });
 
-  it("sorts by statusEnteredAt desc within a bucket", () => {
+  it("sorts by activityAt desc within a bucket", () => {
     const workspaces = [
       ws({
         workspaceKey: "srv:old",
         statusBucket: "done",
-        statusEnteredAt: d("2026-01-01T00:00:00Z"),
+        activityAt: d("2026-01-01T00:00:00Z"),
       }),
       ws({
         workspaceKey: "srv:new",
         statusBucket: "done",
-        statusEnteredAt: d("2026-06-01T00:00:00Z"),
+        activityAt: d("2026-06-01T00:00:00Z"),
       }),
       ws({
         workspaceKey: "srv:mid",
         statusBucket: "done",
-        statusEnteredAt: d("2026-03-01T00:00:00Z"),
+        activityAt: d("2026-03-01T00:00:00Z"),
       }),
     ];
 
@@ -102,13 +103,13 @@ describe("buildStatusGroups", () => {
 
   it("sorts null timestamps last within a bucket", () => {
     const workspaces = [
-      ws({ workspaceKey: "srv:null-a", statusBucket: "done", statusEnteredAt: null }),
+      ws({ workspaceKey: "srv:null-a", statusBucket: "done", activityAt: null }),
       ws({
         workspaceKey: "srv:ts",
         statusBucket: "done",
-        statusEnteredAt: d("2026-01-01T00:00:00Z"),
+        activityAt: d("2026-01-01T00:00:00Z"),
       }),
-      ws({ workspaceKey: "srv:null-b", statusBucket: "done", statusEnteredAt: null }),
+      ws({ workspaceKey: "srv:null-b", statusBucket: "done", activityAt: null }),
     ];
 
     const groups = buildStatusGroups(workspaces, emptyProjectNames);

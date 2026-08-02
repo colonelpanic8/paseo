@@ -63,8 +63,8 @@ function compareStatusRows(
   b: SidebarWorkspaceEntry,
   projectNamesByViewKey: Map<string, string>,
 ): number {
-  const aTime = a.statusEnteredAt?.getTime() ?? null;
-  const bTime = b.statusEnteredAt?.getTime() ?? null;
+  const aTime = a.activityAt?.getTime() ?? null;
+  const bTime = b.activityAt?.getTime() ?? null;
 
   if (aTime !== null && bTime !== null) {
     if (aTime !== bTime) return bTime - aTime;

@@ -263,6 +263,7 @@ class WorkspaceStatus {
 interface AgentState {
   id: string;
   status: AgentSnapshotPayload["status"];
+  updatedAt?: string;
   pendingPermissionCount?: number;
   requiresAttention?: boolean;
   attentionReason?: AgentSnapshotPayload["attentionReason"];
@@ -281,7 +282,7 @@ function createAgent(
     thinkingOptionId: null,
     effectiveThinkingOptionId: null,
     createdAt: NOW,
-    updatedAt: NOW,
+    updatedAt: input.updatedAt ?? NOW,
     lastUserMessageAt: null,
     status: input.status,
     capabilities: {
@@ -444,6 +445,23 @@ describe("WorkspaceDirectory", () => {
     await expect(workspace.workspaceDescriptor()).resolves.toMatchObject({
       status: "running",
       statusEnteredAt: "2026-03-01T12:01:00.000Z",
+      activityAt: "2026-03-01T12:01:00.000Z",
+    });
+  });
+
+  test("completed provider subagent still contributes recent activity", async () => {
+    const workspace = new WorkspaceStatus();
+
+    workspace.hasRootAgent({ id: "parent-agent", status: "idle" });
+    workspace.hasProviderSubagent({
+      parentAgentId: "parent-agent",
+      status: "completed",
+      updatedAt: "2026-03-01T12:01:00.000Z",
+    });
+
+    await expect(workspace.workspaceDescriptor()).resolves.toMatchObject({
+      status: "done",
+      activityAt: "2026-03-01T12:01:00.000Z",
     });
   });
 
@@ -523,7 +541,10 @@ describe("WorkspaceDirectory", () => {
 
     workspace.hasIdleTerminal(changedAt);
 
-    await expect(workspace.workspaceStatus()).resolves.toBe("done");
+    await expect(workspace.workspaceDescriptor()).resolves.toMatchObject({
+      status: "done",
+      activityAt: NOW,
+    });
   });
 
   test("unknown terminal contributes nothing to workspace status", async () => {
@@ -586,6 +607,23 @@ describe("WorkspaceDirectory", () => {
     expect(descriptor.status).toBe("running");
     // terminal timestamp (2027) is newer than agent updatedAt (NOW = 2026-03-01)
     expect(descriptor.statusEnteredAt).toBe("2027-01-01T00:00:00.000Z");
+  });
+
+  test("activityAt tracks the newest activity regardless of the winning status bucket", async () => {
+    const workspace = new WorkspaceStatus();
+    const terminalChangedAt = new Date("2026-05-01T10:00:00.000Z").getTime();
+
+    workspace.hasRootAgent({
+      id: "agent-needs-input",
+      status: "idle",
+      pendingPermissionCount: 1,
+      updatedAt: "2026-04-01T10:00:00.000Z",
+    });
+    workspace.hasWorkingTerminal(terminalChangedAt);
+
+    const descriptor = await workspace.workspaceDescriptor();
+    expect(descriptor.status).toBe("needs_input");
+    expect(descriptor.activityAt).toBe("2026-05-01T10:00:00.000Z");
   });
 });
 
