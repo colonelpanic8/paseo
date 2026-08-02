@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { formatDuration, formatMessageTimestamp, formatTimeAgo } from "./time";
+import {
+  formatClockTime,
+  formatCompactRelativeTime,
+  formatDuration,
+  formatMessageTimestamp,
+  formatTimeAgo,
+} from "./time";
 
 describe("formatTimeAgo", () => {
   const now = new Date("2026-07-16T12:00:00.000Z");
@@ -14,6 +20,27 @@ describe("formatTimeAgo", () => {
     ["2026-01-15T12:00:00.000Z", "Jan 15"],
   ])("formats %s as %s", (date, expected) => {
     expect(formatTimeAgo(new Date(date), now)).toBe(expected);
+  });
+});
+
+describe("formatCompactRelativeTime", () => {
+  const now = new Date("2026-07-16T12:00:00.000Z");
+
+  it.each([
+    ["2026-07-16T11:59:30.000Z", "now"],
+    ["2026-07-16T11:55:00.000Z", "5m"],
+    ["2026-07-16T10:00:00.000Z", "2h"],
+    ["2026-07-13T12:00:00.000Z", "3d"],
+    ["2026-01-15T12:00:00.000Z", "Jan 15"],
+  ])("formats %s as %s", (date, expected) => {
+    expect(formatCompactRelativeTime(new Date(date), now)).toBe(expected);
+  });
+});
+
+describe("formatClockTime", () => {
+  it("uses the runtime's 12-hour or 24-hour clock preference", () => {
+    const date = new Date(2026, 6, 16, 15, 42);
+    expect(formatClockTime(date)).toMatch(/3:42 PM|15:42/);
   });
 });
 

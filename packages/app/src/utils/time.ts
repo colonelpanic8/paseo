@@ -35,6 +35,14 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   return `${month} ${day}`;
 }
 
+export function formatCompactRelativeTime(date: Date, now: Date = new Date()): string {
+  const label = formatTimeAgo(date, now);
+  if (label === "just now") {
+    return "now";
+  }
+  return label.endsWith(" ago") ? label.slice(0, -4) : label;
+}
+
 function isSameLocalDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -61,6 +69,10 @@ function getTimeFormatter(): Intl.DateTimeFormat {
   return cachedTimeFormatter;
 }
 
+export function formatClockTime(date: Date): string {
+  return getTimeFormatter().format(date);
+}
+
 /**
  * Format a chat-message timestamp for hover-revealed UI.
  * - Same day: "10:11 PM" or "22:11" depending on user preference
@@ -68,7 +80,7 @@ function getTimeFormatter(): Intl.DateTimeFormat {
  * - Older: "14 May 2026, 10:11 PM"
  */
 export function formatMessageTimestamp(date: Date, now: Date = new Date()): string {
-  const time = getTimeFormatter().format(date);
+  const time = formatClockTime(date);
 
   if (isSameLocalDay(date, now)) {
     return time;

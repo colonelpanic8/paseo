@@ -22,7 +22,7 @@ import type { Theme } from "@/styles/theme";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
-import { formatTimeAgo } from "@/utils/time";
+import { formatClockTime, formatCompactRelativeTime } from "@/utils/time";
 import { getHostColorTextStyle } from "@/styles/host-color";
 import { HostBadge } from "@/components/sidebar/host-badge";
 import type { HostBadgeModel } from "@/hosts/appearance";
@@ -70,7 +70,7 @@ const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
  * The icon spans the two lines beside it; the meta line then runs the full row
  * width underneath so nothing is stranded in a dead column below the icon:
  *
- *   [icon+dot]  owner/repo                     time ago | archive + kebab
+ *   [icon+dot]  owner/repo                last activity | archive + kebab
  *   [        ]  workspace title
  *   branch  +12 -3                            host  provider icons
  *   PR badge + checks (only when a PR exists)
@@ -93,7 +93,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   isArchiving: boolean;
   shortcutNumber?: number | null;
   showShortcutBadge?: boolean;
-  /** Hover (web) reveals the quick actions in place of the time-ago text. */
+  /** Hover (web) reveals the quick actions in place of the activity timestamp. */
   showActions: boolean;
   /** The hover-revealed quick-action cluster. */
   children?: ReactNode;
@@ -105,13 +105,15 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   const secondaryLabel = resolveStatusRowSecondaryLabel({ workspace, primaryLabel });
   const repoSlug = deriveRemoteSlug(workspace.remoteUrl) ?? workspace.projectName;
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
-  // Rows are memoized, so without this tick the "Xm ago" label would freeze
+  // Rows are memoized, so without this tick the relative label would freeze
   // until some unrelated state change happened to re-render the row.
   useMinuteTick();
-  const timeAgo = workspace.statusEnteredAt ? formatTimeAgo(workspace.statusEnteredAt) : null;
-  // Web swaps the time-ago for the quick actions on hover, inside a fixed slot so
+  const activityLabel = workspace.activityAt
+    ? `${formatCompactRelativeTime(workspace.activityAt)} · ${formatClockTime(workspace.activityAt)}`
+    : null;
+  // Web swaps the activity label for the quick actions on hover, inside a fixed slot so
   // the row never reflows. Touch platforms have no hover: the kebab is permanent,
-  // so it sits beside the time-ago instead of covering it.
+  // so it sits beside the activity label instead of covering it.
   const showOverlayActions = showActions && !showShortcut && !isNative;
   const showInlineActions = showActions && !showShortcut && isNative;
 
@@ -123,7 +125,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
           <StatusRowMetaLine
             repoSlug={repoSlug}
             isArchiving={isArchiving}
-            timeAgo={timeAgo}
+            activityLabel={activityLabel}
             showTimestamp={!showOverlayActions && !showShortcut}
             showOverlayActions={showOverlayActions}
             showInlineActions={showInlineActions}
@@ -152,7 +154,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
 function StatusRowMetaLine({
   repoSlug,
   isArchiving,
-  timeAgo,
+  activityLabel,
   showTimestamp,
   showOverlayActions,
   showInlineActions,
@@ -160,7 +162,7 @@ function StatusRowMetaLine({
 }: {
   repoSlug: string;
   isArchiving: boolean;
-  timeAgo: string | null;
+  activityLabel: string | null;
   showTimestamp: boolean;
   showOverlayActions: boolean;
   showInlineActions: boolean;
@@ -175,7 +177,9 @@ function StatusRowMetaLine({
         {repoSlug}
       </Text>
       <View style={styles.metaTrailing}>
-        {showTimestamp ? <StatusRowTimestamp isArchiving={isArchiving} timeAgo={timeAgo} /> : null}
+        {showTimestamp ? (
+          <StatusRowTimestamp isArchiving={isArchiving} activityLabel={activityLabel} />
+        ) : null}
         {showOverlayActions || showInlineActions ? children : null}
       </View>
     </View>
@@ -299,18 +303,18 @@ export function resolveStatusRowSecondaryLabel({
 
 function StatusRowTimestamp({
   isArchiving,
-  timeAgo,
+  activityLabel,
 }: {
   isArchiving: boolean;
-  timeAgo: string | null;
+  activityLabel: string | null;
 }) {
   if (isArchiving) {
     return <ThemedLoadingSpinner size={10} uniProps={foregroundMutedColorMapping} />;
   }
-  if (!timeAgo) {
+  if (!activityLabel) {
     return null;
   }
-  return <Text style={styles.timeAgo}>{timeAgo}</Text>;
+  return <Text style={styles.timestamp}>{activityLabel}</Text>;
 }
 
 function StatusRowLeadingVisual({
@@ -500,7 +504,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
   },
-  timeAgo: {
+  timestamp: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,

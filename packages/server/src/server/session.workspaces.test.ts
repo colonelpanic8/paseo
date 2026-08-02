@@ -3289,7 +3289,7 @@ test("subdirectory agents contribute to their owning workspace descriptor", asyn
   expect(result.entries[0]).toMatchObject({
     id: "ws-repo-subdir",
     status: "running",
-    activityAt: null,
+    activityAt: "2026-03-01T12:03:00.000Z",
   });
 });
 

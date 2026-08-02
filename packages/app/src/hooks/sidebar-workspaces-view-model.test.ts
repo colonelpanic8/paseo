@@ -32,6 +32,7 @@ function workspaceWithForge(forge: string | undefined, prUrl: string): Workspace
     title: null,
     status: "done",
     statusEnteredAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     scripts: [],
@@ -149,6 +150,7 @@ function workspace(input: {
   projectDisplayName: string;
   status?: WorkspaceDescriptor["status"];
   statusEnteredAt?: Date | null;
+  activityAt?: Date | null;
 }): WorkspaceDescriptor {
   return {
     id: input.id,
@@ -161,6 +163,7 @@ function workspace(input: {
     name: input.name,
     status: input.status ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
+    activityAt: input.activityAt ?? null,
     archivingAt: null,
     diffStat: null,
     scripts: [],
