@@ -3383,12 +3383,14 @@ describe("HostRuntimeStore managed host bootstrap", () => {
           endpoint: "ryzen-shine:6767",
           useTls: false,
           password: "ryzen-secret",
+          color: "blue",
         },
         {
           label: "Mac mini",
           endpoint: "mac-demarco-mini:443",
           useTls: true,
           password: "mac-secret",
+          color: "purple",
         },
       ],
     };
@@ -3413,7 +3415,15 @@ describe("HostRuntimeStore managed host bootstrap", () => {
       storage: createMemoryHostRuntimeStorage(),
     });
 
-    const hostsAdded = onceHostListMatches(store, () => store.getHosts().length === 2);
+    const managedHostsAreColored = () => {
+      const hosts = store.getHosts();
+      return (
+        hosts.length === 2 &&
+        typeof hosts[0]?.color === "string" &&
+        typeof hosts[1]?.color === "string"
+      );
+    };
+    const hostsAdded = onceHostListMatches(store, managedHostsAreColored);
     store.boot();
     await hostsAdded;
 
@@ -3441,6 +3451,67 @@ describe("HostRuntimeStore managed host bootstrap", () => {
         .map((host) => host.label)
         .sort(),
     ).toEqual(["Mac mini", "Ryzen"]);
+    expect(Object.fromEntries(store.getHosts().map((host) => [host.label, host.color]))).toEqual({
+      "Mac mini": "purple",
+      Ryzen: "blue",
+    });
+
+    store.syncHosts([]);
+  });
+
+  it("reconciles a managed color onto an already enrolled host without probing it", async () => {
+    const connection: HostConnection = {
+      id: "direct:ryzen-shine:6767",
+      type: "directTcp",
+      endpoint: "ryzen-shine:6767",
+      useTls: false,
+    };
+    const storedHost = {
+      ...makeHost({
+        serverId: "srv_ryzen",
+        label: "Ryzen",
+        connections: [connection],
+        preferredConnectionId: connection.id,
+      }),
+      color: "red" as const,
+    };
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+        readInitialConnectionHint: () => null,
+        readManagedHostRegistry: async () => ({
+          version: 1,
+          hosts: [
+            {
+              label: "Ryzen",
+              endpoint: "ryzen-shine:6767",
+              useTls: false,
+              color: "green",
+            },
+          ],
+        }),
+      },
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([storedHost]),
+      }),
+    });
+    const probeAndUpsert = vi.spyOn(store, "probeAndUpsertConnection");
+
+    const colorReconciled = onceHostListMatches(
+      store,
+      () => store.getHosts()[0]?.color === "green",
+    );
+    store.boot();
+    await colorReconciled;
+
+    expect(probeAndUpsert).not.toHaveBeenCalled();
+    expect(store.getHosts().find((host) => host.serverId === "srv_ryzen")?.color).toBe("green");
 
     store.syncHosts([]);
   });
