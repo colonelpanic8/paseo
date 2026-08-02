@@ -1200,7 +1200,12 @@ async function removeDirectoryWithRetries(path: string): Promise<void> {
     return;
   }
 
-  const delaysMs = [0, 100, 300, 700, 1500];
+  // Windows refuses to unlink a directory any live process still holds open,
+  // and an archived agent's process is only just being torn down when we get
+  // here. The tail of this backoff exists for that window: give the OS long
+  // enough to release the handles rather than reporting a removal failure for a
+  // worktree that goes away a second later.
+  const delaysMs = [0, 100, 300, 700, 1500, 2500, 2500, 2500];
   let lastError: unknown = null;
   for (const delay of delaysMs) {
     if (delay > 0) {

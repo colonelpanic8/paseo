@@ -91,19 +91,19 @@ export async function expectNoChatOutlinePreviewWhileCrossingToSidebar(page: Pag
     Object.assign(window, { __chatOutlinePreviewObserver: observer });
   });
 
-  for (let step = 0; step <= 10; step += 1) {
-    await page.mouse.move(
-      railBox.x + railBox.width - 1 - (step * railBox.width) / 10,
-      railBox.y + railBox.height / 2,
-    );
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        }),
-    );
-  }
-  await page.mouse.move(railBox.x - 2, railBox.y + railBox.height / 2);
+  // One uninterrupted sweep. The rail suppresses the preview by restarting its
+  // dwell timer on every horizontal move, so the crossing only means what the
+  // test says it means while the moves stay closer together than that timer.
+  // Waiting for a frame between steps handed that spacing to the main thread —
+  // a busy renderer stretched a step past the dwell window and the rail opened a
+  // preview the reader never asked for.
+  await page.mouse.move(railBox.x - 2, railBox.y + railBox.height / 2, { steps: 12 });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
 
   const previewAppeared = await page.evaluate(() => {
     const observer = Reflect.get(window, "__chatOutlinePreviewObserver") as

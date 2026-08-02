@@ -853,8 +853,15 @@ export class HubRelationshipHarness {
           15_000,
         );
         timeout.unref?.();
+        // fs.watch is an optimization here, not the contract: Windows drops
+        // directory events under load, and a dropped one used to mean this
+        // waiter slept through a completed archive until the timeout. Re-read
+        // the state on a timer so the wait ends when the archive ends.
+        const poll = setInterval(() => void observeCompletion(), 250);
+        poll.unref?.();
         const closeWatchers = () => {
           clearTimeout(timeout);
+          clearInterval(poll);
           for (const watcher of watchers) watcher.close();
         };
         const finish = (
