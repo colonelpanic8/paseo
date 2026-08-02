@@ -151,11 +151,6 @@ function toRgb(hex: string): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-function toRgba(hex: string, alpha: number): string {
-  const { r, g, b } = parseHex(hex);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 interface RgbChannels {
   r: number;
   g: number;
@@ -204,10 +199,8 @@ export async function chooseHostBadgeDisplay(
   page: Page,
   option: "Name" | "Icon only" | "Hidden",
 ): Promise<void> {
-  await page
-    .getByTestId("host-appearance-badge-display")
-    .getByRole("button", { name: option, exact: true })
-    .click();
+  await page.getByTestId("host-appearance-badge-display").click();
+  await page.getByRole("button", { name: option, exact: true }).click();
 }
 
 // The badge is a pill with no semantic role, so it is located by its accessible name inside the
@@ -246,11 +239,8 @@ export async function expectHostBadgeTinted(
 ): Promise<void> {
   const badge = hostBadge(page, target);
   await expect(badge).toBeVisible({ timeout: 15_000 });
-  await expect(badge.getByText(target.hostName)).toHaveCSS(
-    "color",
-    toRgb(identityColor(target.color)),
-  );
-  await expect(badge).toHaveCSS("background-color", toRgba(identityColor(target.color), 0.1));
+  await expect(badge.getByText(target.hostName)).toHaveCSS("color", "rgb(113, 113, 122)");
+  await expect(badge.locator("svg")).toHaveCSS("color", toRgb(identityColor(target.color)));
 }
 
 export async function expectHostAppearancePreview(
@@ -261,10 +251,7 @@ export async function expectHostAppearancePreview(
   await expect(preview).toBeVisible();
   const badge = preview.getByLabel(input.hostName);
   await expect(badge).toHaveText(input.hostName);
-  await expect(badge.getByText(input.hostName)).toHaveCSS(
-    "color",
-    toRgb(identityColor(input.color)),
-  );
+  await expect(badge.locator("svg")).toHaveCSS("color", toRgb(identityColor(input.color)));
 }
 
 // The auto-seed fixture rewrites the host registry on every navigation. Setting the

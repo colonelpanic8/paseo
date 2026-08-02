@@ -10,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { HostBadge } from "@/components/sidebar/host-badge";
 import { SettingsSection } from "@/screens/settings/settings-section";
@@ -159,27 +158,54 @@ function BadgeDisplayRow({
   onChange: (badgeDisplay: HostBadgeDisplay) => void;
 }) {
   const { t } = useTranslation();
-  const options = useMemo<SegmentedControlOption<HostBadgeDisplay>[]>(
-    () =>
-      HOST_BADGE_DISPLAYS.map((display) => ({
-        value: display,
-        label: badgeDisplayLabel(t, display),
-      })),
-    [t],
-  );
+  const selectedLabel = badgeDisplayLabel(t, badgeDisplay);
   return (
     <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
       <View style={settingsStyles.rowContent}>
         <Text style={settingsStyles.rowTitle}>{t("settings.host.appearance.badge.label")}</Text>
       </View>
-      <SegmentedControl
-        size="sm"
-        options={options}
-        value={badgeDisplay}
-        onValueChange={onChange}
-        testID="host-appearance-badge-display"
-      />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          testID="host-appearance-badge-display"
+          style={dropdownTriggerStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.host.appearance.badge.label", {
+            value: selectedLabel,
+          })}
+        >
+          <Text style={styles.triggerText}>{selectedLabel}</Text>
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end" width={200}>
+          {HOST_BADGE_DISPLAYS.map((option) => (
+            <BadgeDisplayMenuItem
+              key={option}
+              display={option}
+              selected={option === badgeDisplay}
+              onChange={onChange}
+            />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </View>
+  );
+}
+
+function BadgeDisplayMenuItem({
+  display,
+  selected,
+  onChange,
+}: {
+  display: HostBadgeDisplay;
+  selected: boolean;
+  onChange: (display: HostBadgeDisplay) => void;
+}) {
+  const { t } = useTranslation();
+  const handleSelect = useCallback(() => onChange(display), [display, onChange]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {badgeDisplayLabel(t, display)}
+    </DropdownMenuItem>
   );
 }
 

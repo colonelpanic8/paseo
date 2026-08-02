@@ -1,4 +1,4 @@
-// Muted tones, all landing in a 4.3-4.7:1 contrast band against the white letter on top.
+// Muted tones, all landing in a 4.2-4.8:1 contrast band against the white letter on top.
 //
 // Two properties matter more than the individual hues. First, low chroma: these squares sit
 // in a sidebar row next to a status dot, a PR glyph and a diff stat, and at full saturation
@@ -42,11 +42,6 @@ const IDENTITY_COLORS: Record<IdentityColorName, string> = {
 
 export function identityColor(name: IdentityColorName): string {
   return IDENTITY_COLORS[name];
-}
-
-/** The same hue at 10% alpha, for fills that sit behind text of the full-strength color. */
-export function identityTint(name: IdentityColorName): string {
-  return `${IDENTITY_COLORS[name]}1a`;
 }
 
 function hashIdentityKey(key: string): number {

@@ -1,34 +1,15 @@
-import { Text, View, type TextStyle, type ViewStyle } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Server } from "lucide-react-native";
 import { HOST_COLORS, type HostColor } from "@/hosts/appearance";
-import { identityColor, identityTint } from "@/styles/identity-colors";
+import { identityColor } from "@/styles/identity-colors";
 import type { Theme } from "@/styles/theme";
 
 const ThemedServer = withUnistyles(Server);
 
-interface HostBadgeColorOverride {
-  badge: ViewStyle | null;
-  text: TextStyle | null;
-}
-
-// The identity table is theme-independent, so a color's overrides and its icon mapping are
-// fixed for the life of the module. The icon mapping especially must not be rebuilt per
-// render: a fresh `uniProps` identity makes `withUnistyles` re-subscribe every pass.
-function buildColorOverrides(): Record<HostColor, HostBadgeColorOverride> {
-  const byColor = {} as Record<HostColor, HostBadgeColorOverride>;
-  for (const color of HOST_COLORS) {
-    byColor[color] =
-      color === "none"
-        ? { badge: null, text: null }
-        : {
-            badge: { backgroundColor: identityTint(color) },
-            text: { color: identityColor(color) },
-          };
-  }
-  return byColor;
-}
-
+// The identity table is theme-independent, so its icon mapping is fixed for the life of the
+// module. It must not be rebuilt per render: a fresh `uniProps` identity makes withUnistyles
+// re-subscribe every pass.
 function buildIconMappings(): Record<HostColor, (theme: Theme) => { color: string }> {
   const byColor = {} as Record<HostColor, (theme: Theme) => { color: string }>;
   for (const color of HOST_COLORS) {
@@ -40,7 +21,6 @@ function buildIconMappings(): Record<HostColor, (theme: Theme) => { color: strin
   return byColor;
 }
 
-const COLOR_OVERRIDES = buildColorOverrides();
 const ICON_MAPPINGS = buildIconMappings();
 
 /**
@@ -62,20 +42,15 @@ export function HostBadge({
   color: HostColor;
   showLabel: boolean;
 }) {
-  const override = COLOR_OVERRIDES[color];
   return (
     <View
-      style={[
-        hostBadgeStyles.badge,
-        showLabel ? null : hostBadgeStyles.badgeIconOnly,
-        override.badge,
-      ]}
+      style={[hostBadgeStyles.badge, showLabel ? null : hostBadgeStyles.badgeIconOnly]}
       accessibilityLabel={label}
       testID={`sidebar-host-badge-${serverId}`}
     >
       <ThemedServer size={9} uniProps={ICON_MAPPINGS[color]} />
       {showLabel ? (
-        <Text style={[hostBadgeStyles.text, override.text]} numberOfLines={1}>
+        <Text style={hostBadgeStyles.text} numberOfLines={1}>
           {label}
         </Text>
       ) : null}

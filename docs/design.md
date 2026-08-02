@@ -225,7 +225,7 @@ Status pills are `palette.<color>[300]` foreground on a 10%-alpha background of 
 
 Status dots — the small filled circles next to a host or agent name — are `borderRadius.full` filled with the status color (`statusSuccess`, `statusWarning`, `statusDanger`, or `foregroundMuted`). They sit in the trailing slot of a sidebar row or as a leading marker on a status pill.
 
-Identity badges — the project icon and the sidebar host badge — do not use the theme palette. They draw from the fixed ten-color identity table in `packages/app/src/styles/identity-colors.ts`, whose hexes are held to one contrast band so a color identifies rather than ranks. Text takes `identityColor`, the fill takes `identityTint` (the same hue at 10% alpha). The table is theme-independent by design; do not fork it per theme, and do not add hexes to it without recomputing the band.
+Identity badges — the project icon and the sidebar host badge — do not use the theme palette. They draw from the fixed ten-color identity table in `packages/app/src/styles/identity-colors.ts`, whose hexes are held to one contrast band so a color identifies rather than ranks. Identity color is a fill-only contract: project icons use it as a fill with a white letter, while host badges use it on their icon and retain the normal muted text color. The table is theme-independent by design; do not fork it per theme, and do not add hexes to it without recomputing the band.
 
 The bespoke pills in `packages/app/src/screens/settings/host-page.tsx:97-116`, `packages/app/src/components/agent-list.tsx:607-632`, and `packages/app/src/components/sidebar-workspace-list.tsx:2889-2894` are drift to be removed. New code uses `<StatusBadge>`.
 
