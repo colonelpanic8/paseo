@@ -185,8 +185,14 @@ describe("SidebarArchivedGroup", () => {
       root?.render(
         <SidebarArchivedGroup
           entries={entries}
-          hostLabelByServerId={new Map([["server", "Local"]])}
-          showHostLabels
+          hostBadgeByServerId={
+            new Map([
+              [
+                "server",
+                { serverId: "server", label: "Local", color: "none" as const, showLabel: true },
+              ],
+            ])
+          }
         />,
       );
     });
@@ -210,13 +216,7 @@ describe("SidebarArchivedGroup", () => {
 
   it("renders nothing when there are no archived workspaces", () => {
     flushSync(() => {
-      root?.render(
-        <SidebarArchivedGroup
-          entries={[]}
-          hostLabelByServerId={new Map()}
-          showHostLabels={false}
-        />,
-      );
+      root?.render(<SidebarArchivedGroup entries={[]} hostBadgeByServerId={new Map()} />);
     });
 
     expect(container?.textContent).toBe("");
@@ -228,8 +228,14 @@ describe("SidebarArchivedGroup", () => {
       root?.render(
         <SidebarArchivedGroup
           entries={[pending]}
-          hostLabelByServerId={new Map([["server", "Local"]])}
-          showHostLabels
+          hostBadgeByServerId={
+            new Map([
+              [
+                "server",
+                { serverId: "server", label: "Local", color: "none" as const, showLabel: true },
+              ],
+            ])
+          }
         />,
       );
     });

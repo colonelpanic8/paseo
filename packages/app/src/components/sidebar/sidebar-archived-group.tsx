@@ -9,6 +9,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { isWeb as platformIsWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
+import type { HostBadgeModel } from "@/hosts/appearance";
 import { ARCHIVED_GROUP_KEY } from "@/hooks/sidebar-status-view-model";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
@@ -52,12 +53,10 @@ const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
  */
 export function SidebarArchivedGroup({
   entries,
-  hostLabelByServerId,
-  showHostLabels,
+  hostBadgeByServerId,
 }: {
   entries: ArchivedWorkspaceEntry[];
-  hostLabelByServerId: ReadonlyMap<string, string>;
-  showHostLabels: boolean;
+  hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
 }) {
   const collapsed = useSidebarCollapsedSectionsStore((state) =>
     state.collapsedStatusGroupKeys.has(ARCHIVED_GROUP_KEY),
@@ -98,9 +97,7 @@ export function SidebarArchivedGroup({
               entry={entry}
               subtitle={buildArchivedRowSubtitle({
                 projectName: entry.projectName,
-                hostLabel: showHostLabels
-                  ? (hostLabelByServerId.get(entry.serverId) ?? entry.serverId)
-                  : null,
+                hostLabel: hostBadgeByServerId.get(entry.serverId)?.label ?? null,
               })}
             />
           ))

@@ -6,7 +6,11 @@ import {
   DirectTcpHostConnectionSchema,
   type DirectTcpHostConnection,
 } from "@getpaseo/protocol/host-connection-schema";
-import { normalizeHexColor } from "@/styles/host-color-value";
+import {
+  type HostAppearance,
+  defaultHostAppearance,
+  normalizeStoredHostAppearance,
+} from "@/hosts/appearance";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
 
@@ -38,36 +42,10 @@ export type HostConnection =
 
 export type HostLifecycle = Record<string, never>;
 
-/**
- * The built-in host colors are stored as palette keys rather than hex, so the same
- * host resolves to a hand-tuned, scheme-appropriate shade in every theme.
- */
-export const HOST_COLOR_KEYS = ["blue", "green", "amber", "orange", "red", "purple"] as const;
-
-export type HostColorKey = (typeof HOST_COLOR_KEYS)[number];
-
-/**
- * A color picked outside the palette, stored as lowercase `#rrggbb`.
- *
- * Hex has no scheme-awareness of its own, so it is never rendered raw: see
- * `@/styles/host-color-value`, which re-derives lightness against whichever
- * background the color lands on. That keeps the invariant the palette keys give
- * for free -- one stored value, legible in both schemes -- without capping the
- * user at six choices.
- */
-export type HostCustomColor = string;
-
-export type HostColor = HostColorKey | HostCustomColor;
-
-export function isHostColorKey(value: unknown): value is HostColorKey {
-  return HOST_COLOR_KEYS.includes(value as HostColorKey);
-}
-
 export interface HostProfile {
   serverId: string;
   label: string;
-  /** User-chosen accent for this host; null/undefined renders the default color. */
-  color?: HostColor | null;
+  appearance: HostAppearance;
   lifecycle: HostLifecycle;
   connections: HostConnection[];
   preferredConnectionId: string | null;
@@ -77,15 +55,6 @@ export interface HostProfile {
 
 export function defaultLifecycle(): HostLifecycle {
   return {};
-}
-
-export function normalizeHostColor(value: unknown): HostColor | null {
-  if (isHostColorKey(value)) {
-    return value;
-  }
-  // Anything else must survive the round trip as canonical hex or not at all: a
-  // half-typed "#ab" reaching a style factory would render as a silent transparent.
-  return typeof value === "string" ? normalizeHexColor(value) : null;
 }
 
 export function normalizeHostLabel(value: string | null | undefined, serverId: string): string {
@@ -209,7 +178,7 @@ export function upsertHostConnectionInProfiles(input: {
     const profile: HostProfile = {
       serverId,
       label: derivedLabel,
-      color: null,
+      appearance: defaultHostAppearance(),
       lifecycle: defaultLifecycle(),
       connections: [input.connection],
       preferredConnectionId: input.connection.id,
@@ -410,7 +379,9 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
   return {
     serverId,
     label,
-    color: normalizeHostColor(record.color),
+    // `record.color` predates `appearance`: the pre-merge expand-status-sidebar builds
+    // stored the host color at the top level of the profile.
+    appearance: normalizeStoredHostAppearance(record.appearance, record.color),
     lifecycle: defaultLifecycle(),
     connections,
     preferredConnectionId,

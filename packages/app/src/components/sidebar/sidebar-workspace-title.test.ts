@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import {
+  resolveSidebarWorkspaceAccessibilityLabel,
+  resolveSidebarWorkspacePrimaryLabel,
+} from "@/components/sidebar/sidebar-workspace-title";
 
 const worktree = {
   name: "Investigate search",
@@ -83,5 +86,61 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
 
       expect(label).toBe("Unresolved");
     }
+  });
+});
+
+describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
+  it("includes the visible host badge with the workspace title", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
+        statusBucket: "done",
+      },
+      workspaceTitleSource: "title",
+      hostBadgeLabel: "Build host",
+    });
+
+    expect(label).toBe("Investigate search, Build host");
+  });
+
+  it("owns every visual row contributor in one accessible label", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
+        statusBucket: "running",
+      },
+      workspaceTitleSource: "branch",
+      leadingProjectName: "Search project",
+      hostBadgeLabel: "Build host",
+      pullRequestLabel: "Pull request 42",
+      scriptLabel: "Scripts available",
+    });
+
+    expect(label).toBe(
+      "Search project, fix/search, Build host, Pull request 42, Scripts available, Working",
+    );
+  });
+
+  it("omits the idle status from the workspace label", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
+        statusBucket: "done",
+      },
+      workspaceTitleSource: "title",
+      leadingProjectName: "Search project",
+      hostBadgeLabel: "Build host",
+    });
+
+    expect(label).toBe("Search project, Investigate search, Build host");
   });
 });

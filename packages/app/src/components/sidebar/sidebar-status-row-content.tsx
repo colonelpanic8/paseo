@@ -9,7 +9,7 @@ import { SyncedLoader } from "@/components/synced-loader";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   ChecksBadge,
-  PrBadge,
+  PullRequestIcon,
   SidebarWorkspaceShortcutBadge,
   WorkspaceScriptIcon,
   type SidebarWorkspaceScriptIconKind,
@@ -24,7 +24,8 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
 import { formatTimeAgo } from "@/utils/time";
 import { getHostColorTextStyle } from "@/styles/host-color";
-import type { HostColor } from "@/types/host-connection";
+import { HostBadge } from "@/components/sidebar/host-badge";
+import type { HostBadgeModel } from "@/hosts/appearance";
 import { isNative, isWeb } from "@/constants/platform";
 
 const PROJECT_ICON_SIZE = 40;
@@ -77,8 +78,7 @@ const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
 export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   workspace,
   iconDataUri,
-  hostLabel,
-  hostColor,
+  hostBadge,
   scriptIconKind = null,
   isArchiving,
   shortcutNumber = null,
@@ -88,8 +88,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
-  hostLabel: string;
-  hostColor: HostColor | null;
+  hostBadge: HostBadgeModel | null;
   scriptIconKind?: SidebarWorkspaceScriptIconKind | null;
   isArchiving: boolean;
   shortcutNumber?: number | null;
@@ -138,8 +137,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
         secondaryLabel={secondaryLabel}
         diffStat={workspace.diffStat}
         prHint={workspace.prHint}
-        hostLabel={hostLabel}
-        hostColor={hostColor}
+        hostBadge={hostBadge}
         providers={workspace.providers}
       />
       {showShortcut && shortcutNumber !== null ? (
@@ -205,15 +203,13 @@ function StatusRowDetailLine({
   secondaryLabel,
   diffStat,
   prHint,
-  hostLabel,
-  hostColor,
+  hostBadge,
   providers,
 }: {
   secondaryLabel: string | null;
   diffStat: SidebarWorkspaceEntry["diffStat"];
   prHint: SidebarWorkspaceEntry["prHint"];
-  hostLabel: string;
-  hostColor: HostColor | null;
+  hostBadge: HostBadgeModel | null;
   providers: readonly string[];
 }) {
   return (
@@ -227,16 +223,35 @@ function StatusRowDetailLine({
         {diffStat ? (
           <DiffStat additions={diffStat.additions} deletions={diffStat.deletions} />
         ) : null}
-        {prHint ? <PrBadge hint={prHint} /> : null}
+        {prHint ? <PullRequestIcon hint={prHint} /> : null}
         {prHint ? <ChecksBadge checks={prHint.checks} forge={prHint.forge} /> : null}
       </View>
       <View style={styles.detailRight}>
-        <Text style={[styles.hostLabel, getHostColorTextStyle(hostColor)]} numberOfLines={1}>
-          {hostLabel}
-        </Text>
+        {hostBadge ? <StatusRowHostIdentity hostBadge={hostBadge} /> : null}
         <StatusRowProviderIcons providers={providers} />
       </View>
     </View>
+  );
+}
+
+// The card shows the host as tinted text when its badge display is "name"; icon
+// mode reuses the compact rows' pill so the two modes stay recognizably the same
+// host across grouping modes.
+function StatusRowHostIdentity({ hostBadge }: { hostBadge: HostBadgeModel }) {
+  if (!hostBadge.showLabel) {
+    return (
+      <HostBadge
+        serverId={hostBadge.serverId}
+        label={hostBadge.label}
+        color={hostBadge.color}
+        showLabel={false}
+      />
+    );
+  }
+  return (
+    <Text style={[styles.hostLabel, getHostColorTextStyle(hostBadge.color)]} numberOfLines={1}>
+      {hostBadge.label}
+    </Text>
   );
 }
 

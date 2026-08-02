@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { defaultHostAppearance } from "@/hosts/appearance";
 import {
-  HOST_COLOR_KEYS,
-  normalizeHostColor,
   normalizeStoredHostProfile,
   orderHostsLocalFirst,
   resolveActiveHostServerId,
+  upsertHostConnectionInProfiles,
+  type HostConnection,
   type HostProfile,
 } from "./host-connection";
 
@@ -12,6 +13,7 @@ function makeHost(serverId: string): HostProfile {
   return {
     serverId,
     label: serverId,
+    appearance: defaultHostAppearance(),
     lifecycle: {},
     connections: [],
     preferredConnectionId: null,
@@ -116,6 +118,63 @@ describe("normalizeStoredHostProfile", () => {
       daemonPublicKeyB64: "pubkey",
     });
   });
+
+  it("gives a host stored before appearance existed the default appearance", () => {
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_old",
+      connections: [
+        { id: "socket:/tmp/paseo.sock", type: "directSocket", path: "/tmp/paseo.sock" },
+      ],
+    });
+
+    expect(profile?.appearance).toEqual({ color: "none", badgeDisplay: null });
+  });
+
+  it("loads a stored appearance the user chose", () => {
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_new",
+      appearance: { color: "teal", badgeDisplay: "icon" },
+      connections: [
+        { id: "socket:/tmp/paseo.sock", type: "directSocket", path: "/tmp/paseo.sock" },
+      ],
+    });
+
+    expect(profile?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
+  });
+});
+
+describe("upsertHostConnectionInProfiles", () => {
+  const connection: HostConnection = {
+    id: "socket:/tmp/paseo.sock",
+    type: "directSocket",
+    path: "/tmp/paseo.sock",
+  };
+
+  it("gives a newly discovered host the default appearance", () => {
+    const [profile] = upsertHostConnectionInProfiles({
+      profiles: [],
+      serverId: "srv_new",
+      connection,
+    });
+
+    expect(profile.appearance).toEqual({ color: "none", badgeDisplay: null });
+  });
+
+  it("keeps the appearance the user chose when the host reconnects", () => {
+    const existing: HostProfile = {
+      ...makeHost("srv_known"),
+      appearance: { color: "amber", badgeDisplay: "hidden" },
+      connections: [],
+    };
+
+    const [profile] = upsertHostConnectionInProfiles({
+      profiles: [existing],
+      serverId: "srv_known",
+      connection,
+    });
+
+    expect(profile.appearance).toEqual({ color: "amber", badgeDisplay: "hidden" });
+  });
 });
 
 describe("resolveActiveHostServerId", () => {
@@ -209,24 +268,20 @@ describe("host colors", () => {
     });
   }
 
-  it("keeps a stored palette key", () => {
-    expect(storedProfile("purple")?.color).toBe("purple");
+  it("maps a legacy palette key onto its identity color", () => {
+    expect(storedProfile("purple")?.appearance.color).toBe("violet");
+    expect(storedProfile("green")?.appearance.color).toBe("emerald");
   });
 
-  it("keeps a stored custom hex color", () => {
-    expect(storedProfile("#ff00ff")?.color).toBe("#ff00ff");
+  it("keeps a legacy key that is already an identity color", () => {
+    expect(storedProfile("blue")?.appearance.color).toBe("blue");
+    expect(storedProfile("amber")?.appearance.color).toBe("amber");
   });
 
-  it("drops invalid colors", () => {
-    expect(storedProfile(undefined)?.color).toBeNull();
-    expect(storedProfile(42)?.color).toBeNull();
-    expect(storedProfile("magenta")?.color).toBeNull();
-    expect(storedProfile("#ff00f")?.color).toBeNull();
-  });
-
-  it("accepts every advertised color key", () => {
-    for (const color of HOST_COLOR_KEYS) {
-      expect(normalizeHostColor(color)).toBe(color);
-    }
+  it("drops colors with no identity mapping", () => {
+    expect(storedProfile(undefined)?.appearance.color).toBe("none");
+    expect(storedProfile(42)?.appearance.color).toBe("none");
+    expect(storedProfile("magenta")?.appearance.color).toBe("none");
+    expect(storedProfile("#ff00ff")?.appearance.color).toBe("none");
   });
 });

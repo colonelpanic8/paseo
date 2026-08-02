@@ -11,10 +11,10 @@ import {
   normalizeStoredHostProfile,
   upsertHostConnectionInProfiles,
   registryHasConnection,
-  type HostColor,
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
+import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
 import {
   buildDaemonWebSocketUrl,
   buildRelayWebSocketUrl,
@@ -1348,6 +1348,7 @@ export class HostRuntimeStore {
   private hostListVersion = 0;
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
+  private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
   private deps: HostRuntimeControllerDeps;
   private lastConnectionStatusByServer = new Map<string, HostRuntimeConnectionStatus>();
@@ -1463,7 +1464,9 @@ export class HostRuntimeStore {
       this.hostRegistryStatus = "ready";
       this.emitHostList();
       if (shouldPersistHosts) {
-        void this.persistHosts();
+        void this.persistHosts().catch((error) =>
+          console.error("[HostRuntime] Failed to persist host registry", error),
+        );
       }
     }
   }
@@ -1628,7 +1631,9 @@ export class HostRuntimeStore {
     );
     this.emitHostList();
     this.emit(newServerId);
-    void this.persistHosts();
+    void this.persistHosts().catch((error) =>
+      console.error("[HostRuntime] Failed to persist host registry", error),
+    );
   }
 
   async upsertDirectConnection(input: {
@@ -1666,6 +1671,7 @@ export class HostRuntimeStore {
     const probeHost: HostProfile = {
       serverId: "",
       label: input.label ?? input.connection.id,
+      appearance: defaultHostAppearance(),
       lifecycle: {},
       connections: [input.connection],
       preferredConnectionId: input.connection.id,
@@ -1784,15 +1790,54 @@ export class HostRuntimeStore {
     });
   }
 
-  async renameHost(serverId: string, label: string): Promise<void> {
-    const next = this.hosts.map((h) =>
-      h.serverId === serverId ? { ...h, label, updatedAt: new Date().toISOString() } : h,
+  private async updateHost(
+    serverId: string,
+    apply: (host: HostProfile) => HostProfile,
+  ): Promise<void> {
+    const updatedAt = new Date().toISOString();
+    const next = this.hosts.map((host) =>
+      host.serverId === serverId ? { ...apply(host), updatedAt } : host,
     );
     this.setHostsAndSync(next);
     await this.persistHosts();
   }
 
-  async setHostColor(serverId: string, color: HostColor | null): Promise<void> {
+  async renameHost(serverId: string, label: string): Promise<void> {
+    await this.updateHost(serverId, (host) => ({ ...host, label }));
+  }
+
+  async setHostColor(serverId: string, color: HostColor): Promise<void> {
+    await this.updateHostAppearance(serverId, (host) => ({
+      ...host,
+      appearance: { ...host.appearance, color },
+    }));
+  }
+
+  async setHostBadgeDisplay(serverId: string, badgeDisplay: HostBadgeDisplay): Promise<void> {
+    await this.updateHostAppearance(serverId, (host) => ({
+      ...host,
+      appearance: { ...host.appearance, badgeDisplay },
+    }));
+  }
+
+  private updateHostAppearance(
+    serverId: string,
+    apply: (host: HostProfile) => HostProfile,
+  ): Promise<void> {
+    const update = this.hostAppearanceMutationTail.then(() =>
+      this.applyHostAppearance(serverId, apply),
+    );
+    this.hostAppearanceMutationTail = update.catch(() => undefined);
+    return update;
+  }
+
+  private async applyHostAppearance(
+    serverId: string,
+    apply: (host: HostProfile) => HostProfile,
+  ): Promise<void> {
+    // Rebased over concurrent host-list changes rather than applied to a snapshot:
+    // reconnects can rewrite serverIds mid-write (ID reconciliation), so the target is
+    // re-found by connection id and the mutation retried until it lands on a stable list.
     let targetConnectionIds: readonly string[] | null = null;
     while (true) {
       const baseHosts = this.hosts;
@@ -1807,10 +1852,11 @@ export class HostRuntimeStore {
         throw new Error(`Host ${serverId} no longer exists.`);
       }
       targetConnectionIds ??= target.connections.map((connection) => connection.id);
+      const updatedAt = new Date().toISOString();
       const next = baseHosts.map((host) =>
-        host === target ? { ...host, color, updatedAt: new Date().toISOString() } : host,
+        host === target ? { ...apply(host), updatedAt } : host,
       );
-      await this.writeHosts(next);
+      await this.persistHosts(next);
       if (this.hosts !== baseHosts) {
         continue;
       }
@@ -1877,7 +1923,9 @@ export class HostRuntimeStore {
           ])
         : undefined,
     });
-    void this.persistHosts();
+    void this.persistHosts().catch((error) =>
+      console.error("[HostRuntime] Failed to persist host registry", error),
+    );
     return next.find((daemon) => daemon.serverId === input.serverId) as HostProfile;
   }
 
@@ -1895,15 +1943,7 @@ export class HostRuntimeStore {
     this.emitHostList();
   }
 
-  private async persistHosts(): Promise<void> {
-    try {
-      await this.writeHosts(this.hosts);
-    } catch (error) {
-      console.error("[HostRuntime] Failed to persist host registry", error);
-    }
-  }
-
-  private async writeHosts(hosts: readonly HostProfile[]): Promise<void> {
+  private async persistHosts(hosts = this.hosts): Promise<void> {
     const serializedHosts = JSON.stringify(hosts);
     const write = this.hostRegistryWriteQueue.then(() =>
       this.storage.setItem(REGISTRY_STORAGE_KEY, serializedHosts),
@@ -2459,7 +2499,8 @@ export interface HostMutations {
     label?: string,
   ) => Promise<HostProfile>;
   renameHost: (serverId: string, label: string) => Promise<void>;
-  setHostColor: (serverId: string, color: HostColor | null) => Promise<void>;
+  setHostColor: (serverId: string, color: HostColor) => Promise<void>;
+  setHostBadgeDisplay: (serverId: string, badgeDisplay: HostBadgeDisplay) => Promise<void>;
   removeHost: (serverId: string) => Promise<void>;
   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
 }
@@ -2475,6 +2516,8 @@ export function useHostMutations(): HostMutations {
       upsertConnectionFromOfferUrl: (url, label) => store.upsertConnectionFromOfferUrl(url, label),
       renameHost: (serverId, label) => store.renameHost(serverId, label),
       setHostColor: (serverId, color) => store.setHostColor(serverId, color),
+      setHostBadgeDisplay: (serverId, badgeDisplay) =>
+        store.setHostBadgeDisplay(serverId, badgeDisplay),
       removeHost: (serverId) => store.removeHost(serverId),
       removeConnection: (serverId, connectionId) => store.removeConnection(serverId, connectionId),
     }),

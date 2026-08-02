@@ -38,7 +38,10 @@ import {
   SidebarStatusRowContent,
 } from "@/components/sidebar/sidebar-status-row-content";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
-import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
+import {
+  SidebarWorkspaceContextMenu,
+  SidebarWorkspaceMenu,
+} from "@/components/sidebar/sidebar-workspace-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -50,7 +53,7 @@ import {
 } from "@/components/sidebar/sidebar-motion";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
-import type { HostColor } from "@/types/host-connection";
+import type { HostBadgeModel } from "@/hosts/appearance";
 import type { GestureType } from "react-native-gesture-handler";
 import { StatusRowSwipeContainer } from "@/components/sidebar/status-row-swipe-container";
 
@@ -58,7 +61,6 @@ import { StatusRowSwipeContainer } from "@/components/sidebar/status-row-swipe-c
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
-const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
 const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
@@ -80,8 +82,7 @@ interface StatusWorkspaceListProps {
   shortcutIndexByWorkspaceKey: Map<string, number>;
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
-  hostLabelByServerId: ReadonlyMap<string, string>;
-  hostColorByServerId: ReadonlyMap<string, HostColor>;
+  hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   /** Compact sidebar drawer-close pan; shared with the scroll and row gestures. */
@@ -97,8 +98,7 @@ export function SidebarStatusWorkspaceList({
   shortcutIndexByWorkspaceKey,
   showShortcutBadges,
   onWorkspacePress,
-  hostLabelByServerId,
-  hostColorByServerId,
+  hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   parentGestureRef,
@@ -142,8 +142,7 @@ export function SidebarStatusWorkspaceList({
                   key={workspace.workspaceKey}
                   workspace={workspace}
                   iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
-                  hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
-                  hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
+                  hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
                   shortcutNumber={statusShortcutIndex.get(workspace.workspaceKey) ?? null}
                   showShortcutBadge={showShortcutBadges}
                   canPin={supportsPinningByServerId.get(workspace.serverId) === true}
@@ -177,16 +176,14 @@ export function SidebarStatusWorkspaceList({
         shortcutIndex={statusShortcutIndex}
         showShortcutBadges={showShortcutBadges}
         onWorkspacePress={onWorkspacePress}
-        hostLabelByServerId={hostLabelByServerId}
-        hostColorByServerId={hostColorByServerId}
+        hostBadgeByServerId={hostBadgeByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
         parentGestureRef={parentGestureRef}
       />
       <SidebarArchivedGroup
         entries={archivedWorkspaces}
-        hostLabelByServerId={hostLabelByServerId}
-        showHostLabels
+        hostBadgeByServerId={hostBadgeByServerId}
       />
     </LayoutAnimationConfig>
   );
@@ -224,8 +221,7 @@ function StatusGroupList({
   shortcutIndex,
   showShortcutBadges,
   onWorkspacePress,
-  hostLabelByServerId,
-  hostColorByServerId,
+  hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   parentGestureRef,
@@ -236,8 +232,7 @@ function StatusGroupList({
   shortcutIndex: Map<string, number>;
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
-  hostLabelByServerId: ReadonlyMap<string, string>;
-  hostColorByServerId: ReadonlyMap<string, HostColor>;
+  hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
@@ -253,8 +248,7 @@ function StatusGroupList({
           shortcutIndex={shortcutIndex}
           showShortcutBadges={showShortcutBadges}
           onWorkspacePress={onWorkspacePress}
-          hostLabelByServerId={hostLabelByServerId}
-          hostColorByServerId={hostColorByServerId}
+          hostBadgeByServerId={hostBadgeByServerId}
           supportsPinningByServerId={supportsPinningByServerId}
           onToggleWorkspacePin={onToggleWorkspacePin}
           parentGestureRef={parentGestureRef}
@@ -271,8 +265,7 @@ function StatusGroupRows({
   shortcutIndex,
   showShortcutBadges,
   onWorkspacePress,
-  hostLabelByServerId,
-  hostColorByServerId,
+  hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   parentGestureRef,
@@ -283,8 +276,7 @@ function StatusGroupRows({
   shortcutIndex: Map<string, number>;
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
-  hostLabelByServerId: ReadonlyMap<string, string>;
-  hostColorByServerId: ReadonlyMap<string, HostColor>;
+  hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
@@ -312,8 +304,7 @@ function StatusGroupRows({
               key={workspace.workspaceKey}
               workspace={workspace}
               iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
-              hostLabel={resolveStatusRowHostLabel({ workspace, hostLabelByServerId })}
-              hostColor={hostColorByServerId.get(workspace.serverId) ?? null}
+              hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
               shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
               showShortcutBadge={showShortcutBadges}
               canPin={supportsPinningByServerId.get(workspace.serverId) === true}
@@ -340,19 +331,6 @@ function StatusGroupRows({
       <View style={styles.groupSpacer} />
     </>
   );
-}
-
-// Status mode drops the project grouping, so the host is often the only thing
-// telling two similar workspaces apart: the label always shows here, unlike in
-// project mode where it stays gated on the sidebar spanning more than one host.
-function resolveStatusRowHostLabel({
-  workspace,
-  hostLabelByServerId,
-}: {
-  workspace: SidebarWorkspaceEntry;
-  hostLabelByServerId: ReadonlyMap<string, string>;
-}): string {
-  return hostLabelByServerId.get(workspace.serverId) ?? workspace.serverId;
 }
 
 function StatusGroupHeader({ group, collapsed }: { group: StatusGroup; collapsed: boolean }) {
@@ -431,7 +409,7 @@ function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
     case "attention":
       return <ThemedCircleCheck size={14} uniProps={greenColorMapping} />;
     case "running":
-      return <ThemedCircleDot size={14} uniProps={blueColorMapping} />;
+      return <ThemedCircleDot size={14} uniProps={amberColorMapping} />;
     case "done":
       return <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />;
   }
@@ -440,8 +418,7 @@ function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
 const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   workspace,
   iconDataUri,
-  hostLabel,
-  hostColor,
+  hostBadge,
   shortcutNumber,
   showShortcutBadge,
   canPin,
@@ -452,8 +429,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
-  hostLabel: string;
-  hostColor: HostColor | null;
+  hostBadge: HostBadgeModel | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
   canPin: boolean;
@@ -478,8 +454,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
     <StatusWorkspaceRowWithMenu
       workspace={workspace}
       iconDataUri={iconDataUri}
-      hostLabel={hostLabel}
-      hostColor={hostColor}
+      hostBadge={hostBadge}
       selected={selected}
       shortcutNumber={shortcutNumber}
       showShortcutBadge={showShortcutBadge}
@@ -495,8 +470,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 function StatusWorkspaceRowWithMenu({
   workspace,
   iconDataUri,
-  hostLabel,
-  hostColor,
+  hostBadge,
   selected,
   shortcutNumber,
   showShortcutBadge,
@@ -508,8 +482,7 @@ function StatusWorkspaceRowWithMenu({
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
-  hostLabel: string;
-  hostColor: HostColor | null;
+  hostBadge: HostBadgeModel | null;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -620,8 +593,7 @@ function StatusWorkspaceRowWithMenu({
       <StatusWorkspaceRowInner
         workspace={workspace}
         iconDataUri={iconDataUri}
-        hostLabel={hostLabel}
-        hostColor={hostColor}
+        hostBadge={hostBadge}
         selected={selected}
         shortcutNumber={shortcutNumber}
         showShortcutBadge={showShortcutBadge}
@@ -658,8 +630,7 @@ function StatusWorkspaceRowWithMenu({
 function StatusWorkspaceRowInner({
   workspace,
   iconDataUri,
-  hostLabel,
-  hostColor,
+  hostBadge,
   selected,
   shortcutNumber,
   showShortcutBadge,
@@ -681,8 +652,7 @@ function StatusWorkspaceRowInner({
 }: {
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
-  hostLabel: string;
-  hostColor: HostColor | null;
+  hostBadge: HostBadgeModel | null;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -727,7 +697,7 @@ function StatusWorkspaceRowInner({
       testID={containerTestID}
     >
       <SidebarWorkspaceRowFrame workspace={workspace}>
-        {({ isHovered, hoverHandlers }) => {
+        {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
           // Touch platforms have no hover, so the kebab is permanent there and the
           // inline archive text button never appears.
           const showActions = Boolean(onArchive && (isHovered || isTouchPlatform));
@@ -740,7 +710,26 @@ function StatusWorkspaceRowInner({
                 isArchiving={isArchiving}
                 parentGestureRef={parentGestureRef}
               >
-                <Pressable
+                <SidebarWorkspaceContextMenu
+                  contextMenuOpen={contextMenuOpen}
+                  onContextMenuOpenChange={onContextMenuOpenChange}
+                  workspace={workspace}
+                  leadingProjectName={workspace.projectName}
+                  hostBadgeLabel={hostBadge?.label}
+                  scriptIconKind={scriptIconKind}
+                  workspaceKey={workspace.workspaceKey}
+                  onCopyPath={onCopyPath}
+                  onCopyBranchName={onCopyBranchName}
+                  onRename={onRename}
+                  onMarkAsRead={onMarkAsRead}
+                  onArchive={onArchive}
+                  archiveLabel={archiveLabel}
+                  archiveStatus={archiveStatus}
+                  archivePendingLabel={archivePendingLabel}
+                  archiveShortcutKeys={archiveShortcutKeys}
+                  isPinned={isPinned}
+                  onTogglePin={onTogglePin}
+                  openInFileManagerPath={workspace.workspaceDirectory}
                   disabled={isArchiving}
                   accessibilityRole="button"
                   accessibilityState={accessibilityState}
@@ -751,8 +740,7 @@ function StatusWorkspaceRowInner({
                   <SidebarStatusRowContent
                     workspace={workspace}
                     iconDataUri={iconDataUri}
-                    hostLabel={hostLabel}
-                    hostColor={hostColor}
+                    hostBadge={hostBadge}
                     scriptIconKind={scriptIconKind}
                     isArchiving={isArchiving}
                     shortcutNumber={shortcutNumber}
@@ -777,7 +765,7 @@ function StatusWorkspaceRowInner({
                       />
                     ) : null}
                   </SidebarStatusRowContent>
-                </Pressable>
+                </SidebarWorkspaceContextMenu>
               </StatusRowSwipeContainer>
             </View>
           );
