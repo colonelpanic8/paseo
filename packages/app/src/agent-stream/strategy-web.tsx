@@ -36,6 +36,8 @@ import {
   createHistoryStartSettleScheduler,
   type HistoryStartSettleScheduler,
 } from "./history-start-settle-scheduler";
+import { TurnMinimap } from "./turn-minimap-view.web";
+import { deriveTurnMinimapItems, type TurnMinimapItem } from "./turn-minimap";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -94,6 +96,24 @@ function escapeItemIdForSelector(itemId: string): string {
     return CSS.escape(itemId);
   }
   return itemId.replace(/["\\]/g, "\\$&");
+}
+
+const viewportFrameStyle: CSSProperties = {
+  position: "relative",
+  display: "flex",
+  flex: 1,
+  minHeight: 0,
+  width: "100%",
+};
+
+function setTurnMarkerInView(marker: HTMLSpanElement | undefined, inView: boolean): void {
+  if (!marker) {
+    return;
+  }
+  marker.style.backgroundColor = inView
+    ? "var(--colors-foreground)"
+    : "var(--colors-foreground-extra-muted)";
+  marker.style.opacity = inView ? "0.9" : "0.5";
 }
 
 function isScrollContainerNearBottom(
@@ -184,8 +204,10 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       releaseSessionFindHighlightOwner(owner);
     };
   }, []);
+  const [scrollContainerElement, setScrollContainerElement] = useState<HTMLElement | null>(null);
   const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
     scrollContainerRef.current = node;
+    setScrollContainerElement(node);
   }, []);
   const handleContentRef = useCallback((node: HTMLElement | null) => {
     contentRef.current = node;
@@ -203,6 +225,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
   const pendingAutoScrollTimeoutRef = useRef<number | null>(null);
   const pendingVirtualRowMeasureFramesRef = useRef(new Map<Element, number>());
+  const visibleTurnIdsRef = useRef<ReadonlySet<string>>(new Set());
   const historyStartReadyRef = useRef(false);
   const [historyStartPaginationState, setHistoryStartPaginationState] = useState(
     createHistoryStartPaginationState,
@@ -211,6 +234,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const historyStartPrependAnchorRef = useRef<HistoryStartPrependAnchor | null>(null);
   const historyStartPrependAnchorActiveRef = useRef(false);
   const historyStartSettleSchedulerRef = useRef<HistoryStartSettleScheduler | null>(null);
+  const [turnMarkerMap] = useState(() => new Map<string, HTMLSpanElement>());
   const shouldUseVirtualizer = segments.historyVirtualized.length > 0;
   const {
     renderHistoryVirtualizedRow,
@@ -218,6 +242,11 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     renderLiveHeadRow,
     renderLiveAuxiliary,
   } = renderers;
+  const orderedItems = useMemo(
+    () => [...segments.historyVirtualized, ...segments.historyMounted, ...segments.liveHead],
+    [segments.historyMounted, segments.historyVirtualized, segments.liveHead],
+  );
+  const turnMinimapItems = useMemo(() => deriveTurnMinimapItems(orderedItems), [orderedItems]);
 
   followOutputRef.current = followOutput;
 
@@ -505,6 +534,37 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     syncNearBottom(scrollContainer, onNearBottomChange);
   }, [onNearBottomChange]);
 
+  const updateTurnMarkers = useCallback(() => {
+    const scrollContainer = scrollContainerRef.current;
+    const content = contentRef.current;
+    if (!scrollContainer || !content) {
+      return;
+    }
+
+    const viewportRect = scrollContainer.getBoundingClientRect();
+    const nextVisibleIds = new Set<string>();
+    const turnRows = content.querySelectorAll<HTMLElement>("[data-turn-minimap-row]");
+    for (const row of turnRows) {
+      const turnId = row.dataset.turnMinimapRow;
+      if (!turnId) {
+        continue;
+      }
+      const rowRect = row.getBoundingClientRect();
+      const inView = rowRect.top < viewportRect.bottom && rowRect.bottom > viewportRect.top;
+      if (inView) {
+        nextVisibleIds.add(turnId);
+      }
+      setTurnMarkerInView(turnMarkerMap.get(turnId), inView);
+    }
+
+    for (const turnId of visibleTurnIdsRef.current) {
+      if (!nextVisibleIds.has(turnId)) {
+        setTurnMarkerInView(turnMarkerMap.get(turnId), false);
+      }
+    }
+    visibleTurnIdsRef.current = nextVisibleIds;
+  }, [turnMarkerMap]);
+
   const handleDomScroll = useCallback(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) {
@@ -537,13 +597,20 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
+    updateTurnMarkers();
     evaluateHistoryStart();
   }, [
     cancelPendingStickToBottom,
     evaluateHistoryStart,
     rearmHistoryStartFromUserIntent,
     updateScrollMetrics,
+    updateTurnMarkers,
   ]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(updateTurnMarkers);
+    return () => window.cancelAnimationFrame(frame);
+  }, [turnMinimapItems, updateTurnMarkers, virtualRows]);
 
   useEffect(() => {
     const initialHistoryStartState = createHistoryStartPaginationState();
@@ -834,6 +901,36 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     virtualTotalSize,
   ]);
 
+  const selectTurn = useCallback(
+    (item: TurnMinimapItem) => {
+      const scrollContainer = scrollContainerRef.current;
+      const content = contentRef.current;
+      if (!scrollContainer || !content) {
+        return;
+      }
+
+      cancelPendingStickToBottom();
+      setFollowOutput(false);
+      if (item.rowIndex < segments.historyVirtualized.length) {
+        rowVirtualizer.scrollToIndex(item.rowIndex, { align: "start", behavior: "smooth" });
+        return;
+      }
+
+      const rows = content.querySelectorAll<HTMLElement>("[data-turn-minimap-row]");
+      const target = Array.from(rows).find((row) => row.dataset.turnMinimapRow === item.id);
+      if (!target) {
+        return;
+      }
+      const viewportRect = scrollContainer.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      scrollContainer.scrollTo({
+        top: scrollContainer.scrollTop + targetRect.top - viewportRect.top - 24,
+        behavior: "smooth",
+      });
+    },
+    [cancelPendingStickToBottom, rowVirtualizer, segments.historyVirtualized.length],
+  );
+
   const contentContainerStyle = useMemo((): CSSProperties => {
     return {
       display: "flex",
@@ -880,6 +977,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         key={item.id}
         data-history-row-id={item.id}
         data-stream-item-id={item.id}
+        data-turn-minimap-row={item.kind === "user_message" ? item.id : undefined}
         style={rowAnchorStyle}
       >
         {renderHistoryMountedRow(item, index, segments.historyMounted)}
@@ -889,7 +987,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const liveHeadRows = useMemo(() => {
     void liveHeadRowRevision;
     return segments.liveHead.map((item, index) => (
-      <div key={item.id} data-stream-item-id={item.id} style={rowAnchorStyle}>
+      <div
+        key={item.id}
+        data-stream-item-id={item.id}
+        data-turn-minimap-row={item.kind === "user_message" ? item.id : undefined}
+        style={rowAnchorStyle}
+      >
         {renderLiveHeadRow(item, index, segments.liveHead)}
       </div>
     ));
@@ -916,41 +1019,55 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     !liveAuxiliary;
 
   return (
-    <div
-      ref={handleScrollContainerRef}
-      data-testid="agent-chat-scroll"
-      id={`agent-chat-scroll-${shouldUseVirtualizer ? "web-dom-virtualized" : "web-dom-scroll"}`}
-      style={scrollContainerStyle}
-    >
-      <div ref={handleContentRef} style={contentContainerStyle}>
-        {historyStartSlot}
-        {shouldUseVirtualizer ? (
-          <div style={virtualRowsContainerStyle}>
-            {virtualRows.map((virtualRow) => {
-              const item = segments.historyVirtualized[virtualRow.index];
-              if (!item) {
-                return null;
-              }
-              return (
-                <div
-                  key={virtualRow.key}
-                  data-index={virtualRow.index}
-                  data-history-row-id={item.id}
-                  data-stream-item-id={item.id}
-                  ref={measureVirtualizedRowElement}
-                  style={renderVirtualRowStyle(virtualRow.start)}
-                >
-                  {renderHistoryVirtualizedRow(item, virtualRow.index, segments.historyVirtualized)}
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
-        {mountedHistoryRows}
-        {liveHeadRows}
-        {liveAuxiliary}
-        {shouldRenderEmpty ? listEmptyComponent : null}
+    <div style={viewportFrameStyle}>
+      <div
+        ref={handleScrollContainerRef}
+        data-testid="agent-chat-scroll"
+        id={`agent-chat-scroll-${shouldUseVirtualizer ? "web-dom-virtualized" : "web-dom-scroll"}`}
+        style={scrollContainerStyle}
+      >
+        <div ref={handleContentRef} style={contentContainerStyle}>
+          {historyStartSlot}
+          {shouldUseVirtualizer ? (
+            <div style={virtualRowsContainerStyle}>
+              {virtualRows.map((virtualRow) => {
+                const item = segments.historyVirtualized[virtualRow.index];
+                if (!item) {
+                  return null;
+                }
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    data-history-row-id={item.id}
+                    data-stream-item-id={item.id}
+                    data-turn-minimap-row={item.kind === "user_message" ? item.id : undefined}
+                    ref={measureVirtualizedRowElement}
+                    style={renderVirtualRowStyle(virtualRow.start)}
+                  >
+                    {renderHistoryVirtualizedRow(
+                      item,
+                      virtualRow.index,
+                      segments.historyVirtualized,
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          {mountedHistoryRows}
+          {liveHeadRows}
+          {liveAuxiliary}
+          {shouldRenderEmpty ? listEmptyComponent : null}
+        </div>
       </div>
+      <TurnMinimap
+        items={turnMinimapItems}
+        markerMap={turnMarkerMap}
+        viewportElement={scrollContainerElement}
+        onMarkersReady={updateTurnMarkers}
+        onSelect={selectTurn}
+      />
     </div>
   );
 }

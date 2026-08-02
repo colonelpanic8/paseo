@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
 import {
   awaitAssistantMessage,
@@ -27,6 +28,10 @@ import {
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
 
+async function readScrollTop(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => element.scrollTop);
+}
+
 test.describe("Agent stream UI", () => {
   test("keeps running agent chrome after page refresh", async ({ page }) => {
     const title = "Running agent refresh";
@@ -43,6 +48,44 @@ test.describe("Agent stream UI", () => {
       await page.reload();
 
       await expectRunningAgentChrome(page, title);
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
+  test("previews and navigates turns from the wide-layout minimap", async ({ page }) => {
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: "turn-minimap-",
+      title: "Turn minimap",
+    });
+    const prompts = [
+      "First minimap turn: emit 80 coalesced agent stream updates.",
+      "Second minimap turn: emit 80 coalesced agent stream updates.",
+      "Third minimap turn: emit 80 coalesced agent stream updates.",
+    ];
+
+    try {
+      for (const prompt of prompts) {
+        await agent.client.sendAgentMessage(agent.agentId, prompt);
+        await agent.client.waitForFinish(agent.agentId, 15_000);
+      }
+
+      await page.setViewportSize({ width: 1_400, height: 720 });
+      await openAgentRoute(page, agent);
+      await expectComposerVisible(page);
+
+      const minimap = page.getByTestId("turn-minimap");
+      const rail = page.getByTestId("turn-minimap-rail");
+      await expect(minimap).toBeVisible();
+      await rail.hover({ position: { x: 4, y: 1 } });
+      await expect(page.getByTestId("turn-minimap-preview")).toContainText(prompts[0]!);
+
+      const scroll = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
+      await rail.click({ position: { x: 4, y: 1 } });
+      await expect.poll(() => readScrollTop(scroll)).toBeLessThan(100);
+
+      await page.setViewportSize({ width: 900, height: 720 });
+      await expect(minimap).toHaveCount(0);
     } finally {
       await agent.cleanup();
     }
