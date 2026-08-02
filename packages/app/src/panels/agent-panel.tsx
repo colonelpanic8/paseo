@@ -26,6 +26,9 @@ import { useRetainedPanelActive } from "@/components/retained-panel";
 import { SidebarCallout } from "@/components/sidebar-callout";
 import { Composer } from "@/composer";
 import { getActiveMessageSubmissions } from "@/composer/submission/model";
+import { pickAgentModelDisplaySource } from "@/composer/agent-controls/utils";
+import { buildAgentPanelSubtitle } from "@/panels/agent-panel-subtitle";
+import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
@@ -111,6 +114,7 @@ interface ChatAgentStateShape {
   currentModeId?: Agent["currentModeId"];
   model?: Agent["model"];
   thinkingOptionId?: Agent["thinkingOptionId"];
+  effectiveThinkingOptionId?: Agent["effectiveThinkingOptionId"];
   runtimeInfo?: Agent["runtimeInfo"];
   features?: Agent["features"];
   lastError?: Agent["lastError"] | null;
@@ -164,6 +168,7 @@ function selectChatAgentState(
     currentModeId: agent.currentModeId,
     model: agent.model,
     thinkingOptionId: agent.thinkingOptionId,
+    effectiveThinkingOptionId: agent.effectiveThinkingOptionId,
     runtimeInfo: agent.runtimeInfo,
     features: agent.features,
     lastError: agent.lastError ?? null,
@@ -192,6 +197,7 @@ function buildChatAgentFromState(
     currentModeId: state.currentModeId,
     model: state.model,
     thinkingOptionId: state.thinkingOptionId,
+    effectiveThinkingOptionId: state.effectiveThinkingOptionId,
     runtimeInfo: state.runtimeInfo,
     features: state.features,
     lastError: state.lastError ?? null,
@@ -236,17 +242,6 @@ function renderChatAgentNonReadyView(args: {
   return null;
 }
 
-function formatProviderLabel(provider: Agent["provider"]): string {
-  if (!provider) {
-    return "Agent";
-  }
-  return provider
-    .split(/[-_\s]+/)
-    .filter((part) => part.length > 0)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function resolveWorkspaceAgentTabLabel(title: string | null | undefined): string | null {
   if (typeof title !== "string") {
     return null;
@@ -274,6 +269,8 @@ const EMPTY_AGENT_PANEL_DESCRIPTOR_STATE = {
   requiresAttention: false,
   attentionReason: null,
   isTurnActive: false,
+  cwd: null,
+  ...pickAgentModelDisplaySource(null),
 };
 
 function selectAgentPanelDescriptorState(
@@ -301,6 +298,8 @@ function selectAgentPanelDescriptorState(
     requiresAttention: agent.requiresAttention ?? false,
     attentionReason: agent.attentionReason ?? null,
     isTurnActive: selectAgentTurnPresentation(session, agentId).isActive,
+    cwd: agent.cwd ?? null,
+    ...pickAgentModelDisplaySource(agent),
   };
 }
 
@@ -351,6 +350,15 @@ function storeFetchedAgentDetail(input: {
   return hydrated;
 }
 
+function findPanelAgent(
+  state: ReturnType<typeof useSessionStore.getState>,
+  serverId: string,
+  agentId: string,
+) {
+  const session = state.sessions[serverId];
+  return session?.agents?.get(agentId) ?? session?.agentDetails?.get(agentId) ?? null;
+}
+
 function useAgentPanelDescriptor(
   target: { kind: "agent"; agentId: string },
   context: { serverId: string },
@@ -367,11 +375,21 @@ function useAgentPanelDescriptor(
     providerLabel,
   });
   const icon = getProviderIcon(provider);
+  const modelDisplay = useAgentModelDisplay({
+    serverId: context.serverId,
+    cwd: descriptorState.cwd,
+    provider,
+    model: descriptorState.model,
+    runtimeModelId: descriptorState.runtimeModelId,
+    thinkingOptionId: descriptorState.thinkingOptionId,
+    effectiveThinkingOptionId: descriptorState.effectiveThinkingOptionId,
+  });
+  const subtitle = buildAgentPanelSubtitle(provider, modelDisplay);
 
   return {
     label: label ?? "",
-    subtitle: purposePresentation.subtitle,
-    tooltip: purposePresentation.tooltip,
+    subtitle: descriptorState.summary ? purposePresentation.subtitle : subtitle,
+    tooltip: descriptorState.summary ? purposePresentation.tooltip : (label ?? subtitle),
     titleState: label ? "ready" : "loading",
     icon,
     statusBucket: descriptorState.status
@@ -1608,6 +1626,8 @@ function ActiveAgentComposer({
     <ReanimatedAnimated.View style={inputAreaStyle} onLayout={onInputAreaLayout}>
       <SubagentsTrack
         rows={subagentRows}
+        serverId={serverId}
+        cwd={cwd}
         onOpenSubagent={handleOpenSubagent}
         onOpenProviderSubagent={handleOpenProviderSubagent}
         onArchiveSubagent={handleArchiveSubagent}
