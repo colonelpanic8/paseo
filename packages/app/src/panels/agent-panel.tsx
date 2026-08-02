@@ -1209,6 +1209,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         serverId={serverId}
         agentId={agentId}
         agent={effectiveAgent}
+        isPaneFocused={isPaneFocused}
         routeBottomAnchorRequest={routeBottomAnchorRequest}
         hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
         toast={toastApi}
@@ -1281,6 +1282,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   serverId,
   agentId,
   agent,
+  isPaneFocused,
   routeBottomAnchorRequest,
   hasAppliedAuthoritativeHistory,
   toast,
@@ -1290,6 +1292,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   serverId: string;
   agentId?: string;
   agent: AgentScreenAgent;
+  isPaneFocused: boolean;
   routeBottomAnchorRequest: RouteBottomAnchorRequest;
   hasAppliedAuthoritativeHistory: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
@@ -1354,6 +1357,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
       pendingMessageSubmissions={pendingMessageSubmissions}
       turnPresentation={turnPresentation}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      isPaneFocused={isPaneFocused}
     />
   );
 });
