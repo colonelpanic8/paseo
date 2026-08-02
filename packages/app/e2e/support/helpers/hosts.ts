@@ -1,5 +1,8 @@
 import { expect, type Page } from "@playwright/test";
+import { identityColor, type IdentityColorName } from "@/styles/identity-colors";
+import { openSettings } from "./app";
 import { buildSeededHost } from "./daemon-registry";
+import { clickSettingsBackToWorkspace, openHostSection, selectSettingsHost } from "./settings";
 
 const REGISTRY_KEY = "@paseo:daemon-registry";
 const SEED_NONCE_KEY = "@paseo:e2e-seed-nonce";
@@ -139,4 +142,144 @@ export async function toggleHostFilter(page: Page, serverId: string): Promise<vo
 
 export async function selectAllHostsFilter(page: Page): Promise<void> {
   await page.getByTestId("sidebar-host-filter-all").click();
+}
+
+// Playwright reports resolved colors, so the expected value is derived from the same identity
+// table the app reads. A hex literal in the test would be a second copy of the palette.
+function toRgb(hex: string): string {
+  const { r, g, b } = parseHex(hex);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function toRgba(hex: string, alpha: number): string {
+  const { r, g, b } = parseHex(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+interface RgbChannels {
+  r: number;
+  g: number;
+  b: number;
+}
+
+function parseHex(hex: string): RgbChannels {
+  return {
+    r: Number.parseInt(hex.slice(1, 3), 16),
+    g: Number.parseInt(hex.slice(3, 5), 16),
+    b: Number.parseInt(hex.slice(5, 7), 16),
+  };
+}
+
+export async function openHostAppearanceSettings(page: Page, serverId: string): Promise<void> {
+  await openSettings(page);
+  await selectSettingsHost(page, serverId);
+  await openHostSection(page, serverId, "host");
+  await expect(page.getByTestId("host-appearance-preview")).toBeVisible({ timeout: 15_000 });
+}
+
+// Settings replaces the workspace sidebar, so badge assertions need the app shell back. Going
+// through the in-app back control (rather than a fresh goto) also keeps the auto-seed fixture
+// from rewriting the host registry, since init scripts only re-run on a real navigation.
+export async function leaveHostAppearanceSettings(page: Page): Promise<void> {
+  await clickSettingsBackToWorkspace(page);
+  await expect(page.getByTestId("host-appearance-preview")).toHaveCount(0);
+}
+
+export async function renameHostFromSettings(page: Page, name: string): Promise<void> {
+  await page.getByTestId("host-page-label-edit-button").click();
+  const input = page.getByTestId("host-page-rename-modal-input");
+  await expect(input).toBeVisible();
+  await input.fill(name);
+  await page.getByTestId("host-page-rename-modal-submit").click();
+  await expect(input).toHaveCount(0);
+}
+
+export async function chooseHostColor(page: Page, colorName: string): Promise<void> {
+  await page.getByRole("button", { name: /^Color, / }).click();
+  await page.getByRole("button", { name: colorName, exact: true }).click();
+  await expect(page.getByRole("button", { name: `Color, ${colorName}` })).toBeVisible();
+}
+
+export async function chooseHostBadgeDisplay(
+  page: Page,
+  option: "Name" | "Icon only" | "Hidden",
+): Promise<void> {
+  await page
+    .getByTestId("host-appearance-badge-display")
+    .getByRole("button", { name: option, exact: true })
+    .click();
+}
+
+// The badge is a pill with no semantic role, so it is located by its accessible name inside the
+// workspace row that owns it — the row test ID is existing sidebar vocabulary.
+function hostBadge(page: Page, input: HostBadgeTarget) {
+  return page
+    .getByTestId(`sidebar-workspace-row-${input.serverId}:${input.workspaceId}`)
+    .getByLabel(input.hostName);
+}
+
+interface HostBadgeTarget {
+  serverId: string;
+  workspaceId: string;
+  hostName: string;
+}
+
+export async function expectHostBadgeName(page: Page, target: HostBadgeTarget): Promise<void> {
+  const badge = hostBadge(page, target);
+  await expect(badge).toBeVisible({ timeout: 15_000 });
+  await expect(badge).toHaveText(target.hostName);
+}
+
+export async function expectHostBadgeIconOnly(page: Page, target: HostBadgeTarget): Promise<void> {
+  const badge = hostBadge(page, target);
+  await expect(badge).toBeVisible({ timeout: 15_000 });
+  await expect(badge).toHaveText("");
+}
+
+export async function expectNoHostBadge(page: Page, target: HostBadgeTarget): Promise<void> {
+  await expect(hostBadge(page, target)).toHaveCount(0, { timeout: 15_000 });
+}
+
+export async function expectHostBadgeTinted(
+  page: Page,
+  target: HostBadgeTarget & { color: IdentityColorName },
+): Promise<void> {
+  const badge = hostBadge(page, target);
+  await expect(badge).toBeVisible({ timeout: 15_000 });
+  await expect(badge.getByText(target.hostName)).toHaveCSS(
+    "color",
+    toRgb(identityColor(target.color)),
+  );
+  await expect(badge).toHaveCSS("background-color", toRgba(identityColor(target.color), 0.1));
+}
+
+export async function expectHostAppearancePreview(
+  page: Page,
+  input: { hostName: string; color: IdentityColorName },
+): Promise<void> {
+  const preview = page.getByTestId("host-appearance-preview");
+  await expect(preview).toBeVisible();
+  const badge = preview.getByLabel(input.hostName);
+  await expect(badge).toHaveText(input.hostName);
+  await expect(badge.getByText(input.hostName)).toHaveCSS(
+    "color",
+    toRgb(identityColor(input.color)),
+  );
+}
+
+// The auto-seed fixture rewrites the host registry on every navigation. Setting the
+// disable-once flag to the current nonce makes it skip exactly one reload, which is what proves
+// the appearance survived rather than being reseeded.
+export async function reloadPreservingHostRegistry(page: Page): Promise<void> {
+  await page.evaluate(
+    (keys) => {
+      const nonce = localStorage.getItem(keys.nonce);
+      if (!nonce) {
+        throw new Error("Expected the e2e seed nonce before reloading.");
+      }
+      localStorage.setItem(keys.disableSeedOnce, nonce);
+    },
+    { nonce: SEED_NONCE_KEY, disableSeedOnce: DISABLE_DEFAULT_SEED_ONCE_KEY },
+  );
+  await page.reload();
 }

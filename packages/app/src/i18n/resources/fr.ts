@@ -1984,6 +1984,40 @@ export const fr: TranslationResources = {
       },
     },
     host: {
+      appearance: {
+        title: "Apparence",
+        name: {
+          label: "Nom",
+        },
+        color: {
+          label: "Couleur",
+          accessibilityLabel: "Couleur, {{value}}",
+          options: {
+            none: "Par défaut",
+            violet: "Violet",
+            sky: "Ciel",
+            emerald: "Émeraude",
+            orange: "Orange",
+            pink: "Rose",
+            indigo: "Indigo",
+            teal: "Sarcelle",
+            red: "Rouge",
+            amber: "Ambre",
+            blue: "Bleu",
+          },
+        },
+        badge: {
+          label: "Badge de la barre latérale",
+          options: {
+            name: "Nom",
+            icon: "Icône seule",
+            hidden: "Masqué",
+          },
+        },
+        preview: {
+          workspaceName: "my-workspace",
+        },
+      },
       notFound: "Hostintrouvable",
       badges: {
         relay: "Relais",
