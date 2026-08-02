@@ -520,6 +520,10 @@ function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) 
   };
 }
 
+function resolveAgentPurposeSummariesEnabled(env: NodeJS.ProcessEnv): boolean {
+  return parseBooleanEnv(env.PASEO_AGENT_PURPOSE_SUMMARIES) ?? true;
+}
+
 function resolveStaticLoadConfigSettings(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
@@ -530,6 +534,7 @@ function resolveStaticLoadConfigSettings(
     mcpInjectIntoAgents:
       cli?.mcpInjectIntoAgents ?? persisted.daemon?.mcp?.injectIntoAgents ?? false,
     browserToolsEnabled: resolveBrowserToolsEnabled(persisted),
+    agentPurposeSummariesEnabled: resolveAgentPurposeSummariesEnabled(env),
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     ...resolveProfileLists(persisted),
@@ -565,6 +570,7 @@ export function resolveConfigFromPersisted(
     mcpEnabled,
     mcpInjectIntoAgents,
     browserToolsEnabled,
+    agentPurposeSummariesEnabled,
     autoArchiveAfterMerge,
     appendSystemPrompt,
     terminalProfiles,
@@ -609,6 +615,7 @@ export function resolveConfigFromPersisted(
     mcpInjectIntoAgents,
     browserToolsEnabled,
     git: resolveGitProcessConfig(env, persisted),
+    agentPurposeSummariesEnabled,
     autoArchiveAfterMerge,
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
     appendSystemPrompt,
