@@ -149,6 +149,9 @@ test.describe("Model B sidebar shape", () => {
       await expect(workspaceRow(page, activeMock.workspaceId).first()).toBeVisible({
         timeout: 60_000,
       });
+      await expect(workspaceRow(page, idleProject.workspaceId).first()).toHaveAccessibleName(
+        `${idleProject.projectDisplayName}, ${idleProject.workspaceName}`,
+      );
 
       // Only workspace rows are shown — no tab/agent/terminal leaves leak into
       // the status view.

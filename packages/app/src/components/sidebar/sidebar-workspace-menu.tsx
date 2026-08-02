@@ -4,6 +4,8 @@ import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Archive, CircleCheck, Copy, MoreVertical, Pencil, Pin, PinOff } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
+import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -20,6 +22,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
+import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -241,6 +244,8 @@ export function SidebarWorkspaceContextMenu({
   children,
   contextMenuOpen,
   onContextMenuOpenChange,
+  workspace,
+  leadingProjectName,
   workspaceKey,
   onCopyPath,
   onCopyBranchName,
@@ -254,17 +259,32 @@ export function SidebarWorkspaceContextMenu({
   isPinned,
   onTogglePin,
   openInFileManagerPath,
+  accessibilityLabel,
   ...triggerProps
 }: PropsWithChildren<
   SidebarWorkspaceMenuItemsProps &
     ContextTriggerProps & {
       contextMenuOpen: boolean;
       onContextMenuOpenChange: (open: boolean) => void;
+      workspace: SidebarWorkspaceEntry;
+      leadingProjectName?: string | null;
     }
 >) {
+  const {
+    settings: { workspaceTitleSource },
+  } = useAppSettings();
+  const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
+  const rowAccessibilityLabel = leadingProjectName
+    ? `${leadingProjectName}, ${workspaceLabel}`
+    : workspaceLabel;
+
   return (
     <ContextMenu open={contextMenuOpen} onOpenChange={onContextMenuOpenChange}>
-      <ContextMenuTrigger {...triggerProps} enabledOnMobile={false}>
+      <ContextMenuTrigger
+        {...triggerProps}
+        enabledOnMobile={false}
+        accessibilityLabel={accessibilityLabel ?? rowAccessibilityLabel}
+      >
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent
