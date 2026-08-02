@@ -1348,6 +1348,7 @@ export class HostRuntimeStore {
   private hostListVersion = 0;
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
+  private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
   private deps: HostRuntimeControllerDeps;
   private lastConnectionStatusByServer = new Map<string, HostRuntimeConnectionStatus>();
@@ -1791,17 +1792,11 @@ export class HostRuntimeStore {
   private async updateHost(
     serverId: string,
     apply: (host: HostProfile) => HostProfile,
-    persistBeforeCommit = false,
   ): Promise<void> {
     const updatedAt = new Date().toISOString();
     const next = this.hosts.map((host) =>
       host.serverId === serverId ? { ...apply(host), updatedAt } : host,
     );
-    if (persistBeforeCommit) {
-      await this.persistHosts(next);
-      this.setHostsAndSync(next);
-      return;
-    }
     this.setHostsAndSync(next);
     await this.persistHosts();
   }
@@ -1811,19 +1806,40 @@ export class HostRuntimeStore {
   }
 
   async setHostColor(serverId: string, color: HostColor): Promise<void> {
-    await this.updateHost(
-      serverId,
-      (host) => ({ ...host, appearance: { ...host.appearance, color } }),
-      true,
-    );
+    await this.updateHostAppearance(serverId, (host) => ({
+      ...host,
+      appearance: { ...host.appearance, color },
+    }));
   }
 
   async setHostBadgeDisplay(serverId: string, badgeDisplay: HostBadgeDisplay): Promise<void> {
-    await this.updateHost(
-      serverId,
-      (host) => ({ ...host, appearance: { ...host.appearance, badgeDisplay } }),
-      true,
+    await this.updateHostAppearance(serverId, (host) => ({
+      ...host,
+      appearance: { ...host.appearance, badgeDisplay },
+    }));
+  }
+
+  private updateHostAppearance(
+    serverId: string,
+    apply: (host: HostProfile) => HostProfile,
+  ): Promise<void> {
+    const update = this.hostAppearanceMutationTail.then(() =>
+      this.applyHostAppearance(serverId, apply),
     );
+    this.hostAppearanceMutationTail = update.catch(() => undefined);
+    return update;
+  }
+
+  private async applyHostAppearance(
+    serverId: string,
+    apply: (host: HostProfile) => HostProfile,
+  ): Promise<void> {
+    const updatedAt = new Date().toISOString();
+    const next = this.hosts.map((host) =>
+      host.serverId === serverId ? { ...apply(host), updatedAt } : host,
+    );
+    await this.persistHosts(next);
+    this.setHostsAndSync(next);
   }
 
   async removeHost(serverId: string): Promise<void> {

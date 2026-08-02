@@ -1605,6 +1605,40 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
+  it("serializes overlapping host appearance writes", async () => {
+    const host = makeHost({ serverId: "srv_appearance" });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@paseo:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    const firstWrite = createDeferred<void>();
+    let writeCount = 0;
+    const setItem = storage.setItem.bind(storage);
+    storage.setItem = async (key, value) => {
+      writeCount += 1;
+      if (writeCount === 1) await firstWrite.promise;
+      await setItem(key, value);
+    };
+
+    const color = store.setHostColor("srv_appearance", "teal");
+    const display = store.setHostBadgeDisplay("srv_appearance", "icon");
+    await Promise.resolve();
+    expect(writeCount).toBe(1);
+
+    firstWrite.resolve();
+    await Promise.all([color, display]);
+
+    expect(store.getHosts()[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
+    const persistedHosts = JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]");
+    expect(persistedHosts[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
+    store.syncHosts([]);
+  });
+
   it("bootstraps agent directory subscription when host transitions online", async () => {
     const host = makeHost({
       connections: [
