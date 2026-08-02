@@ -1356,7 +1356,6 @@ export class HostRuntimeStore {
   private queuedAgentDrainInFlight = new Set<string>();
   private directorySyncByServer = new Map<string, DirectorySync>();
   private configuredOverrideBootstrapInFlight: Promise<void> | null = null;
-  private hostRegistryWriteQueue: Promise<void> = Promise.resolve();
   private bootStarted = false;
   private storage: HostRuntimeStorage;
   private replicaCache: ReplicaCache;
@@ -1944,12 +1943,7 @@ export class HostRuntimeStore {
   }
 
   private async persistHosts(hosts = this.hosts): Promise<void> {
-    const serializedHosts = JSON.stringify(hosts);
-    const write = this.hostRegistryWriteQueue.then(() =>
-      this.storage.setItem(REGISTRY_STORAGE_KEY, serializedHosts),
-    );
-    this.hostRegistryWriteQueue = write.catch(() => undefined);
-    await write;
+    await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(hosts));
   }
 
   private emitHostList(): void {
