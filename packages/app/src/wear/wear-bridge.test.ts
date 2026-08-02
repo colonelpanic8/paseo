@@ -342,12 +342,12 @@ describe("parseWearCommand", () => {
 
 function makeTransport(): WearBridgeTransport & {
   published: string[];
-  transcripts: Array<{ agentId: string; payload: string }>;
+  transcripts: Array<{ serverId: string; agentId: string; payload: string }>;
   icons: Array<{ projectKey: string; data: string; mimeType: string }>;
   emit: (payload: string) => void;
 } {
   const published: string[] = [];
-  const transcripts: Array<{ agentId: string; payload: string }> = [];
+  const transcripts: Array<{ serverId: string; agentId: string; payload: string }> = [];
   const icons: Array<{ projectKey: string; data: string; mimeType: string }> = [];
   let listener: ((payload: string) => void) | null = null;
   return {
@@ -359,8 +359,8 @@ function makeTransport(): WearBridgeTransport & {
       published.push(payload);
       return true;
     },
-    publishTranscript: async (agentId, payload) => {
-      transcripts.push({ agentId, payload });
+    publishTranscript: async (serverId, agentId, payload) => {
+      transcripts.push({ serverId, agentId, payload });
       return true;
     },
     publishProjectIcon: async (projectKey, data, mimeType) => {
