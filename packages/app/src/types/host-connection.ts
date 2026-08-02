@@ -379,9 +379,7 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
   return {
     serverId,
     label,
-    // `record.color` predates `appearance`: the pre-merge expand-status-sidebar builds
-    // stored the host color at the top level of the profile.
-    appearance: normalizeStoredHostAppearance(record.appearance, record.color),
+    appearance: normalizeStoredHostAppearance(record.appearance),
     lifecycle: defaultLifecycle(),
     connections,
     preferredConnectionId,

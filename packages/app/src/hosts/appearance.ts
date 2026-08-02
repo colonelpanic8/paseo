@@ -31,35 +31,13 @@ function isHostBadgeDisplay(value: unknown): value is HostBadgeDisplay {
   return HOST_BADGE_DISPLAYS.some((display) => display === value);
 }
 
-// Palette keys from the pre-appearance host-color storage that don't collide with an
-// identity name. The colliding keys (blue, orange, red, amber) already parse as host
-// colors on their own.
-const LEGACY_HOST_COLOR_KEYS: Record<string, IdentityColorName> = {
-  green: "emerald",
-  purple: "violet",
-};
-
-function normalizeHostColor(value: unknown): HostColor {
-  if (isHostColor(value)) {
-    return value;
-  }
-  return (typeof value === "string" && LEGACY_HOST_COLOR_KEYS[value]) || "none";
-}
-
-/**
- * `legacyColor` is the top-level `color` field that host profiles stored before
- * appearance existed; it only applies when the profile has no appearance record.
- */
-export function normalizeStoredHostAppearance(
-  value: unknown,
-  legacyColor?: unknown,
-): HostAppearance {
+export function normalizeStoredHostAppearance(value: unknown): HostAppearance {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { color: normalizeHostColor(legacyColor), badgeDisplay: null };
+    return defaultHostAppearance();
   }
   const record = value as Record<string, unknown>;
   return {
-    color: normalizeHostColor(record.color),
+    color: isHostColor(record.color) ? record.color : "none",
     badgeDisplay: isHostBadgeDisplay(record.badgeDisplay) ? record.badgeDisplay : null,
   };
 }
