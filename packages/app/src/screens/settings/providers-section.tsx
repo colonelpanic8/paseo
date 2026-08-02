@@ -22,6 +22,11 @@ import {
   type AcpProviderCatalogItem,
 } from "@/hooks/use-acp-provider-catalog";
 import { ProviderCatalogList } from "@/components/provider-catalog-list";
+import {
+  ProviderAccountSheet,
+  type ProviderAccountCreateInput,
+} from "@/components/provider-account-sheet";
+import { canAddProviderAccount } from "@/provider-accounts/provider-account-form-model";
 import { getProviderIcon } from "@/components/provider-icons";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
@@ -34,7 +39,7 @@ import {
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react-native";
+import { ChevronRight, MoreHorizontal, Trash2, UserPlus } from "lucide-react-native";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -82,10 +87,12 @@ interface ProviderRowProps {
   isToggling: boolean;
   isRemoving: boolean;
   canRemove: boolean;
+  canAddAccount: boolean;
   isFirst: boolean;
   onPress: (providerId: string) => void;
   onToggleEnabled: (providerId: string, enabled: boolean) => void;
   onRemove: (providerId: string, providerLabel: string) => void;
+  onAddAccount: (providerId: string, providerLabel: string) => void;
 }
 
 function stopPressInPropagation(event: GestureResponderEvent) {
@@ -96,27 +103,36 @@ interface ProviderActionsMenuProps {
   providerId: string;
   providerLabel: string;
   isRemoving: boolean;
+  canRemove: boolean;
+  canAddAccount: boolean;
   iconSize: number;
   foregroundColor: string;
   foregroundMutedColor: string;
   dangerColor: string;
   onRemove: (providerId: string, providerLabel: string) => void;
+  onAddAccount: (providerId: string, providerLabel: string) => void;
 }
 
 function ProviderActionsMenu({
   providerId,
   providerLabel,
   isRemoving,
+  canRemove,
+  canAddAccount,
   iconSize,
   foregroundColor,
   foregroundMutedColor,
   dangerColor,
   onRemove,
+  onAddAccount,
 }: ProviderActionsMenuProps) {
   const { t } = useTranslation();
   const handleRemove = useCallback(() => {
     onRemove(providerId, providerLabel);
   }, [onRemove, providerId, providerLabel]);
+  const handleAddAccount = useCallback(() => {
+    onAddAccount(providerId, providerLabel);
+  }, [onAddAccount, providerId, providerLabel]);
   const triggerStyle = useCallback(
     ({
       pressed,
@@ -130,6 +146,10 @@ function ProviderActionsMenu({
     [],
   );
   const trashLeading = useMemo(() => <Trash2 size={16} color={dangerColor} />, [dangerColor]);
+  const addAccountLeading = useMemo(
+    () => <UserPlus size={16} color={foregroundMutedColor} />,
+    [foregroundMutedColor],
+  );
 
   return (
     <DropdownMenu>
@@ -150,16 +170,27 @@ function ProviderActionsMenu({
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width={220}>
-        <DropdownMenuItem
-          destructive
-          leading={trashLeading}
-          onSelect={handleRemove}
-          status={isRemoving ? "pending" : "idle"}
-          pendingLabel={t("settings.providers.actions.removing")}
-          testID={`provider-remove-${providerId}`}
-        >
-          {t("settings.providers.actions.remove")}
-        </DropdownMenuItem>
+        {canAddAccount ? (
+          <DropdownMenuItem
+            leading={addAccountLeading}
+            onSelect={handleAddAccount}
+            testID={`provider-add-account-${providerId}`}
+          >
+            {t("settings.providers.actions.addAccount")}
+          </DropdownMenuItem>
+        ) : null}
+        {canRemove ? (
+          <DropdownMenuItem
+            destructive
+            leading={trashLeading}
+            onSelect={handleRemove}
+            status={isRemoving ? "pending" : "idle"}
+            pendingLabel={t("settings.providers.actions.removing")}
+            testID={`provider-remove-${providerId}`}
+          >
+            {t("settings.providers.actions.remove")}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -172,10 +203,12 @@ function ProviderRow({
   isToggling,
   isRemoving,
   canRemove,
+  canAddAccount,
   isFirst,
   onPress,
   onToggleEnabled,
   onRemove,
+  onAddAccount,
 }: ProviderRowProps) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
@@ -249,16 +282,19 @@ function ProviderRow({
               accessibilityLabel={t("settings.providers.enableProvider", { name: def.label })}
             />
             <View style={styles.menuSlot}>
-              {canRemove ? (
+              {canRemove || canAddAccount ? (
                 <ProviderActionsMenu
                   providerId={def.id}
                   providerLabel={def.label}
                   isRemoving={isRemoving}
+                  canRemove={canRemove}
+                  canAddAccount={canAddAccount}
                   iconSize={theme.iconSize.sm}
                   foregroundColor={theme.colors.foreground}
                   foregroundMutedColor={theme.colors.foregroundMuted}
                   dangerColor={theme.colors.statusDanger}
                   onRemove={onRemove}
+                  onAddAccount={onAddAccount}
                 />
               ) : null}
             </View>
@@ -316,6 +352,11 @@ function StatusIndicator({ status, compact }: { status: ProviderStatus; compact:
   );
 }
 
+interface ProviderAccountTarget {
+  id: string;
+  label: string;
+}
+
 export interface ProvidersSectionProps {
   serverId: string;
 }
@@ -331,8 +372,15 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const [removingProviderId, setRemovingProviderId] = useState<string | null>(null);
   const removingProviderIdRef = useRef<string | null>(null);
   const [installingProviderId, setInstallingProviderId] = useState<string | null>(null);
+  const [accountBaseProvider, setAccountBaseProvider] = useState<ProviderAccountTarget | null>(
+    null,
+  );
 
   const providerDefinitions = useMemo(() => buildProviderDefinitions(entries), [entries]);
+  const existingProviderIds = useMemo(
+    () => (entries ?? []).map((entry) => entry.provider),
+    [entries],
+  );
   const hasServer = serverId.length > 0;
 
   const handleOpenProviderSettings = useCallback(
@@ -410,6 +458,31 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     [installingProviderId, patchConfig, refresh, t],
   );
 
+  const handleOpenAddAccount = useCallback((providerId: string, providerLabel: string) => {
+    setAccountBaseProvider({ id: providerId, label: providerLabel });
+  }, []);
+
+  const handleCloseAddAccount = useCallback(() => {
+    setAccountBaseProvider(null);
+  }, []);
+
+  const handleCreateAccount = useCallback(
+    async ({ providerId, patch }: ProviderAccountCreateInput) => {
+      try {
+        await patchConfig(patch);
+        await refresh([providerId]);
+        return true;
+      } catch (error) {
+        Alert.alert(
+          t("settings.providers.account.errorTitle"),
+          error instanceof Error ? error.message : String(error),
+        );
+        return false;
+      }
+    },
+    [patchConfig, refresh, t],
+  );
+
   return (
     <>
       <SettingsSection
@@ -441,10 +514,15 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
                   isToggling={pendingProviderId === def.id}
                   isRemoving={removingProviderId === def.id}
                   canRemove={supportsProviderRemoval && entry.source === "custom"}
+                  canAddAccount={canAddProviderAccount({
+                    providerId: def.id,
+                    source: entry.source,
+                  })}
                   isFirst={index === 0}
                   onPress={handleOpenProviderSettings}
                   onToggleEnabled={handleToggleEnabled}
                   onRemove={handleRemoveProvider}
+                  onAddAccount={handleOpenAddAccount}
                 />
               );
             })}
@@ -464,6 +542,18 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
             onInstall={handleInstall}
           />
         </SettingsSection>
+      ) : null}
+
+      {accountBaseProvider ? (
+        <ProviderAccountSheet
+          key={accountBaseProvider.id}
+          visible
+          baseProviderId={accountBaseProvider.id}
+          baseProviderLabel={accountBaseProvider.label}
+          existingProviderIds={existingProviderIds}
+          onClose={handleCloseAddAccount}
+          onCreate={handleCreateAccount}
+        />
       ) : null}
     </>
   );

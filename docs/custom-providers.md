@@ -245,6 +245,12 @@ requires_openai_auth = false
 
 You can create multiple entries that extend the same built-in provider. Each gets its own entry in the provider list with independent credentials, models, and environment.
 
+Three ways to create one, all writing the same `config.json` entry:
+
+- **App** — Settings > Providers, the actions menu on a built-in provider row > Add account.
+- **CLI** — `paseo provider add claude-work --extends claude --label "Claude (Work)" --env ANTHROPIC_API_KEY=sk-ant-...`, and `paseo provider rm claude-work` to delete it.
+- **By hand** — edit `config.json` as below.
+
 Example: two different Anthropic accounts as separate profiles:
 
 ```json
