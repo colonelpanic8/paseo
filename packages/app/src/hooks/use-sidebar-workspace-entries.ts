@@ -1,5 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
+import { useWorkspaceSnoozeClock } from "@/workspace-snooze/use-workspace-snooze-clock";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
 import {
@@ -32,6 +33,11 @@ export function useSidebarWorkspaceEntries(
   const pendingCreateAttempts = useCreateFlowStore((state) =>
     enabled ? state.pendingByDraftId : EMPTY_PENDING_CREATE_ATTEMPTS,
   );
+  // The snooze clock re-renders this hook the moment the next workspace snooze
+  // expires, so a workspace pops back out of the Snoozed group without any
+  // store update.
+  const workspaceMaps = useMemo(() => sessions.map((session) => session.workspaces), [sessions]);
+  const nowMs = useWorkspaceSnoozeClock(workspaceMaps);
   const previousEntriesRef = useRef<ReadonlyMap<string, SidebarWorkspaceEntry>>(EMPTY_ENTRIES);
 
   // Collection ownership is intentional: retained sidebars have one cheap
@@ -50,8 +56,9 @@ export function useSidebarWorkspaceEntries(
       sessions,
       pendingCreateAttempts,
       previousEntries: previousEntriesRef.current,
+      nowMs,
     });
     previousEntriesRef.current = entries;
     return entries;
-  }, [enabled, pendingCreateAttempts, placements, sessions]);
+  }, [enabled, nowMs, pendingCreateAttempts, placements, sessions]);
 }
