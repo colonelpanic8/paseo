@@ -1286,6 +1286,7 @@ export class HubRelationshipHarness {
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: false,
+      agentPurposeSummariesEnabled: false,
       staticDir,
       mcpDebug: false,
       agentClients: {
