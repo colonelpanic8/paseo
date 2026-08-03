@@ -423,6 +423,14 @@ describe("loadAppSettingsFromStorage", () => {
     expect(legacySide.openInSidePane).not.toHaveProperty("pullRequests");
   });
 
+  it("defaults always-show host labels to disabled when storage is empty", async () => {
+    const deps = makeDeps();
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.alwaysShowHostLabels).toBe(false);
+  });
+
   it("loads configured terminal scrollback lines from app settings", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
@@ -445,6 +453,18 @@ describe("loadAppSettingsFromStorage", () => {
     const result = await loadAppSettingsFromStorage(deps);
 
     expect(result.workspaceTitleSource).toBe("branch");
+  });
+
+  it("loads the always-show host labels preference from app settings", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ alwaysShowHostLabels: true }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.alwaysShowHostLabels).toBe(true);
   });
 
   it("drops an unknown workspace title source back to title", async () => {

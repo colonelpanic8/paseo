@@ -3,6 +3,7 @@ import {
   DEFAULT_SIDEBAR_ROW_ITEMS,
   isChecksHiddenByLegacyRowItem,
   parseSidebarRowItems,
+  resolveHostPair,
 } from "./row-items";
 
 describe("parseSidebarRowItems", () => {
@@ -77,4 +78,33 @@ describe("isChecksHiddenByLegacyRowItem", () => {
       expect(isChecksHiddenByLegacyRowItem(value)).toBe(false);
     },
   );
+});
+
+describe("resolveHostPair", () => {
+  const on = { rowItems: DEFAULT_SIDEBAR_ROW_ITEMS, alwaysShowHostLabels: false };
+
+  it("leaves other row items independent", () => {
+    expect(resolveHostPair({ ...on, alwaysShowHostLabels: true }, "checks")).toEqual({
+      rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, checks: false },
+      alwaysShowHostLabels: true,
+    });
+  });
+
+  it("drops the override when the host is switched off", () => {
+    expect(resolveHostPair({ ...on, alwaysShowHostLabels: true }, "host")).toEqual({
+      rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, host: false },
+      alwaysShowHostLabels: false,
+    });
+  });
+
+  it("keeps the host enabled when the override is switched on", () => {
+    const off = {
+      rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, host: false },
+      alwaysShowHostLabels: false,
+    };
+    expect(resolveHostPair(off, "alwaysShowHostLabels")).toEqual({
+      rowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
+      alwaysShowHostLabels: true,
+    });
+  });
 });

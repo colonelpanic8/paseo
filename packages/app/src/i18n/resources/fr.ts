@@ -1251,6 +1251,7 @@ export const fr: TranslationResources = {
         branch: "Branche",
         project: "Projet",
         host: "Hôte",
+        alwaysShowHost: "Toujours afficher l’hôte",
         changeRequest: "Pull request",
         checks: "Vérifications",
         services: "Services",
