@@ -171,3 +171,11 @@ it.each([401, 403])("reports an existing login rejected with HTTP %i", async (st
     else process.env["COPILOT_TOKEN"] = previous;
   }
 });
+
+it("a provider account's token is used without consulting the plugin environment", async () => {
+  const fetchApi = vi.fn(async () => jsonResponse({ copilot_plan: "business" }));
+  await fetchUsage({ store: "token", token: "selected-token" }, fetchApi as typeof fetch);
+  expect(fetchApi.mock.calls[0]?.[1]).toMatchObject({
+    headers: { Authorization: "token selected-token" },
+  });
+});
