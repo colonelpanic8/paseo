@@ -1,6 +1,10 @@
 /**
  * Format a date as a human-friendly relative time string
  * Examples: "just now", "5m ago", "2h ago", "3d ago", "Jan 15"
+ *
+ * Coarsest granularity is deliberately one minute: callers refresh at most
+ * once a minute (see useMinuteNow), and a seconds readout would visibly
+ * freeze between renders.
  */
 export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const diffMs = now.getTime() - date.getTime();
@@ -9,12 +13,8 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 10) {
-    return "just now";
-  }
-
   if (diffMin < 1) {
-    return `${diffSec}s ago`;
+    return "just now";
   }
 
   if (diffHour < 1) {
@@ -33,6 +33,14 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const month = date.toLocaleDateString("en-US", { month: "short" });
   const day = date.getDate();
   return `${month} ${day}`;
+}
+
+export function formatCompactRelativeTime(date: Date, now: Date = new Date()): string {
+  const label = formatTimeAgo(date, now);
+  if (label === "just now") {
+    return "now";
+  }
+  return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
 
 function isSameLocalDay(a: Date, b: Date): boolean {
@@ -61,6 +69,10 @@ function getTimeFormatter(): Intl.DateTimeFormat {
   return cachedTimeFormatter;
 }
 
+export function formatClockTime(date: Date): string {
+  return getTimeFormatter().format(date);
+}
+
 /**
  * Format a chat-message timestamp for hover-revealed UI.
  * - Same day: "10:11 PM" or "22:11" depending on user preference
@@ -68,7 +80,7 @@ function getTimeFormatter(): Intl.DateTimeFormat {
  * - Older: "14 May 2026, 10:11 PM"
  */
 export function formatMessageTimestamp(date: Date, now: Date = new Date()): string {
-  const time = getTimeFormatter().format(date);
+  const time = formatClockTime(date);
 
   if (isSameLocalDay(date, now)) {
     return time;

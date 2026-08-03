@@ -2,6 +2,11 @@ import type { SidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-mode
 
 export type StatusBucket = SidebarWorkspaceEntry["statusBucket"];
 
+// The archived group is not a status bucket: archived workspaces have no live
+// status, and they must never enter STATUS_BUCKET_ORDER or the shortcut index.
+// It renders after every real group as a greyed-out tail.
+export const ARCHIVED_GROUP_KEY = "archived";
+
 export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
   "needs_input",
   "failed",
@@ -85,8 +90,8 @@ function compareStatusRows(
   b: SidebarWorkspaceEntry,
   projectNamesByViewKey: Map<string, string>,
 ): number {
-  const aTime = a.statusEnteredAt?.getTime() ?? null;
-  const bTime = b.statusEnteredAt?.getTime() ?? null;
+  const aTime = a.activityAt?.getTime() ?? null;
+  const bTime = b.activityAt?.getTime() ?? null;
 
   if (aTime !== null && bTime !== null) {
     if (aTime !== bTime) return bTime - aTime;

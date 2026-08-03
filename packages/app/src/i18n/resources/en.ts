@@ -984,6 +984,12 @@ export const en = {
         archiving: "Archiving...",
         hiding: "Hiding...",
       },
+      archived: {
+        groupTitle: "Recently archived",
+        unarchive: "Unarchive",
+        unarchiving: "Unarchiving...",
+        unarchiveFailed: "Failed to unarchive workspace",
+      },
       confirmations: {
         hideTitle: "Hide workspace?",
         hideMessage:
@@ -2079,6 +2085,26 @@ export const en = {
           title: "Rename host",
           placeholder: "My Host",
           submit: "Rename",
+        },
+        color: {
+          section: "Appearance",
+          title: "Color",
+          hint: "Tints this host's label in the sidebar",
+          options: {
+            none: "None",
+            blue: "Blue",
+            green: "Green",
+            amber: "Amber",
+            orange: "Orange",
+            red: "Red",
+            purple: "Purple",
+          },
+          custom: {
+            label: "Custom",
+            title: "Custom color",
+            submit: "Apply",
+            invalid: "Enter a hex color like #4f46e5",
+          },
         },
         restart: {
           title: "Restart daemon",
