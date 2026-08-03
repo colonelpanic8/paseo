@@ -2281,6 +2281,12 @@ export const ja: TranslationResources = {
         color: {
           label: "色",
           accessibilityLabel: "色、{{value}}",
+          custom: {
+            action: "カスタム…",
+            title: "カスタムカラー",
+            submit: "適用",
+            invalid: "#368080 のような16進カラーコードを入力してください。",
+          },
           options: {
             none: "デフォルト",
             violet: "バイオレット",

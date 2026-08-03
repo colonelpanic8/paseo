@@ -2360,6 +2360,12 @@ export const en = {
         color: {
           label: "Color",
           accessibilityLabel: "Color, {{value}}",
+          custom: {
+            action: "Custom…",
+            title: "Custom color",
+            submit: "Apply",
+            invalid: "Enter a hex color like #368080.",
+          },
           options: {
             none: "Default",
             violet: "Violet",

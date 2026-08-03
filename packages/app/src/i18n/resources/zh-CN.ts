@@ -2236,6 +2236,12 @@ export const zhCN: TranslationResources = {
         color: {
           label: "颜色",
           accessibilityLabel: "颜色，{{value}}",
+          custom: {
+            action: "自定义…",
+            title: "自定义颜色",
+            submit: "应用",
+            invalid: "输入十六进制颜色，例如 #368080。",
+          },
           options: {
             none: "默认",
             violet: "紫罗兰",

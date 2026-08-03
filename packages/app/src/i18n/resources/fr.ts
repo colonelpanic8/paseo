@@ -2318,6 +2318,12 @@ export const fr: TranslationResources = {
         color: {
           label: "Couleur",
           accessibilityLabel: "Couleur, {{value}}",
+          custom: {
+            action: "Personnalisée…",
+            title: "Couleur personnalisée",
+            submit: "Appliquer",
+            invalid: "Saisissez une couleur hexadécimale comme #368080.",
+          },
           options: {
             none: "Par défaut",
             violet: "Violet",
