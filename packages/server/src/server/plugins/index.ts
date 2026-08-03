@@ -31,6 +31,7 @@ import {
   type ListUsageReportsOptions,
   UsageSourceRegistry,
 } from "./usage-sources/index.js";
+import { ACCOUNT_USAGE_SOURCES, providerAccountUsage } from "./usage-sources/provider-accounts.js";
 import type { PluginUsageSourceMetadata } from "./plugin-process-protocol.js";
 
 const BUILTIN_PROVIDER_ID_SET: ReadonlySet<string> = new Set(BUILTIN_PROVIDER_IDS);
@@ -175,6 +176,9 @@ export class PluginService {
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    this.configStore.onFieldChange("providers", () =>
+      this.usageSources.invalidateReports((id) => ACCOUNT_USAGE_SOURCES.has(id.split(":")[0]!)),
+    );
     const config = this.configStore.get();
     this.globalStartsBlocked = config.pluginsEnabled !== true;
     await this.builtinPlugins.load(async (plugin) => {
@@ -587,7 +591,9 @@ export class PluginService {
             const result = await this.runtime.discoverUsage(pluginId, source.id, scope);
             if (!Array.isArray(result))
               throw new Error(`Invalid usage discovery from ${source.id}`);
-            return result;
+            return scope.kind === "global" && this.builtinPluginIds.has(pluginId) && pluginId === `${source.id}-usage-source`
+              ? [...result, ...providerAccountUsage(source.id, this.configStore.get().providers)]
+              : result;
           },
           fetch: (input) => {
             return this.runtime.fetchUsage(pluginId, source.id, input);
