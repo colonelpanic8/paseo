@@ -934,6 +934,7 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.stableProjectIdentity).toBe(true);
     expect(serverInfo.features?.canonicalSubmittedPrompts).toBe(true);
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
+    expect(serverInfo.features?.agentPurposeSummary).toBe(true);
     await server.close();
   });
 

@@ -1610,6 +1610,7 @@ export class VoiceAssistantWebSocketServer {
         projectCustomIcon: true,
         // COMPAT(agentEnv): added in v0.2.4, drop the gate when floor >= v0.2.4.
         agentEnv: true,
+        agentPurposeSummary: true,
       },
     };
   }
