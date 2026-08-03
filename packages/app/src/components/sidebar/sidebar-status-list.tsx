@@ -90,6 +90,9 @@ const attentionColorMapping = (theme: Theme) => ({
 const runningColorMapping = (theme: Theme) => ({
   color: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
 });
+// Snoozed is not a status-dot bucket -- it is a sidebar state, not an agent one -- so it
+// takes the palette directly rather than going through the producer.
+const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 const STATUS_ROW_ENTERING = sidebarRowEnter;
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
