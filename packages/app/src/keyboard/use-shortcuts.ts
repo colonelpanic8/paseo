@@ -12,6 +12,7 @@ import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store"
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import {
   type ChordState,
+  buildCommandShortcutBindings,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
 } from "@/keyboard/keyboard-shortcuts";
@@ -32,6 +33,10 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
+import {
+  useCommandCenterContributions,
+  useCommandCenterShortcutRunner,
+} from "@/command-center/provider";
 
 export function useKeyboardShortcuts({
   enabled,
@@ -55,7 +60,17 @@ export function useKeyboardShortcuts({
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
-  const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
+  const commandCenterSnapshot = useCommandCenterContributions();
+  const runCommandCenterShortcut = useCommandCenterShortcutRunner();
+  const bindings = useMemo(() => {
+    const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
+      contribution.shortcutId ? [contribution.shortcutId] : [],
+    );
+    return [
+      ...buildEffectiveBindings(overrides),
+      ...buildCommandShortcutBindings(commandShortcutIds, overrides),
+    ];
+  }, [commandCenterSnapshot.contributions, overrides]);
   const isMac = getShortcutOs() === "mac";
   const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
@@ -197,11 +212,13 @@ export function useKeyboardShortcuts({
   const isCapturing = useStableEvent(() => useKeyboardShortcutsStore.getState().capturingShortcut);
   const dispatchMatch = useStableEvent(
     (match: import("./keyboard-shortcuts").KeyboardShortcutMatch, input: KeyboardSourceInput) =>
-      routeAndPerformShortcut({
-        action: match.action,
-        payload: match.payload,
-        captureFocusRestore: input.captureFocusRestore,
-      }),
+      match.commandShortcutId
+        ? runCommandCenterShortcut(match.commandShortcutId)
+        : routeAndPerformShortcut({
+            action: match.action,
+            payload: match.payload,
+            captureFocusRestore: input.captureFocusRestore,
+          }),
   );
   const chordChanged = useStableEvent(
     (previous: ChordState, next: ChordState, input: KeyboardSourceInput | null) => {

@@ -386,7 +386,20 @@ interface AppContainerProps {
 
 const WINDOW_SIDEBAR_TOGGLE_HORIZONTAL_PADDING = 12;
 
-function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
+function AppContainer(props: AppContainerProps) {
+  return (
+    <ComposerEditingSessionsProvider>
+      <CommandCenterProvider>
+        <AppContainerContent {...props} />
+      </CommandCenterProvider>
+    </ComposerEditingSessionsProvider>
+  );
+}
+
+function AppContainerContent({
+  children,
+  chromeEnabled: chromeEnabledOverride,
+}: AppContainerProps) {
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
@@ -592,13 +605,7 @@ function AppContainerLifetime({
   sidebarGesturesEnabled: boolean;
 }) {
   return (
-    <ComposerEditingSessionsProvider>
-      <CommandCenterProvider>
-        <MobileGestureWrapper chromeEnabled={sidebarGesturesEnabled}>
-          {children}
-        </MobileGestureWrapper>
-      </CommandCenterProvider>
-    </ComposerEditingSessionsProvider>
+    <MobileGestureWrapper chromeEnabled={sidebarGesturesEnabled}>{children}</MobileGestureWrapper>
   );
 }
 

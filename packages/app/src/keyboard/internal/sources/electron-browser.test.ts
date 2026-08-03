@@ -5,9 +5,44 @@ import {
   parseBrowserShortcutInput,
   shouldPublishBrowserShortcutPolicy,
 } from "./electron-browser";
-import { buildEffectiveBindings, resolveKeyboardShortcut } from "../../keyboard-shortcuts";
+import {
+  buildCommandShortcutBindings,
+  buildEffectiveBindings,
+  resolveKeyboardShortcut,
+} from "../../keyboard-shortcuts";
 
 describe("buildBrowserKeyboardPolicy", () => {
+  it("forwards collision-free F13-F24 command shortcuts without a modifier", () => {
+    const bindings = buildCommandShortcutBindings(["thinking:high"], {
+      "command-center.shortcut:thinking:high": "F24",
+    });
+
+    expect(
+      buildBrowserKeyboardPolicy({ bindings, isMac: true, usesDesktopBindings: true }).prefixes,
+    ).toEqual([
+      {
+        alt: false,
+        code: "F24",
+        codeFallback: true,
+        control: false,
+        meta: false,
+        repeat: false,
+        shift: false,
+      },
+    ]);
+  });
+
+  it("does not broaden unmodified browser capture to ordinary fallback keys", () => {
+    const prefixes = buildBrowserKeyboardPolicy({
+      bindings: buildEffectiveBindings({}),
+      isMac: true,
+      usesDesktopBindings: true,
+    }).prefixes;
+
+    expect(prefixes.some((prefix) => prefix.code === "Space")).toBe(false);
+    expect(prefixes.some((prefix) => prefix.code === "Enter")).toBe(false);
+  });
+
   it("publishes only chord starts while no browser chord is pending", () => {
     const bindings = buildEffectiveBindings({
       "workspace-tab-new-ctrl-t-non-mac": "Ctrl+Y",
