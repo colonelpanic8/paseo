@@ -27,6 +27,7 @@ interface SupportedMutableConfigPatch {
   providers?: MutableDaemonConfig["providers"];
   removeProviders?: string[];
   replaceProviders?: MutableDaemonConfigPatch["replaceProviders"];
+  renameProviders?: MutableDaemonConfigPatch["renameProviders"];
   metadataGeneration?: MutableDaemonConfig["metadataGeneration"];
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
@@ -49,9 +50,15 @@ interface LoggerLike {
   info(...args: unknown[]): void;
 }
 
+export interface ProviderRename {
+  from: string;
+  to: string;
+}
+
 export interface DaemonConfigChangeDetails {
   removedProviders: readonly string[];
   replacedProviders: readonly string[];
+  renamedProviders: readonly ProviderRename[];
 }
 
 export interface DaemonConfigReloadResult {
@@ -283,6 +290,16 @@ function pickRelayPatch(
   return Object.keys(picked).length > 0 ? { relay: picked } : {};
 }
 
+function pickProviderMutationPatch(
+  patch: MutableDaemonConfigPatch,
+): Pick<SupportedMutableConfigPatch, "removeProviders" | "replaceProviders" | "renameProviders"> {
+  return {
+    ...(patch.removeProviders !== undefined ? { removeProviders: patch.removeProviders } : {}),
+    ...(patch.replaceProviders !== undefined ? { replaceProviders: patch.replaceProviders } : {}),
+    ...(patch.renameProviders !== undefined ? { renameProviders: patch.renameProviders } : {}),
+  };
+}
+
 function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
   return {
     ...pickRelayPatch(patch.relay),
@@ -294,8 +311,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
       ? { browserTools: { enabled: patch.browserTools.enabled } }
       : {}),
     ...(patch.providers !== undefined ? { providers: patch.providers } : {}),
-    ...(patch.removeProviders !== undefined ? { removeProviders: patch.removeProviders } : {}),
-    ...(patch.replaceProviders !== undefined ? { replaceProviders: patch.replaceProviders } : {}),
+    ...pickProviderMutationPatch(patch),
     ...(patch.metadataGeneration?.providers !== undefined
       ? { metadataGeneration: { providers: patch.metadataGeneration.providers } }
       : {}),
@@ -348,6 +364,68 @@ export function applyMutableProviderConfigToOverrides(
   }
 
   return nextOverrides;
+}
+
+/**
+ * A rename carries no mutation of its own: the caller already sends the new definition in
+ * `replaceProviders` (or `providers`) and the old id in `removeProviders`. Reject renames that
+ * don't match that shape rather than half-applying one.
+ */
+function assertProviderMutationsAreConsistent(params: {
+  replacedProviders: readonly string[];
+  removedProviderSet: ReadonlySet<string>;
+  renameProviders: Record<string, string>;
+  definedProviders: ReadonlySet<string>;
+}): void {
+  const { replacedProviders, removedProviderSet, renameProviders, definedProviders } = params;
+  const conflictingProvider = replacedProviders.find((providerId) =>
+    removedProviderSet.has(providerId),
+  );
+  if (conflictingProvider) {
+    throw new Error(`Provider ${conflictingProvider} cannot be removed and replaced together`);
+  }
+  for (const [from, to] of Object.entries(renameProviders)) {
+    if (from === to) {
+      throw new Error(`Provider rename for ${from} must change the provider id`);
+    }
+    if (!removedProviderSet.has(from)) {
+      throw new Error(`Provider rename from ${from} must also remove ${from}`);
+    }
+    if (!definedProviders.has(to)) {
+      throw new Error(`Provider rename to ${to} must also define ${to}`);
+    }
+  }
+}
+
+interface ProviderMutations {
+  removedProviders: string[];
+  replacedProviders: string[];
+  renamedProviders: ProviderRename[];
+  providersPatch: Pick<SupportedMutableConfigPatch, "providers">;
+}
+
+function resolveProviderMutations(
+  patch: Pick<
+    SupportedMutableConfigPatch,
+    "removeProviders" | "replaceProviders" | "renameProviders" | "providers"
+  >,
+): ProviderMutations {
+  const { removeProviders = [], replaceProviders = {}, renameProviders = {}, providers } = patch;
+  const removedProviders = Array.from(new Set(removeProviders));
+  const replacedProviders = Object.keys(replaceProviders);
+  assertProviderMutationsAreConsistent({
+    replacedProviders,
+    removedProviderSet: new Set(removedProviders),
+    renameProviders,
+    definedProviders: new Set([...replacedProviders, ...Object.keys(providers ?? {})]),
+  });
+  return {
+    removedProviders,
+    replacedProviders,
+    renamedProviders: Object.entries(renameProviders).map(([from, to]) => ({ from, to })),
+    providersPatch:
+      replacedProviders.length > 0 ? { providers: { ...providers, ...replaceProviders } } : {},
+  };
 }
 
 export class DaemonConfigStore {
@@ -421,21 +499,15 @@ export class DaemonConfigStore {
         "Relay is controlled by a daemon launch override. Remove PASEO_RELAY_ENABLED or the relay CLI flag before changing it here.",
       );
     }
-    const { removeProviders = [], replaceProviders = {}, ...patch } = parsedPatch;
+    const { removeProviders, replaceProviders, renameProviders, ...patch } = parsedPatch;
     const { features: speechPatch, ...configPatch } = patch;
-    const removedProviders = Array.from(new Set(removeProviders));
-    const replacedProviders = Object.keys(replaceProviders);
-    const removedProviderSet = new Set(removedProviders);
-    const conflictingProvider = replacedProviders.find((providerId) =>
-      removedProviderSet.has(providerId),
-    );
-    if (conflictingProvider) {
-      throw new Error(`Provider ${conflictingProvider} cannot be removed and replaced together`);
-    }
-    const providersPatch =
-      replacedProviders.length > 0
-        ? { providers: { ...configPatch.providers, ...replaceProviders } }
-        : {};
+    const { removedProviders, replacedProviders, renamedProviders, providersPatch } =
+      resolveProviderMutations({
+        removeProviders,
+        replaceProviders,
+        renameProviders,
+        providers: configPatch.providers,
+      });
     const merged = deepMerge(omitProvidersFromConfig(this.current, replacedProviders), {
       ...configPatch,
       ...providersPatch,
@@ -472,7 +544,7 @@ export class DaemonConfigStore {
     const speechChanged = this.speechPersistedChanged(this.lastKnownPersisted, knownNext);
     if (configChanged || removedProviders.length > 0 || replacedProviders.length > 0) {
       try {
-        this.applyReplacement(next, { removedProviders, replacedProviders });
+        this.applyReplacement(next, { removedProviders, replacedProviders, renamedProviders });
       } catch (error) {
         await savePersistedConfigAsync(this.paseoHome, persistedBeforePatch, this.logger);
         throw error;
@@ -558,7 +630,11 @@ export class DaemonConfigStore {
       (provider) => !(provider in desired.providers),
     );
     const speechChanged = this.speechPersistedChanged(this.lastKnownPersisted, persisted);
-    this.applyReplacement(desired, { removedProviders, replacedProviders: [] });
+    this.applyReplacement(desired, {
+      removedProviders,
+      replacedProviders: [],
+      renamedProviders: [],
+    });
     this.lastKnownPersisted = persisted;
     if (speechChanged && this.speechOwner) {
       this.speechOwner.apply(persisted);
@@ -586,7 +662,8 @@ export class DaemonConfigStore {
     if (
       isEqualValue(this.current, next) &&
       changeDetails.removedProviders.length === 0 &&
-      changeDetails.replacedProviders.length === 0
+      changeDetails.replacedProviders.length === 0 &&
+      changeDetails.renamedProviders.length === 0
     ) {
       return;
     }
@@ -725,12 +802,7 @@ function mergeMutablePatchIntoPersistedConfig(params: {
 }): PersistedConfig {
   const { persisted, patch, removeProviders, replaceProviders, persistRelayEnabled } = params;
   const daemon = mergeMutableDaemonPatch(persisted.daemon, patch, persistRelayEnabled);
-  const agents = mergeMutableAgentPatch(
-    persisted.agents,
-    patch,
-    removeProviders,
-    replaceProviders,
-  );
+  const agents = mergeMutableAgentPatch(persisted.agents, patch, removeProviders, replaceProviders);
   const withSpeech = patch.features
     ? mergeSpeechSettingsPatch(persisted, patch.features)
     : persisted;

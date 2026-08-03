@@ -437,6 +437,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const supportsHopliteProvider = useHostFeature(serverId, "hopliteProvider");
   const supportsProviderRemoval = useHostFeature(serverId, "providerRemoval");
   const supportsProviderConfigReplace = useHostFeature(serverId, "providerConfigReplace");
+  const supportsProviderConfigRename = useHostFeature(serverId, "providerConfigRename");
   const { entries, isLoading, refresh } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
   const openProviderSettings = useProviderSettingsStore((state) => state.open);
@@ -663,6 +664,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
           baseProviderLabel={accountTarget.baseProviderLabel}
           existingProviderIds={existingProviderIds}
           account={accountTarget.account}
+          supportsProviderConfigRename={supportsProviderConfigRename}
           onClose={handleCloseAccount}
           onSave={handleSaveAccount}
         />
