@@ -6,10 +6,6 @@ import {
 
 export type ComboboxOptionKind = "directory" | "file";
 
-// Pickers whose option count varies with the model or provider turn search on
-// past this length. Below it the search row costs more than it saves.
-export const SEARCHABLE_OPTION_THRESHOLD = 6;
-
 export interface ComboboxOptionModel {
   id: string;
   label: string;

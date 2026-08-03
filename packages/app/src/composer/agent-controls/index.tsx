@@ -39,7 +39,6 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
-import { SEARCHABLE_OPTION_THRESHOLD } from "@/components/ui/combobox-options";
 import {
   AgentModeControl,
   useLiveAgentModeControl,
@@ -1003,7 +1002,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             options={comboboxProviderOptions}
             value={selectedProviderId ?? ""}
             onSelect={handleProviderSelect}
-            searchable={comboboxProviderOptions.length > SEARCHABLE_OPTION_THRESHOLD}
             open={openSelector === "provider"}
             onOpenChange={handleProviderOpenChange}
             anchorRef={providerAnchorRef}
@@ -1074,7 +1072,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             options={comboboxThinkingOptions}
             value={selectedThinkingOptionId ?? ""}
             onSelect={handleThinkingSelect}
-            searchable={comboboxThinkingOptions.length > SEARCHABLE_OPTION_THRESHOLD}
             open={openSelector === "thinking"}
             onOpenChange={handleThinkingOpenChange}
             anchorRef={thinkingAnchorRef}
@@ -1261,7 +1258,6 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
             options={comboboxThinkingOptions}
             value={selectedThinkingOptionId ?? ""}
             onSelect={handleSelectThinkingAndClose}
-            searchable={false}
             title={t("agentControls.thinking.title")}
             open={activeSheet === "thinking"}
             onOpenChange={handleThinkingSheetOpenChange}
@@ -1509,7 +1505,6 @@ function SheetFeatureItem({
           onOpenChange={handleFeatureOpenChange}
           anchorRef={featureAnchorRef}
           presentation="push"
-          searchable={false}
           header={sheetHeader}
         />
       </>
