@@ -1140,6 +1140,7 @@ export const es: TranslationResources = {
         branch: "Rama",
         project: "Proyecto",
         host: "Host",
+        alwaysShowHost: "Mostrar siempre el host",
         changeRequest: "Pull request",
         checks: "Comprobaciones",
         services: "Servicios",
