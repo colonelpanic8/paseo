@@ -28,7 +28,11 @@ import {
   ProviderAccountSheet,
   type ProviderAccountCreateInput,
 } from "@/components/provider-account-sheet";
-import { canAddProviderAccount } from "@/provider-accounts/provider-account-form-model";
+import {
+  canAddProviderAccount,
+  groupProviderAccounts,
+  resolveProviderAccountBaseId,
+} from "@/provider-accounts/provider-account-form-model";
 import { useProviderIcon } from "@/components/provider-icons";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SkeletonPulse, useSkeletonPulse } from "@/components/ui/skeleton";
@@ -93,6 +97,7 @@ interface ProviderRowProps {
   isRemoving: boolean;
   canRemove: boolean;
   canAddAccount: boolean;
+  iconProviderId: string;
   isFirst: boolean;
   onPress: (providerId: string) => void;
   onToggleEnabled: (providerId: string, enabled: boolean) => void;
@@ -237,6 +242,7 @@ function ProviderRow({
   isRemoving,
   canRemove,
   canAddAccount,
+  iconProviderId,
   isFirst,
   onPress,
   onToggleEnabled,
@@ -246,7 +252,7 @@ function ProviderRow({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const isCompact = useIsCompactFormFactor();
-  const ProviderIcon = useProviderIcon(def.id, serverId);
+  const ProviderIcon = useProviderIcon(iconProviderId, serverId);
   const providerError =
     enabled &&
     entry.status === "error" &&
@@ -411,7 +417,10 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     null,
   );
 
-  const providerDefinitions = useMemo(() => buildProviderDefinitions(entries), [entries]);
+  const providerDefinitions = useMemo(
+    () => groupProviderAccounts(buildProviderDefinitions(entries), config?.providers),
+    [config?.providers, entries],
+  );
   const existingProviderIds = useMemo(
     () => (entries ?? []).map((entry) => entry.provider),
     [entries],
@@ -564,6 +573,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
                     providerId: def.id,
                     source: entry.source,
                   })}
+                  iconProviderId={resolveProviderAccountBaseId(def.id, config?.providers) ?? def.id}
                   isFirst={index === 0}
                   onPress={handleOpenProviderSettings}
                   onToggleEnabled={handleToggleEnabled}
