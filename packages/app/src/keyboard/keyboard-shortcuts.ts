@@ -1225,6 +1225,7 @@ export function getCommandShortcutIdFromBindingId(bindingId: string): string | n
 export function buildCommandShortcutBindings(
   shortcutIds: readonly string[],
   overrides: Readonly<Record<string, string | null>>,
+  reservedBindings: readonly ParsedShortcutBinding[] = [],
 ): ParsedShortcutBinding[] {
   const bindings: ParsedShortcutBinding[] = [];
   for (const shortcutId of new Set(shortcutIds)) {
@@ -1249,7 +1250,54 @@ export function buildCommandShortcutBindings(
       when: { commandCenter: false, terminal: false },
     });
   }
-  return bindings;
+  const chordCounts = new Map<string, number>();
+  for (const binding of bindings) {
+    const key = shortcutChordKey(binding.parsedChord);
+    chordCounts.set(key, (chordCounts.get(key) ?? 0) + 1);
+  }
+  const reservedChordKeys = new Set(
+    reservedBindings.map((binding) => shortcutChordKey(binding.parsedChord)),
+  );
+  return bindings.filter((binding) => {
+    const key = shortcutChordKey(binding.parsedChord);
+    return chordCounts.get(key) === 1 && !reservedChordKeys.has(key);
+  });
+}
+
+function shortcutChordKey(chord: readonly KeyCombo[]): string {
+  return chord
+    .map((combo) =>
+      [combo.code, combo.meta, combo.ctrl, combo.alt, combo.shift, combo.mod]
+        .map((part) => String(part ?? false))
+        .join(":"),
+    )
+    .join(" ");
+}
+
+export function findKeyboardShortcutConflict(
+  bindingId: string,
+  combo: string,
+  overrides: ShortcutOverrides,
+  commandShortcutIds: readonly string[],
+): string | null {
+  let candidateChord: KeyCombo[];
+  try {
+    candidateChord = parseBindingChord(combo);
+  } catch {
+    return null;
+  }
+  const candidateKey = shortcutChordKey(candidateChord);
+  const nextOverrides = { ...overrides, [bindingId]: combo };
+  const bindings = [
+    ...buildEffectiveBindings(nextOverrides),
+    ...buildCommandShortcutBindings(commandShortcutIds, nextOverrides),
+  ];
+  return (
+    bindings.find(
+      (binding) =>
+        binding.id !== bindingId && shortcutChordKey(binding.parsedChord) === candidateKey,
+    )?.id ?? null
+  );
 }
 
 export type ShortcutOverrides = Record<string, string | null>;

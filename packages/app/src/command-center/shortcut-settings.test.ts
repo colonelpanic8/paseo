@@ -35,6 +35,18 @@ describe("command shortcut settings", () => {
           path: ["Thinking", "High"],
         }),
       ],
+      [
+        choice({
+          id: "dynamic:models:codex:gpt-5.6-sol",
+          shortcutId: "models:codex:gpt-5.6-sol",
+          path: ["Model", "Codex", "GPT-5.6 Sol"],
+        }),
+        choice({
+          id: "dynamic:thinking:high",
+          shortcutId: "thinking:high",
+          path: ["Thinking", "High"],
+        }),
+      ],
       { "command-center.shortcut:models:codex:gpt-5.6-sol": "F13" },
     );
 
@@ -59,7 +71,7 @@ describe("command shortcut settings", () => {
   });
 
   it("keeps stored unavailable targets visible for reset without claiming availability", () => {
-    const rows = buildCommandShortcutSettingsRows([], {
+    const rows = buildCommandShortcutSettingsRows([], [], {
       "command-center.shortcut:models:claude:claude-opus-5": "F14",
       "command-center.shortcut:thinking:top": "F24",
       "unrelated-binding": "F15",
@@ -82,6 +94,18 @@ describe("command shortcut settings", () => {
         combo: "F24",
         available: false,
       },
+    ]);
+  });
+
+  it("marks retained catalog targets unavailable after their live contribution unregisters", () => {
+    const retained = choice({
+      id: "dynamic:thinking:high",
+      shortcutId: "thinking:high",
+      path: ["Thinking", "High"],
+    });
+
+    expect(buildCommandShortcutSettingsRows([retained], [], {})).toEqual([
+      expect.objectContaining({ shortcutId: "thinking:high", label: "High", available: false }),
     ]);
   });
 });
