@@ -205,6 +205,13 @@ export const ja: TranslationResources = {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
     historyLoadFailed: "エージェントの履歴を読み込めませんでした",
+    find: {
+      placeholder: "会話内を検索",
+      matchCount: "{{current}}/{{total}}",
+      previous: "前の一致",
+      next: "次の一致",
+      close: "検索を閉じる",
+    },
     permission: {
       plan: "プラン",
       required: "権限が必要です",
@@ -1951,6 +1958,7 @@ export const ja: TranslationResources = {
         selectHost: "ホストを選択",
         toggleFastMode: "高速モードを切り替える",
         togglePlanMode: "プランモードを切り替える",
+        findInConversation: "会話内を検索",
       },
       helpNotes: {
         showKeyboardShortcuts:

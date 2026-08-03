@@ -71,6 +71,8 @@ import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
+import { SessionFindBar } from "./find-bar";
+import { useSessionFind } from "./use-session-find";
 import {
   CompletedTurnFooterRow,
   TurnFooter,
@@ -247,6 +249,8 @@ export interface AgentStreamViewProps {
   isAuthoritativeHistoryReady?: boolean;
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  /** Enables pane-scoped keyboard actions such as find-in-session (Cmd/Ctrl+F). */
+  isPaneFocused?: boolean;
   readOnly?: boolean;
   historyPagination?: {
     hasOlder: boolean;
@@ -273,6 +277,8 @@ const EMPTY_PENDING_MESSAGE_SUBMISSIONS: readonly PendingMessageSubmission[] = [
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
+  // The stream view coordinates several independent rendering and navigation paths.
+  // oxlint-disable-next-line complexity
   function AgentStreamView(
     {
       agentId,
@@ -287,6 +293,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       isAuthoritativeHistoryReady = true,
       toast,
       onOpenWorkspaceFile,
+      isPaneFocused = false,
       readOnly = false,
       historyPagination,
     },
@@ -502,6 +509,23 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         toolCallDetailLevel,
       ],
     );
+
+    // Matches are computed over the projected items, i.e. what the stream
+    // actually renders, in display order (tail then live head on web).
+    const findSearchItems = useMemo(() => {
+      if (projectedToolCalls.head.length === 0) {
+        return projectedToolCalls.tail;
+      }
+      return [...projectedToolCalls.tail, ...projectedToolCalls.head];
+    }, [projectedToolCalls.head, projectedToolCalls.tail]);
+    const find = useSessionFind({
+      agentId,
+      items: findSearchItems,
+      viewportRef,
+      isPaneFocused,
+      isPanelActive: isActive,
+    });
+    const sessionFind = find.sessionFind;
 
     const baseRenderModel = useMemo(() => {
       return buildAgentStreamRenderModel({
@@ -1005,12 +1029,27 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
               olderHistoryProgressKey: progressKey,
+              sessionFind,
               scrollEnabled: streamScrollEnabled,
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
             })}
           </MessageOuterSpacingProvider>
+          {find.isOpen ? (
+            <View style={stylesheet.findBarContainer} pointerEvents="box-none">
+              <SessionFindBar
+                query={find.query}
+                matchCount={find.matches.length}
+                activeMatchNumber={find.activeIndex + 1}
+                focusRequestId={find.focusRequestId}
+                onQueryChange={find.onQueryChange}
+                onNext={find.next}
+                onPrevious={find.previous}
+                onClose={find.close}
+              />
+            </View>
+          ) : null}
           <ChatOutlineRail
             prompts={chatOutline.prompts}
             activePrompt={chatOutline.activePrompt}
@@ -1149,6 +1188,7 @@ function agentStreamViewPropsEqual(
   }
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
+  if (left.isPaneFocused !== right.isPaneFocused) reasons.push("isPaneFocused");
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
@@ -1523,6 +1563,12 @@ const stylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     textAlign: "center",
+  },
+  findBarContainer: {
+    position: "absolute",
+    top: theme.spacing[2],
+    right: theme.spacing[4],
+    alignItems: "flex-end",
   },
   scrollToBottomContainer: {
     position: "absolute",
