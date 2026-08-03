@@ -62,6 +62,26 @@ describe("resolveHostBadgeDisplay", () => {
     ).toBe("hidden");
   });
 
+  it("names an untouched local host when labels are always enabled", () => {
+    expect(
+      resolveHostBadgeDisplay({
+        appearance: defaultHostAppearance(),
+        isLocalHost: true,
+        alwaysShowHostLabels: true,
+      }),
+    ).toBe("name");
+  });
+
+  it("keeps an explicit hidden choice when labels are always enabled", () => {
+    expect(
+      resolveHostBadgeDisplay({
+        appearance: { color: "none", badgeDisplay: "hidden" },
+        isLocalHost: true,
+        alwaysShowHostLabels: true,
+      }),
+    ).toBe("hidden");
+  });
+
   it("defers only the default while local-host detection is unresolved", () => {
     expect(
       resolveHostBadgeDisplay({
@@ -139,6 +159,16 @@ describe("selectHostBadges", () => {
     });
     expect(badges.has("alpha")).toBe(false);
     expect(badges.get("beta")?.label).toBe("Beta");
+  });
+
+  it("includes an untouched local host when labels are always enabled", () => {
+    const badges = selectHostBadges({
+      hosts: [host("alpha", "Alpha")],
+      localServerId: "alpha",
+      enabled: true,
+      alwaysShowHostLabels: true,
+    });
+    expect(badges.get("alpha")?.label).toBe("Alpha");
   });
 
   it("omits untouched badges while local-host detection is unresolved", () => {

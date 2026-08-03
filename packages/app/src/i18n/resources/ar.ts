@@ -1172,6 +1172,7 @@ export const ar: TranslationResources = {
         branch: "الفرع",
         project: "المشروع",
         host: "المضيف",
+        alwaysShowHost: "إظهار المضيف دائمًا",
         changeRequest: "طلب السحب",
         checks: "الفحوصات",
         services: "الخدمات",

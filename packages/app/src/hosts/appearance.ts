@@ -38,9 +38,13 @@ export function resolveHostBadgeDisplay(input: {
   appearance: HostAppearance;
   isLocalHost: boolean;
   localHostResolutionPending?: boolean;
+  alwaysShowHostLabels?: boolean;
 }): HostBadgeDisplay | null {
   if (input.appearance.badgeDisplay) {
     return input.appearance.badgeDisplay;
+  }
+  if (input.alwaysShowHostLabels) {
+    return "name";
   }
   if (input.localHostResolutionPending) {
     return null;
@@ -67,6 +71,7 @@ export function selectHostBadges(input: {
   localServerId: string | null;
   localHostResolutionPending?: boolean;
   enabled: boolean;
+  alwaysShowHostLabels?: boolean;
 }): ReadonlyMap<string, HostBadgeModel> {
   const badges = new Map<string, HostBadgeModel>();
   if (!input.enabled) {
@@ -77,6 +82,7 @@ export function selectHostBadges(input: {
       appearance: host.appearance,
       isLocalHost: host.serverId === input.localServerId,
       localHostResolutionPending: input.localHostResolutionPending,
+      alwaysShowHostLabels: input.alwaysShowHostLabels,
     });
     if (display === null || display === "hidden") {
       continue;
