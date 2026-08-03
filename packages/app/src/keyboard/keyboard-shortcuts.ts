@@ -1248,10 +1248,9 @@ export function getCommandShortcutIdFromBindingId(bindingId: string): string | n
     : null;
 }
 
-export function buildCommandShortcutBindings(
+function buildCommandShortcutBindingsUnchecked(
   shortcutIds: readonly string[],
   overrides: Readonly<Record<string, string | null>>,
-  reservedBindings: readonly ParsedShortcutBinding[] = [],
 ): ParsedShortcutBinding[] {
   const bindings: ParsedShortcutBinding[] = [];
   for (const shortcutId of new Set(shortcutIds)) {
@@ -1276,28 +1275,46 @@ export function buildCommandShortcutBindings(
       when: { commandCenter: false, terminal: false },
     });
   }
-  const chordCounts = new Map<string, number>();
-  for (const binding of bindings) {
-    const key = shortcutChordKey(binding.parsedChord);
-    chordCounts.set(key, (chordCounts.get(key) ?? 0) + 1);
-  }
-  const reservedChordKeys = new Set(
-    reservedBindings.map((binding) => shortcutChordKey(binding.parsedChord)),
+  return bindings;
+}
+
+export function buildCommandShortcutBindings(
+  shortcutIds: readonly string[],
+  overrides: ShortcutOverrides,
+  reservedBindings: readonly ParsedShortcutBinding[] = [],
+  platform?: KeyboardShortcutPlatformContext,
+): ParsedShortcutBinding[] {
+  const bindings = buildCommandShortcutBindingsUnchecked(shortcutIds, overrides);
+  const applicableReservedBindings = reservedBindings.filter(
+    (binding) => !platform || helpMatchesPlatform(binding.when, platform),
   );
   return bindings.filter((binding) => {
-    const key = shortcutChordKey(binding.parsedChord);
-    return chordCounts.get(key) === 1 && !reservedChordKeys.has(key);
+    const conflictsWithDirectBinding = bindings.some(
+      (other) =>
+        other.id !== binding.id && shortcutChordsConflict(binding.parsedChord, other.parsedChord),
+    );
+    const conflictsWithReservedBinding = applicableReservedBindings.some((reserved) =>
+      shortcutChordsConflict(binding.parsedChord, reserved.parsedChord),
+    );
+    return !conflictsWithDirectBinding && !conflictsWithReservedBinding;
   });
 }
 
-function shortcutChordKey(chord: readonly KeyCombo[]): string {
-  return chord
-    .map((combo) =>
-      [combo.code, combo.meta, combo.ctrl, combo.alt, combo.shift, combo.mod]
-        .map((part) => String(part ?? false))
-        .join(":"),
-    )
-    .join(" ");
+function shortcutChordsConflict(left: readonly KeyCombo[], right: readonly KeyCombo[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((combo, index) => {
+    const other = right[index];
+    const modifiersMatch = ["meta", "ctrl", "alt", "shift", "mod"].every(
+      (modifier) =>
+        Boolean(combo[modifier as keyof KeyCombo]) === Boolean(other[modifier as keyof KeyCombo]),
+    );
+    if (!modifiersMatch) return false;
+    if (combo.code === other.code) return true;
+    return (
+      (combo.code === "Digit" && /^(Digit|Numpad)[1-9]$/.test(other.code)) ||
+      (other.code === "Digit" && /^(Digit|Numpad)[1-9]$/.test(combo.code))
+    );
+  });
 }
 
 export function findKeyboardShortcutConflict(
@@ -1305,6 +1322,7 @@ export function findKeyboardShortcutConflict(
   combo: string,
   overrides: ShortcutOverrides,
   commandShortcutIds: readonly string[],
+  platform: KeyboardShortcutPlatformContext,
 ): string | null {
   let candidateChord: KeyCombo[];
   try {
@@ -1312,16 +1330,17 @@ export function findKeyboardShortcutConflict(
   } catch {
     return null;
   }
-  const candidateKey = shortcutChordKey(candidateChord);
   const nextOverrides = { ...overrides, [bindingId]: combo };
   const bindings = [
-    ...buildEffectiveBindings(nextOverrides),
-    ...buildCommandShortcutBindings(commandShortcutIds, nextOverrides),
+    ...buildEffectiveBindings(nextOverrides).filter((binding) =>
+      helpMatchesPlatform(binding.when, platform),
+    ),
+    ...buildCommandShortcutBindingsUnchecked(commandShortcutIds, nextOverrides),
   ];
   return (
     bindings.find(
       (binding) =>
-        binding.id !== bindingId && shortcutChordKey(binding.parsedChord) === candidateKey,
+        binding.id !== bindingId && shortcutChordsConflict(binding.parsedChord, candidateChord),
     )?.id ?? null
   );
 }

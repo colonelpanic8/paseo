@@ -62,6 +62,7 @@ export function useKeyboardShortcuts({
   const { overrides } = useKeyboardShortcutOverrides();
   const commandCenterSnapshot = useCommandCenterContributions();
   const runCommandCenterShortcut = useCommandCenterShortcutRunner();
+  const isMac = getShortcutOs() === "mac";
   const bindings = useMemo(() => {
     const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
       contribution.shortcutId ? [contribution.shortcutId] : [],
@@ -69,10 +70,12 @@ export function useKeyboardShortcuts({
     const effectiveBindings = buildEffectiveBindings(overrides);
     return [
       ...effectiveBindings,
-      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings),
+      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings, {
+        isMac,
+        usesDesktopBindings,
+      }),
     ];
-  }, [commandCenterSnapshot.contributions, overrides]);
-  const isMac = getShortcutOs() === "mac";
+  }, [commandCenterSnapshot.contributions, isMac, overrides]);
   const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);
