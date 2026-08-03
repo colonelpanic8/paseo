@@ -276,6 +276,8 @@ const EMPTY_PENDING_MESSAGE_SUBMISSIONS: readonly PendingMessageSubmission[] = [
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
+  // The stream view coordinates several independent rendering and navigation paths.
+  // oxlint-disable-next-line complexity
   function AgentStreamView(
     {
       agentId,
