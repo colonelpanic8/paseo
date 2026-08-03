@@ -279,3 +279,53 @@ test("failed fallbacks preserve the final problem", async () => {
     problem: { kind: "rejected", status: 403 },
   });
 });
+
+test("invalidation replaces credentials and prevents pending results from restoring the cache", async () => {
+  const registry = new UsageSourceRegistry();
+  let token = "old";
+  let finishOld!: (report: unknown) => void;
+  let began!: () => void;
+  const started = new Promise<void>((resolve) => {
+    began = resolve;
+  });
+  registry.register(
+    source({
+      id: "codex",
+      discover: async () => [{ key: "provider.work", input: { token } }],
+      fetch: async (input) => {
+        if ((input as { token: string }).token === "old") {
+          began();
+          return new Promise((resolve) => {
+            finishOld = resolve;
+          });
+        }
+        return {
+          status: "available",
+          windows: [{ id: "credential", label: (input as { token: string }).token }],
+        };
+      },
+    }),
+  );
+  const label = (entries: Awaited<ReturnType<typeof registry.listReports>>) => {
+    const report = entries[0]?.report;
+    return report?.status === "available" ? report.windows[0]?.label : undefined;
+  };
+  const pending = registry.listReports();
+  await started;
+  token = "new";
+  registry.invalidateReports((id) => id.startsWith("codex:"));
+  expect(label(await registry.listReports({ reportIds: ["codex:provider.work"] }))).toBe("new");
+  finishOld({ status: "available", windows: [{ id: "credential", label: "old" }] });
+  expect(label(await pending)).toBe("new");
+  expect(label(await registry.listReports())).toBe("new");
+});
+
+test("invalidated accounts that are no longer discovered disappear from targeted refreshes", async () => {
+  const registry = new UsageSourceRegistry();
+  let accounts = [{ key: "provider.work", label: "Work", input: {} }];
+  registry.register(source({ id: "codex", discover: async () => accounts }));
+  expect((await registry.listReports()).map((entry) => entry.id)).toEqual(["codex:provider.work"]);
+  accounts = [];
+  registry.invalidateReports((id) => id.startsWith("codex:"));
+  expect(await registry.listReports({ reportIds: ["codex:provider.work"] })).toEqual([]);
+});
