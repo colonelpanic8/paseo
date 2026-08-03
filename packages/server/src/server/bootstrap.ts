@@ -524,8 +524,13 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
-function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
-  const providers = config.providerOverrides ?? {};
+export function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
+  const providers: MutableDaemonConfig["providers"] = Object.fromEntries(
+    Object.entries(config.providerOverrides ?? {}).map(([providerId, override]) => [
+      providerId,
+      { ...override },
+    ]),
+  );
 
   const initialConfig: MutableDaemonConfig = {
     relay: { enabled: config.relayEnabled ?? true },

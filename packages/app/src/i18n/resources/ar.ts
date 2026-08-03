@@ -2351,13 +2351,16 @@ export const ar: TranslationResources = {
       actions: {
         menu: "{{name}} actions",
         addAccount: "إضافة حساب",
+        editAccount: "تعديل الحساب",
         remove: "Remove provider",
         removing: "Removing...",
       },
       account: {
         title: "إضافة حساب {{provider}}",
-        errorTitle: "تعذر إضافة الحساب",
+        editTitle: "تعديل حساب {{provider}}",
+        errorTitle: "تعذر حفظ الحساب",
         submit: "إضافة حساب",
+        save: "حفظ التغييرات",
         fields: {
           label: "الاسم",
           providerId: "معرّف المزود",

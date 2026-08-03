@@ -710,6 +710,7 @@ export class VoiceAssistantWebSocketServer {
       updateProviderRegistry: (state) => this.agentManager.updateProviderRegistry(state),
     });
     const unsubscribeChange = this.daemonConfigStore.onChange((config) => {
+      this.providerUsageService.updateProviderConfigs(config.providers);
       this.broadcastDaemonConfigChanged(config);
     });
     this.unsubscribeDaemonConfigChange = () => {
@@ -732,6 +733,7 @@ export class VoiceAssistantWebSocketServer {
 
     this.providerUsageService = new ProviderUsageService({
       logger: this.logger,
+      providerConfigs: this.daemonConfigStore.get().providers,
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
@@ -1725,6 +1727,8 @@ export class VoiceAssistantWebSocketServer {
         commitBaseClassification: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: true,
+        // COMPAT(providerConfigReplace): added in v0.2.X, remove after 2027-02-02 when old daemons are unsupported.
+        providerConfigReplace: true,
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
         importSessionWorkspaceTarget: true,
         // COMPAT(forgeProviders): added in v0.1.106, drop the gate when daemon floor >= v0.1.106.

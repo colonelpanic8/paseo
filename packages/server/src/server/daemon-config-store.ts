@@ -38,6 +38,7 @@ interface LoggerLike {
 
 export interface DaemonConfigChangeDetails {
   removedProviders: readonly string[];
+  replacedProviders: readonly string[];
 }
 
 export interface DaemonConfigReloadResult {
@@ -339,9 +340,24 @@ export class DaemonConfigStore {
         "Relay is controlled by a daemon launch override. Remove PASEO_RELAY_ENABLED or the relay CLI flag before changing it here.",
       );
     }
-    const { removeProviders = [], ...configPatch } = parsedPatch;
+    const { removeProviders = [], replaceProviders = {}, ...configPatch } = parsedPatch;
     const removedProviders = Array.from(new Set(removeProviders));
-    const merged = deepMerge(this.current, configPatch);
+    const replacedProviders = Object.keys(replaceProviders);
+    const removedProviderSet = new Set(removedProviders);
+    const conflictingProvider = replacedProviders.find((providerId) =>
+      removedProviderSet.has(providerId),
+    );
+    if (conflictingProvider) {
+      throw new Error(`Provider ${conflictingProvider} cannot be removed and replaced together`);
+    }
+    const mergePatch =
+      replacedProviders.length > 0
+        ? {
+            ...configPatch,
+            providers: { ...configPatch.providers, ...replaceProviders },
+          }
+        : configPatch;
+    const merged = deepMerge(omitProvidersFromConfig(this.current, replacedProviders), mergePatch);
     if (parsedPatch.plugins !== undefined) merged.plugins = parsedPatch.plugins;
     const next = MutableDaemonConfigSchema.parse(
       omitMetadataGenerationProvidersFromConfig(
@@ -352,7 +368,7 @@ export class DaemonConfigStore {
 
     const configChanged = !isEqualValue(this.current, next);
 
-    if (!configChanged && removedProviders.length === 0) {
+    if (!configChanged && removedProviders.length === 0 && replacedProviders.length === 0) {
       return this.current;
     }
 
@@ -554,6 +570,7 @@ function mergeMutablePatchIntoPersistedConfig(params: {
   persisted: PersistedConfig;
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">;
   removeProviders: readonly string[];
+  replaceProviders: readonly string[];
   persistRelayEnabled: boolean;
 }): PersistedConfig {
   const { persisted, patch, removeProviders, persistRelayEnabled } = params;

@@ -124,6 +124,7 @@ interface ProviderSnapshotReadOptions {
 interface ApplyMutableProviderConfigOptions {
   removeProviders?: readonly string[];
   replace?: boolean;
+  replaceProviders?: readonly string[];
 }
 
 export interface StagedMutableProviderConfig {
