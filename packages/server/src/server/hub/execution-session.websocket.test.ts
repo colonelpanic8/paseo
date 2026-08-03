@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "vitest";
 import {
   HubRelationshipHarness,
+  NonNotifyingArchiveWatchFiles,
   SetupFailingArchiveWatchFiles,
 } from "./test-utils/relationship-harness.js";
 
@@ -11,8 +12,10 @@ afterEach(async () => {
   relationship = null;
 });
 
-async function launchRelationship(): Promise<HubRelationshipHarness> {
-  const launched = await HubRelationshipHarness.start();
+async function launchRelationship(
+  archiveWatchFiles?: ConstructorParameters<typeof HubRelationshipHarness.start>[0],
+): Promise<HubRelationshipHarness> {
+  const launched = await HubRelationshipHarness.start(archiveWatchFiles);
   await launched.beginConnect().result;
   launched.connectLatestSocket();
   relationship = launched;
@@ -158,7 +161,9 @@ test("Hub archives only the owned agent in a shared local checkout", async () =>
 });
 
 test("Hub archives a running execution's Paseo-created worktree", async () => {
-  const hub = await launchRelationship();
+  // Windows can silently drop fs.watch rename notifications. Archive completion
+  // must still be observed through the persisted-state polling fallback.
+  const hub = await launchRelationship(new NonNotifyingArchiveWatchFiles());
   hub.beginOwnedCreate("worktree-create", "execution-worktree", {
     worktree: { mode: "branch-off", newBranch: "hub-created-worktree", base: "main" },
     prompt: "sleep 30",
