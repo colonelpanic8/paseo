@@ -599,7 +599,7 @@ function SidebarChrome({
   );
   const active = visible && isOpen;
   return (
-    <SidebarModelProvider active={active}>
+    <SidebarModelProvider active={active || keyboardShortcutsEnabled}>
       {mounted ? <LeftSidebar active={active} /> : null}
       <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
     </SidebarModelProvider>

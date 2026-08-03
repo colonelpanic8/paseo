@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useKeyboardShortcutsStore } from "./keyboard-shortcuts-store";
 
-describe("keyboard shortcut badge state", () => {
+describe("keyboard-shortcuts-store", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     useKeyboardShortcutsStore.setState({
@@ -14,6 +14,7 @@ describe("keyboard shortcut badge state", () => {
       showShortcutBadges: false,
       showControlShortcutBadges: false,
       sidebarShortcutWorkspaceTargets: [],
+      readyWaitingWorkspaceTargets: [],
     });
   });
 
@@ -61,5 +62,15 @@ describe("keyboard shortcut badge state", () => {
     useKeyboardShortcutsStore.getState().setCmdOrCtrlDown(false);
 
     expect(useKeyboardShortcutsStore.getState().showControlShortcutBadges).toBe(true);
+  });
+
+  it("stores ready/waiting workspace navigation targets", () => {
+    useKeyboardShortcutsStore
+      .getState()
+      .setReadyWaitingWorkspaceTargets([{ serverId: "srv", workspaceId: "ws-ready" }]);
+
+    expect(useKeyboardShortcutsStore.getState().readyWaitingWorkspaceTargets).toEqual([
+      { serverId: "srv", workspaceId: "ws-ready" },
+    ]);
   });
 });
