@@ -8,7 +8,10 @@ import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { getProviderIcon } from "@/components/provider-icons";
 import { ModelBrowser, useModelBrowser } from "@/components/model-browser";
 import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
-import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
+import {
+  resolveProviderIconId,
+  type ProviderSelectorProvider,
+} from "@/provider-selection/provider-selection";
 import { useIsCompactFormFactor } from "@/constants/layout";
 
 const SNAP_POINTS = ["80%", "90%"];
@@ -71,7 +74,9 @@ export function CompactModelSheet({
   });
   const { prepareToOpen, reset } = browser;
   const ProviderIcon =
-    selectedProvider.trim().length > 0 ? getProviderIcon(selectedProvider) : null;
+    selectedProvider.trim().length > 0
+      ? getProviderIcon(resolveProviderIconId(providers, selectedProvider))
+      : null;
   const compactFooter = useMemo(
     () =>
       usesBottomSheet ? (

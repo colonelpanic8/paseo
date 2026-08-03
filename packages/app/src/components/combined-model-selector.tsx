@@ -8,7 +8,10 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
 import { ModelBrowser, ModelProviderGlyph, useModelBrowser } from "@/components/model-browser";
 import { isNative, isWeb } from "@/constants/platform";
-import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
+import {
+  resolveProviderIconId,
+  type ProviderSelectorProvider,
+} from "@/provider-selection/provider-selection";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const EMPTY_COMBOBOX_OPTIONS: ComboboxOption[] = [];
@@ -211,7 +214,7 @@ export function CombinedModelSelector({
           {selectedProvider.trim().length > 0 ? (
             <View style={toolbar?.glyphSize === 20 ? styles.toolbarGlyph20 : styles.toolbarGlyph16}>
               <ModelProviderGlyph
-                provider={selectedProvider}
+                provider={resolveProviderIconId(providers, selectedProvider)}
                 size={toolbar?.glyphSize ?? ICON_SIZE.md}
               />
             </View>
