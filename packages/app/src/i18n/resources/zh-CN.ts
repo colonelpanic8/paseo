@@ -1057,6 +1057,7 @@ export const zhCN: TranslationResources = {
         branch: "分支",
         project: "项目",
         host: "主机",
+        alwaysShowHost: "始终显示 Host",
         changeRequest: "拉取请求",
         checks: "检查",
         services: "服务",

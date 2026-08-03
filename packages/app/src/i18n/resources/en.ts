@@ -1074,6 +1074,7 @@ export const en = {
         branch: "Branch",
         project: "Project",
         host: "Host",
+        alwaysShowHost: "Always show host",
         changeRequest: "Pull request",
         checks: "Checks",
         services: "Services",
