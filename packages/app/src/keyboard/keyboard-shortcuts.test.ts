@@ -712,9 +712,12 @@ describe("command contribution shortcut overrides", () => {
     const builtIns = buildEffectiveBindings(overrides);
 
     expect(buildCommandShortcutBindings([shortcutId], overrides, builtIns)).toEqual([]);
-    expect(findKeyboardShortcutConflict(bindingId, "Ctrl+W", {}, [shortcutId])).toBe(
-      "workspace-tab-close-current-ctrl-w-non-mac",
-    );
+    expect(
+      findKeyboardShortcutConflict(bindingId, "Ctrl+W", {}, [shortcutId], {
+        isMac: false,
+        isDesktop: true,
+      }),
+    ).toBe("workspace-tab-close-current-ctrl-w-non-mac");
   });
 
   it("rejects all direct shortcuts sharing the same chord", () => {
@@ -724,8 +727,35 @@ describe("command contribution shortcut overrides", () => {
 
     expect(buildCommandShortcutBindings([shortcutId, thinkingId], overrides)).toEqual([]);
     expect(
-      findKeyboardShortcutConflict(bindingId, "F13", overrides, [shortcutId, thinkingId]),
+      findKeyboardShortcutConflict(bindingId, "F13", overrides, [shortcutId, thinkingId], {
+        isMac: false,
+        isDesktop: true,
+      }),
     ).toBe(thinkingBindingId);
+  });
+
+  it("ignores conflicts from bindings that cannot run on the current platform", () => {
+    const overrides = { [bindingId]: "Alt+1" };
+    const builtIns = buildEffectiveBindings(overrides);
+
+    expect(
+      buildCommandShortcutBindings([shortcutId], overrides, builtIns, {
+        isMac: true,
+        isDesktop: true,
+      }),
+    ).toHaveLength(1);
+    expect(
+      findKeyboardShortcutConflict(bindingId, "Alt+1", {}, [shortcutId], {
+        isMac: true,
+        isDesktop: true,
+      }),
+    ).toBeNull();
+    expect(
+      findKeyboardShortcutConflict(bindingId, "Alt+1", {}, [shortcutId], {
+        isMac: true,
+        isDesktop: false,
+      }),
+    ).toBe("workspace-navigate-index-alt-digit-web");
   });
 });
 
