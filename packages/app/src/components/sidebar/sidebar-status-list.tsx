@@ -18,6 +18,7 @@ import {
   CircleCheck,
   CircleDot,
   CircleX,
+  Moon,
 } from "lucide-react-native";
 import { DiffStat } from "@/components/diff-stat";
 import { useToast } from "@/contexts/toast-context";
@@ -46,6 +47,8 @@ import {
   SidebarWorkspaceContextMenu,
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
+import { isStatusGroupCollapsed } from "@/stores/sidebar-collapsed-sections-store/state";
+import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -65,6 +68,7 @@ const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedCircleX = withUnistyles(CircleX);
+const ThemedMoon = withUnistyles(Moon);
 interface StatusWorkspaceListProps {
   groups: StatusGroup[];
   pinnedWorkspaces: SidebarWorkspaceEntry[];
@@ -206,7 +210,7 @@ function StatusGroupList({
         <StatusGroupRows
           key={group.bucket}
           group={group}
-          collapsed={collapsedStatusGroupKeys.has(group.bucket)}
+          collapsed={isStatusGroupCollapsed(collapsedStatusGroupKeys, group.bucket)}
           projectIconByProjectViewKey={projectIconByProjectViewKey}
           shortcutIndex={shortcutIndex}
           showShortcutBadges={showShortcutBadges}
@@ -386,6 +390,8 @@ function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
       return <ThemedCircleDot size={14} uniProps={amberColorMapping} />;
     case "done":
       return <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />;
+    case "snoozed":
+      return <ThemedMoon size={14} uniProps={blueColorMapping} />;
   }
 }
 
@@ -777,6 +783,11 @@ function StatusWorkspaceActionSlot({
   archivePendingLabel?: string;
   archiveShortcutKeys?: ShortcutKey[][] | null;
 }) {
+  const snooze = useWorkspaceSnoozeMenu({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+    isSnoozed: workspace.statusBucket === "snoozed",
+  });
   return (
     <SidebarWorkspaceTrailingActionSlot>
       <SidebarWorkspaceTrailingActionBase visible={showBase}>
@@ -802,6 +813,7 @@ function StatusWorkspaceActionSlot({
             archiveShortcutKeys={archiveShortcutKeys}
             isPinned={isPinned}
             onTogglePin={onTogglePin}
+            snooze={snooze}
           />
         ) : null}
       </SidebarWorkspaceTrailingActionOverlay>
