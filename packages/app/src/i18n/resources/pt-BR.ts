@@ -1057,6 +1057,11 @@ export const ptBR: TranslationResources = {
         hideConfirm: "Ocultar",
         cancel: "Cancelar",
       },
+      agentTree: {
+        show: "Mostrar agentes",
+        hide: "Ocultar agentes",
+        swipeAction: "Agentes",
+      },
       rename: {
         title: "Renomear workspace",
         submit: "Renomear",

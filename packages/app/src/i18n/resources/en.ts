@@ -1045,6 +1045,11 @@ export const en = {
         hideConfirm: "Hide",
         cancel: "Cancel",
       },
+      agentTree: {
+        show: "Show agents",
+        hide: "Hide agents",
+        swipeAction: "Agents",
+      },
       rename: {
         title: "Rename workspace",
         submit: "Rename",

@@ -1057,6 +1057,11 @@ export const ru: TranslationResources = {
         hideConfirm: "Скрывать",
         cancel: "Отмена",
       },
+      agentTree: {
+        show: "Показать агентов",
+        hide: "Скрыть агентов",
+        swipeAction: "Агенты",
+      },
       rename: {
         title: "Переименовать рабочую область",
         submit: "Переименовать",
