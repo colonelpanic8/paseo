@@ -140,10 +140,12 @@ function hostLifecycleEquals(left: HostLifecycle, right: HostLifecycle): boolean
 function dedupeHostConnections(connections: HostConnection[]): HostConnection[] {
   const next: HostConnection[] = [];
   for (const connection of connections) {
-    if (next.some((existing) => hostConnectionEquals(existing, connection))) {
-      continue;
+    const existingIndex = next.findIndex((existing) => existing.id === connection.id);
+    if (existingIndex === -1) {
+      next.push(connection);
+    } else {
+      next[existingIndex] = connection;
     }
-    next.push(connection);
   }
   return next;
 }
@@ -167,7 +169,7 @@ export function upsertHostConnectionInProfiles(input: {
   const matchingIndexes = existing.reduce<number[]>((matches, daemon, index) => {
     if (
       daemon.serverId === serverId ||
-      daemon.connections.some((connection) => hostConnectionEquals(connection, input.connection))
+      daemon.connections.some((connection) => connection.id === input.connection.id)
     ) {
       matches.push(index);
     }
