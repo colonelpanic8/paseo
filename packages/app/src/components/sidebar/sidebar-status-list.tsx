@@ -67,6 +67,7 @@ import { useMinuteNow } from "@/hooks/use-minute-tick";
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
+const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
 const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
