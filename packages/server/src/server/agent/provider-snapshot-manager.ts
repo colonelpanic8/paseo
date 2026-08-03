@@ -121,6 +121,7 @@ interface ProviderSnapshotReadOptions {
 interface ApplyMutableProviderConfigOptions {
   removeProviders?: readonly string[];
   replace?: boolean;
+  replaceProviders?: readonly string[];
 }
 
 export interface StagedMutableProviderConfig {
@@ -490,10 +491,10 @@ export class ProviderSnapshotManager {
         this.baseProviderOverrides = undefined;
         this.runtimeSettings = undefined;
       } else {
-        this.baseProviderOverrides = omitProviderOverrides(
-          this.baseProviderOverrides,
-          options.removeProviders ?? [],
-        );
+        this.baseProviderOverrides = omitProviderOverrides(this.baseProviderOverrides, [
+          ...(options.removeProviders ?? []),
+          ...(options.replaceProviders ?? []),
+        ]);
       }
       this.providerOverrides = applyMutableProviderConfigToOverrides(
         this.baseProviderOverrides,
