@@ -426,7 +426,18 @@ interface AppContainerProps {
 const THEME_CYCLE_ORDER: ThemeName[] = ["dark", "zinc", "midnight", "claude", "ghostty", "light"];
 const WINDOW_SIDEBAR_TOGGLE_HORIZONTAL_PADDING = 12;
 
-function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
+function AppContainer(props: AppContainerProps) {
+  return (
+    <CommandCenterProvider>
+      <AppContainerContent {...props} />
+    </CommandCenterProvider>
+  );
+}
+
+function AppContainerContent({
+  children,
+  chromeEnabled: chromeEnabledOverride,
+}: AppContainerProps) {
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
@@ -583,7 +594,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     surface
   );
 
-  return <CommandCenterProvider>{content}</CommandCenterProvider>;
+  return content;
 }
 
 function SidebarChrome({

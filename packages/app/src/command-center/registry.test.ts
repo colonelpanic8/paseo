@@ -1,16 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { CommandCenterContribution, CommandCenterRegistrationOwner } from "./contributions";
-import { createCommandCenterRegistry } from "./registry";
+import { createCommandCenterRegistry, getResolvableShortcutIds } from "./registry";
 
-function action(id: string, rank: number): CommandCenterContribution {
+function action(
+  id: string,
+  rank: number,
+  shortcutId?: string,
+  run: () => void = () => undefined,
+): CommandCenterContribution {
   return {
     id,
+    ...(shortcutId ? { shortcutId } : {}),
     group: "actions",
     groupRank: 0,
     rank,
     keywords: [],
     visibility: "always",
-    run: () => undefined,
+    run,
     presentation: { kind: "action", title: id },
   };
 }
@@ -69,5 +75,67 @@ describe("Command Center registry", () => {
         contributions: [action("same", 0), action("same", 1)],
       }),
     ).toThrow("Duplicate Command Center contribution id: duplicate:same");
+  });
+
+  it("runs one active contribution by stable identity", () => {
+    const registry = createCommandCenterRegistry();
+    const calls: string[] = [];
+    registry.replace({
+      owner: owner("agent:host:first"),
+      contributions: [action("dynamic-model", 0, "models:codex:gpt", () => calls.push("gpt"))],
+    });
+
+    expect(registry.getSnapshot().contributions[0].id).toBe("agent:host:first:dynamic-model");
+    expect(registry.runShortcut("models:codex:gpt")).toBe(true);
+    expect(calls).toEqual(["gpt"]);
+  });
+
+  it("does not run unavailable or ambiguous targets", () => {
+    const registry = createCommandCenterRegistry();
+    const calls: string[] = [];
+    registry.replace({
+      owner: owner("agent:first"),
+      contributions: [action("high", 0, "thinking:high", () => calls.push("first"))],
+    });
+    registry.replace({
+      owner: owner("agent:second"),
+      contributions: [action("high", 0, "thinking:high", () => calls.push("second"))],
+    });
+
+    expect(getResolvableShortcutIds(registry.getSnapshot().contributions)).toEqual([]);
+    expect(registry.runShortcut("thinking:high")).toBe(false);
+    expect(registry.runShortcut("thinking:low")).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  it("catalogs inactive mounted sources without making them executable", () => {
+    const registry = createCommandCenterRegistry();
+    const source = owner("agent:first");
+    registry.replace({
+      owner: source,
+      contributions: [action("high", 0, "thinking:high")],
+      enabled: false,
+    });
+
+    expect(registry.getSnapshot().contributions).toEqual([]);
+    expect(registry.getSnapshot().shortcutCatalog.map((item) => item.shortcutId)).toEqual([
+      "thinking:high",
+    ]);
+    expect(registry.runShortcut("thinking:high")).toBe(false);
+
+    registry.remove(source);
+    expect(registry.getSnapshot().shortcutCatalog).toEqual([]);
+  });
+
+  it("updates active resolution when a mounted source changes focus", () => {
+    const registry = createCommandCenterRegistry();
+    const source = owner("agent:first");
+    const contributions = [action("high", 0, "thinking:high")];
+    registry.replace({ owner: source, contributions, enabled: false });
+    registry.replace({ owner: source, contributions, enabled: true });
+
+    expect(getResolvableShortcutIds(registry.getSnapshot().contributions)).toEqual([
+      "thinking:high",
+    ]);
   });
 });

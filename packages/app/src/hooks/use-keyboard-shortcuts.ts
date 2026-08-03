@@ -9,6 +9,7 @@ import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher"
 import {
   type ChordState,
   type KeyboardShortcutInput,
+  buildCommandShortcutBindings,
   resolveKeyboardShortcut,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
@@ -37,6 +38,11 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
+import {
+  useCommandCenterContributions,
+  useCommandCenterShortcutRunner,
+} from "@/command-center/provider";
+import { getResolvableShortcutIds } from "@/command-center/registry";
 
 export function useKeyboardShortcuts({
   enabled,
@@ -59,7 +65,15 @@ export function useKeyboardShortcuts({
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
-  const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
+  const commandCenterSnapshot = useCommandCenterContributions();
+  const runCommandCenterShortcut = useCommandCenterShortcutRunner();
+  const bindings = useMemo(() => {
+    const shortcutIds = getResolvableShortcutIds(commandCenterSnapshot.contributions);
+    return [
+      ...buildCommandShortcutBindings(shortcutIds, overrides),
+      ...buildEffectiveBindings(overrides),
+    ];
+  }, [commandCenterSnapshot.contributions, overrides]);
   const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const isDesktopApp = getIsElectronRuntime();
   const isMac = getShortcutOs() === "mac";
@@ -271,12 +285,14 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      const handled = routeAndPerformShortcut({
-        action: result.match.action,
-        payload: result.match.payload,
-        domEvent: input.domEvent,
-        browserFocusRestoreElement: input.browserFocusRestoreElement,
-      });
+      const handled = result.match.commandShortcutId
+        ? runCommandCenterShortcut(result.match.commandShortcutId)
+        : routeAndPerformShortcut({
+            action: result.match.action,
+            payload: result.match.payload,
+            domEvent: input.domEvent,
+            browserFocusRestoreElement: input.browserFocusRestoreElement,
+          });
       if (!handled || !input.domEvent) {
         return;
       }
@@ -390,6 +406,7 @@ export function useKeyboardShortcuts({
     pathname,
     publishBrowserShortcutPolicy,
     resetModifiers,
+    runCommandCenterShortcut,
     router,
     shortcutsAvailable,
     toggleAgentList,

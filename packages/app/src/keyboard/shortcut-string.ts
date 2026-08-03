@@ -70,7 +70,7 @@ KEY_MAP["PageUp"] = { code: "PageUp" };
 KEY_MAP["PageDown"] = { code: "PageDown" };
 KEY_MAP["Insert"] = { code: "Insert" };
 
-for (let i = 1; i <= 12; i++) {
+for (let i = 1; i <= 24; i++) {
   KEY_MAP[`F${i}`] = { code: `F${i}` };
 }
 

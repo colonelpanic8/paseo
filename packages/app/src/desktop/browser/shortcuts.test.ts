@@ -4,9 +4,46 @@ import {
   parseBrowserShortcutInput,
   shouldPublishBrowserShortcutPolicy,
 } from "./shortcuts";
-import { buildEffectiveBindings, resolveKeyboardShortcut } from "../../keyboard/keyboard-shortcuts";
+import {
+  buildCommandShortcutBindings,
+  buildEffectiveBindings,
+  resolveKeyboardShortcut,
+} from "../../keyboard/keyboard-shortcuts";
 
 describe("buildBrowserKeyboardPolicy", () => {
+  it("forwards unmodified F13-F24 direct shortcuts while preserving F1-F12 behavior", () => {
+    const bindings = buildCommandShortcutBindings(["thinking:high", "thinking:top"], {
+      "command-center.shortcut:thinking:high": "F13",
+      "command-center.shortcut:thinking:top": "F24",
+    });
+
+    const prefixes = buildBrowserKeyboardPolicy({
+      bindings,
+      isMac: true,
+      isDesktop: true,
+    }).prefixes;
+
+    expect(prefixes).toEqual([
+      {
+        alt: false,
+        code: "F13",
+        control: false,
+        meta: false,
+        repeat: false,
+        shift: false,
+      },
+      {
+        alt: false,
+        code: "F24",
+        control: false,
+        meta: false,
+        repeat: false,
+        shift: false,
+      },
+    ]);
+    expect(prefixes.some((prefix) => prefix.code === "F12")).toBe(false);
+  });
+
   it("publishes only chord starts while no browser chord is pending", () => {
     const bindings = buildEffectiveBindings({
       "workspace-tab-new-ctrl-t-non-mac": "Ctrl+Y",

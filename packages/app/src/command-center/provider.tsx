@@ -1,4 +1,5 @@
 import {
+  useCallback,
   createContext,
   useContext,
   useEffect,
@@ -28,6 +29,11 @@ function useCommandCenterRegistry(): CommandCenterRegistry {
   return registry;
 }
 
+export function useCommandCenterShortcutRunner(): (shortcutId: string) => boolean {
+  const registry = useCommandCenterRegistry();
+  return useCallback((shortcutId: string) => registry.runShortcut(shortcutId), [registry]);
+}
+
 export function useCommandCenterContributions() {
   const registry = useCommandCenterRegistry();
   return useSyncExternalStore(registry.subscribe, registry.getSnapshot, registry.getSnapshot);
@@ -46,11 +52,10 @@ export function useCommandCenterActions(input: {
   const owner = ownerRef.current;
 
   useEffect(() => {
-    if (!input.enabled) {
-      registry.remove(owner);
-      return;
-    }
-    registry.replace({ owner, contributions: input.actions });
-    return () => registry.remove(owner);
+    registry.replace({ owner, contributions: input.actions, enabled: input.enabled });
   }, [input.actions, input.enabled, owner, registry]);
+
+  useEffect(() => {
+    return () => registry.remove(owner);
+  }, [owner, registry]);
 }

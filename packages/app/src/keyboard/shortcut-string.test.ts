@@ -68,3 +68,20 @@ describe("parseShortcutString round-trips punctuation keys", () => {
     expect(keyComboToString(combo)).toBe("Cmd+-");
   });
 });
+
+describe("function-key shortcuts", () => {
+  for (let index = 1; index <= 24; index += 1) {
+    const key = `F${index}`;
+
+    it(`parses, displays, and captures ${key}`, () => {
+      const combo = parseShortcutString(key);
+      expect(combo).toEqual({ code: key });
+      expect(keyComboToString(combo)).toBe(key);
+      expect(keyboardEventToComboString(keyboardEvent({ key, code: key }))).toBe(key);
+    });
+  }
+
+  it("rejects function keys outside F1-F24", () => {
+    expect(() => parseShortcutString("F25")).toThrow('Unknown key: "F25"');
+  });
+});

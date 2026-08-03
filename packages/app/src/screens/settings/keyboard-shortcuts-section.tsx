@@ -24,6 +24,12 @@ import { getShortcutOs } from "@/utils/shortcut-platform";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { getDesktopHost } from "@/desktop/host";
+import { useCommandCenterContributions } from "@/command-center/provider";
+import {
+  buildCommandShortcutSettingsRows,
+  type CommandShortcutSettingsRow,
+} from "@/command-center/shortcut-settings";
+import type { ShortcutKey } from "@/utils/format-shortcut";
 
 const EMPTY_CAPTURED_COMBOS: string[] = [];
 
@@ -75,6 +81,7 @@ function ShortcutRowContainer({
   onCancelCapture,
   onRemoveOverride,
 }: ShortcutRowContainerProps) {
+  const { t } = useTranslation();
   const handleRebind = useCallback(() => {
     if (bindingId) onStartCapture(bindingId);
   }, [bindingId, onStartCapture]);
@@ -85,8 +92,10 @@ function ShortcutRowContainer({
 
   return (
     <ShortcutRow
-      row={row}
+      label={t(row.labelKey)}
+      defaultChord={[row.keys]}
       bindingId={bindingId}
+      canRebind={bindingId !== null}
       overrideCombo={overrideCombo}
       isCapturing={isCapturing}
       capturedCombos={capturedCombos}
@@ -99,9 +108,53 @@ function ShortcutRowContainer({
   );
 }
 
-function ShortcutRow({
+function DirectShortcutRowContainer({
   row,
+  isCapturing,
+  capturedCombos,
+  heldModifiers,
+  onStartCapture,
+  onSaveCapture,
+  onCancelCapture,
+  onRemoveOverride,
+}: {
+  row: CommandShortcutSettingsRow;
+  isCapturing: boolean;
+  capturedCombos: string[];
+  heldModifiers: string | null;
+  onStartCapture: (bindingId: string) => void;
+  onSaveCapture: () => void;
+  onCancelCapture: () => void;
+  onRemoveOverride: (bindingId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handleRebind = useCallback(() => onStartCapture(row.bindingId), [onStartCapture, row]);
+  const handleReset = useCallback(() => onRemoveOverride(row.bindingId), [onRemoveOverride, row]);
+  const label = row.available ? row.label : `${row.label} · ${t("settings.providers.unavailable")}`;
+
+  return (
+    <ShortcutRow
+      label={label}
+      defaultChord={null}
+      bindingId={row.bindingId}
+      canRebind={row.available}
+      overrideCombo={row.combo}
+      isCapturing={isCapturing}
+      capturedCombos={capturedCombos}
+      heldModifiers={heldModifiers}
+      onRebind={handleRebind}
+      onDone={onSaveCapture}
+      onCancel={onCancelCapture}
+      onReset={handleReset}
+    />
+  );
+}
+
+function ShortcutRow({
+  label,
+  defaultChord,
   bindingId,
+  canRebind,
   overrideCombo,
   isCapturing,
   capturedCombos,
@@ -111,8 +164,10 @@ function ShortcutRow({
   onCancel,
   onReset,
 }: {
-  row: KeyboardShortcutHelpRow;
+  label: string;
+  defaultChord: ShortcutKey[][] | null;
   bindingId: string | null;
+  canRebind: boolean;
   overrideCombo: string | undefined;
   isCapturing: boolean;
   capturedCombos: string[];
@@ -124,21 +179,25 @@ function ShortcutRow({
 }) {
   const { t } = useTranslation();
   const displayChord = useMemo(
-    () => (overrideCombo ? chordStringToShortcutKeys(overrideCombo) : [row.keys]),
-    [overrideCombo, row.keys],
+    () => (overrideCombo ? chordStringToShortcutKeys(overrideCombo) : defaultChord),
+    [defaultChord, overrideCombo],
   );
   const rowStyle = useMemo(() => [styles.row, isCapturing && styles.rowCapturing], [isCapturing]);
+  let shortcut = displayChord ? (
+    <Shortcut chord={displayChord} />
+  ) : (
+    <Text style={styles.unassigned}>—</Text>
+  );
+  if (isCapturing) {
+    shortcut = <ShortcutSequence chord={capturedCombos} heldModifiers={heldModifiers} />;
+  }
 
   return (
     <View style={rowStyle}>
-      <Text style={styles.rowLabel}>{t(row.labelKey)}</Text>
+      <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.rowActions}>
-        {isCapturing ? (
-          <ShortcutSequence chord={capturedCombos} heldModifiers={heldModifiers} />
-        ) : (
-          <Shortcut chord={displayChord} />
-        )}
-        {bindingId !== null && (
+        {shortcut}
+        {bindingId !== null && canRebind && (
           <>
             {isCapturing && capturedCombos.length > 0 ? (
               <Button variant="ghost" size="sm" onPress={onDone}>
@@ -169,6 +228,7 @@ export function KeyboardShortcutsSection() {
   const [heldModifiers, setHeldModifiers] = useState<string | null>(null);
   const { overrides, hasOverrides, setOverride, removeOverride, resetAll } =
     useKeyboardShortcutOverrides();
+  const commandCenterSnapshot = useCommandCenterContributions();
   const setCapturingShortcut = useKeyboardShortcutsStore((s) => s.setCapturingShortcut);
   const capturing = useKeyboardShortcutsStore((s) => s.capturingShortcut);
 
@@ -176,6 +236,25 @@ export function KeyboardShortcutsSection() {
   const isMac = getShortcutOs() === "mac";
   const isDesktopApp = getIsElectronRuntime();
   const sections = buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp });
+  const directShortcutRows = useMemo(
+    () => buildCommandShortcutSettingsRows(commandCenterSnapshot.shortcutCatalog, overrides),
+    [commandCenterSnapshot.shortcutCatalog, overrides],
+  );
+  const directShortcutGroups = useMemo(
+    () => [
+      {
+        id: "models" as const,
+        title: t("shell.commandCenter.modelGroupLabel"),
+        rows: directShortcutRows.filter((row) => row.group === "models"),
+      },
+      {
+        id: "thinking" as const,
+        title: t("shell.commandCenter.thinkingGroupLabel"),
+        rows: directShortcutRows.filter((row) => row.group === "thinking"),
+      },
+    ],
+    [directShortcutRows, t],
+  );
 
   const cancelCapture = useCallback(() => {
     setCapturedCombos([]);
@@ -318,6 +397,36 @@ export function KeyboardShortcutsSection() {
           </SettingsSection>
         );
       })}
+      {directShortcutGroups.map(function (group) {
+        if (group.rows.length === 0) return null;
+        return (
+          <SettingsSection key={group.id} title={group.title}>
+            <View style={settingsStyles.card}>
+              {group.rows.map(function (row, index) {
+                return (
+                  <View key={row.shortcutId}>
+                    <DirectShortcutRowContainer
+                      row={row}
+                      isCapturing={capturingBindingId === row.bindingId}
+                      capturedCombos={
+                        capturingBindingId === row.bindingId
+                          ? capturedCombos
+                          : EMPTY_CAPTURED_COMBOS
+                      }
+                      heldModifiers={capturingBindingId === row.bindingId ? heldModifiers : null}
+                      onStartCapture={startCapture}
+                      onSaveCapture={saveCapture}
+                      onCancelCapture={cancelCapture}
+                      onRemoveOverride={handleRemoveOverride}
+                    />
+                    {index < group.rows.length - 1 && <View style={styles.separator} />}
+                  </View>
+                );
+              })}
+            </View>
+          </SettingsSection>
+        );
+      })}
     </>
   );
 }
@@ -348,6 +457,10 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   resetText: {
+    color: theme.colors.foregroundMuted,
+  },
+  unassigned: {
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   separator: {

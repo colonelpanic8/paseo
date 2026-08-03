@@ -228,4 +228,33 @@ describe("browser keyboard policy", () => {
       }),
     ).toBe(false);
   });
+
+  test.each(["F13", "F24"])("matches an unmodified %s browser-pane shortcut", (code) => {
+    const policy = parseBrowserKeyboardPolicy({
+      menuPrefixes: [],
+      prefixes: [
+        {
+          alt: false,
+          code,
+          control: false,
+          meta: false,
+          repeat: false,
+          shift: false,
+        },
+      ],
+    });
+    expect(policy).not.toBeNull();
+
+    const input = {
+      alt: false,
+      code,
+      control: false,
+      key: code,
+      meta: false,
+      repeat: false,
+      shift: false,
+    };
+    expect(matchesBrowserShortcutPolicy(policy!, input)).toBe(true);
+    expect(matchesBrowserShortcutPolicy(policy!, { ...input, repeat: true })).toBe(false);
+  });
 });

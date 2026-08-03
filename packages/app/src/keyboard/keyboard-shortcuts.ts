@@ -31,6 +31,7 @@ export interface KeyboardShortcutInput {
 
 export interface KeyboardShortcutMatch {
   action: KeyboardActionId;
+  commandShortcutId?: string;
   payload: KeyboardShortcutPayload;
   preventDefault: boolean;
   stopPropagation: boolean;
@@ -103,6 +104,7 @@ interface ShortcutBinding {
 
 export interface ParsedShortcutBinding extends ShortcutBinding {
   parsedChord: KeyCombo[];
+  commandShortcutId?: string;
 }
 
 export interface ChordState {
@@ -1076,6 +1078,48 @@ function parseBinding(binding: ShortcutBinding): ParsedShortcutBinding {
 export const DEFAULT_BINDINGS: readonly ParsedShortcutBinding[] =
   SHORTCUT_BINDINGS.map(parseBinding);
 
+const COMMAND_SHORTCUT_BINDING_PREFIX = "command-center.shortcut:";
+
+export function getCommandShortcutBindingId(shortcutId: string): string {
+  return `${COMMAND_SHORTCUT_BINDING_PREFIX}${shortcutId}`;
+}
+
+export function getCommandShortcutIdFromBindingId(bindingId: string): string | null {
+  if (!bindingId.startsWith(COMMAND_SHORTCUT_BINDING_PREFIX)) return null;
+  const shortcutId = bindingId.slice(COMMAND_SHORTCUT_BINDING_PREFIX.length);
+  return shortcutId.length > 0 ? shortcutId : null;
+}
+
+export function buildCommandShortcutBindings(
+  shortcutIds: readonly string[],
+  overrides: Readonly<Record<string, string>>,
+): ParsedShortcutBinding[] {
+  const bindings: ParsedShortcutBinding[] = [];
+  for (const shortcutId of new Set(shortcutIds)) {
+    const id = getCommandShortcutBindingId(shortcutId);
+    const combo = overrides[id];
+    if (!combo) continue;
+    let parsedChord: KeyCombo[];
+    try {
+      parsedChord = parseChordString(combo);
+    } catch {
+      continue;
+    }
+    const lastCombo = parsedChord.at(-1);
+    if (lastCombo) lastCombo.repeat = false;
+    bindings.push({
+      id,
+      action: "command-center.contribution.run",
+      commandShortcutId: shortcutId,
+      combo,
+      parsedChord,
+      repeat: false,
+      when: { commandCenter: false, terminal: false },
+    });
+  }
+  return bindings;
+}
+
 export function buildEffectiveBindings(overrides: Record<string, string>): ParsedShortcutBinding[] {
   return DEFAULT_BINDINGS.map(function (binding) {
     const override = overrides[binding.id];
@@ -1232,6 +1276,7 @@ function buildMatchFromBinding(
 ): KeyboardShortcutMatch {
   return {
     action: binding.action,
+    ...(binding.commandShortcutId ? { commandShortcutId: binding.commandShortcutId } : {}),
     payload: resolvePayload(binding.payload, event),
     preventDefault: binding.preventDefault ?? true,
     stopPropagation: binding.stopPropagation ?? true,

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildCommandShortcutBindings,
   buildKeyboardShortcutHelpSections,
   buildEffectiveBindings,
+  getCommandShortcutBindingId,
+  getCommandShortcutIdFromBindingId,
   getBindingIdForAction,
   getWorkspaceIndexJumpModifierKey,
   resolveKeyboardShortcut,
@@ -602,6 +605,68 @@ describe("keyboard-shortcuts", () => {
 
     expect(onChordReset).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
+  });
+});
+
+describe("direct command shortcut overrides", () => {
+  const shortcutId = "models:codex:gpt-5.6-sol";
+  const bindingId = "command-center.shortcut:models:codex:gpt-5.6-sol";
+
+  it("resolves a configured exact target through its stable persisted identity", () => {
+    const bindings = buildCommandShortcutBindings([shortcutId], { [bindingId]: "F13" });
+    const result = resolveShortcut({
+      event: { key: "F13", code: "F13" },
+      context: { focusScope: "message-input" },
+      bindings,
+    });
+
+    expect(result.match).toMatchObject({
+      action: "command-center.contribution.run",
+      commandShortcutId: shortcutId,
+      payload: null,
+      preventDefault: true,
+      stopPropagation: true,
+    });
+  });
+
+  it("has no default mapping and ignores unavailable or invalid stored targets", () => {
+    expect(getCommandShortcutBindingId(shortcutId)).toBe(bindingId);
+    expect(getCommandShortcutIdFromBindingId(bindingId)).toBe(shortcutId);
+    expect(getCommandShortcutIdFromBindingId("command-center.shortcut:")).toBeNull();
+    expect(getCommandShortcutIdFromBindingId("settings-toggle-cmd-comma-mac")).toBeNull();
+    expect(buildCommandShortcutBindings([shortcutId], {})).toEqual([]);
+    expect(
+      buildCommandShortcutBindings(["models:claude:claude-opus-5"], {
+        [bindingId]: "F13",
+      }),
+    ).toEqual([]);
+    expect(buildCommandShortcutBindings([shortcutId], { [bindingId]: "F25" })).toEqual([]);
+  });
+
+  it("matches editable composer focus but not terminals or the open command center", () => {
+    const bindings = buildCommandShortcutBindings([shortcutId], { [bindingId]: "F13" });
+
+    expect(
+      resolveShortcut({
+        event: { key: "F13", code: "F13" },
+        context: { focusScope: "terminal" },
+        bindings,
+      }).match,
+    ).toBeNull();
+    expect(
+      resolveShortcut({
+        event: { key: "F13", code: "F13" },
+        context: { commandCenterOpen: true },
+        bindings,
+      }).match,
+    ).toBeNull();
+    expect(
+      resolveShortcut({
+        event: { key: "F13", code: "F13" },
+        context: { focusScope: "editable" },
+        bindings,
+      }).match?.commandShortcutId,
+    ).toBe(shortcutId);
   });
 });
 

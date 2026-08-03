@@ -109,7 +109,8 @@ function prefixFromCombo(
   if (combo.shiftedKey) {
     prefix.shiftedKey = combo.shiftedKey;
   }
-  return prefix.meta || prefix.control || prefix.alt ? prefix : null;
+  const isExtendedFunctionKey = /^F(?:1[3-9]|2[0-4])$/.test(combo.code);
+  return prefix.meta || prefix.control || prefix.alt || isExtendedFunctionKey ? prefix : null;
 }
 
 function isBrowserNativeNavigationPrefix(prefix: BrowserShortcutPrefix, isMac: boolean): boolean {
