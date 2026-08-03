@@ -8,6 +8,7 @@ import {
 } from "@getpaseo/client/internal/daemon-client";
 import {
   connectionFromListen,
+  hostHasConnection,
   normalizeStoredHostProfile,
   upsertHostConnectionInProfiles,
   registryHasConnection,
@@ -1356,6 +1357,20 @@ interface ManagedHostBootstrapInput {
   label: string;
   endpoint: string;
   connection: HostConnection;
+  color?: HostColor;
+}
+
+function normalizeManagedHostColor(
+  color: ManagedHostRegistry["hosts"][number]["color"],
+): HostColor | undefined {
+  switch (color) {
+    case "green":
+      return "emerald";
+    case "purple":
+      return "violet";
+    default:
+      return color;
+  }
 }
 
 export class HostRuntimeStore {
@@ -1501,22 +1516,33 @@ export class HostRuntimeStore {
         label: host.label,
         endpoint,
         connection,
+        color: normalizeManagedHostColor(host.color),
       });
     }
     return hasValidHost;
   }
 
   private async bootstrapManagedHost(input: ManagedHostBootstrapInput): Promise<void> {
-    const { connection, endpoint, label } = input;
+    const { color, connection, endpoint, label } = input;
     let attempt = 0;
-    while (!registryHasConnection(this.hosts, connection)) {
+    while (true) {
       attempt += 1;
       try {
-        await this.probeAndUpsertConnection({
-          connection,
-          label,
-          timeoutMs: DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS,
-        });
+        const existingHost = this.hosts.find((host) => hostHasConnection(host, connection));
+        const serverId =
+          existingHost?.serverId ??
+          (
+            await this.probeAndUpsertConnection({
+              connection,
+              label,
+              timeoutMs: DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS,
+            })
+          ).serverId;
+        const currentHost = this.hosts.find((host) => host.serverId === serverId);
+        if (color !== undefined && currentHost?.appearance.color !== color) {
+          await this.setHostColor(serverId, color);
+        }
+        return;
       } catch (error) {
         if (attempt === 1 || attempt % 10 === 0) {
           console.warn("[HostRuntime] managed host bootstrap probe failed", {
