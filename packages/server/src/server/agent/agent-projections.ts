@@ -236,6 +236,7 @@ function buildStoredPersistenceHandle(
   return toPublicPersistenceHandle(toAgentPersistenceHandle(validProviders, record.persistence));
 }
 
+// oxlint-disable-next-line complexity
 export function buildStoredAgentPayload(
   record: StoredAgentRecord,
   validProviders: Iterable<AgentProvider>,
