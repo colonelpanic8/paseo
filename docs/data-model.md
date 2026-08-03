@@ -173,9 +173,27 @@ Terminal activity contributes to the workspace status bucket **per `workspaceId`
 
 ## 2. Daemon Configuration
 
-**Path:** `$PASEO_HOME/config.json`
+**Root path:** `$PASEO_HOME/config.json`
 
-Single file, validated with `PersistedConfigSchema`.
+Each file is validated with `PersistedConfigSchema`. The root can import shared layers and select
+which layer receives settings changes:
+
+```json
+{
+  "imports": ["../dotfiles/paseo.json", "machine.json"],
+  "writeTo": "machine.json"
+}
+```
+
+Imports are flattened depth-first. Later imports override earlier ones, and each file overrides its
+imports. Relative paths start from the referencing file's directory; paths beginning with `~/`
+start from the user's home directory. `writeTo` must name the root or a file in its import graph and
+is allowed only in the root. Without `writeTo`, settings changes write to the root.
+
+Settings changes rewrite only the selected layer's difference from all other layers. Imported files
+are read without changing their permissions, so shared configuration can live in a Nix store or Git
+checkout. A setting from another layer that cannot be overridden or removed through the writable
+layer is rejected with the owning file path.
 
 `agents.skills.selection` is the daemon host's orchestration-skill preference. Missing means
 `{ mode: "all" }`. Installed state is not persisted; the daemon derives it from its three managed
