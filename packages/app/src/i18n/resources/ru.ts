@@ -1736,6 +1736,14 @@ export const ru: TranslationResources = {
           queue: "Очередь",
         },
       },
+      commandTrigger: {
+        label: "Триггер команд",
+        description: "Открывает полный список команд в начале сообщения.",
+      },
+      skillTrigger: {
+        label: "Триггер навыков",
+        description: "Открывает список навыков в любом месте сообщения.",
+      },
       serviceUrls: {
         label: "URL- адреса служб",
         description: "Где открыть URL- адреса запущенных скриптов",

@@ -18,6 +18,7 @@ import {
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  shouldSubmitShellVariable,
   type SlashCommandRange,
 } from "@/utils/agent-command-autocomplete";
 import {
@@ -25,6 +26,8 @@ import {
   findActiveFileMention,
   type FileMentionRange,
 } from "@/utils/file-mention-autocomplete";
+import { DEFAULT_COMMAND_SIGIL, type ComposerSigils } from "@/composer/tokens/sigils";
+import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
 
 interface UseAgentAutocompleteInput {
   userInput: string;
@@ -36,6 +39,7 @@ interface UseAgentAutocompleteInput {
   onAutocompleteApplied?: () => void;
   onClientSlashCommand?: (command: ClientSlashCommand) => void;
   canExecuteClientSlashCommand?: boolean;
+  sigils: ComposerSigils;
 }
 
 type AgentAutocompleteOption =
@@ -55,6 +59,7 @@ interface AgentAutocompleteResult {
   errorMessage?: string;
   loadingText: string;
   emptyText: string;
+  tokenCatalog: ComposerTokenCatalog;
   onSelectOption: (option: AutocompleteOption) => void;
   onKeyPress: (event: AutocompleteKeyEvent) => boolean;
 }
@@ -117,11 +122,15 @@ function mapDirectorySuggestionsToEntries(payload: {
   }));
 }
 
-function mapCommandToOption(entry: AvailableCommand, t: TFunction): AgentAutocompleteOption {
+function mapCommandToOption(
+  entry: AvailableCommand,
+  t: TFunction,
+  sigil: string,
+): AgentAutocompleteOption {
   const command = entry.command;
   const base = {
     id: command.name,
-    label: `/${command.name}`,
+    label: `${sigil}${command.name}`,
     detail: command.argumentHint || undefined,
     description:
       entry.source === "client" ? t(entry.command.descriptionKey) : entry.command.description,
@@ -151,6 +160,7 @@ interface BuildAutocompleteOptionsInput {
   activeSlashCommand: SlashCommandRange | null;
   activeFileMention: FileMentionRange | null;
   fileSuggestions: DirectorySuggestionEntry[];
+  sigils: ComposerSigils;
   t: TFunction;
 }
 
@@ -172,16 +182,20 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
           ),
           ...providerCommands.filter((entry) => !clientCommandNames.has(entry.command.name)),
         ];
-    const availableCommands =
-      input.activeSlashCommand?.position === "inline"
-        ? filterInlineSkillCommandEntries(providerCommands)
-        : rootCommands;
+    // The skill sigil always means skills-only. The command sigil keeps its
+    // existing split: full list at the start of the message, skills inline.
+    const skillsOnly =
+      input.activeSlashCommand?.menu === "skill" || input.activeSlashCommand?.position === "inline";
+    const availableCommands = skillsOnly
+      ? filterInlineSkillCommandEntries(providerCommands)
+      : rootCommands;
     const matches = filterAndRankCommandAutocompleteEntries(
       availableCommands,
       input.commandFilterQuery,
     );
     const orderedMatches = orderAutocompleteOptions(matches);
-    return orderedMatches.map((entry) => mapCommandToOption(entry, input.t));
+    const sigil = input.activeSlashCommand?.sigil ?? input.sigils.command;
+    return orderedMatches.map((entry) => mapCommandToOption(entry, input.t, sigil));
   }
 
   const activeFileMention = input.activeFileMention;
@@ -213,14 +227,24 @@ function resolveAutocompleteMode(args: {
   return null;
 }
 
-function resolveAutocompleteIsVisible(args: {
+export function resolveAutocompleteIsVisible(args: {
   mode: AutocompleteMode;
   canLoadCommands: boolean;
   serverId: string;
   autocompleteCwd: string;
+  isCommandsLoading: boolean;
+  isDraftContext: boolean;
 }): boolean {
   if (args.mode === "command") {
-    return args.canLoadCommands;
+    if (!args.canLoadCommands) {
+      return false;
+    }
+    // A draft composer has no agent session yet, so its first command listing
+    // has to spin up a provider session: seconds at best, an error if the
+    // provider cannot start. Staying hidden through all of that makes the
+    // trigger character look dead — show the loading and error states instead.
+    // In-session listings resolve fast enough that hiding the flash still wins.
+    return args.isDraftContext || !args.isCommandsLoading;
   }
   if (args.mode === "file") {
     return Boolean(args.serverId) && args.autocompleteCwd.length > 0;
@@ -289,6 +313,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     onAutocompleteApplied,
     onClientSlashCommand,
     canExecuteClientSlashCommand,
+    sigils,
   } = input;
 
   const activeSlashCommand = useMemo(
@@ -296,10 +321,15 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       findActiveSlashCommand({
         text: userInput,
         cursorIndex,
+        sigils,
       }),
-    [cursorIndex, userInput],
+    [cursorIndex, userInput, sigils],
   );
   const showCommandAutocomplete = activeSlashCommand !== null;
+  const hasTokenCandidate =
+    userInput.includes(DEFAULT_COMMAND_SIGIL) ||
+    userInput.includes(sigils.command) ||
+    userInput.includes(sigils.skill);
   const commandFilterQuery = activeSlashCommand?.query ?? "";
 
   const activeFileMention = useMemo(
@@ -342,12 +372,6 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const isConnected = useHostRuntimeIsConnected(serverId);
 
   const mode = resolveAutocompleteMode({ showFileAutocomplete, showCommandAutocomplete });
-  const canShowAutocomplete = resolveAutocompleteIsVisible({
-    mode,
-    canLoadCommands,
-    serverId,
-    autocompleteCwd,
-  });
 
   const {
     commands,
@@ -357,11 +381,30 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   } = useAgentCommandsQuery({
     serverId,
     agentId,
-    enabled: mode === "command" && canLoadCommands,
+    enabled: hasTokenCandidate && canLoadCommands,
     draftConfig: queryDraftConfig,
   });
 
-  const isVisible = canShowAutocomplete && !(mode === "command" && isCommandsLoading);
+  const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
+    const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
+    const skillNames = new Set<string>();
+    for (const command of commands) {
+      commandNames.add(command.name);
+      if (command.kind === "skill") {
+        skillNames.add(command.name);
+      }
+    }
+    return { commandNames, skillNames };
+  }, [commands]);
+
+  const isVisible = resolveAutocompleteIsVisible({
+    mode,
+    canLoadCommands,
+    serverId,
+    autocompleteCwd,
+    isCommandsLoading,
+    isDraftContext,
+  });
 
   const fileSuggestionsQuery = useQuery({
     queryKey: [
@@ -410,6 +453,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         isDraftContext,
         isVisible,
         mode,
+        sigils,
         t,
       }),
     [
@@ -421,6 +465,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       isDraftContext,
       isVisible,
       mode,
+      sigils,
       t,
     ],
   );
@@ -440,7 +485,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
 
       if (selected.type === "client_command" || selected.type === "provider_command") {
         if (!activeSlashCommand) {
-          setUserInput(`/${selected.id} `);
+          setUserInput(`${sigils.command}${selected.id} `);
           onAutocompleteApplied?.();
           return;
         }
@@ -470,10 +515,11 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       setUserInput,
       userInput,
       activeSlashCommand,
+      sigils,
     ],
   );
 
-  const { selectedIndex, onKeyPress } = useAutocomplete({
+  const { selectedIndex, onKeyPress: onAutocompleteKeyPress } = useAutocomplete({
     isVisible,
     options,
     query: mode === "command" ? commandFilterQuery : fileFilterQuery,
@@ -483,6 +529,15 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         ? () => setUserInput("")
         : undefined,
   });
+  const onKeyPress = useCallback(
+    (event: { key: string; preventDefault: () => void }) => {
+      if (shouldSubmitShellVariable({ key: event.key, command: activeSlashCommand })) {
+        return false;
+      }
+      return onAutocompleteKeyPress(event);
+    },
+    [activeSlashCommand, onAutocompleteKeyPress],
+  );
 
   const isLoading = resolveAutocompleteIsLoading({
     mode,
@@ -514,6 +569,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     errorMessage,
     loadingText,
     emptyText,
+    tokenCatalog,
     onSelectOption,
     onKeyPress,
   };

@@ -90,6 +90,8 @@ import {
 } from "@/assistant-file-links";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { useAssistantImage } from "@/assistant-image/use-assistant-image";
+import { SentComposerTokenText } from "@/composer/tokens/sent-text";
+import type { ComposerSigils } from "@/composer/tokens/sigils";
 import {
   AttachmentFrame,
   AttachmentLabel,
@@ -111,6 +113,7 @@ interface UserMessageProps {
   agentId?: string;
   messageId?: string;
   message: string;
+  sigils: ComposerSigils;
   images?: UserMessageImageAttachment[];
   attachments?: AgentAttachment[];
   timestamp: number;
@@ -411,6 +414,7 @@ export const UserMessage = memo(function UserMessage({
   agentId,
   messageId,
   message,
+  sigils,
   images = [],
   attachments = [],
   timestamp,
@@ -521,9 +525,11 @@ export const UserMessage = memo(function UserMessage({
             </View>
           ) : null}
           {hasText ? (
-            <Text selectable style={userMessageStylesheet.text}>
-              {message}
-            </Text>
+            <SentComposerTokenText
+              text={message}
+              sigils={sigils}
+              style={userMessageStylesheet.text}
+            />
           ) : null}
         </View>
         {hasText ? (
