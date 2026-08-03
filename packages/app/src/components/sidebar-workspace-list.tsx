@@ -96,6 +96,7 @@ import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reor
 import { confirmDialog } from "@/utils/confirm-dialog";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
+import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import {
   SidebarWorkspaceContextMenu,
