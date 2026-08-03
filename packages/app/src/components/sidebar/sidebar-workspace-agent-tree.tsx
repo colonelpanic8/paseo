@@ -12,17 +12,18 @@ import { isWorkspaceRootAgent } from "@/subagents/policies";
 import { providerSubagentLifecycleStatus } from "@/subagents/provider-store";
 import { useSubagentsForParent, type SubagentRow } from "@/subagents/select";
 import { resolveRowLabel } from "@/subagents/track-presentation";
-import { ICON_SIZE, SPACING } from "@/styles/theme";
+import { SPACING } from "@/styles/theme";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 
 /**
- * Leading rail of a project-mode row's title: row padding + status-indicator
- * slot + the gap between them. Depth-0 agent dots sit on that rail. Status mode
- * leads with a wider icon, so it passes its own rail.
+ * Depth-0 agent dots sit on the workspace row's own leading rail (its left
+ * padding) rather than the title rail — hierarchy under the row reads from the
+ * per-depth steps, not from a large base offset. Status mode passes its own
+ * rail.
  */
-export const AGENT_TREE_PROJECT_MODE_INDENT = SPACING[2] + ICON_SIZE.md + SPACING[2];
+export const AGENT_TREE_PROJECT_MODE_INDENT = SPACING[2];
 const AGENT_TREE_INDENT_PER_DEPTH = SPACING[4];
 /** Deeper fan-outs stop rendering rather than nesting the sidebar off-screen. */
 const MAX_AGENT_TREE_DEPTH = 5;
