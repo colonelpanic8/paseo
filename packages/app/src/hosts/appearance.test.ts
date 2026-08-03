@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   type HostAppearanceSource,
   defaultHostAppearance,
+  hostColorValue,
+  normalizeCustomHostColor,
   normalizeStoredHostAppearance,
   resolveHostBadgeDisplay,
   selectHostBadges,
@@ -31,6 +33,30 @@ describe("normalizeStoredHostAppearance", () => {
       color: "teal",
       badgeDisplay: "icon",
     });
+  });
+
+  it("normalizes custom hex colors and rejects invalid colors", () => {
+    expect(normalizeStoredHostAppearance({ color: "#A1b2C3" }).color).toBe("#a1b2c3");
+    expect(normalizeStoredHostAppearance({ color: "bad color" }).color).toBe("none");
+  });
+});
+
+describe("custom host colors", () => {
+  it("accepts full, short, and hashless hex input", () => {
+    expect(normalizeCustomHostColor("#12AbEf")).toBe("#12abef");
+    expect(normalizeCustomHostColor("#abc")).toBe("#aabbcc");
+    expect(normalizeCustomHostColor("123456")).toBe("#123456");
+  });
+
+  it("rejects non-hex and alpha colors", () => {
+    expect(normalizeCustomHostColor("blue")).toBeNull();
+    expect(normalizeCustomHostColor("#12345")).toBeNull();
+    expect(normalizeCustomHostColor("#12345678")).toBeNull();
+  });
+
+  it("resolves custom foreground values", () => {
+    expect(hostColorValue("#123456")).toBe("#123456");
+    expect(hostColorValue("none")).toBeNull();
   });
 });
 
