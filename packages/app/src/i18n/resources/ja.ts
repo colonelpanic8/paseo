@@ -1648,6 +1648,8 @@ export const ja: TranslationResources = {
     used: "{{percentage}}%使用",
     tokens: "{{used}} / {{max}}トークン",
     sessionCost: "セッションコスト: {{cost}}",
+    model: "モデル: {{model}}",
+    thinking: "思考: {{thinking}}",
     accessibility: "コンテキストウィンドウ{{percentage}}%使用",
   },
   review: {
