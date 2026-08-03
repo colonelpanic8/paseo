@@ -75,6 +75,11 @@ const STORED_AGENT_SCHEMA = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   internal: z.boolean().optional(),
   archivedAt: z.string().nullable().optional(),
+  // Set when this agent was archived as part of archiving its workspace (the
+  // workspace-archive cascade), so restoring that workspace can bring back
+  // exactly those agents and leave individually-archived ones alone.
+  // Storage-only; never crosses the wire.
+  archivedWithWorkspaceId: z.string().nullable().optional(),
   owner: AgentOwnerSchema.optional(),
 });
 
@@ -165,11 +170,45 @@ export class AgentStorage {
     await this.queueRecordWrite(record);
   }
 
-  private queueRecordWrite(record: StoredAgentRecord): Promise<void> {
-    const agentId = record.id;
+  /**
+   * Read-modify-write *inside* the per-agent write queue. `mutate` runs when the
+   * write is dequeued, so it sees the record as of that moment rather than a
+   * snapshot taken before an in-flight write landed — `writeRecord` only updates
+   * the cache after its atomic file write resolves, so a plain `get()` + `upsert()`
+   * from outside the queue can silently clobber a concurrent background persist.
+   * Returns the written record, or null when the agent is gone or `mutate`
+   * declines by returning null.
+   */
+  async updateRecord(
+    agentId: string,
+    mutate: (record: StoredAgentRecord) => StoredAgentRecord | null,
+  ): Promise<StoredAgentRecord | null> {
+    await this.load();
+    let written: StoredAgentRecord | null = null;
+    await this.queueRecordWrite(agentId, () => {
+      const current = this.cache.get(agentId);
+      if (!current) {
+        return null;
+      }
+      written = mutate(current);
+      return written;
+    });
+    return written;
+  }
+
+  private queueRecordWrite(
+    agentIdOrRecord: string | StoredAgentRecord,
+    resolveRecord?: () => StoredAgentRecord | null,
+  ): Promise<void> {
+    const agentId = typeof agentIdOrRecord === "string" ? agentIdOrRecord : agentIdOrRecord.id;
     const prev = this.pendingWrites.get(agentId) ?? Promise.resolve();
     const next = prev.then(async () => {
       if (this.deleting.has(agentId)) {
+        return undefined;
+      }
+
+      const record = resolveRecord ? resolveRecord() : (agentIdOrRecord as StoredAgentRecord);
+      if (!record) {
         return undefined;
       }
 
@@ -263,6 +302,12 @@ export class AgentStorage {
     // would wipe it during normal persistence (including on daemon restart).
     if (existing && existing.archivedAt !== undefined) {
       record.archivedAt = existing.archivedAt;
+    }
+    // Same story for the workspace-archive cascade stamp: it is storage-only, so a
+    // naive projection from ManagedAgent would drop it and workspace restore would
+    // silently stop finding the agents it archived.
+    if (existing && existing.archivedWithWorkspaceId !== undefined) {
+      record.archivedWithWorkspaceId = existing.archivedWithWorkspaceId;
     }
     await this.upsert(record);
   }
