@@ -1,31 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SIDEBAR_ROW_ITEMS,
-  isChecksHiddenByLegacyRowItem,
   parseSidebarRowItems,
+  resolveHostPair,
+  SIDEBAR_ROW_ITEMS,
 } from "./row-items";
 
 describe("parseSidebarRowItems", () => {
-  it("shows operational metadata but hides identity badges by default", () => {
-    expect(DEFAULT_SIDEBAR_ROW_ITEMS).toEqual({
-      branch: false,
-      project: false,
-      host: true,
-      changeRequest: true,
-      services: true,
-      labels: true,
-    });
+  it("shows everything by default", () => {
+    for (const item of SIDEBAR_ROW_ITEMS) {
+      expect(DEFAULT_SIDEBAR_ROW_ITEMS[item]).toBe(true);
+    }
   });
 
   it("applies stored overrides", () => {
-    expect(parseSidebarRowItems({ services: false })).toEqual({
+    expect(parseSidebarRowItems({ checks: false })).toEqual({
       ...DEFAULT_SIDEBAR_ROW_ITEMS,
-      services: false,
+      checks: false,
     });
   });
 
   it("leaves items absent from storage at their default", () => {
-    // An absent key takes the item's explicit product default.
+    // A newly added item must ship visible rather than inheriting "missing means off".
     expect(parseSidebarRowItems({ host: false })).toEqual({
       ...DEFAULT_SIDEBAR_ROW_ITEMS,
       host: false,
@@ -34,47 +30,74 @@ describe("parseSidebarRowItems", () => {
 
   it("ignores unknown keys and non-boolean values", () => {
     expect(
-      parseSidebarRowItems({ checks: false, nonsense: false, services: null, host: false }),
+      parseSidebarRowItems({ checks: "yes", nonsense: false, scripts: null, host: false }),
     ).toEqual({ ...DEFAULT_SIDEBAR_ROW_ITEMS, host: false });
   });
 
-  it.each([[null], [undefined], ["diff"], [42], [["services"]]])(
+  it.each([[null], [undefined], ["diff"], [42], [["checks"]]])(
     "falls back to defaults for %s",
     (value) => {
       expect(parseSidebarRowItems(value)).toEqual(DEFAULT_SIDEBAR_ROW_ITEMS);
     },
   );
 
-  it("carries a switched-off scripts item over to services", () => {
-    // COMPAT(sidebarRowItemsScripts): the item narrowed from scripts to services in v0.3.0.
-    expect(parseSidebarRowItems({ scripts: false })).toEqual({
-      ...DEFAULT_SIDEBAR_ROW_ITEMS,
-      services: false,
-    });
-  });
-
-  it("lets a stored services value win over the scripts item it replaced", () => {
-    expect(parseSidebarRowItems({ scripts: false, services: true })).toEqual(
-      DEFAULT_SIDEBAR_ROW_ITEMS,
-    );
-  });
-
   it("does not hand back the shared default object", () => {
-    const parsed = parseSidebarRowItems({ services: false });
+    const parsed = parseSidebarRowItems({ checks: false });
     expect(parsed).not.toBe(DEFAULT_SIDEBAR_ROW_ITEMS);
-    expect(DEFAULT_SIDEBAR_ROW_ITEMS.services).toBe(true);
+    expect(DEFAULT_SIDEBAR_ROW_ITEMS.checks).toBe(true);
   });
 });
 
-describe("isChecksHiddenByLegacyRowItem", () => {
-  it("reports the one stored shape that means checks were switched off", () => {
-    expect(isChecksHiddenByLegacyRowItem({ checks: false })).toBe(true);
+describe("resolveHostPair", () => {
+  const on = { rowItems: DEFAULT_SIDEBAR_ROW_ITEMS, alwaysShowHostLabels: false };
+
+  it("leaves the other row items answering only for themselves", () => {
+    expect(resolveHostPair({ ...on, alwaysShowHostLabels: true }, "checks")).toEqual({
+      rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, checks: false },
+      alwaysShowHostLabels: true,
+    });
   });
 
-  it.each([[{ checks: true }], [{ services: false }], [{}], [null], ["checks"], [["checks"]]])(
-    "leaves %s to the new setting's default",
-    (value) => {
-      expect(isChecksHiddenByLegacyRowItem(value)).toBe(false);
-    },
-  );
+  it("drops the override when the host is switched off", () => {
+    expect(resolveHostPair({ ...on, alwaysShowHostLabels: true }, "host")).toEqual({
+      rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, host: false },
+      alwaysShowHostLabels: false,
+    });
+  });
+
+  it("keeps the override when the host is switched back on", () => {
+    const off = {
+      rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, host: false },
+      alwaysShowHostLabels: false,
+    };
+    expect(resolveHostPair(off, "host")).toEqual({
+      rowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
+      alwaysShowHostLabels: false,
+    });
+  });
+
+  it("switches the host back on when the override is asked for", () => {
+    const off = {
+      rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, host: false },
+      alwaysShowHostLabels: false,
+    };
+    expect(resolveHostPair(off, "alwaysShowHostLabels")).toEqual({
+      rowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
+      alwaysShowHostLabels: true,
+    });
+  });
+
+  it("leaves the host alone when the override is switched off", () => {
+    expect(resolveHostPair({ ...on, alwaysShowHostLabels: true }, "alwaysShowHostLabels")).toEqual({
+      rowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
+      alwaysShowHostLabels: false,
+    });
+  });
+
+  it("never mutates the state it is given", () => {
+    const current = { rowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS }, alwaysShowHostLabels: true };
+    resolveHostPair(current, "host");
+    expect(current.rowItems.host).toBe(true);
+    expect(current.alwaysShowHostLabels).toBe(true);
+  });
 });

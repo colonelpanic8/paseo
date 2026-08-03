@@ -1083,6 +1083,7 @@ export const ja: TranslationResources = {
         branch: "ブランチ",
         project: "プロジェクト",
         host: "ホスト",
+        alwaysShowHost: "ホストを常に表示",
         changeRequest: "プルリクエスト",
         checks: "チェック",
         services: "サービス",
