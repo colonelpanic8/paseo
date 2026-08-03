@@ -26,11 +26,11 @@ import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-worksp
 
 const PROJECT_ICON_SIZE = 40;
 /**
- * Left rail of a status row's title text: the row's own left padding, the
- * project icon, and the gap between them. The agent tree lines its top-level
- * rows up with it.
+ * The agent tree's top-level rows sit on the status row's own leading rail
+ * (its left padding) rather than the title rail — hierarchy reads from the
+ * per-depth steps, not from a large base offset.
  */
-export const STATUS_ROW_AGENT_TREE_INDENT = SPACING[2] + PROJECT_ICON_SIZE + SPACING[2];
+export const STATUS_ROW_AGENT_TREE_INDENT = SPACING[2];
 const STATUS_DOT_SIZE = 12;
 const MAX_PROVIDER_ICONS = 3;
 const PROVIDER_ICON_SIZE = 14;
