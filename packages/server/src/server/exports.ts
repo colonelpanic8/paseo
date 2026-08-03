@@ -13,8 +13,11 @@ export {
 export { getOrCreateServerId } from "./server-id.js";
 export { createRootLogger, type LogLevel, type LogFormat } from "./logger.js";
 export {
+  loadConfigStack,
   loadPersistedConfig,
   savePersistedConfig,
+  type ConfigLayer,
+  type ConfigStack,
   type PersistedConfig,
 } from "./persisted-config.js";
 export { hashDaemonPassword, isBearerTokenValid } from "./auth.js";

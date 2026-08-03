@@ -1,19 +1,18 @@
 import {
   chmodSync,
-  existsSync,
-  mkdirSync,
   mkdtempSync,
+  mkdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 
-import { resolvePaseoPaths } from "./paseo-paths.js";
-import { loadConfig } from "./config.js";
 import {
+  loadConfigStack,
   loadPersistedConfig,
   PersistedConfigSchema,
   savePersistedConfig,
@@ -29,6 +28,10 @@ function createTempHome(): string {
 
 function modeOf(filePath: string): number {
   return statSync(filePath).mode & MODE_MASK;
+}
+
+function writeJson(filePath: string, value: unknown): void {
+  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 describe("PersistedConfigSchema daemon auth config", () => {
@@ -744,6 +747,176 @@ describe("loadPersistedConfig", () => {
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  test("preserves single-file save behavior without imports or writeTo", () => {
+    const home = createTempHome();
+    const configPath = path.join(home, "config.json");
+    const config = {
+      version: 1,
+      daemon: {
+        listen: "127.0.0.1:7000",
+        relay: { enabled: true },
+      },
+    } as const;
+    try {
+      writeJson(configPath, config);
+
+      savePersistedConfig(home, loadPersistedConfig(home));
+
+      expect(readFileSync(configPath, "utf-8")).toBe(`${JSON.stringify(config, null, 2)}\n`);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("flattens nested imports depth-first with later and local layers winning", () => {
+    const home = createTempHome();
+    const layersDir = path.join(home, "layers");
+    mkdirSync(layersDir);
+    const nestedPath = path.join(layersDir, "nested.json");
+    const firstPath = path.join(layersDir, "first.json");
+    const secondPath = path.join(layersDir, "second.json");
+    const configPath = path.join(home, "config.json");
+    try {
+      writeJson(nestedPath, {
+        daemon: {
+          mcp: { enabled: true, injectIntoAgents: false },
+          git: { maxProcessConcurrency: 2 },
+          cors: { allowedOrigins: ["https://nested.example"] },
+        },
+      });
+      writeJson(firstPath, {
+        imports: ["nested.json"],
+        daemon: {
+          mcp: { injectIntoAgents: true },
+          relay: { enabled: true },
+        },
+      });
+      writeJson(secondPath, {
+        daemon: {
+          mcp: { enabled: false },
+          git: { maxProcessConcurrency: 4 },
+          cors: { allowedOrigins: ["https://second.example"] },
+        },
+      });
+      writeJson(configPath, {
+        version: 1,
+        imports: ["layers/first.json", "layers/second.json"],
+        daemon: { mcp: { injectIntoAgents: false } },
+      });
+
+      const stack = loadConfigStack(home);
+
+      expect(stack.layers.map((layer) => layer.path)).toEqual([
+        nestedPath,
+        firstPath,
+        secondPath,
+        configPath,
+      ]);
+      expect(stack.effective.daemon).toEqual({
+        mcp: { enabled: false, injectIntoAgents: false },
+        git: { maxProcessConcurrency: 4 },
+        cors: { allowedOrigins: ["https://second.example"] },
+        relay: { enabled: true },
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves relative and home-relative import paths from the referencing file", () => {
+    const home = createTempHome();
+    const homeImportDir = mkdtempSync(path.join(homedir(), ".paseo-config-import-"));
+    const homeImportPath = path.join(homeImportDir, "shared.json");
+    const relativePath = path.join(home, "relative.json");
+    try {
+      const homeReference = `~/${path.relative(homedir(), homeImportPath)}`;
+      writeJson(homeImportPath, {
+        daemon: { git: { maxProcessesPerSecond: 12 } },
+        app: { baseUrl: "https://shared.example" },
+      });
+      writeJson(relativePath, {
+        imports: [homeReference],
+        app: { baseUrl: "https://relative.example" },
+      });
+      writeJson(path.join(home, "config.json"), {
+        imports: ["relative.json"],
+        writeTo: homeReference,
+      });
+
+      const stack = loadConfigStack(home);
+      expect(stack.writeTargetPath).toBe(homeImportPath);
+      expect(stack.effective).toEqual({
+        daemon: { git: { maxProcessesPerSecond: 12 } },
+        app: { baseUrl: "https://relative.example" },
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(homeImportDir, { recursive: true, force: true });
+    }
+  });
+
+  test("reports missing imports with the importer and resolved path", () => {
+    const home = createTempHome();
+    const configPath = path.join(home, "config.json");
+    const missingPath = path.join(home, "missing.json");
+    try {
+      writeJson(configPath, { imports: ["missing.json"] });
+
+      expect(() => loadPersistedConfig(home)).toThrow(
+        `Import ${missingPath} referenced by ${configPath} does not exist`,
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("reports import cycles with the complete cycle chain", () => {
+    const home = createTempHome();
+    const firstPath = path.join(home, "first.json");
+    const secondPath = path.join(home, "second.json");
+    try {
+      writeJson(path.join(home, "config.json"), { imports: ["first.json"] });
+      writeJson(firstPath, { imports: ["second.json"] });
+      writeJson(secondPath, { imports: ["first.json"] });
+
+      expect(() => loadPersistedConfig(home)).toThrow(
+        `Config import cycle: ${firstPath} -> ${secondPath} -> ${firstPath}`,
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects writeTo paths outside the import graph", () => {
+    const home = createTempHome();
+    const outsidePath = path.join(home, "outside.json");
+    try {
+      writeJson(outsidePath, {});
+      writeJson(path.join(home, "config.json"), { writeTo: "outside.json" });
+
+      expect(() => loadPersistedConfig(home)).toThrow(
+        `resolves to ${outsidePath}, which is not the root config or an imported file`,
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects writeTo in an imported file", () => {
+    const home = createTempHome();
+    const importedPath = path.join(home, "imported.json");
+    try {
+      writeJson(path.join(home, "config.json"), { imports: ["imported.json"] });
+      writeJson(importedPath, { writeTo: "imported.json" });
+
+      expect(() => loadPersistedConfig(home)).toThrow(
+        `Invalid config in ${importedPath}:\n  - writeTo: writeTo is only allowed in the root config file`,
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe.skipIf(process.platform === "win32")("persisted config file permissions", () => {
@@ -773,6 +946,22 @@ describe.skipIf(process.platform === "win32")("persisted config file permissions
     }
   });
 
+  test("does not change imported file permissions", () => {
+    const home = createTempHome();
+    const importedPath = path.join(home, "shared.json");
+    try {
+      writeFileSync(importedPath, "{}\n", { mode: PERMISSIVE_FILE_MODE });
+      chmodSync(importedPath, PERMISSIVE_FILE_MODE);
+      writeJson(path.join(home, "config.json"), { imports: ["shared.json"] });
+
+      loadPersistedConfig(home);
+
+      expect(modeOf(importedPath)).toBe(PERMISSIVE_FILE_MODE);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("saves config.json with private permissions", () => {
     const home = createTempHome();
     try {
@@ -788,96 +977,5 @@ describe.skipIf(process.platform === "win32")("persisted config file permissions
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
-  });
-});
-
-describe("config.json location by category", () => {
-  const homes: string[] = [];
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    while (homes.length > 0) {
-      rmSync(homes.pop() as string, { recursive: true, force: true });
-    }
-  });
-
-  function stubHome(): string {
-    const home = mkdtempSync(path.join(tmpdir(), "paseo-config-home-"));
-    homes.push(home);
-    vi.stubEnv("HOME", home);
-    vi.stubEnv("PASEO_HOME", undefined);
-    // Every XDG root has to be redirected too. Stubbing only HOME leaves an inherited
-    // XDG_CONFIG_HOME pointing at the real one, and the test then writes a config file into the
-    // developer's actual ~/.config/paseo.
-    for (const variable of [
-      "XDG_CONFIG_HOME",
-      "XDG_DATA_HOME",
-      "XDG_STATE_HOME",
-      "XDG_CACHE_HOME",
-    ]) {
-      vi.stubEnv(
-        variable,
-        path.join(home, variable.toLowerCase().replace("xdg_", "").replace("_home", "")),
-      );
-    }
-    return home;
-  }
-
-  // The XDG layout is Linux-only, so this expectation only holds there.
-  test.skipIf(process.platform !== "linux")(
-    "a fresh install reads config from the config root, not the daemon's data root",
-    () => {
-      const home = stubHome();
-      const paths = resolvePaseoPaths(process.env, process.platform, home);
-      expect(paths.layout).toBe("xdg");
-      expect(paths.config).toBe(path.join(home, "config", "paseo"));
-
-      loadPersistedConfig(paths.home, undefined, paths);
-
-      expect(existsSync(path.join(home, "config", "paseo", "config.json"))).toBe(true);
-      expect(existsSync(path.join(paths.data, "config.json"))).toBe(false);
-    },
-  );
-
-  test.skipIf(process.platform !== "linux")(
-    "loadConfig uses the same injected XDG environment that selected the data root",
-    () => {
-      const home = stubHome();
-      const env: NodeJS.ProcessEnv = {
-        XDG_CONFIG_HOME: path.join(home, "injected-config"),
-        XDG_DATA_HOME: path.join(home, "injected-data"),
-      };
-      const paths = resolvePaseoPaths(env, process.platform, home);
-      mkdirSync(paths.config, { recursive: true });
-      writeFileSync(
-        path.join(paths.config, "config.json"),
-        JSON.stringify({ version: 1, daemon: { listen: "127.0.0.1:7777" } }),
-        { encoding: "utf8", flag: "wx" },
-      );
-
-      expect(loadConfig(paths.home, { env, paths }).listen).toBe("127.0.0.1:7777");
-    },
-  );
-
-  test("an existing ~/.paseo keeps config.json exactly where it is", () => {
-    const home = stubHome();
-    const legacy = path.join(home, ".paseo");
-    mkdirSync(legacy);
-    const paths = resolvePaseoPaths(process.env);
-
-    savePersistedConfig(paths.home, loadPersistedConfig(paths.home));
-
-    expect(existsSync(path.join(legacy, "config.json"))).toBe(true);
-    expect(existsSync(path.join(home, "config", "paseo", "config.json"))).toBe(false);
-  });
-
-  test("an explicitly named directory stays self-contained", () => {
-    stubHome();
-    const explicitHome = createTempHome();
-    homes.push(explicitHome);
-
-    loadPersistedConfig(explicitHome);
-
-    expect(existsSync(path.join(explicitHome, "config.json"))).toBe(true);
   });
 });
