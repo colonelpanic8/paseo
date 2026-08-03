@@ -331,6 +331,8 @@ function resolveBottomOverlayControlOffset(clearance: number | undefined): numbe
 }
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
+  // The stream view coordinates several independent rendering and navigation paths.
+  // oxlint-disable-next-line complexity
   function AgentStreamView(
     {
       agentId,
