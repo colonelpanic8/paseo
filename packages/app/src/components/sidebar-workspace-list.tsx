@@ -44,10 +44,11 @@ import {
   Plus,
   Trash2,
 } from "lucide-react-native";
+import Animated from "react-native-reanimated";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
   useSidebarWorkspacePinController,
@@ -63,12 +64,14 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
+  resolveSidebarServerIds,
   shouldShowSidebarHostLabels,
   useSidebarProjectStatusBucket,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
+import { useArchivedWorkspaces } from "@/hooks/use-archived-workspaces";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useShowShortcutBadges } from "@/hooks/use-show-shortcut-badges";
@@ -93,15 +96,18 @@ import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reor
 import { confirmDialog } from "@/utils/confirm-dialog";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
+import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import {
   SidebarWorkspaceContextMenu,
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
+import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
+import { useArchiveCollapse } from "@/components/sidebar/sidebar-motion";
 import {
   SidebarWorkspaceRowFrame,
   SidebarWorkspaceRowContent,
@@ -289,6 +295,7 @@ interface WorkspaceRowInnerProps {
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onSubmitRename?: (value: string) => Promise<void>;
   onMarkAsRead?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
@@ -642,6 +649,12 @@ function WorkspaceRowRightGroup({
 }) {
   const workspacePath = workspace.workspaceDirectory ?? workspace.projectRootPath;
   const { t } = useTranslation();
+  const snooze = useWorkspaceSnoozeMenu({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+    isSnoozed: workspace.statusBucket === "snoozed",
+    snoozeWakeAt: workspace.snoozeWakeAt,
+  });
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const {
     showDiffStat,
@@ -686,6 +699,7 @@ function WorkspaceRowRightGroup({
                 archiveShortcutKeys={archiveShortcutKeys}
                 isPinned={isPinned}
                 onTogglePin={onTogglePin}
+                snooze={snooze}
                 openInFileManagerPath={workspacePath}
               />
             ) : null}
@@ -1046,6 +1060,7 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onSubmitRename,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -1053,6 +1068,7 @@ function WorkspaceRowInner({
 }: WorkspaceRowInnerProps) {
   const _isCompact = useIsCompactFormFactor();
   const isTouchPlatform = platformIsNative;
+  const archiveCollapse = useArchiveCollapse(isArchiving);
   const interaction = useLongPressDragInteraction({
     drag,
     menuController,
@@ -1075,96 +1091,99 @@ function WorkspaceRowInner({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
-      {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
-        const isDesktop = !isTouchPlatform;
-        const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
-        const hasRunningService = workspace.scripts.some(
-          (s) => s.lifecycle === "running" && (s.type ?? "service") === "service",
-        );
-        let scriptIconKind: "service" | "command" | null = null;
-        if (showScriptsIcon) {
-          scriptIconKind = hasRunningService ? "service" : "command";
-        }
-        const workspaceRowStyle = getProjectWorkspaceRowStyle({
-          isDragging,
-          selected,
-          isHovered,
-        });
-        return (
-          <View
-            {...dragAttributes}
-            {...dragHandleProps?.listeners}
-            ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
-            style={styles.workspaceRowContainer}
-            {...hoverHandlers}
-          >
-            <SidebarWorkspaceContextMenu
-              contextMenuOpen={contextMenuOpen}
-              onContextMenuOpenChange={onContextMenuOpenChange}
-              workspace={workspace}
-              leadingProjectName={leadingProjectName}
-              hostBadgeLabel={hostBadge?.label}
-              workspaceKey={workspace.workspaceKey}
-              onCopyPath={onCopyPath}
-              onCopyBranchName={onCopyBranchName}
-              onRename={onRename}
-              onArchive={onArchive}
-              archiveLabel={archiveLabel}
-              archiveStatus={archiveStatus}
-              archivePendingLabel={archivePendingLabel}
-              archiveShortcutKeys={archiveShortcutKeys}
-              isPinned={isPinned}
-              onTogglePin={onTogglePin}
-              openInFileManagerPath={workspace.workspaceDirectory}
-              disabled={isArchiving}
-              aria-selected={selected}
-              accessibilityRole="button"
-              accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
-              onPressIn={interaction.handlePressIn}
-              onTouchMove={interaction.handleTouchMove}
-              onPressOut={interaction.handlePressOut}
-              onPress={handlePress}
-              testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
+    <Animated.View onLayout={archiveCollapse.onLayout} style={archiveCollapse.style}>
+      <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
+        {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
+          const isDesktop = !isTouchPlatform;
+          const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
+          const hasRunningService = workspace.scripts.some(
+            (s) => s.lifecycle === "running" && (s.type ?? "service") === "service",
+          );
+          let scriptIconKind: "service" | "command" | null = null;
+          if (showScriptsIcon) {
+            scriptIconKind = hasRunningService ? "service" : "command";
+          }
+          const workspaceRowStyle = getProjectWorkspaceRowStyle({
+            isDragging,
+            selected,
+            isHovered,
+          });
+          return (
+            <View
+              {...dragAttributes}
+              {...dragHandleProps?.listeners}
+              ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
+              style={styles.workspaceRowContainer}
+              {...hoverHandlers}
             >
-              <SidebarWorkspaceRowContent
+              <SidebarWorkspaceContextMenu
+                contextMenuOpen={contextMenuOpen}
+                onContextMenuOpenChange={onContextMenuOpenChange}
                 workspace={workspace}
-                hostBadge={hostBadge}
                 leadingProjectName={leadingProjectName}
-                leadingProjectIconDataUri={leadingProjectIconDataUri}
-                scriptIconKind={scriptIconKind}
-                isHovered={isHovered}
-                isLoading={isArchiving || isCreating}
-                isCreating={isCreating}
-                shortcutNumber={shortcutNumber}
-                showShortcutBadge={showShortcutBadge}
-                reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+                hostBadgeLabel={hostBadge?.label}
+                workspaceKey={workspace.workspaceKey}
+                onCopyPath={onCopyPath}
+                onCopyBranchName={onCopyBranchName}
+                onRename={onRename}
+                onArchive={onArchive}
+                archiveLabel={archiveLabel}
+                archiveStatus={archiveStatus}
+                archivePendingLabel={archivePendingLabel}
+                archiveShortcutKeys={archiveShortcutKeys}
+                isPinned={isPinned}
+                onTogglePin={onTogglePin}
+                openInFileManagerPath={workspace.workspaceDirectory}
+                disabled={isArchiving}
+                aria-selected={selected}
+                accessibilityRole="button"
+                accessibilityState={accessibilityState}
+                style={workspaceRowStyle}
+                onPressIn={interaction.handlePressIn}
+                onTouchMove={interaction.handleTouchMove}
+                onPressOut={interaction.handlePressOut}
+                onPress={handlePress}
+                testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
               >
-                <WorkspaceRowRightGroup
+                <SidebarWorkspaceRowContent
                   workspace={workspace}
+                  hostBadge={hostBadge}
+                  leadingProjectName={leadingProjectName}
+                  leadingProjectIconDataUri={leadingProjectIconDataUri}
+                  scriptIconKind={scriptIconKind}
                   isHovered={isHovered}
-                  isTouchPlatform={isTouchPlatform}
+                  isLoading={isArchiving || isCreating}
                   isCreating={isCreating}
-                  showShortcutBadge={showShortcutBadge}
                   shortcutNumber={shortcutNumber}
-                  archiveLabel={archiveLabel}
-                  archiveStatus={archiveStatus}
-                  archivePendingLabel={archivePendingLabel}
-                  archiveShortcutKeys={archiveShortcutKeys}
-                  onArchive={onArchive}
-                  onCopyBranchName={onCopyBranchName}
-                  onCopyPath={onCopyPath}
-                  onRename={onRename}
-                  isPinned={isPinned}
-                  onTogglePin={onTogglePin}
-                />
-              </SidebarWorkspaceRowContent>
-            </SidebarWorkspaceContextMenu>
-          </View>
-        );
-      }}
-    </SidebarWorkspaceRowFrame>
+                  showShortcutBadge={showShortcutBadge}
+                  reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+                  onSubmitRename={onSubmitRename}
+                >
+                  <WorkspaceRowRightGroup
+                    workspace={workspace}
+                    isHovered={isHovered}
+                    isTouchPlatform={isTouchPlatform}
+                    isCreating={isCreating}
+                    showShortcutBadge={showShortcutBadge}
+                    shortcutNumber={shortcutNumber}
+                    archiveLabel={archiveLabel}
+                    archiveStatus={archiveStatus}
+                    archivePendingLabel={archivePendingLabel}
+                    archiveShortcutKeys={archiveShortcutKeys}
+                    onArchive={onArchive}
+                    onCopyBranchName={onCopyBranchName}
+                    onCopyPath={onCopyPath}
+                    onRename={onRename}
+                    isPinned={isPinned}
+                    onTogglePin={onTogglePin}
+                  />
+                </SidebarWorkspaceRowContent>
+              </SidebarWorkspaceContextMenu>
+            </View>
+          );
+        }}
+      </SidebarWorkspaceRowFrame>
+    </Animated.View>
   );
 }
 
@@ -1221,6 +1240,7 @@ function WorkspaceRowWithMenu({
     workspaceId: workspace.workspaceId,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
+    projectName: workspace.projectName,
     ...toWorktreeArchiveRisk(workspace),
     onArchiveStarted: redirectAfterArchive,
     onSetHiding: setIsHidingWorkspace,
@@ -1337,6 +1357,7 @@ function WorkspaceRowWithMenu({
         onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
+        onSubmitRename={handleSubmitRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
@@ -1921,6 +1942,7 @@ export function SidebarWorkspaceList({
     groupMode === "status" ? (
       <SidebarStatusModeWrapper
         statusGroups={statusGroups}
+        allServerIds={serverIds}
         pinnedGroups={pinnedGroups}
         workspaceEntriesByKey={workspaceEntriesByKey}
         projectIconByProjectViewKey={statusProjectIconByProjectViewKey}
@@ -1929,6 +1951,7 @@ export function SidebarWorkspaceList({
         hostBadgeByServerId={hostBadgeByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
+        parentGestureRef={parentGestureRef}
         listHeaderComponent={listHeaderComponent}
       />
     ) : (
@@ -1958,6 +1981,7 @@ export function SidebarWorkspaceList({
 
 function SidebarStatusModeWrapper({
   statusGroups,
+  allServerIds,
   pinnedGroups,
   workspaceEntriesByKey,
   projectIconByProjectViewKey,
@@ -1966,9 +1990,11 @@ function SidebarStatusModeWrapper({
   hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
+  parentGestureRef,
   listHeaderComponent,
 }: {
   statusGroups: StatusGroup[];
+  allServerIds: string[];
   pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -1977,13 +2003,24 @@ function SidebarStatusModeWrapper({
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
   listHeaderComponent?: ReactElement | null;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
+  // Only status mode renders the archived tail, so the query lives here rather
+  // than in the shared sidebar model — project mode never pays for it.
+  const hostFilters = useSidebarViewStore((state) => state.hostFilters);
+  const hostRegistryLoaded = useHostRegistryLoaded();
+  const archivedServerIds = useMemo(
+    () => resolveSidebarServerIds({ allServerIds, hostFilters, hostRegistryLoaded }),
+    [allServerIds, hostFilters, hostRegistryLoaded],
+  );
+  const archivedWorkspaces = useArchivedWorkspaces({ serverIds: archivedServerIds });
 
   return (
     <SidebarStatusWorkspaceList
       groups={statusGroups}
+      archivedWorkspaces={archivedWorkspaces}
       pinnedWorkspaces={pinnedGroups.pinnedChats.flatMap((workspace) => {
         const entry = workspaceEntriesByKey.get(workspace.workspaceKey);
         return entry ? [entry] : [];
@@ -1995,6 +2032,7 @@ function SidebarStatusModeWrapper({
       hostBadgeByServerId={hostBadgeByServerId}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
+      parentGestureRef={parentGestureRef}
       listHeaderComponent={listHeaderComponent}
     />
   );

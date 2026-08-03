@@ -1,6 +1,10 @@
 /**
  * Format a date as a human-friendly relative time string
  * Examples: "just now", "5m ago", "2h ago", "3d ago", "Jan 15"
+ *
+ * Coarsest granularity is deliberately one minute: callers refresh at most
+ * once a minute (see useMinuteNow), and a seconds readout would visibly
+ * freeze between renders.
  */
 export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const diffMs = now.getTime() - date.getTime();
@@ -9,12 +13,8 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 10) {
-    return "just now";
-  }
-
   if (diffMin < 1) {
-    return `${diffSec}s ago`;
+    return "just now";
   }
 
   if (diffHour < 1) {
@@ -33,6 +33,14 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const month = date.toLocaleDateString("en-US", { month: "short" });
   const day = date.getDate();
   return `${month} ${day}`;
+}
+
+export function formatCompactRelativeTime(date: Date, now: Date = new Date()): string {
+  const label = formatTimeAgo(date, now);
+  if (label === "just now") {
+    return "now";
+  }
+  return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
 
 function isSameLocalDay(a: Date, b: Date): boolean {
@@ -61,6 +69,10 @@ function getTimeFormatter(): Intl.DateTimeFormat {
   return cachedTimeFormatter;
 }
 
+export function formatClockTime(date: Date): string {
+  return getTimeFormatter().format(date);
+}
+
 /**
  * Format a chat-message timestamp for hover-revealed UI.
  * - Same day: "10:11 PM" or "22:11" depending on user preference
@@ -68,7 +80,7 @@ function getTimeFormatter(): Intl.DateTimeFormat {
  * - Older: "14 May 2026, 10:11 PM"
  */
 export function formatMessageTimestamp(date: Date, now: Date = new Date()): string {
-  const time = getTimeFormatter().format(date);
+  const time = formatClockTime(date);
 
   if (isSameLocalDay(date, now)) {
     return time;
@@ -87,6 +99,83 @@ export function formatMessageTimestamp(date: Date, now: Date = new Date()): stri
     year: "numeric",
   });
   return `${dateLabel}, ${time}`;
+}
+
+/**
+ * Format a deadline that lies ahead, such as the time a snooze ends.
+ * - Same day: "6:00 PM" or "18:00" depending on user preference
+ * - Within the next ~6 days: "Wednesday 9:00 AM"
+ * - Further out: "14 May 2026, 9:00 AM"
+ *
+ * The weekday form is only useful while it is unambiguous, so it stops at a
+ * week out — by then the same weekday name would have come around again.
+ */
+export function formatFutureTimestamp(date: Date, now: Date = new Date()): string {
+  const time = getTimeFormatter().format(date);
+
+  if (isSameLocalDay(date, now)) {
+    return time;
+  }
+
+  // Counted in calendar days rather than elapsed hours: "Wednesday" has to mean
+  // the only Wednesday ahead, and a 6-day-20-hour gap already reaches the next
+  // one.
+  const daysAhead = countCalendarDaysBetween(now, date);
+  if (daysAhead >= 0 && daysAhead < 7) {
+    const weekday = date.toLocaleDateString(undefined, { weekday: "long" });
+    return `${weekday} ${time}`;
+  }
+
+  const dateLabel = date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return `${dateLabel}, ${time}`;
+}
+
+/** Whole local calendar days from `from` to `to`, ignoring the time of day. */
+function countCalendarDaysBetween(from: Date, to: Date): number {
+  const fromMidnight = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const toMidnight = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((toMidnight.getTime() - fromMidnight.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+
+/**
+ * Format a countdown at minute granularity, two units at most: "45m",
+ * "2h 15m", "3h", "3d 4h", "3d".
+ *
+ * Distinct from formatDuration, which measures elapsed work and so counts
+ * seconds and never reaches a day unit. A snooze deadline can sit a week out
+ * ("168h 0m" is not an answer), and it only ever refreshes once a minute, so
+ * seconds would be stale the moment they were drawn.
+ *
+ * Anything still ahead floors at "1m" rather than "0m", and a deadline already
+ * behind us gets the same floor: the row's wake clock may be a beat late in
+ * popping it out of the snoozed bucket, and "-1m" would be a bug on screen.
+ */
+export function formatDurationCoarse(durationMs: number): string {
+  const totalMinutes = Number.isFinite(durationMs)
+    ? Math.max(1, Math.ceil(durationMs / MS_PER_MINUTE))
+    : 1;
+
+  if (totalMinutes < MINUTES_PER_HOUR) {
+    return `${totalMinutes}m`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / MINUTES_PER_HOUR);
+  if (totalHours < HOURS_PER_DAY) {
+    const minutes = totalMinutes % MINUTES_PER_HOUR;
+    return minutes === 0 ? `${totalHours}h` : `${totalHours}h ${minutes}m`;
+  }
+
+  const days = Math.floor(totalHours / HOURS_PER_DAY);
+  const hours = totalHours % HOURS_PER_DAY;
+  return hours === 0 ? `${days}d` : `${days}d ${hours}h`;
 }
 
 /**

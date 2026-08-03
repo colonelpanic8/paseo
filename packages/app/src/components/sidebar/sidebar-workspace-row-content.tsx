@@ -29,11 +29,13 @@ import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
 import type { PrHint } from "@/git/use-pr-status-query";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
+import { ForgeBrandIcon } from "@/git/forge-icon";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { getStatusDotColor, isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
 
 // The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
 // SCRIM_SOLID_OFFSET rightward, which keeps the kebab itself off the gradient entirely.
@@ -97,7 +99,7 @@ function pullRequestIconStyle({
   ];
 }
 
-type SidebarWorkspaceScriptIconKind = "service" | "command";
+export type SidebarWorkspaceScriptIconKind = "service" | "command";
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -157,6 +159,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   shortcutNumber = null,
   showShortcutBadge = false,
   reserveIdleStatusIndicatorSpace = true,
+  onSubmitRename,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -172,6 +175,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge?: boolean;
   /** Keep the empty leading slot when the workspace has no active status. */
   reserveIdleStatusIndicatorSpace?: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
   children?: ReactNode;
 }) {
   const {
@@ -223,9 +227,14 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
                   showLabel={hostBadge.showLabel}
                 />
               ) : null}
-              <Text style={workspaceBranchTextStyle} numberOfLines={1}>
-                {workspaceLabel}
-              </Text>
+              <SidebarWorkspaceInlineTitle
+                displayValue={workspaceLabel}
+                renameValue={workspace.title ?? workspace.name}
+                editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+                onSubmit={onSubmitRename}
+                style={workspaceBranchTextStyle}
+                testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+              />
               {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
             </View>
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
@@ -241,7 +250,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   );
 });
 
-function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
+export function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
   return (
     <View
       style={styles.workspaceTitleAccessory}
@@ -304,15 +313,10 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "done") {
-    // An idle row still gets a dot rather than an empty slot. Nested rows are marked as
-    // workspaces by indentation alone, and with nothing in the leading slot the rail has no
-    // edge to read against — a workspace carrying its own glyph starts looking like a project
-    // header. The dot is muted to half opacity so it holds the rail without reporting status.
+  // Snoozed rows carry no status indicator, same as done.
+  if (bucket === "done" || bucket === "snoozed") {
     return reserveIdleSpace ? (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done">
-        <View style={styles.idleStatusDot} />
-      </View>
+      <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`} />
     ) : null;
   }
 
@@ -368,7 +372,7 @@ function StatusDotOverlay({
   return <View style={overlayStyle} />;
 }
 
-function PullRequestIcon({ hint }: { hint: PrHint }) {
+export function PullRequestIcon({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -398,6 +402,41 @@ function PullRequestIcon({ hint }: { hint: PrHint }) {
   );
 }
 
+// No longer rendered in the compact row, but the status-grouped card still shows
+// failing-check counts — see sidebar-status-row-content.
+export function ChecksBadge({
+  checks,
+  forge,
+}: {
+  checks: PrHint["checks"];
+  forge: PrHint["forge"];
+}) {
+  if (!checks || checks.length === 0) return null;
+  const failed = checks.filter((check) => check.status === "failure").length;
+  if (failed === 0) return null;
+  const icon = getForgePresentation(normalizeForge(forge)).icon;
+  return (
+    <View style={checksBadgeStyles.badge}>
+      <ForgeBrandIcon iconKind={icon} size={10} uniProps={redColorMapping} />
+      <Text style={checksBadgeStyles.text}>{failed} failed</Text>
+    </View>
+  );
+}
+
+const checksBadgeStyles = StyleSheet.create((theme) => ({
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  text: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+    lineHeight: 14,
+    color: theme.colors.palette.red[500],
+  },
+}));
+
 function getPrIconUniMapping(state: PrHint["state"]) {
   switch (state) {
     case "merged":
@@ -420,6 +459,7 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
     case "attention":
       return styles.statusDotAttention;
     case "done":
+    case "snoozed":
       return null;
   }
 }

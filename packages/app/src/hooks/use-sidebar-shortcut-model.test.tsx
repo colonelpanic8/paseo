@@ -29,6 +29,7 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
     currentBranch: null,
     statusBucket: "done",
     statusEnteredAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -36,6 +37,9 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
     archiveUnpushedCommitCount: null,
     scripts: [],
     hasRunningScripts: false,
+    snoozeWakeAt: null,
+    remoteUrl: null,
+    providers: [],
   };
 }
 

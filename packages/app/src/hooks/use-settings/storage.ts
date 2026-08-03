@@ -11,12 +11,16 @@ const LEGACY_SETTINGS_KEY = "@paseo:settings";
 export type SendBehavior = "interrupt" | "queue";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
-export type WorkspaceTitleSource = "title" | "branch";
+export type WorkspaceTitleSource = "title" | "branch" | "worktree";
 export type ToolCallDetailLevel = "overview" | "detailed";
 
 const VALID_THEMES = new Set<string>([...Object.keys(THEME_TO_UNISTYLES), "auto"]);
 const VALID_SERVICE_URL_BEHAVIORS = new Set<ServiceUrlBehavior>(["ask", "in-app", "external"]);
-const VALID_WORKSPACE_TITLE_SOURCES = new Set<WorkspaceTitleSource>(["title", "branch"]);
+const VALID_WORKSPACE_TITLE_SOURCES = new Set<WorkspaceTitleSource>([
+  "title",
+  "branch",
+  "worktree",
+]);
 const VALID_TOOL_CALL_DETAIL_LEVELS = new Set<ToolCallDetailLevel>(["overview", "detailed"]);
 export const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
 export const MIN_TERMINAL_SCROLLBACK_LINES = 0;

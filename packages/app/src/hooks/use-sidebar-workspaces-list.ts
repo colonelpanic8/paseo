@@ -14,6 +14,7 @@ import {
   createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   type ProjectStatusSession,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
@@ -31,6 +32,7 @@ export {
   computeSidebarOrderUpdates,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   shouldShowSidebarHostLabels,
   type SidebarLoadingState,
   type SidebarOrderUpdates,
@@ -108,19 +110,10 @@ export function useSidebarWorkspacesList(options?: {
   const reconcileHostFilters = useSidebarViewStore((state) => state.reconcileHostFilters);
   const isActive = options?.enabled !== false;
 
-  const serverIds = useMemo(() => {
-    if (hostFilters.length === 0) {
-      return allServerIds;
-    }
-    const selected = new Set(hostFilters);
-    const matched = allServerIds.filter((id) => selected.has(id));
-    // Registry has settled but none of the pinned hosts still exist — fall back to every
-    // host rather than leaving the sidebar empty.
-    if (hostRegistryLoaded && matched.length === 0) {
-      return allServerIds;
-    }
-    return matched;
-  }, [allServerIds, hostFilters, hostRegistryLoaded]);
+  const serverIds = useMemo(
+    () => resolveSidebarServerIds({ allServerIds, hostFilters, hostRegistryLoaded }),
+    [allServerIds, hostFilters, hostRegistryLoaded],
+  );
 
   useEffect(() => {
     if (!hostRegistryLoaded) {

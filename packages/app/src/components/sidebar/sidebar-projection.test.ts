@@ -25,6 +25,7 @@ function makeWorkspace(id: string, statusBucket: SidebarWorkspaceEntry["statusBu
     currentBranch: null,
     statusBucket,
     statusEnteredAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -32,6 +33,9 @@ function makeWorkspace(id: string, statusBucket: SidebarWorkspaceEntry["statusBu
     archiveUnpushedCommitCount: null,
     scripts: [],
     hasRunningScripts: false,
+    snoozeWakeAt: null,
+    remoteUrl: null,
+    providers: [],
   };
   return { placement, entry };
 }
@@ -113,6 +117,30 @@ describe("buildSidebarProjection", () => {
 
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "unpinned" },
+    ]);
+  });
+
+  it("treats the snoozed group as collapsed by default and expanded once its key is stored", () => {
+    const snoozed = makeWorkspace("snoozy", "snoozed");
+    const input = {
+      ...projectionInput({ groupMode: "status" }),
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      projects: [makeProject([snoozed.placement])],
+      workspaceEntriesByKey: new Map([[snoozed.entry.workspaceKey, snoozed.entry]]),
+    };
+
+    const collapsedByDefault = buildSidebarProjection(input);
+    expect(collapsedByDefault.statusGroups.map((group) => group.bucket)).toEqual(["snoozed"]);
+    // Collapsed sections get no shortcut numbers, so default-collapsed snoozed
+    // rows must not appear as shortcut targets.
+    expect(collapsedByDefault.shortcutModel.shortcutTargets).toEqual([]);
+
+    const expandedByUser = buildSidebarProjection({
+      ...input,
+      collapsedStatusGroupKeys: new Set(["snoozed"]),
+    });
+    expect(expandedByUser.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "snoozy" },
     ]);
   });
 });
