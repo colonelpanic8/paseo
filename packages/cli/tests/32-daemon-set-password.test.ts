@@ -110,6 +110,7 @@ try {
     console.log("✓ command refuses password mismatch\n");
   }
 
+
   {
     console.log("Test 4: piped stdin fails with a message instead of exiting silently");
     const pipedHome = join(root, "piped");
@@ -130,6 +131,46 @@ try {
     await assert.rejects(readFile(join(pipedHome, "config.json"), "utf-8"));
     console.log("✓ piped stdin reports that a terminal is required\n");
   }
+
+
+
+  {
+    console.log("Test 4: layered config writes and reports the configured target");
+    const layeredHome = join(root, "layered-paseo-home");
+    const sharedPath = join(layeredHome, "shared.json");
+    const writablePath = join(layeredHome, "machine.json");
+    const rootPath = join(layeredHome, "config.json");
+    await mkdir(layeredHome, { recursive: true });
+    await writeFile(
+      sharedPath,
+      `${JSON.stringify({ daemon: { listen: "127.0.0.1:9999" } }, null, 2)}\n`,
+    );
+    await writeFile(writablePath, `${JSON.stringify({ version: 1 }, null, 2)}\n`);
+    await writeFile(
+      rootPath,
+      `${JSON.stringify(
+        {
+          imports: ["shared.json", "machine.json"],
+          writeTo: "machine.json",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const result = await setDaemonPasswordInConfig("layered-secret", { home: layeredHome });
+    const writable = JSON.parse(await readFile(writablePath, "utf-8"));
+
+    assert.strictEqual(result.configPath, writablePath);
+    assert.strictEqual(writable.version, 1);
+    assert.strictEqual(
+      isBearerTokenValid({ password: writable.daemon.auth.password, token: "layered-secret" }),
+      true,
+    );
+    assert.strictEqual(writable.daemon.listen, undefined);
+    console.log("✓ set-password writes and reports the layered target\n");
+  }
+
 } finally {
   await rm(root, { recursive: true, force: true });
 }
