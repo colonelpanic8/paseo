@@ -15,7 +15,10 @@ import {
   resolveModelBrowserScrolling,
   resolveModelSheetOpening,
 } from "@/composer/agent-controls/model-sheet-flow";
-import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
+import {
+  resolveProviderIconId,
+  type ProviderSelectorProvider,
+} from "@/provider-selection/provider-selection";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 
@@ -101,7 +104,9 @@ export function CompactModelSheet({
     serverId,
   });
   const ProviderIcon =
-    selectedProvider.trim().length > 0 ? getProviderIcon(selectedProvider) : null;
+    selectedProvider.trim().length > 0
+      ? getProviderIcon(resolveProviderIconId(providers, selectedProvider))
+      : null;
   const ModelIcon = ProviderIcon ?? Bot;
   const rootHeader = useMemo(
     () => ({
