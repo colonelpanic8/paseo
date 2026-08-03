@@ -2323,6 +2323,9 @@ export const fr: TranslationResources = {
             title: "Couleur personnalisée",
             submit: "Appliquer",
             invalid: "Saisissez une couleur hexadécimale comme #368080.",
+            panelAccessibility: "Saturation et luminosité",
+            hueAccessibility: "Teinte",
+            hexAccessibility: "Couleur hexadécimale",
           },
           options: {
             none: "Par défaut",

@@ -20,13 +20,14 @@ import {
   HOST_COLORS,
   hostColorValue,
   isCustomHostColor,
-  normalizeCustomHostColor,
   resolveHostBadgeDisplay,
+  type CustomHostColor,
   type HostBadgeDisplay,
   type HostColor,
 } from "@/hosts/appearance";
 import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { useHostMutations } from "@/runtime/host-runtime";
+import { HostCustomColorModal } from "@/screens/settings/host-custom-color-modal";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
@@ -135,18 +136,8 @@ function ColorRow({
   const isCustomColor = isCustomHostColor(color);
   const openCustomColor = useCallback(() => setIsCustomColorOpen(true), []);
   const closeCustomColor = useCallback(() => setIsCustomColorOpen(false), []);
-  const validateCustomColor = useCallback(
-    (value: string) =>
-      normalizeCustomHostColor(value) ? null : t("settings.host.appearance.color.custom.invalid"),
-    [t],
-  );
   const submitCustomColor = useCallback(
-    async (value: string) => {
-      const customColor = normalizeCustomHostColor(value);
-      if (customColor) {
-        await onChange(customColor);
-      }
-    },
+    async (customColor: CustomHostColor) => onChange(customColor),
     [onChange],
   );
   return (
@@ -183,17 +174,11 @@ function ColorRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </View>
-      <AdaptiveRenameModal
+      <HostCustomColorModal
         visible={isCustomColorOpen}
-        title={t("settings.host.appearance.color.custom.title")}
-        initialValue={isCustomColor ? color.toUpperCase() : ""}
-        placeholder="#368080"
-        submitLabel={t("settings.host.appearance.color.custom.submit")}
+        color={color}
         onClose={closeCustomColor}
         onSubmit={submitCustomColor}
-        validate={validateCustomColor}
-        maxLength={7}
-        testID="host-appearance-custom-color-modal"
       />
     </>
   );

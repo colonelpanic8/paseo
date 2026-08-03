@@ -2031,6 +2031,9 @@ export const ru: TranslationResources = {
             title: "Пользовательский цвет",
             submit: "Применить",
             invalid: "Введите цвет в шестнадцатеричном формате, например #368080.",
+            panelAccessibility: "Насыщенность и яркость",
+            hueAccessibility: "Оттенок",
+            hexAccessibility: "Цвет в шестнадцатеричном формате",
           },
           options: {
             none: "По умолчанию",

@@ -2286,6 +2286,9 @@ export const ja: TranslationResources = {
             title: "カスタムカラー",
             submit: "適用",
             invalid: "#368080 のような16進カラーコードを入力してください。",
+            panelAccessibility: "彩度と明るさ",
+            hueAccessibility: "色相",
+            hexAccessibility: "16進カラー",
           },
           options: {
             none: "デフォルト",

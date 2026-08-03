@@ -2241,6 +2241,9 @@ export const zhCN: TranslationResources = {
             title: "自定义颜色",
             submit: "应用",
             invalid: "输入十六进制颜色，例如 #368080。",
+            panelAccessibility: "饱和度和亮度",
+            hueAccessibility: "色相",
+            hexAccessibility: "十六进制颜色",
           },
           options: {
             none: "默认",

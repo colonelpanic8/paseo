@@ -2302,6 +2302,9 @@ export const ptBR: TranslationResources = {
             title: "Cor personalizada",
             submit: "Aplicar",
             invalid: "Insira uma cor hexadecimal como #368080.",
+            panelAccessibility: "Saturação e brilho",
+            hueAccessibility: "Matiz",
+            hexAccessibility: "Cor hexadecimal",
           },
           options: {
             none: "Padrão",

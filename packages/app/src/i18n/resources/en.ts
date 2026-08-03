@@ -2365,6 +2365,9 @@ export const en = {
             title: "Custom color",
             submit: "Apply",
             invalid: "Enter a hex color like #368080.",
+            panelAccessibility: "Saturation and brightness",
+            hueAccessibility: "Hue",
+            hexAccessibility: "Hex color",
           },
           options: {
             none: "Default",
