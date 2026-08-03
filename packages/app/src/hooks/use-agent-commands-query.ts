@@ -36,6 +36,14 @@ export async function fetchAgentCommands(input: {
     agentId: input.agentId,
     draftConfig: input.draftConfig,
   });
+  // Draft listings spin up a provider session on demand, so a failure here is a
+  // real failure the user needs to see: without this the daemon's error is
+  // dropped and a broken provider is indistinguishable from "no skills". Only
+  // draft listings throw — a draft surface with no config yet answers "agent not
+  // found", which is an ordinary state rather than something worth reporting.
+  if (response.error && input.draftConfig) {
+    throw new Error(response.error);
+  }
   return response.commands as AgentSlashCommand[];
 }
 
@@ -68,7 +76,9 @@ export function useAgentCommandsQuery({
     },
     enabled: queryEnabled && !!client && isConnected && (!!agentId || !!draftConfig),
     staleTime: draftConfig ? DRAFT_COMMANDS_STALE_TIME : SESSION_COMMANDS_STALE_TIME,
-    retry: 3,
+    // Each draft attempt spawns and tears down a provider session, so a broken
+    // provider should report once rather than four times.
+    retry: draftConfig ? 0 : 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 

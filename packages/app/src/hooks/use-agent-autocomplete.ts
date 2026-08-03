@@ -227,14 +227,24 @@ function resolveAutocompleteMode(args: {
   return null;
 }
 
-function resolveAutocompleteIsVisible(args: {
+export function resolveAutocompleteIsVisible(args: {
   mode: AutocompleteMode;
   canLoadCommands: boolean;
   serverId: string;
   autocompleteCwd: string;
+  isCommandsLoading: boolean;
+  isDraftContext: boolean;
 }): boolean {
   if (args.mode === "command") {
-    return args.canLoadCommands;
+    if (!args.canLoadCommands) {
+      return false;
+    }
+    // A draft composer has no agent session yet, so its first command listing
+    // has to spin up a provider session: seconds at best, an error if the
+    // provider cannot start. Staying hidden through all of that makes the
+    // trigger character look dead — show the loading and error states instead.
+    // In-session listings resolve fast enough that hiding the flash still wins.
+    return args.isDraftContext || !args.isCommandsLoading;
   }
   if (args.mode === "file") {
     return Boolean(args.serverId) && args.autocompleteCwd.length > 0;
@@ -362,12 +372,6 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const isConnected = useHostRuntimeIsConnected(serverId);
 
   const mode = resolveAutocompleteMode({ showFileAutocomplete, showCommandAutocomplete });
-  const canShowAutocomplete = resolveAutocompleteIsVisible({
-    mode,
-    canLoadCommands,
-    serverId,
-    autocompleteCwd,
-  });
 
   const {
     commands,
@@ -393,7 +397,14 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     return { commandNames, skillNames };
   }, [commands]);
 
-  const isVisible = canShowAutocomplete && !(mode === "command" && isCommandsLoading);
+  const isVisible = resolveAutocompleteIsVisible({
+    mode,
+    canLoadCommands,
+    serverId,
+    autocompleteCwd,
+    isCommandsLoading,
+    isDraftContext,
+  });
 
   const fileSuggestionsQuery = useQuery({
     queryKey: [
