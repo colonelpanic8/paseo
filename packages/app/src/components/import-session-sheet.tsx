@@ -524,7 +524,6 @@ export function ImportSessionSheet({
             value={selectedProvider}
             onSelect={handleFilterSelect}
             renderOption={renderFilterOption}
-            searchable={false}
             title="Filter by provider"
             open={isFilterOpen}
             onOpenChange={setIsFilterOpen}

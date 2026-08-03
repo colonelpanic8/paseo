@@ -165,6 +165,9 @@ export async function startIsolatedHostDaemon(
         // provider, whose models stream for minutes and starve timing-sensitive
         // specs. Tests that cover summaries opt back in via options.environment.
         PASEO_AGENT_PURPOSE_SUMMARIES: "0",
+        // Test hosts must not inherit auth from the developer's daemon. A test
+        // can still opt into password auth through options.environment.
+        PASEO_PASSWORD: undefined,
         ...options.environment,
         PASEO_HOME: paseoHome,
         PASEO_SERVER_ID: serverId,
