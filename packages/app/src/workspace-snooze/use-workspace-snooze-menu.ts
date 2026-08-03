@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/contexts/toast-context";
 import { useHostFeature } from "@/runtime/host-features";
-import { useMinuteTick } from "@/hooks/use-minute-tick";
+import { useMinuteNow } from "@/hooks/use-minute-tick";
 import { formatDurationCoarse, formatFutureTimestamp } from "@/utils/time";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import {
@@ -28,11 +28,11 @@ const PRESET_LABEL_KEYS: Record<WorkspaceSnoozePresetId, string> = {
 function deriveSnoozeLabels(
   snoozeWakeAtMs: number | null,
   t: (key: string, options: { time: string; duration: string }) => string,
+  now: Date,
 ): { chip: string | null; sentence: string | null } {
   if (snoozeWakeAtMs === null) {
     return { chip: null, sentence: null };
   }
-  const now = new Date();
   const time = formatFutureTimestamp(new Date(snoozeWakeAtMs), now);
   const duration = formatDurationCoarse(snoozeWakeAtMs - now.getTime());
   return {
@@ -95,8 +95,8 @@ export function useWorkspaceSnoozeMenu(input: {
   // Deliberately unmemoized: two formats and an interpolation per render is
   // cheaper than reasoning about which key would keep them fresh, and a memo on
   // snoozeWakeAtMs is exactly what froze them before.
-  useMinuteTick();
-  const snoozeLabels = deriveSnoozeLabels(snoozeWakeAtMs, t);
+  const now = useMinuteNow();
+  const snoozeLabels = deriveSnoozeLabels(snoozeWakeAtMs, t, now);
 
   const onSnooze = useCallback(
     async (preset: WorkspaceSnoozePreset) => {
