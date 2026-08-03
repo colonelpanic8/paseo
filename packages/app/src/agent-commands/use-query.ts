@@ -98,7 +98,9 @@ export function useAgentCommandsQuery({
       ? { immutableWhen: () => true as const }
       : { ...sessionCommandQueryPolicy, staleTimeMs: sessionCommandQueryPolicy.staleTime }),
     subscribed: queryEnabled,
-    retry: 3,
+    // Each draft attempt spawns and tears down a provider session, so a broken
+    // provider should report once rather than four times.
+    retry: draftConfig ? 0 : 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 

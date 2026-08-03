@@ -312,7 +312,7 @@ function resolveAutocompleteMode(args: {
   return null;
 }
 
-function resolveAutocompleteIsVisible(args: {
+export function resolveAutocompleteIsVisible(args: {
   mode: AutocompleteMode;
   canLoadCommands: boolean;
   serverId: string;
