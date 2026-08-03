@@ -56,6 +56,7 @@ import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import type { GestureType } from "react-native-gesture-handler";
 import { StatusRowSwipeContainer } from "@/components/sidebar/status-row-swipe-container";
+import { useMinuteNow } from "@/hooks/use-minute-tick";
 
 // Themed icon wrappers
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -104,6 +105,9 @@ export function SidebarStatusWorkspaceList({
   parentGestureRef,
   listHeaderComponent,
 }: StatusWorkspaceListProps) {
+  // One clock invalidates every visible status row together. Rows receive the
+  // minute explicitly so memoization cannot retain a stale relative label.
+  const activityNow = useMinuteNow();
   const collapsedStatusGroupKeys = useSidebarCollapsedSectionsStore(
     (state) => state.collapsedStatusGroupKeys,
   );
@@ -140,6 +144,7 @@ export function SidebarStatusWorkspaceList({
               {visiblePinnedWorkspaces.map((workspace) => (
                 <StatusWorkspaceRow
                   key={workspace.workspaceKey}
+                  activityNow={activityNow}
                   workspace={workspace}
                   iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
                   hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
@@ -170,6 +175,7 @@ export function SidebarStatusWorkspaceList({
         </Animated.View>
       ) : null}
       <StatusGroupList
+        activityNow={activityNow}
         groups={groups}
         collapsedStatusGroupKeys={collapsedStatusGroupKeys}
         projectIconByProjectViewKey={projectIconByProjectViewKey}
@@ -215,6 +221,7 @@ export function SidebarStatusWorkspaceList({
 }
 
 function StatusGroupList({
+  activityNow,
   groups,
   collapsedStatusGroupKeys,
   projectIconByProjectViewKey,
@@ -226,6 +233,7 @@ function StatusGroupList({
   onToggleWorkspacePin,
   parentGestureRef,
 }: {
+  activityNow: Date;
   groups: StatusGroup[];
   collapsedStatusGroupKeys: ReadonlySet<string>;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -242,6 +250,7 @@ function StatusGroupList({
       {groups.map((group) => (
         <StatusGroupRows
           key={group.bucket}
+          activityNow={activityNow}
           group={group}
           collapsed={collapsedStatusGroupKeys.has(group.bucket)}
           projectIconByProjectViewKey={projectIconByProjectViewKey}
@@ -259,6 +268,7 @@ function StatusGroupList({
 }
 
 function StatusGroupRows({
+  activityNow,
   group,
   collapsed,
   projectIconByProjectViewKey,
@@ -270,6 +280,7 @@ function StatusGroupRows({
   onToggleWorkspacePin,
   parentGestureRef,
 }: {
+  activityNow: Date;
   group: StatusGroup;
   collapsed: boolean;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -302,6 +313,7 @@ function StatusGroupRows({
         ? visibleWorkspaces.map((workspace) => (
             <StatusWorkspaceRow
               key={workspace.workspaceKey}
+              activityNow={activityNow}
               workspace={workspace}
               iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
               hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
@@ -416,6 +428,7 @@ function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
 }
 
 const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
+  activityNow,
   workspace,
   iconDataUri,
   hostBadge,
@@ -427,6 +440,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   parentGestureRef,
   containerTestID,
 }: {
+  activityNow: Date;
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostBadge: HostBadgeModel | null;
@@ -452,6 +466,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 
   return (
     <StatusWorkspaceRowWithMenu
+      activityNow={activityNow}
       workspace={workspace}
       iconDataUri={iconDataUri}
       hostBadge={hostBadge}
@@ -468,6 +483,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 });
 
 function StatusWorkspaceRowWithMenu({
+  activityNow,
   workspace,
   iconDataUri,
   hostBadge,
@@ -480,6 +496,7 @@ function StatusWorkspaceRowWithMenu({
   onPress,
   containerTestID,
 }: {
+  activityNow: Date;
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostBadge: HostBadgeModel | null;
@@ -591,6 +608,7 @@ function StatusWorkspaceRowWithMenu({
   return (
     <>
       <StatusWorkspaceRowInner
+        activityNow={activityNow}
         workspace={workspace}
         iconDataUri={iconDataUri}
         hostBadge={hostBadge}
@@ -628,6 +646,7 @@ function StatusWorkspaceRowWithMenu({
 }
 
 function StatusWorkspaceRowInner({
+  activityNow,
   workspace,
   iconDataUri,
   hostBadge,
@@ -650,6 +669,7 @@ function StatusWorkspaceRowInner({
   parentGestureRef,
   containerTestID,
 }: {
+  activityNow: Date;
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostBadge: HostBadgeModel | null;
@@ -738,6 +758,7 @@ function StatusWorkspaceRowInner({
                   testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
                 >
                   <SidebarStatusRowContent
+                    activityNow={activityNow}
                     workspace={workspace}
                     iconDataUri={iconDataUri}
                     hostBadge={hostBadge}

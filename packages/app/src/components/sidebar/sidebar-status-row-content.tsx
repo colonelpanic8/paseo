@@ -15,7 +15,6 @@ import {
   type SidebarWorkspaceScriptIconKind,
 } from "@/components/sidebar/sidebar-workspace-row-content";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
-import { useMinuteNow } from "@/hooks/use-minute-tick";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { Theme } from "@/styles/theme";
@@ -76,6 +75,7 @@ const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
  *   PR badge + checks (only when a PR exists)
  */
 export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
+  activityNow,
   workspace,
   iconDataUri,
   hostBadge,
@@ -86,6 +86,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   showActions,
   children,
 }: {
+  activityNow: Date;
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostBadge: HostBadgeModel | null;
@@ -105,11 +106,8 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   const secondaryLabel = resolveStatusRowSecondaryLabel({ workspace, primaryLabel });
   const repoSlug = deriveRemoteSlug(workspace.remoteUrl) ?? workspace.projectName;
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
-  // Rows are memoized, so without this tick the relative label would freeze
-  // until some unrelated state change happened to re-render the row.
-  const now = useMinuteNow();
   const activityLabel = workspace.activityAt
-    ? `${formatCompactRelativeTime(workspace.activityAt, now)} · ${formatClockTime(workspace.activityAt)}`
+    ? `${formatCompactRelativeTime(workspace.activityAt, activityNow)} · ${formatClockTime(workspace.activityAt)}`
     : null;
   // Web swaps the activity label for the quick actions on hover, inside a fixed slot so
   // the row never reflows. Touch platforms have no hover: the kebab is permanent,
