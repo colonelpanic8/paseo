@@ -173,8 +173,6 @@ export interface HostPickerProps {
   onEnableBuiltInDaemon?: () => void;
   showActiveConnection?: boolean;
   onOpenHostSettings?: (serverId: string) => void;
-  /** Host pickers search by default; pass `false` for a picker that is always short. */
-  searchable?: boolean;
   title?: string;
   desktopPlacement?: ComboboxProps["desktopPlacement"];
   desktopMinWidth?: number;
@@ -197,7 +195,6 @@ export function HostPicker({
   onEnableBuiltInDaemon,
   showActiveConnection,
   onOpenHostSettings,
-  searchable = true,
   title,
   desktopPlacement = "bottom-start",
   desktopMinWidth,
@@ -307,7 +304,6 @@ export function HostPicker({
         value={value}
         onSelect={handleSelect}
         renderOption={renderOption}
-        searchable={searchable}
         searchPlaceholder="Search hosts"
         title={title ?? "Host"}
         open={open}
