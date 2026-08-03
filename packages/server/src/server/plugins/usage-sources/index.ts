@@ -51,6 +51,7 @@ interface AgentReports {
 
 /** Owns account identity, ordered logins for each account, and the five-minute fetch cache. */
 export class UsageSourceRegistry {
+  private generation = 0;
   private readonly sources = new Map<string, UsageSource>();
   private readonly known = new Map<string, KnownReport>();
   private defaults = new Map<string, KnownReport>();
@@ -79,14 +80,27 @@ export class UsageSourceRegistry {
       if ([...mapping.reports.values()].some((report) => report.source.id === id))
         this.byAgent.delete(agentId);
     }
-    for (const key of this.known.keys()) if (key.startsWith(`${id}:`)) this.known.delete(key);
-    for (const key of this.cache.keys()) if (key.startsWith(`${id}:`)) this.cache.delete(key);
-    for (const key of this.pending.keys()) if (key.startsWith(`${id}:`)) this.pending.delete(key);
+    this.invalidateReports((key) => key.startsWith(`${id}:`));
+  }
+
+  invalidateReports(predicate: (id: string) => boolean): void {
+    this.generation++;
+    for (const id of this.defaults.keys()) if (predicate(id)) this.defaults.delete(id);
+    for (const [agentId, mapping] of this.byAgent) {
+      if ([...mapping.reports.keys()].some(predicate)) this.byAgent.delete(agentId);
+    }
+    for (const id of this.known.keys()) if (predicate(id)) this.known.delete(id);
+    // Fetch results are keyed by `${reportId}:${loginSetHash}`.
+    for (const map of [this.cache, this.pending]) {
+      for (const key of map.keys())
+        if (predicate(key.slice(0, key.lastIndexOf(":")))) map.delete(key);
+    }
   }
 
   async listReports(options: ListUsageReportsOptions = {}): Promise<UsageReportEntry[]> {
     if (options.agentId !== undefined && options.reportIds !== undefined)
       throw new Error("agentId and reportIds cannot be combined");
+    const generation = this.generation;
     this.pruneAgents();
     let ids: string[];
     let reports = this.known;
@@ -94,24 +108,34 @@ export class UsageSourceRegistry {
       ids = await this.discoverAgent(options.agentId);
       reports = this.byAgent.get(options.agentId)?.reports ?? new Map();
     } else if (options.reportIds !== undefined) {
+      if (options.reportIds.some((id) => !this.known.has(id))) await this.discoverReportIds();
       ids = options.reportIds;
     } else {
       this.defaults = await this.discover({ kind: "global" });
       this.mergeKnown();
       ids = [...this.known.keys()];
     }
-    return Promise.all(
+    if (generation !== this.generation) return this.listReports(options);
+    const entries = await Promise.all(
       [...new Set(ids)].flatMap((id) => {
         const known = reports.get(id);
         if (!known) return [];
         return [
           this.fetchId(id, known, options.forceRefresh).then((entry) => {
-            options.onReport?.(entry);
+            if (generation === this.generation) options.onReport?.(entry);
             return entry;
           }),
         ];
       }),
     );
+    return generation === this.generation ? entries : this.listReports(options);
+  }
+
+  private async discoverReportIds(): Promise<string[]> {
+    this.pruneAgents();
+    this.defaults = await this.discover({ kind: "global" });
+    this.mergeKnown();
+    return [...this.known.keys()];
   }
 
   private pruneAgents(): void {
@@ -228,6 +252,7 @@ export class UsageSourceRegistry {
         windows: entry.report.status === "available" ? entry.report.windows : [],
         balances: entry.report.status === "available" ? (entry.report.balances ?? []) : [],
         details: entry.report.status === "available" ? (entry.report.details ?? []) : [],
+        bankedResets: entry.report.status === "available" ? entry.report.bankedResets : undefined,
         error: legacyError(entry.report, this.now()),
       })),
     };
@@ -243,6 +268,7 @@ export class UsageSourceRegistry {
       return Promise.resolve(cached.entry);
     const pending = this.pending.get(cacheKey);
     if (pending) return pending;
+    const generation = this.generation;
     const request = (async () => {
       const entry: UsageReportEntry = {
         id,
@@ -253,7 +279,8 @@ export class UsageSourceRegistry {
         fetchedAt: new Date(this.now()).toISOString(),
         ...(await this.fetchWithFallback(known)),
       };
-      if (this.sources.get(known.source.id) === known.source) this.writeCache(cacheKey, entry);
+      if (generation === this.generation && this.sources.get(known.source.id) === known.source)
+        this.writeCache(cacheKey, entry);
       return entry;
     })();
     this.pending.set(cacheKey, request);
