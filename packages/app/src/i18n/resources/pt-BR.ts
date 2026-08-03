@@ -1819,6 +1819,7 @@ export const ptBR: TranslationResources = {
       connectedHosts: "Hosts conectados",
       offline: "Offline",
       versionDiffers: "A versão é diferente da deste dispositivo",
+      viewCommit: "Ver o commit no GitHub",
       releaseChannel: {
         label: "Canal de lançamento",
         description: "Troque para Beta para receber atualizações antes e ajudar a moldá-las",

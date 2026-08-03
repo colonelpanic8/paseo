@@ -1835,6 +1835,7 @@ export const es: TranslationResources = {
       connectedHosts: "Anfitriones conectados",
       offline: "Desconectado",
       versionDiffers: "La versión difiere de este dispositivo.",
+      viewCommit: "Ver el commit en GitHub",
       releaseChannel: {
         label: "Canal de lanzamiento",
         description: "Cambie aBetapara recibir actualizaciones antes y ayudar a darles forma",
