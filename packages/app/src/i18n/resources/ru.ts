@@ -2470,6 +2470,12 @@ export const ru: TranslationResources = {
         color: {
           label: "Цвет",
           accessibilityLabel: "Цвет, {{value}}",
+          custom: {
+            action: "Другой…",
+            title: "Пользовательский цвет",
+            submit: "Применить",
+            invalid: "Введите цвет в шестнадцатеричном формате, например #368080.",
+          },
           options: {
             none: "По умолчанию",
             violet: "Фиолетовый",
