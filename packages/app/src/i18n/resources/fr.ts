@@ -1057,6 +1057,11 @@ export const fr: TranslationResources = {
         hideConfirm: "Cacher",
         cancel: "Annuler",
       },
+      agentTree: {
+        show: "Afficher les agents",
+        hide: "Masquer les agents",
+        swipeAction: "Agents",
+      },
       rename: {
         title: "Renommer l'espace de travail",
         submit: "Rebaptiser",

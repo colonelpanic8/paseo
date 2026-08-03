@@ -1027,6 +1027,11 @@ export const ar: TranslationResources = {
         hideConfirm: "يخفي",
         cancel: "يلغي",
       },
+      agentTree: {
+        show: "إظهار الوكلاء",
+        hide: "إخفاء الوكلاء",
+        swipeAction: "الوكلاء",
+      },
       rename: {
         title: "إعادة تسمية مساحة العمل",
         submit: "إعادة تسمية",

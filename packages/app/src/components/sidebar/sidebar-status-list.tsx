@@ -34,12 +34,21 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
-import { SidebarWorkspaceRowFrame } from "@/components/sidebar/sidebar-workspace-row-content";
+import {
+  SidebarWorkspaceRowFrame,
+  SidebarWorkspaceAgentTreeToggle,
+  type SidebarWorkspaceRowDisclosure,
+} from "@/components/sidebar/sidebar-workspace-row-content";
 import { selectWorkspaceScriptSummary } from "@/components/sidebar/workspace-meta-row";
 import {
   SidebarStatusRowArchiveAction,
   SidebarStatusRowContent,
+  STATUS_ROW_AGENT_TREE_INDENT,
 } from "@/components/sidebar/sidebar-status-row-content";
+import {
+  useWorkspaceHasAgents,
+  WorkspaceAgentTree,
+} from "@/components/sidebar/sidebar-workspace-agent-tree";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import {
   SidebarWorkspaceContextMenu,
@@ -603,6 +612,27 @@ function StatusWorkspaceRowWithMenu({
     });
   }, [clearAttention, toast]);
 
+  // Subscribed here rather than threaded through the memoized row above, and
+  // keyed by workspaceKey so an expansion carries across grouping modes.
+  const workspaceKey = workspace.workspaceKey;
+  const agentTreeExpanded = useSidebarCollapsedSectionsStore((state) =>
+    state.expandedAgentTreeWorkspaceKeys.has(workspaceKey),
+  );
+  const toggleAgentTreeExpanded = useSidebarCollapsedSectionsStore(
+    (state) => state.toggleAgentTreeExpanded,
+  );
+  const hasAgents = useWorkspaceHasAgents({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+  });
+  const handleToggleAgentTree = useCallback(() => {
+    toggleAgentTreeExpanded(workspaceKey);
+  }, [toggleAgentTreeExpanded, workspaceKey]);
+  const disclosure = useMemo(
+    () => (hasAgents ? { expanded: agentTreeExpanded, onToggle: handleToggleAgentTree } : null),
+    [agentTreeExpanded, handleToggleAgentTree, hasAgents],
+  );
+
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
     actions: ["workspace.archive"],
@@ -640,7 +670,23 @@ function StatusWorkspaceRowWithMenu({
         onTogglePin={onTogglePin}
         parentGestureRef={parentGestureRef}
         containerTestID={containerTestID}
+        disclosure={disclosure}
       />
+      {/*
+        A flat sibling of the row, not a child of it: the row's animated wrapper
+        carries a layout transition, and the web backend animates a resize as a
+        scale keyframe that would squash the row and its tree (see
+        sidebar-motion.ts). Growing the list by adding a sibling keeps every
+        layout transition a pure translation. An archiving row drops its tree
+        first so the collapse animates alone.
+      */}
+      {disclosure?.expanded && !isArchiving ? (
+        <WorkspaceAgentTree
+          serverId={workspace.serverId}
+          workspaceId={workspace.workspaceId}
+          baseIndent={STATUS_ROW_AGENT_TREE_INDENT}
+        />
+      ) : null}
       <AdaptiveRenameModal
         visible={isRenameOpen}
         title="Rename workspace"
@@ -679,6 +725,7 @@ function StatusWorkspaceRowInner({
   onTogglePin,
   parentGestureRef,
   containerTestID,
+  disclosure,
 }: {
   activityNow: Date;
   workspace: SidebarWorkspaceEntry;
@@ -703,7 +750,10 @@ function StatusWorkspaceRowInner({
   onTogglePin?: () => void;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   containerTestID?: string;
+  disclosure: SidebarWorkspaceRowDisclosure | null;
 }) {
+  const { t } = useTranslation();
+  const agentsLabel = t("sidebar.workspace.agentTree.swipeAction");
   const isTouchPlatform = platformIsNative;
   const archiveCollapse = useArchiveCollapse(isArchiving);
   // The snoozed bucket already ticks via the sidebar's wake clock, so the row
@@ -732,6 +782,11 @@ function StatusWorkspaceRowInner({
           // The full cluster already contains the snooze chip, so the standalone
           // one only fills the gap when the cluster is hidden.
           const showSnoozeChipOnly = !showActions && isSnoozed;
+          // Web-only: the chevron is hover-revealed and stays on while the tree
+          // is open. Native has no hover and reaches the tree by swiping instead.
+          const showAgentTreeToggle = Boolean(
+            disclosure && platformIsWeb && (isHovered || disclosure.expanded),
+          );
           const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
           return (
             <View style={styles.workspaceRowContainer} {...hoverHandlers}>
@@ -739,6 +794,8 @@ function StatusWorkspaceRowInner({
                 archiveLabel={archiveLabel}
                 onArchive={onArchive}
                 isArchiving={isArchiving}
+                agentsLabel={agentsLabel}
+                onToggleAgents={disclosure?.onToggle}
                 parentGestureRef={parentGestureRef}
               >
                 <SidebarWorkspaceContextMenu
@@ -760,6 +817,7 @@ function StatusWorkspaceRowInner({
                   archiveShortcutKeys={archiveShortcutKeys}
                   isPinned={isPinned}
                   onTogglePin={onTogglePin}
+                  agentTree={disclosure ?? undefined}
                   openInFileManagerPath={workspace.workspaceDirectory}
                   disabled={isArchiving}
                   accessibilityRole="button"
@@ -779,6 +837,7 @@ function StatusWorkspaceRowInner({
                     showShortcutBadge={showShortcutBadge}
                     showActions={showActions}
                     showSnoozedChip={showSnoozeChipOnly}
+                    showAgentTreeToggle={showAgentTreeToggle}
                     onSubmitRename={onSubmitRename}
                   >
                     {showSnoozeChipOnly ? (
@@ -799,6 +858,13 @@ function StatusWorkspaceRowInner({
                         archiveStatus={archiveStatus}
                         archivePendingLabel={archivePendingLabel}
                         archiveShortcutKeys={archiveShortcutKeys}
+                      />
+                    ) : null}
+                    {showAgentTreeToggle && disclosure ? (
+                      <SidebarWorkspaceAgentTreeToggle
+                        expanded={disclosure.expanded}
+                        onToggle={disclosure.onToggle}
+                        testID={`sidebar-workspace-agent-tree-toggle-${workspace.workspaceKey}`}
                       />
                     ) : null}
                   </SidebarStatusRowContent>

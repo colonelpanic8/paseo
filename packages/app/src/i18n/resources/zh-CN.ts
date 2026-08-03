@@ -1016,6 +1016,11 @@ export const zhCN: TranslationResources = {
         hideConfirm: "隐藏",
         cancel: "取消",
       },
+      agentTree: {
+        show: "显示 Agent",
+        hide: "隐藏 Agent",
+        swipeAction: "Agent",
+      },
       rename: {
         title: "重命名 workspace",
         submit: "重命名",
