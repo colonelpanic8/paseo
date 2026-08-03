@@ -34,6 +34,7 @@ import {
   formatProviderDiagnosticError,
 } from "./providers/diagnostic-utils.js";
 import type { MutableDaemonConfig } from "../daemon-config-store.js";
+import { ProviderIntrospectionQueue } from "./provider-introspection-queue.js";
 
 const DEFAULT_REFRESH_TIMEOUT_MS = 60_000;
 const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
@@ -85,6 +86,7 @@ type ProviderSnapshotChangeListener = (entries: ProviderSnapshotEntry[], cwd: st
 
 export interface ProviderSnapshotManagerOptions {
   logger: Logger;
+  providerIntrospectionQueue?: ProviderIntrospectionQueue;
   runtimeSettings?: AgentProviderRuntimeSettingsMap;
   providerOverrides?: Record<string, ProviderOverride>;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
@@ -179,6 +181,7 @@ export class ProviderSnapshotManager {
   private readonly refreshTimeoutMs: number;
   private readonly diagnosticTimeoutMs: number;
   private readonly logger: Logger;
+  private readonly providerIntrospectionQueue: ProviderIntrospectionQueue;
   private readonly workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   private readonly managedProcesses?: ManagedProcessRegistry;
   private readonly isDev: boolean;
@@ -191,6 +194,8 @@ export class ProviderSnapshotManager {
 
   constructor(options: ProviderSnapshotManagerOptions) {
     this.logger = options.logger;
+    this.providerIntrospectionQueue =
+      options.providerIntrospectionQueue ?? new ProviderIntrospectionQueue();
     this.workspaceGitService = options.workspaceGitService;
     this.managedProcesses = options.managedProcesses;
     this.isDev = options.isDev === true;
@@ -792,8 +797,11 @@ export class ProviderSnapshotManager {
       }
 
       const catalogOptions = createFetchCatalogOptions(catalogScope, force);
-      const catalog = await withTimeout(
+      const catalogLoad = this.providerIntrospectionQueue.run(provider, async () =>
         definition.fetchCatalog({ ...catalogOptions, timeoutMs: this.refreshTimeoutMs }, client),
+      );
+      const catalog = await withTimeout(
+        catalogLoad,
         this.refreshTimeoutMs,
         `Timed out refreshing ${definition.label} after ${this.refreshTimeoutMs}ms`,
       );
