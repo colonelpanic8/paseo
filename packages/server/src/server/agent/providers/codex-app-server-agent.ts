@@ -3407,6 +3407,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private observedModel: string | undefined;
   private observedThinkingOptionId: string | undefined;
+  private pendingObservedModelReset = false;
+  private pendingObservedThinkingReset = false;
   private activeTurnObservedModel: string | undefined;
   private activeTurnObservedThinkingOptionId: string | undefined;
   private serviceTier: "fast" | null = null;
@@ -3648,6 +3650,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.currentTurnId = null;
     this.pendingForegroundTurnIdentification?.resolve(null);
     this.pendingForegroundTurnIdentification = null;
+    this.applyPendingObservedRuntimeResets();
   }
 
   private async loadCollaborationModes(): Promise<void> {
@@ -4321,6 +4324,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.pendingForegroundTurnIdentification = null;
       this.activeForegroundTurnId = null;
       this.activeClientMessageId = null;
+      this.applyPendingObservedRuntimeResets();
       throw error;
     } finally {
       if (this.pendingForegroundStart === pendingStart) {
@@ -4511,6 +4515,28 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.activeTurnObservedThinkingOptionId = undefined;
   }
 
+  /**
+   * Drops observations a selection made during the turn invalidated. Anything
+   * the finished turn observed after that selection belongs to the old turn too,
+   * so the reset still clears it here.
+   */
+  private applyPendingObservedRuntimeResets(): void {
+    let changed = false;
+    if (this.pendingObservedModelReset) {
+      this.pendingObservedModelReset = false;
+      this.observedModel = undefined;
+      changed = true;
+    }
+    if (this.pendingObservedThinkingReset) {
+      this.pendingObservedThinkingReset = false;
+      this.observedThinkingOptionId = undefined;
+      changed = true;
+    }
+    if (changed) {
+      this.cachedRuntimeInfo = null;
+    }
+  }
+
   private stampActiveTurnAttribution(item: AgentTimelineItem): void {
     if (item.type !== "assistant_message") {
       return;
@@ -4586,19 +4612,30 @@ export class CodexAppServerAgentSession implements AgentSession {
     // Observations predate this selection; without a reset, `observed ?? config`
     // would keep reporting the old values until a notification re-observes them.
     // The effort observation is invalidated too: it was made under the old model.
-    this.observedModel = undefined;
-    this.observedThinkingOptionId = undefined;
+    // A running turn keeps the model it started with, so defer the reset until it
+    // ends rather than relabeling it with a selection it never used.
+    if (this.activeForegroundTurnId) {
+      this.pendingObservedModelReset = true;
+      this.pendingObservedThinkingReset = true;
+    } else {
+      this.observedModel = undefined;
+      this.observedThinkingOptionId = undefined;
+    }
     this.cachedRuntimeInfo = null;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void | AgentProviderNotice> {
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(thinkingOptionId);
     this.refreshResolvedCollaborationMode();
-    this.observedThinkingOptionId = undefined;
-    this.cachedRuntimeInfo = null;
+    // Same deferral as setModel: the selection applies next turn, so the running
+    // turn keeps reporting the effort it is actually running at.
     if (this.activeForegroundTurnId) {
+      this.pendingObservedThinkingReset = true;
+      this.cachedRuntimeInfo = null;
       return THINKING_APPLIES_NEXT_TURN_NOTICE;
     }
+    this.observedThinkingOptionId = undefined;
+    this.cachedRuntimeInfo = null;
   }
 
   async setFeature(featureId: string, value: unknown): Promise<void> {
@@ -6115,6 +6152,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.pendingSubAgentNotificationsByThreadId.clear();
     this.resetTurnTrackingState();
     this.resetActiveTurnObservedRuntimeInfo();
+    this.applyPendingObservedRuntimeResets();
   }
 
   private resetTurnTrackingState(): void {

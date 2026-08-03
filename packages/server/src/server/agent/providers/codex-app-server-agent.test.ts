@@ -1126,8 +1126,9 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("setThinkingOption and setModel clear stale observations", async () => {
+  test("setThinkingOption and setModel clear stale observations between turns", async () => {
     const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+    session.activeForegroundTurnId = null;
 
     asInternals(session).handleNotification("thread/started", {
       thread: {
@@ -1148,6 +1149,54 @@ describe("Codex app-server provider", () => {
     });
 
     await session.setModel("gpt-selected");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-selected",
+      thinkingOptionId: "low",
+    });
+  });
+
+  test("keeps the running turn's observations until the turn ends", async () => {
+    const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
+
+    asInternals(session).handleNotification("thread/started", {
+      thread: {
+        id: "test-thread",
+        model: "gpt-observed",
+        reasoningEffort: "high",
+      },
+    });
+
+    await expect(session.setThinkingOption?.("low")).resolves.toEqual({
+      type: "warning",
+      message: "Thinking level applies next turn",
+    });
+    await session.setModel("gpt-selected");
+
+    // The turn is still running under what Codex reported for it; a selection
+    // that only applies next turn must not relabel it.
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-observed",
+      thinkingOptionId: "high",
+    });
+
+    // An observation that lands after the selection still describes the old turn.
+    asInternals(session).handleNotification("thread/started", {
+      thread: {
+        id: "test-thread",
+        model: "gpt-late-observation",
+        reasoningEffort: "xhigh",
+      },
+    });
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "gpt-late-observation",
+      thinkingOptionId: "xhigh",
+    });
+
+    asInternals(session).handleNotification("turn/completed", {
+      threadId: "test-thread",
+      turn: { status: "completed" },
+    });
+
     await expect(session.getRuntimeInfo()).resolves.toMatchObject({
       model: "gpt-selected",
       thinkingOptionId: "low",

@@ -2119,6 +2119,8 @@ class ClaudeAgentSession implements AgentSession {
   private lastOptionsModel: string | null = null;
   private lastRuntimeModel: string | null = null;
   private lastObservedEffort: ClaudeThinkingEffort | null = null;
+  private pendingObservedModelReset: { optionsModel: string | null } | null = null;
+  private pendingObservedEffortReset = false;
   private compacting = false;
   private queryPumpPromise: Promise<void> | null = null;
   private queryRestartNeeded = false;
@@ -2463,11 +2465,20 @@ class ClaudeAgentSession implements AgentSession {
     this.contextUsage.setInitialContextWindowMaxTokens(
       findClaudeModel(this.config.model)?.contextWindowMaxTokens,
     );
-    this.lastOptionsModel = normalizedModelId ?? this.lastOptionsModel;
-    this.lastRuntimeModel = null;
     // Effort levels are per-model, so an observation from the old model says
-    // nothing about the new one.
-    this.lastObservedEffort = null;
+    // nothing about the new one. A running turn keeps the model it started with,
+    // so defer both resets until it ends rather than relabeling that turn with a
+    // selection it never used.
+    if (this.activeForegroundTurnId || this.autonomousTurn) {
+      this.pendingObservedModelReset = {
+        optionsModel: normalizedModelId ?? this.lastOptionsModel,
+      };
+      this.pendingObservedEffortReset = true;
+    } else {
+      this.lastOptionsModel = normalizedModelId ?? this.lastOptionsModel;
+      this.lastRuntimeModel = null;
+      this.lastObservedEffort = null;
+    }
     this.cachedRuntimeInfo = null;
     // Model change affects persistence metadata, so invalidate cached handle.
     this.persistence = null;
@@ -2508,13 +2519,15 @@ class ClaudeAgentSession implements AgentSession {
       throw new Error(`Unknown thinking option: ${normalizedThinkingOptionId}`);
     }
     // Drop the observation so a level from before this selection cannot shadow
-    // it; the next frame reports what Claude actually applied.
-    this.lastObservedEffort = null;
+    // it; the next frame reports what Claude actually applied. Mid-turn the
+    // selection only takes effect next turn, so the drop waits for turn end.
     this.cachedRuntimeInfo = null;
     this.queryRestartNeeded = true;
     if (this.activeForegroundTurnId || this.autonomousTurn) {
+      this.pendingObservedEffortReset = true;
       return THINKING_APPLIES_NEXT_TURN_NOTICE;
     }
+    this.lastObservedEffort = null;
   }
 
   async setFeature(featureId: string, value: unknown): Promise<void> {
@@ -3469,6 +3482,32 @@ class ClaudeAgentSession implements AgentSession {
       return;
     }
     this.transitionTurnState("idle", reason);
+    // Every turn-terminal path lands here, including interrupts and failures,
+    // which makes it the one place a deferred observation reset has to run.
+    this.applyPendingRuntimeObservationResets();
+  }
+
+  /**
+   * Drops observations a mid-turn selection invalidated. Anything the finished
+   * turn observed after that selection describes the old turn too, so the
+   * selection's values win here regardless of what arrived in between.
+   */
+  private applyPendingRuntimeObservationResets(): void {
+    const pendingModel = this.pendingObservedModelReset;
+    const pendingEffort = this.pendingObservedEffortReset;
+    if (!pendingModel && !pendingEffort) {
+      return;
+    }
+    this.pendingObservedModelReset = null;
+    this.pendingObservedEffortReset = false;
+    if (pendingModel) {
+      this.lastOptionsModel = pendingModel.optionsModel;
+      this.lastRuntimeModel = null;
+    }
+    if (pendingEffort) {
+      this.lastObservedEffort = null;
+    }
+    this.cachedRuntimeInfo = null;
   }
 
   private isAbortError(message: SDKMessage): boolean {
