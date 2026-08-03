@@ -155,6 +155,7 @@ interface SessionTestAccess {
   handleMessage(message: unknown): Promise<unknown>;
   handleCreatePaseoWorktreeRequest(params: unknown): Promise<unknown>;
   listAgentPayloads(...args: unknown[]): Promise<unknown[]>;
+  listAgentActivityAt(): Promise<ReadonlyMap<string, string>>;
   listFetchWorkspacesEntries(params: unknown): Promise<ListFetchResult>;
   listFetchAgentsEntries(params: unknown): Promise<ListFetchResult>;
   resolveAgentIdentifier(identifier: string): Promise<unknown>;
@@ -3279,6 +3280,7 @@ test("subdirectory agents contribute to their owning workspace descriptor", asyn
       updatedAt: "2026-03-01T12:03:00.000Z",
     }),
   ];
+  session.listAgentActivityAt = async () => new Map([["a1", "2026-03-01T12:03:00.000Z"]]);
 
   const result = await session.listFetchWorkspacesEntries({
     type: "fetch_workspaces_request",

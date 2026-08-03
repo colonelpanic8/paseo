@@ -107,16 +107,17 @@ export function isStoredAgentProviderAvailable(
 export function extractTimestamps(record: StoredAgentRecord): {
   createdAt: Date;
   updatedAt: Date;
-  lastActivityAt: Date;
+  lastMessageAt: Date | null;
   lastUserMessageAt: Date | null;
   labels?: Record<string, string>;
   workspaceId?: string;
   owner?: StoredAgentRecord["owner"];
 } {
+  const lastMessageAt = record.lastMessageAt ?? record.lastUserMessageAt;
   return {
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
-    lastActivityAt: new Date(record.lastActivityAt ?? record.updatedAt),
+    lastMessageAt: lastMessageAt ? new Date(lastMessageAt) : null,
     lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
     labels: record.labels,
     workspaceId: record.workspaceId,

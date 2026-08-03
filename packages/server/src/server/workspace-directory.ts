@@ -588,9 +588,7 @@ export class WorkspaceDirectory {
   ): string | null {
     let latest = sourceActivityAt;
     for (const agent of contributingAgents) {
-      latest = laterTimestamp(latest, agentActivityAtById.get(agent.id) ?? agent.updatedAt);
-      latest = laterTimestamp(latest, agent.lastUserMessageAt);
-      latest = laterTimestamp(latest, agent.attentionTimestamp);
+      latest = laterTimestamp(latest, agentActivityAtById.get(agent.id));
     }
     return latest;
   }

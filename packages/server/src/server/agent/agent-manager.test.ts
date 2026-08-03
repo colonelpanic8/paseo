@@ -2526,7 +2526,7 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     },
   };
 
-  const lastActivityAt = new Date("2025-01-02T03:04:05.000Z");
+  const lastMessageAt = new Date("2025-01-02T03:04:05.000Z");
   const resumed = await manager.resumeAgentFromPersistence(
     handle,
     {
@@ -2542,9 +2542,9 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     },
     undefined,
     {
-      createdAt: lastActivityAt,
-      updatedAt: lastActivityAt,
-      lastActivityAt,
+      createdAt: lastMessageAt,
+      updatedAt: lastMessageAt,
+      lastMessageAt,
     },
   );
 
@@ -2575,8 +2575,8 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
       PASEO_AGENT_CWD: workdir,
     },
   });
-  expect(resumed.lastActivityAt).toEqual(lastActivityAt);
-  expect(resumed.updatedAt.getTime()).toBeGreaterThan(lastActivityAt.getTime());
+  expect(resumed.lastMessageAt).toEqual(lastMessageAt);
+  expect(resumed.updatedAt.getTime()).toBeGreaterThan(lastMessageAt.getTime());
 });
 
 test("importProviderSession imports the selected session without listing and publishes ready state", async () => {
@@ -2687,7 +2687,7 @@ test("importProviderSession imports the selected session without listing and pub
   });
   expect(imported.lifecycle).toBe("idle");
   expect(imported.historyPrimed).toBe(true);
-  expect(imported.lastActivityAt.toISOString()).toBe("2026-01-02T00:00:02.000Z");
+  expect(imported.lastMessageAt?.toISOString()).toBe("2026-01-02T00:00:01.000Z");
   expect(manager.getTimeline(imported.id)).toEqual([
     { type: "user_message", text: "Trace provider imports" },
     { type: "assistant_message", text: "Done" },
@@ -3751,6 +3751,13 @@ test("reloadAgentSession cancels active run and resumes existing session once th
   );
   expect(snapshot.persistence).toBeNull();
 
+  await manager.appendTimelineItem(snapshot.id, {
+    type: "user_message",
+    text: "earlier canonical message",
+  });
+  const messageTimestamp = manager.getAgent(snapshot.id)?.lastMessageAt;
+  expect(messageTimestamp).not.toBeNull();
+
   const stream = manager.streamAgent(snapshot.id, "hello");
   const first = await stream.next();
   expect(first.done).toBe(false);
@@ -3765,6 +3772,7 @@ test("reloadAgentSession cancels active run and resumes existing session once th
 
   const active = manager.getAgent(snapshot.id);
   expect(active?.lifecycle).toBe("running");
+  expect(active?.lastMessageAt).toEqual(messageTimestamp);
 
   const reloaded = await manager.reloadAgentSession(snapshot.id, {
     systemPrompt: "voice mode on",
@@ -3773,6 +3781,7 @@ test("reloadAgentSession cancels active run and resumes existing session once th
   expect(client.createSessionCalls).toBe(1);
   expect(client.resumeSessionCalls).toBe(1);
   expect(reloaded.persistence?.sessionId).toBe("delayed-session-1");
+  expect(reloaded.lastMessageAt).toEqual(messageTimestamp);
 
   // Drain stream after cancellation to ensure clean shutdown.
   while (true) {
@@ -8152,7 +8161,7 @@ test("hydrateTimeline preserves provider replay timestamps without changing agen
     item: { type: "user_message", text: "hello", messageId: "msg_history_1" },
   });
   expect(timeline[1]?.timestamp).toEqual(expect.any(String));
-  expect(manager.getAgent(snapshot.id)?.lastActivityAt).toEqual(snapshot.lastActivityAt);
+  expect(manager.getAgent(snapshot.id)?.lastMessageAt).toEqual(snapshot.lastMessageAt);
 });
 
 test("provider user_message is recorded from the live stream", async () => {
