@@ -292,7 +292,10 @@ export function KeyboardShortcutsSection() {
     );
     if (
       getCommandShortcutIdFromBindingId(capturingBindingId) &&
-      findKeyboardShortcutConflict(capturingBindingId, combo, overrides, commandShortcutIds)
+      findKeyboardShortcutConflict(capturingBindingId, combo, overrides, commandShortcutIds, {
+        isMac,
+        isDesktop: isDesktopApp,
+      })
     ) {
       toast.error("That shortcut is already assigned.");
       return;
@@ -304,6 +307,8 @@ export function KeyboardShortcutsSection() {
     capturedCombos,
     capturingBindingId,
     commandCenterSnapshot.shortcutCatalog,
+    isDesktopApp,
+    isMac,
     overrides,
     setOverride,
     toast,

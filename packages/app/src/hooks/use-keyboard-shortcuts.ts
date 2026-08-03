@@ -71,6 +71,8 @@ export function useKeyboardShortcuts({
   const { overrides } = useKeyboardShortcutOverrides();
   const commandCenterSnapshot = useCommandCenterContributions();
   const runCommandCenterShortcut = useCommandCenterShortcutRunner();
+  const isDesktopApp = getIsElectronRuntime();
+  const isMac = getShortcutOs() === "mac";
   const bindings = useMemo(() => {
     const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
       contribution.shortcutId ? [contribution.shortcutId] : [],
@@ -78,12 +80,13 @@ export function useKeyboardShortcuts({
     const effectiveBindings = buildEffectiveBindings(overrides);
     return [
       ...effectiveBindings,
-      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings),
+      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings, {
+        isMac,
+        isDesktop: isDesktopApp,
+      }),
     ];
-  }, [commandCenterSnapshot.contributions, overrides]);
+  }, [commandCenterSnapshot.contributions, isDesktopApp, isMac, overrides]);
   const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
-  const isDesktopApp = getIsElectronRuntime();
-  const isMac = getShortcutOs() === "mac";
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
     step: 0,
