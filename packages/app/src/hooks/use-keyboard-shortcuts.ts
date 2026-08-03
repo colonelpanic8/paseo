@@ -72,9 +72,10 @@ export function useKeyboardShortcuts({
     const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
       contribution.shortcutId ? [contribution.shortcutId] : [],
     );
+    const effectiveBindings = buildEffectiveBindings(overrides);
     return [
-      ...buildEffectiveBindings(overrides),
-      ...buildCommandShortcutBindings(commandShortcutIds, overrides),
+      ...effectiveBindings,
+      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings),
     ];
   }, [commandCenterSnapshot.contributions, overrides]);
   const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });

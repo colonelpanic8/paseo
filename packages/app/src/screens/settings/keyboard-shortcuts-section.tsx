@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import {
+  findKeyboardShortcutConflict,
   buildKeyboardShortcutHelpSections,
   getBindingIdForAction,
+  getCommandShortcutIdFromBindingId,
   type KeyboardShortcutHelpRow,
 } from "@/keyboard/keyboard-shortcuts";
 import {
@@ -30,6 +32,7 @@ import {
   type CommandShortcutSettingsRow,
 } from "@/command-center/shortcut-settings";
 import type { ShortcutKey } from "@/utils/format-shortcut";
+import { useToast } from "@/contexts/toast-context";
 
 const EMPTY_CAPTURED_COMBOS: string[] = [];
 
@@ -223,6 +226,7 @@ function ShortcutRow({
 
 export function KeyboardShortcutsSection() {
   const { t } = useTranslation();
+  const toast = useToast();
   const [capturingBindingId, setCapturingBindingId] = useState<string | null>(null);
   const [capturedCombos, setCapturedCombos] = useState<string[]>([]);
   const [heldModifiers, setHeldModifiers] = useState<string | null>(null);
@@ -237,8 +241,13 @@ export function KeyboardShortcutsSection() {
   const isDesktopApp = getIsElectronRuntime();
   const sections = buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp });
   const directShortcutRows = useMemo(
-    () => buildCommandShortcutSettingsRows(commandCenterSnapshot.shortcutCatalog, overrides),
-    [commandCenterSnapshot.shortcutCatalog, overrides],
+    () =>
+      buildCommandShortcutSettingsRows(
+        commandCenterSnapshot.shortcutCatalog,
+        commandCenterSnapshot.contributions,
+        overrides,
+      ),
+    [commandCenterSnapshot.contributions, commandCenterSnapshot.shortcutCatalog, overrides],
   );
   const directShortcutGroups = useMemo(
     () => [
@@ -277,9 +286,28 @@ export function KeyboardShortcutsSection() {
     if (capturingBindingId === null || capturedCombos.length === 0) {
       return;
     }
-    void setOverride(capturingBindingId, capturedCombos.join(" "));
+    const combo = capturedCombos.join(" ");
+    const commandShortcutIds = commandCenterSnapshot.shortcutCatalog.flatMap((contribution) =>
+      contribution.shortcutId ? [contribution.shortcutId] : [],
+    );
+    if (
+      getCommandShortcutIdFromBindingId(capturingBindingId) &&
+      findKeyboardShortcutConflict(capturingBindingId, combo, overrides, commandShortcutIds)
+    ) {
+      toast.error("That shortcut is already assigned.");
+      return;
+    }
+    void setOverride(capturingBindingId, combo);
     cancelCapture();
-  }, [capturingBindingId, capturedCombos, setOverride, cancelCapture]);
+  }, [
+    cancelCapture,
+    capturedCombos,
+    capturingBindingId,
+    commandCenterSnapshot.shortcutCatalog,
+    overrides,
+    setOverride,
+    toast,
+  ]);
 
   useEffect(() => {
     if (!isFocused && capturingBindingId !== null) {

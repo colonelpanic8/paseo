@@ -4,6 +4,7 @@ import {
   buildKeyboardShortcutHelpSections,
   buildCommandShortcutBindings,
   buildEffectiveBindings,
+  findKeyboardShortcutConflict,
   getCommandShortcutBindingId,
   getCommandShortcutIdFromBindingId,
   getBindingIdForAction,
@@ -704,6 +705,27 @@ describe("command contribution shortcut overrides", () => {
 
   it("ignores invalid stored command shortcut overrides", () => {
     expect(buildCommandShortcutBindings([shortcutId], { [bindingId]: "F25" })).toEqual([]);
+  });
+
+  it("rejects direct shortcuts that conflict with built-in bindings", () => {
+    const overrides = { [bindingId]: "Ctrl+W" };
+    const builtIns = buildEffectiveBindings(overrides);
+
+    expect(buildCommandShortcutBindings([shortcutId], overrides, builtIns)).toEqual([]);
+    expect(findKeyboardShortcutConflict(bindingId, "Ctrl+W", {}, [shortcutId])).toBe(
+      "workspace-tab-close-current-ctrl-w-non-mac",
+    );
+  });
+
+  it("rejects all direct shortcuts sharing the same chord", () => {
+    const thinkingId = "thinking:high";
+    const thinkingBindingId = getCommandShortcutBindingId(thinkingId);
+    const overrides = { [bindingId]: "F13", [thinkingBindingId]: "F13" };
+
+    expect(buildCommandShortcutBindings([shortcutId, thinkingId], overrides)).toEqual([]);
+    expect(
+      findKeyboardShortcutConflict(bindingId, "F13", overrides, [shortcutId, thinkingId]),
+    ).toBe(thinkingBindingId);
   });
 });
 
