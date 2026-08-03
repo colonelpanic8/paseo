@@ -388,6 +388,7 @@ export function SidebarWorkspaceContextMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  snooze,
   openInFileManagerPath,
   accessibilityLabel,
   highlightStyle,
@@ -454,6 +455,7 @@ export function SidebarWorkspaceContextMenu({
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
+          snooze={snooze}
           openInFileManagerPath={openInFileManagerPath}
         />
       </ContextMenuContent>
