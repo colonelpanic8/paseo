@@ -679,6 +679,7 @@ export class ProviderSnapshotManager {
         status: "error",
         enabled: definition.enabled,
         source: this.getProviderSource(provider),
+        baseProviderId: this.getBaseProviderId(provider),
         label: definition.label,
         description: definition.description,
         defaultModeId: definition.defaultModeId,
@@ -717,6 +718,19 @@ export class ProviderSnapshotManager {
     return !isBuiltin && this.providerOverrides?.[provider]?.extends ? "custom" : "builtin";
   }
 
+  /**
+   * The builtin provider a custom account extends. Builtin ids never report a
+   * base even when they derive from another builtin (omp extends pi), because
+   * the base only exists to group and icon provider accounts.
+   */
+  private getBaseProviderId(provider: AgentProvider): string | undefined {
+    if (BUILTIN_PROVIDER_IDS.includes(provider)) {
+      return undefined;
+    }
+    const base = this.providerOverrides?.[provider]?.extends;
+    return typeof base === "string" && BUILTIN_PROVIDER_IDS.includes(base) ? base : undefined;
+  }
+
   private createLoadingEntries(): Map<AgentProvider, ProviderSnapshotEntry> {
     const entries = new Map<AgentProvider, ProviderSnapshotEntry>();
     for (const provider of this.getProviderIds()) {
@@ -726,6 +740,7 @@ export class ProviderSnapshotManager {
         status: "loading",
         enabled: definition?.enabled ?? true,
         source: this.getProviderSource(provider),
+        baseProviderId: this.getBaseProviderId(provider),
         label: definition?.label,
         description: definition?.description,
         defaultModeId: definition?.defaultModeId ?? null,
@@ -745,6 +760,7 @@ export class ProviderSnapshotManager {
         provider,
         enabled: definition?.enabled ?? true,
         source: this.getProviderSource(provider),
+        baseProviderId: this.getBaseProviderId(provider),
         label: definition?.label,
         description: definition?.description,
         defaultModeId: definition?.defaultModeId ?? null,
@@ -913,6 +929,7 @@ export class ProviderSnapshotManager {
     const base = {
       provider,
       source: this.getProviderSource(provider),
+      baseProviderId: this.getBaseProviderId(provider),
       label: definition.label,
       description: definition.description,
       defaultModeId: definition.defaultModeId,
