@@ -11,7 +11,10 @@ import { ModelBrowser, ModelProviderGlyph, useModelBrowser } from "@/components/
 import { resolveModelBrowserScrolling } from "@/components/model-browser-view";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
-import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
+import {
+  resolveProviderIconId,
+  type ProviderSelectorProvider,
+} from "@/provider-selection/provider-selection";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   TOOLBAR_GLYPH_SIZES,
@@ -259,7 +262,7 @@ export function CombinedModelSelector({
           {selectedProvider.trim().length > 0 ? (
             <View style={toolbar ? styles.toolbarGlyph : styles.glyph}>
               <ModelProviderGlyph
-                provider={selectedProvider}
+                provider={resolveProviderIconId(providers, selectedProvider)}
                 serverId={serverId}
                 size={toolbar?.glyph.size ?? ICON_SIZE.md}
                 strokeWidth={toolbar?.glyph.strokeWidth}
