@@ -15,6 +15,7 @@ import {
 } from "./opencode-agent.js";
 import { streamSession } from "./test-utils/session-stream-adapter.js";
 import {
+  idleEvent,
   TestOpenCodeClient,
   TestOpenCodeHarness,
 } from "./opencode/test-utils/test-opencode-harness.js";
@@ -150,6 +151,22 @@ async function collectTurnEvents(iterator: AsyncGenerator<AgentStreamEvent>): Pr
   }
 
   return result;
+}
+
+/** Pulls the stream forward without ending the turn, unlike breaking a for-await. */
+async function nextEventMatching(
+  iterator: AsyncGenerator<AgentStreamEvent>,
+  predicate: (event: AgentStreamEvent) => boolean,
+): Promise<AgentStreamEvent> {
+  for (;;) {
+    const next = await iterator.next();
+    if (next.done) {
+      throw new Error("Turn stream ended before a matching event arrived");
+    }
+    if (predicate(next.value)) {
+      return next.value;
+    }
+  }
 }
 
 function providerAssistantMessages(events: AgentStreamEvent[], text: string): AgentStreamEvent[] {
@@ -533,6 +550,53 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       });
 
       await session.setModel?.("selected-provider/selected-model");
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: "selected-provider/selected-model",
+      });
+    } finally {
+      await session.close();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps the running turn's observed model until the turn ends", async () => {
+    const cwd = tmpCwd();
+    const runtime = new TestOpenCodeHarness();
+    const openCode = new TestOpenCodeClient();
+    // No session.idle here: the turn keeps running while the selection changes.
+    openCode.sessionPromptAsyncEvents = assistantMessageEvents({
+      model: {
+        providerID: "runtime-provider",
+        modelID: "runtime-model",
+      },
+    });
+    runtime.enqueueClient(openCode);
+    const client = new OpenCodeAgentClient(logger, undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+    const session = await client.createSession(buildConfig(cwd));
+
+    try {
+      const turn = streamSession(session, "Observe the runtime model");
+      await nextEventMatching(
+        turn,
+        (event) => event.type === "timeline" && event.item.type === "assistant_message",
+      );
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: "runtime-provider/runtime-model",
+      });
+
+      await session.setModel?.("selected-provider/selected-model");
+
+      // The running turn is still on the model OpenCode reported for it.
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: "runtime-provider/runtime-model",
+      });
+
+      openCode.emitEvent(idleEvent());
+      await nextEventMatching(turn, (event) => event.type === "turn_completed");
+
       await expect(session.getRuntimeInfo()).resolves.toMatchObject({
         model: "selected-provider/selected-model",
       });
