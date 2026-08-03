@@ -2345,6 +2345,12 @@ export const ar: TranslationResources = {
         color: {
           label: "اللون",
           accessibilityLabel: "اللون، {{value}}",
+          custom: {
+            action: "مخصص…",
+            title: "لون مخصص",
+            submit: "تطبيق",
+            invalid: "أدخل لونًا سداسيًا مثل #368080.",
+          },
           options: {
             none: "افتراضي",
             violet: "بنفسجي",
