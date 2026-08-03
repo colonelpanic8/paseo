@@ -243,6 +243,21 @@ describe("shouldSubmitShellVariable", () => {
     ).toBe(true);
   });
 
+  it("protects shell variables when the dollar sigil is the command trigger", () => {
+    expect(
+      shouldSubmitShellVariable({
+        key: "Enter",
+        command: { ...shellVariable, menu: "command" },
+      }),
+    ).toBe(true);
+    expect(
+      shouldSubmitShellVariable({
+        key: "Tab",
+        command: { ...shellVariable, menu: "command" },
+      }),
+    ).toBe(false);
+  });
+
   it("allows explicit selection and ordinary configured triggers", () => {
     expect(shouldSubmitShellVariable({ key: "Tab", command: shellVariable })).toBe(false);
     expect(
