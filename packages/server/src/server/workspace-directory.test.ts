@@ -79,13 +79,7 @@ class WorkspaceStatus {
       workspaceRegistry: { list: async () => this.workspaces },
       getBucketHistory: () => this.daemonBucketHistory,
       listAgentPayloads: async () => this.agents,
-      listAgentActivityAt: async () =>
-        new Map(
-          this.agents.map(
-            (agent) =>
-              [agent.id, this.agentActivityAtOverrides.get(agent.id) ?? agent.updatedAt] as const,
-          ),
-        ),
+      listAgentActivityAt: async () => new Map(this.agentActivityAtOverrides),
       listProviderSubagentActivity: async () => this.providerSubagents,
       listTerminalActivityContributions: async () => this.terminals,
       isProviderVisibleToClient: () => true,
@@ -645,6 +639,8 @@ describe("WorkspaceDirectory", () => {
       id: "opened-agent",
       status: "idle",
       updatedAt: "2026-06-01T10:05:00.000Z",
+      requiresAttention: true,
+      attentionTimestamp: "2026-06-01T10:06:00.000Z",
     });
     workspace.hasAgentActivityAt("opened-agent", "2026-06-01T09:30:00.000Z");
 

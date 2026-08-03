@@ -4116,11 +4116,19 @@ export class Session {
 
   private async listAgentActivityAt(): Promise<ReadonlyMap<string, string>> {
     const records = await this.agentStorage.list();
-    const activityAtByAgentId = new Map(
-      records.map((record) => [record.id, record.lastActivityAt ?? record.updatedAt] as const),
-    );
+    const activityAtByAgentId = new Map<string, string>();
+    for (const record of records) {
+      const lastMessageAt = record.lastMessageAt ?? record.lastUserMessageAt;
+      if (lastMessageAt) {
+        activityAtByAgentId.set(record.id, lastMessageAt);
+      }
+    }
     for (const agent of this.agentManager.listAgents()) {
-      activityAtByAgentId.set(agent.id, (agent.lastActivityAt ?? agent.updatedAt).toISOString());
+      if (agent.lastMessageAt) {
+        activityAtByAgentId.set(agent.id, agent.lastMessageAt.toISOString());
+      } else {
+        activityAtByAgentId.delete(agent.id);
+      }
     }
     return activityAtByAgentId;
   }
