@@ -1,4 +1,12 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -17,6 +25,8 @@ const MODEL_ROW_STRIDE = 44;
 const MODEL_VIEWPORT_VISIBLE_ROWS = 4.5;
 const FIXED_MODEL_VIEWPORT_HEIGHT =
   MODEL_LIST_TOP_INSET + MODEL_ROW_STRIDE * MODEL_VIEWPORT_VISIBLE_ROWS;
+
+function noop() {}
 
 interface CompactModelSheetProps {
   providers: ProviderSelectorProvider[];
@@ -68,12 +78,23 @@ export function CompactModelSheet({
   const usesBottomSheet = useIsCompactFormFactor();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isOpen = controlledOpen ?? uncontrolledOpen;
+  // useModelBrowser needs the select handler up front, while closing the sheet
+  // needs the browser's reset(). A ref breaks that cycle.
+  const closeRef = useRef<() => void>(noop);
+  const handleSelect = useCallback(
+    (provider: string, modelId: string) => {
+      onSelect(provider, modelId);
+      closeRef.current();
+    },
+    [onSelect],
+  );
   const browser = useModelBrowser({
     providers,
     selectedProvider,
     selectedModel,
     isLoading,
     favoriteKeys,
+    onSelect: handleSelect,
     serverId,
   });
   const { prepareToOpen, reset } = browser;
@@ -116,13 +137,9 @@ export function CompactModelSheet({
     onClose?.();
   }, [isOpen, onClose, onOpen, prepareToOpen, reset]);
 
-  const handleSelect = useCallback(
-    (provider: string, modelId: string) => {
-      onSelect(provider, modelId);
-      close();
-    },
-    [close, onSelect],
-  );
+  useEffect(() => {
+    closeRef.current = close;
+  }, [close]);
 
   const toggle = useCallback(() => {
     if (isOpen) {
@@ -178,6 +195,7 @@ export function CompactModelSheet({
         footer={compactFooter}
         footerContainerStyle={usesBottomSheet ? styles.compactFooterContainer : undefined}
         contentStyle={styles.sheetBody}
+        onOverlayKeyDown={browser.handleOverlayKeyDown}
         testID="agent-controls-model-sheet"
       >
         <View
@@ -189,7 +207,6 @@ export function CompactModelSheet({
         >
           <ModelBrowser
             state={browser}
-            onSelect={handleSelect}
             onToggleFavorite={onToggleFavorite}
             onRetryProvider={onRetryProvider}
             isRetryingProvider={isRetryingProvider}
