@@ -3397,6 +3397,7 @@ class OpenCodeAgentSession implements AgentSession {
   private readonly unrelatedSessionIds = new Set<string>();
   private selectedModelContextWindowMaxTokens: number | undefined;
   private observedModel: string | undefined;
+  private pendingObservedModelReset = false;
   private releaseServer: (() => Promise<void>) | null;
   private releaseBridge: (() => void) | null;
   private ingress = Promise.resolve();
@@ -3475,10 +3476,28 @@ class OpenCodeAgentSession implements AgentSession {
     this.config.model = normalizedModelId ?? undefined;
     // The observation predates this selection; without a reset, `observed ?? config`
     // would keep reporting the old model until the next assistant message re-observes it.
-    this.observedModel = undefined;
+    // A running turn keeps the model it started with, so defer the reset until it
+    // ends rather than relabeling that turn with a selection it never used.
+    if (this.activeForegroundTurnId) {
+      this.pendingObservedModelReset = true;
+    } else {
+      this.observedModel = undefined;
+    }
     this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
       this.config.model,
     );
+  }
+
+  /**
+   * Drops an observation the mid-turn selection invalidated. A model the finished
+   * turn observed after that selection belongs to the old turn too, so it goes here.
+   */
+  private applyPendingObservedModelReset(): void {
+    if (!this.pendingObservedModelReset) {
+      return;
+    }
+    this.pendingObservedModelReset = false;
+    this.observedModel = undefined;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
@@ -4614,6 +4633,7 @@ class OpenCodeAgentSession implements AgentSession {
     this.pendingSteerSubmissions = [];
     this.turnState = { status: "idle" };
     this.abortController = null;
+    this.applyPendingObservedModelReset();
     this.notifySubscribers(event, turnId);
   }
 
@@ -4705,6 +4725,7 @@ class OpenCodeAgentSession implements AgentSession {
     const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
     this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
     this.turnState = { status: "idle" };
+    this.applyPendingObservedModelReset();
     stop.terminal.resolve();
   }
 

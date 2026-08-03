@@ -1179,6 +1179,164 @@ describe("ClaudeAgentSession features", () => {
     await session.close();
   });
 
+  test("keeps the running turn's observed model until the turn ends", async () => {
+    const { queryFactory } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "claude-opus-4-8",
+    });
+    const observed = session as unknown as TestClaudeSession;
+
+    await session.startTurn("hello");
+
+    observed.translateMessageToEvents({
+      type: "assistant",
+      effort: "low",
+      message: {
+        id: "assistant-in-flight",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Running." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-in-flight-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-opus-4-6",
+      thinkingOptionId: "low",
+    });
+
+    await session.setModel?.("claude-sonnet-5");
+
+    // The selection applies next turn, so the running turn keeps reporting the
+    // model and effort Claude actually ran it at.
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-opus-4-6",
+      thinkingOptionId: "low",
+    });
+
+    // A frame that lands after the selection still describes the old turn.
+    observed.translateMessageToEvents({
+      type: "assistant",
+      effort: "medium",
+      message: {
+        id: "assistant-late",
+        role: "assistant",
+        model: "claude-sonnet-4-5-20250929",
+        content: [{ type: "text", text: "Still running." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-late-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-sonnet-4-5-20250929",
+      thinkingOptionId: "medium",
+    });
+
+    await session.interrupt();
+
+    // With the turn over, the selection wins over everything it observed.
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ model: "claude-sonnet-5" });
+    await expect(session.getRuntimeInfo()).resolves.not.toHaveProperty("thinkingOptionId");
+
+    await session.close();
+  });
+
+  test("keeps the running turn's observed effort until the turn ends", async () => {
+    const { queryFactory } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "claude-opus-4-8",
+    });
+    const observed = session as unknown as TestClaudeSession;
+
+    await session.startTurn("hello");
+
+    observed.translateMessageToEvents({
+      type: "assistant",
+      effort: "low",
+      message: {
+        id: "assistant-effort-in-flight",
+        role: "assistant",
+        model: "claude-opus-4-8-20260101",
+        content: [{ type: "text", text: "Running." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-effort-in-flight-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+
+    await expect(session.setThinkingOption?.("high")).resolves.toEqual({
+      type: "warning",
+      message: "Thinking level applies next turn",
+    });
+
+    // The notice says next turn, so this turn keeps reporting the level it ran at.
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ thinkingOptionId: "low" });
+
+    await session.interrupt();
+
+    await expect(session.getRuntimeInfo()).resolves.not.toHaveProperty("thinkingOptionId");
+
+    await session.close();
+  });
+
+  test("clears observed runtime values immediately when no turn is running", async () => {
+    const { queryFactory } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "claude-opus-4-8",
+    });
+    const observed = session as unknown as TestClaudeSession;
+
+    observed.translateMessageToEvents({
+      type: "assistant",
+      effort: "low",
+      message: {
+        id: "assistant-between-turns",
+        role: "assistant",
+        model: "claude-opus-4-6-20260101",
+        content: [{ type: "text", text: "Earlier turn." }],
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+      uuid: "assistant-between-turns-event",
+      session_id: "session-1",
+    } as unknown as SDKMessage);
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "claude-opus-4-6",
+      thinkingOptionId: "low",
+    });
+
+    await session.setModel?.("claude-sonnet-5");
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ model: "claude-sonnet-5" });
+    await expect(session.getRuntimeInfo()).resolves.not.toHaveProperty("thinkingOptionId");
+
+    await session.close();
+  });
+
   test("toggles fast mode on the active query without restarting it", async () => {
     const { queryFactory, queryMock } = createQueryMock();
     const client = new ClaudeAgentClient({
