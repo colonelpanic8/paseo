@@ -35,15 +35,22 @@ function contributionLabel(contribution: CommandCenterContribution): string | nu
 }
 
 export function buildCommandShortcutSettingsRows(
-  contributions: readonly CommandCenterContribution[],
+  catalog: readonly CommandCenterContribution[],
+  activeContributions: readonly CommandCenterContribution[],
   overrides: Readonly<Record<string, string>>,
 ): CommandShortcutSettingsRow[] {
   const contributionsByShortcutId = new Map<string, CommandCenterContribution[]>();
-  for (const contribution of contributions) {
+  for (const contribution of catalog) {
     if (!contribution.shortcutId || !getGroup(contribution.shortcutId)) continue;
     const matches = contributionsByShortcutId.get(contribution.shortcutId) ?? [];
     matches.push(contribution);
     contributionsByShortcutId.set(contribution.shortcutId, matches);
+  }
+
+  const activeCounts = new Map<string, number>();
+  for (const contribution of activeContributions) {
+    if (!contribution.shortcutId) continue;
+    activeCounts.set(contribution.shortcutId, (activeCounts.get(contribution.shortcutId) ?? 0) + 1);
   }
 
   const shortcutIds = new Set(contributionsByShortcutId.keys());
@@ -56,7 +63,7 @@ export function buildCommandShortcutSettingsRows(
     const group = getGroup(shortcutId);
     if (!group) return [];
     const matches = contributionsByShortcutId.get(shortcutId) ?? [];
-    const available = matches.length === 1;
+    const available = activeCounts.get(shortcutId) === 1;
     const bindingId = getCommandShortcutBindingId(shortcutId);
     return [
       {
@@ -64,7 +71,8 @@ export function buildCommandShortcutSettingsRows(
         bindingId,
         group,
         label:
-          (available ? contributionLabel(matches[0]) : null) ?? fallbackLabel(shortcutId, group),
+          (matches.length === 1 ? contributionLabel(matches[0]) : null) ??
+          fallbackLabel(shortcutId, group),
         combo: overrides[bindingId],
         available,
       },
