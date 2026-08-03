@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Archive, GitPullRequest, Globe, SquareTerminal } from "lucide-react-native";
+import { Archive, GitPullRequest, Globe, Server, SquareTerminal } from "lucide-react-native";
 import { DiffStat } from "@/components/diff-stat";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -18,13 +18,13 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
 import { formatClockTime, formatCompactRelativeTime } from "@/utils/time";
 import { getHostColorTextStyle } from "@/styles/host-color";
-import { HostBadge } from "@/components/sidebar/host-badge";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isNative, isWeb } from "@/constants/platform";
 import type { PrHint } from "@/git/use-pr-status-query";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { identityColor } from "@/styles/identity-colors";
 
 type SidebarWorkspaceScriptIconKind = "service" | "command";
 
@@ -53,6 +53,7 @@ const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedGlobe = withUnistyles(Globe);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
+const ThemedServer = withUnistyles(Server);
 
 function DynamicProviderIcon({
   provider,
@@ -322,12 +323,16 @@ function StatusRowDetailLine({
 function StatusRowHostIdentity({ hostBadge }: { hostBadge: HostBadgeModel }) {
   if (!hostBadge.showLabel) {
     return (
-      <HostBadge
-        serverId={hostBadge.serverId}
-        label={hostBadge.label}
-        color={hostBadge.color}
-        showLabel={false}
-      />
+      <View
+        accessibilityLabel={hostBadge.label}
+        testID={`sidebar-host-badge-${hostBadge.serverId}`}
+      >
+        {hostBadge.color === "none" ? (
+          <ThemedServer size={12} uniProps={foregroundMutedColorMapping} />
+        ) : (
+          <Server size={12} color={identityColor(hostBadge.color)} />
+        )}
+      </View>
     );
   }
   return (
@@ -416,8 +421,7 @@ function StatusRowLeadingVisual({
         iconDataUri={iconDataUri}
         initial={workspace.projectName.charAt(0).toUpperCase()}
         projectViewKey={workspace.projectViewKey}
-        imageStyle={styles.projectIcon}
-        fallbackStyle={styles.projectIconFallback}
+        size={PROJECT_ICON_SIZE}
         textStyle={styles.projectIconFallbackText}
       />
       {showRunningIndicator ? (
@@ -510,18 +514,6 @@ const styles = StyleSheet.create((theme) => ({
     width: PROJECT_ICON_SIZE,
     height: PROJECT_ICON_SIZE,
     flexShrink: 0,
-  },
-  projectIcon: {
-    width: "100%",
-    height: "100%",
-    borderRadius: theme.borderRadius.md,
-  },
-  projectIconFallback: {
-    width: "100%",
-    height: "100%",
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
   },
   projectIconFallbackText: {
     fontSize: theme.fontSize.xs,
