@@ -2327,6 +2327,9 @@ export const es: TranslationResources = {
             title: "Color personalizado",
             submit: "Aplicar",
             invalid: "Introduce un color hexadecimal como #368080.",
+            panelAccessibility: "Saturación y brillo",
+            hueAccessibility: "Tono",
+            hexAccessibility: "Color hexadecimal",
           },
           options: {
             none: "Predeterminado",
