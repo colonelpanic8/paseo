@@ -119,6 +119,7 @@ export async function fanOutReconciledWorkspaceUpdates(input: {
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createGitHubService } from "../services/github-service.js";
+import { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import { createPaseoWorktreeWorkflow } from "./worktree-session.js";
@@ -1639,6 +1640,10 @@ export async function createPaseoDaemon(
               hubRelationships,
               workspaceSetupRuntime,
               pluginRuntime,
+              new ProviderUsageService({
+                logger,
+                providerConfigs: daemonConfigStore.get().providers,
+              }),
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();

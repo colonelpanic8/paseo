@@ -647,6 +647,7 @@ export class VoiceAssistantWebSocketServer {
     hubRelationships?: HubRelationshipManagement | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
     pluginRuntime?: SessionOptions["pluginRuntime"],
+    providerUsageService?: ProviderUsageService,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -704,6 +705,8 @@ export class VoiceAssistantWebSocketServer {
       this.speech?.onReadinessChange((snapshot) => {
         this.publishSpeechReadiness(snapshot);
       }) ?? null;
+    this.providerUsageService =
+      providerUsageService ?? new ProviderUsageService({ logger: this.logger });
     const unsubscribeProviderConfig = attachMutableProviderConfigOwner({
       store: this.daemonConfigStore,
       providerSnapshotManager: this.providerSnapshotManager,
@@ -729,11 +732,6 @@ export class VoiceAssistantWebSocketServer {
       void this.broadcastAgentAttention(params).catch((err) => {
         this.logger.warn({ err, agentId: params.agentId }, "Failed to broadcast agent attention");
       });
-    });
-
-    this.providerUsageService = new ProviderUsageService({
-      logger: this.logger,
-      providerConfigs: this.daemonConfigStore.get().providers,
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
