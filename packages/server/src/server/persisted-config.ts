@@ -1,7 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import { PluginRegistriesSchema } from "@getpaseo/protocol/plugin-registry";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 
 import {
@@ -240,6 +242,9 @@ export const PersistedConfigSchema = z
     // v1 schema marker
     version: z.literal(1).optional(),
 
+    imports: z.array(z.string().min(1)).optional(),
+    writeTo: z.string().min(1).optional(),
+
     // v1 config layout
     daemon: z
       .object({
@@ -378,6 +383,27 @@ export type PersistedConfig = Omit<PersistedConfigSchemaOutput, "agents"> & {
   };
 };
 
+export interface ConfigStructuralKeys {
+  $schema?: string;
+  version?: 1;
+  imports?: string[];
+  writeTo?: string;
+}
+
+export interface ConfigLayer {
+  path: string;
+  body: PersistedConfig;
+  structural: ConfigStructuralKeys;
+  raw: string;
+}
+
+export interface ConfigStack {
+  rootPath: string;
+  layers: ConfigLayer[];
+  writeTargetPath: string;
+  effective: PersistedConfig;
+}
+
 const CONFIG_FILENAME = "config.json";
 const DEFAULT_PERSISTED_CONFIG = PersistedConfigSchema.parse({
   version: 1,
@@ -402,11 +428,30 @@ interface LoggerLike {
 }
 
 function getConfigPath(paseoHome: string): string {
-  return path.join(paseoHome, CONFIG_FILENAME);
+  return path.resolve(paseoHome, CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
   return logger?.child({ module: "config" });
+}
+
+export function deepMerge<T extends Record<string, unknown>>(
+  current: T,
+  patch: Record<string, unknown>,
+): T {
+  const next: Record<string, unknown> = { ...current };
+
+  for (const [key, patchValue] of Object.entries(patch)) {
+    if (patchValue === undefined) continue;
+    const currentValue = next[key];
+    if (isConfigRecord(currentValue) && isConfigRecord(patchValue)) {
+      next[key] = deepMerge(currentValue, patchValue);
+      continue;
+    }
+    next[key] = patchValue;
+  }
+
+  return next as T;
 }
 
 function isConfigRecord(value: unknown): value is Record<string, unknown> {
@@ -499,74 +544,25 @@ function warnDiscardedSpeechKeys(
   }
 }
 
-export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
-  const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
-
-  if (!existsSync(configPath)) {
-    try {
-      writePrivateFileAtomicSync(
-        configPath,
-        JSON.stringify(DEFAULT_PERSISTED_CONFIG, null, 2) + "\n",
-      );
-      log?.info(`Initialized config file at ${configPath}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`[Config] Failed to initialize ${configPath}: ${message}`, { cause: err });
-    }
-  }
-
-  let raw: string;
-  try {
-    ensurePrivateFile(configPath);
-    raw = readFileSync(configPath, "utf-8");
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`[Config] Failed to read ${configPath}: ${message}`, {
-      cause: err,
-    });
-  }
-
-  const config = parseConfigFile(configPath, raw, log);
-  log?.info(`Loaded from ${configPath}`);
-  return config;
+function formatValidationIssues(error: z.ZodError): string {
+  return error.issues.map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`).join("\n");
 }
 
-/** Runtime config IO. Startup and offline CLI consumers retain their synchronous entry points. */
-export async function loadPersistedConfigAsync(
-  paseoHome: string,
-  logger?: LoggerLike,
-): Promise<PersistedConfig> {
-  const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
-  let raw: string;
-  await ensurePrivateFileAsync(configPath);
-  try {
-    raw = await readFile(configPath, "utf-8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw new Error(
-        `[Config] Failed to read ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
-    }
-    try {
-      raw = JSON.stringify(DEFAULT_PERSISTED_CONFIG, null, 2) + "\n";
-      await writePrivateFileAtomic(configPath, raw);
-      log?.info(`Initialized config file at ${configPath}`);
-    } catch (initializationError) {
-      throw new Error(
-        `[Config] Failed to initialize ${configPath}: ${initializationError instanceof Error ? initializationError.message : String(initializationError)}`,
-        { cause: initializationError },
-      );
-    }
-  }
-  const config = parseConfigFile(configPath, raw, log);
-  log?.info(`Loaded from ${configPath}`);
-  return config;
+function splitConfig(config: PersistedConfigSchemaOutput): {
+  structural: ConfigStructuralKeys;
+  body: PersistedConfig;
+} {
+  const { $schema, version, imports, writeTo, ...body } = config;
+  const structural: ConfigStructuralKeys = {};
+  if ($schema !== undefined) structural.$schema = $schema;
+  if (version !== undefined) structural.version = version;
+  if (imports !== undefined) structural.imports = imports;
+  if (writeTo !== undefined) structural.writeTo = writeTo;
+  const jsonBody = JSON.parse(JSON.stringify(body)) as PersistedConfig;
+  return { structural, body: jsonBody };
 }
 
-/** Observe the file without initializing a home, identity, or default configuration. */
+/** Observe one config file without initializing a home or default configuration. */
 export function readPersistedConfig(
   paseoHome: string,
   options: { defaultsIfMissing?: boolean } = {},
@@ -580,28 +576,433 @@ export function readPersistedConfig(
       return options.defaultsIfMissing ? structuredClone(DEFAULT_PERSISTED_CONFIG) : {};
     throw error;
   }
-  return parseConfigFile(configPath, raw);
+  return parseConfigFile(raw, configPath).body;
 }
 
-function parseConfigFile(configPath: string, raw: string, logger?: LoggerLike): PersistedConfig {
+function parseConfigFile(
+  raw: string,
+  configPath: string,
+  logger?: LoggerLike,
+): Omit<ConfigLayer, "path" | "raw"> {
   let parsed: unknown;
   try {
     parsed = parseConfigText(raw);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`[Config] Invalid JSON in ${configPath}: ${message}`, {
-      cause: err,
-    });
+    throw new Error(`[Config] Invalid JSON in ${configPath}: ${message}`, { cause: err });
   }
 
   const result = PersistedConfigSchema.safeParse(normalizeSpeechProviderConfig(parsed, logger));
   if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
-      .join("\n");
-    throw new Error(`[Config] Invalid config in ${configPath}:\n${issues}`);
+    throw new Error(
+      `[Config] Invalid config in ${configPath}:\n${formatValidationIssues(result.error)}`,
+    );
   }
-  return result.data as PersistedConfig;
+  return splitConfig(result.data);
+}
+
+function resolveConfigReference(configPath: string, reference: string): string {
+  const expanded = reference.startsWith("~/")
+    ? path.join(homedir(), reference.slice(2))
+    : reference;
+  return path.resolve(path.dirname(configPath), expanded);
+}
+
+type ConfigIoRequest =
+  | { kind: "exists"; path: string }
+  | { kind: "realpath"; path: string }
+  | { kind: "read"; path: string; ensurePrivate: boolean }
+  | { kind: "write"; path: string; data: string };
+
+/** Config file IO as data, so one implementation serves startup (sync) and runtime (async) callers. */
+type ConfigIo<T> = Generator<ConfigIoRequest, T, unknown>;
+
+function* configFileExists(filePath: string): ConfigIo<boolean> {
+  return (yield { kind: "exists", path: filePath }) as boolean;
+}
+
+function* resolveConfigRealpath(filePath: string): ConfigIo<string> {
+  return (yield { kind: "realpath", path: filePath }) as string;
+}
+
+function* readConfigFile(filePath: string, ensurePrivate: boolean): ConfigIo<string> {
+  return (yield { kind: "read", path: filePath, ensurePrivate }) as string;
+}
+
+function* writeConfigText(filePath: string, data: string): ConfigIo<void> {
+  yield { kind: "write", path: filePath, data };
+}
+
+function performConfigIoSync(request: ConfigIoRequest): unknown {
+  switch (request.kind) {
+    case "exists":
+      return existsSync(request.path);
+    case "realpath":
+      return realpathSync(request.path);
+    case "read":
+      if (request.ensurePrivate) ensurePrivateFile(request.path);
+      return readFileSync(request.path, "utf-8");
+    case "write":
+      return writePrivateFileAtomicSync(request.path, request.data);
+  }
+}
+
+async function performConfigIo(request: ConfigIoRequest): Promise<unknown> {
+  switch (request.kind) {
+    case "exists":
+      return access(request.path).then(
+        () => true,
+        () => false,
+      );
+    case "realpath":
+      return realpath(request.path);
+    case "read":
+      if (request.ensurePrivate) await ensurePrivateFileAsync(request.path);
+      return readFile(request.path, "utf-8");
+    case "write":
+      return writePrivateFileAtomic(request.path, request.data);
+  }
+}
+
+function runConfigIoSync<T>(io: ConfigIo<T>): T {
+  let step = io.next();
+  while (!step.done) {
+    let result: unknown;
+    try {
+      result = performConfigIoSync(step.value);
+    } catch (error) {
+      step = io.throw(error);
+      continue;
+    }
+    step = io.next(result);
+  }
+  return step.value;
+}
+
+async function runConfigIo<T>(io: ConfigIo<T>): Promise<T> {
+  let step = io.next();
+  while (!step.done) {
+    let result: unknown;
+    try {
+      result = await performConfigIo(step.value);
+    } catch (error) {
+      step = io.throw(error);
+      continue;
+    }
+    step = io.next(result);
+  }
+  return step.value;
+}
+
+interface LoadLayerParams {
+  requestedPath: string;
+  importingPath?: string;
+  ancestry: string[];
+  isRoot: boolean;
+  logger?: LoggerLike;
+}
+
+function* loadLayer(
+  params: LoadLayerParams,
+): ConfigIo<{ layer: ConfigLayer; layers: ConfigLayer[] }> {
+  const requestedPath = path.resolve(params.requestedPath);
+  if (!(yield* configFileExists(requestedPath))) {
+    if (params.importingPath) {
+      throw new Error(
+        `[Config] Import ${requestedPath} referenced by ${params.importingPath} does not exist`,
+      );
+    }
+    throw new Error(`[Config] Failed to read ${requestedPath}: file does not exist`);
+  }
+  let configPath: string;
+  try {
+    configPath = yield* resolveConfigRealpath(requestedPath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[Config] Failed to resolve ${requestedPath}: ${message}`, { cause: err });
+  }
+
+  const cycleStart = params.ancestry.indexOf(configPath);
+  if (cycleStart !== -1) {
+    const cycle = [...params.ancestry.slice(cycleStart), configPath].join(" -> ");
+    throw new Error(`[Config] Config import cycle: ${cycle}`);
+  }
+
+  let raw: string;
+  try {
+    raw = yield* readConfigFile(configPath, params.isRoot);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[Config] Failed to read ${configPath}: ${message}`, { cause: err });
+  }
+
+  const parsed = parseConfigFile(raw, configPath, params.logger);
+  if (!params.isRoot && parsed.structural.writeTo !== undefined) {
+    throw new Error(
+      `[Config] Invalid config in ${configPath}:\n  - writeTo: writeTo is only allowed in the root config file`,
+    );
+  }
+
+  const layer: ConfigLayer = { path: configPath, raw, ...parsed };
+  const ancestry = [...params.ancestry, configPath];
+  const layers: ConfigLayer[] = [];
+  for (const importedPath of layer.structural.imports ?? []) {
+    const imported = yield* loadLayer({
+      requestedPath: resolveConfigReference(configPath, importedPath),
+      importingPath: configPath,
+      ancestry,
+      isRoot: false,
+      logger: params.logger,
+    });
+    layers.push(...imported.layers);
+  }
+  layers.push(layer);
+  return { layer, layers };
+}
+
+function validateEffectiveConfig(config: PersistedConfig, context: string): PersistedConfig {
+  const result = PersistedConfigSchema.safeParse(config);
+  if (!result.success) {
+    throw new Error(`[Config] Invalid ${context}:\n${formatValidationIssues(result.error)}`);
+  }
+  return splitConfig(result.data).body;
+}
+
+function mergeLayers(layers: readonly ConfigLayer[], writeTarget?: ConfigLayer): PersistedConfig {
+  let effective: PersistedConfig = {};
+  for (const layer of layers) {
+    const body = writeTarget && layer.path === writeTarget.path ? writeTarget.body : layer.body;
+    effective = deepMerge(effective, body);
+  }
+  return effective;
+}
+
+function* initializeRootConfig(configPath: string, logger?: LoggerLike): ConfigIo<void> {
+  try {
+    yield* writeConfigText(configPath, JSON.stringify(DEFAULT_PERSISTED_CONFIG, null, 2) + "\n");
+    logger?.info(`Initialized config file at ${configPath}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[Config] Failed to initialize ${configPath}: ${message}`, { cause: err });
+  }
+}
+
+function* readConfigStack(paseoHome: string, logger?: LoggerLike): ConfigIo<ConfigStack> {
+  const log = getLogger(logger);
+  const requestedRootPath = getConfigPath(paseoHome);
+  if (!(yield* configFileExists(requestedRootPath))) {
+    yield* initializeRootConfig(requestedRootPath, log);
+  }
+
+  const loaded = yield* loadLayer({
+    requestedPath: requestedRootPath,
+    ancestry: [],
+    isRoot: true,
+    logger: log,
+  });
+  const rootPath = loaded.layer.path;
+  const effective = validateEffectiveConfig(mergeLayers(loaded.layers), "merged config");
+
+  const writeTo = loaded.layer.structural.writeTo;
+  const requestedWriteTarget = writeTo ? resolveConfigReference(rootPath, writeTo) : rootPath;
+  const resolvedWriteTarget = (yield* configFileExists(requestedWriteTarget))
+    ? yield* resolveConfigRealpath(requestedWriteTarget)
+    : requestedWriteTarget;
+  const writeTarget = loaded.layers.find((layer) => layer.path === resolvedWriteTarget);
+  if (!writeTarget) {
+    throw new Error(
+      `[Config] writeTo in ${rootPath} resolves to ${requestedWriteTarget}, which is not the root config or an imported file`,
+    );
+  }
+
+  log?.info(`Loaded from ${rootPath}`);
+  return {
+    rootPath,
+    layers: loaded.layers,
+    writeTargetPath: writeTarget.path,
+    effective,
+  };
+}
+
+export function loadConfigStack(paseoHome: string, logger?: LoggerLike): ConfigStack {
+  return runConfigIoSync(readConfigStack(paseoHome, logger));
+}
+
+export function loadConfigStackAsync(paseoHome: string, logger?: LoggerLike): Promise<ConfigStack> {
+  return runConfigIo(readConfigStack(paseoHome, logger));
+}
+
+export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
+  return loadConfigStack(paseoHome, logger).effective;
+}
+
+/** Runtime config IO. Startup and offline CLI consumers retain their synchronous entry points. */
+export async function loadPersistedConfigAsync(
+  paseoHome: string,
+  logger?: LoggerLike,
+): Promise<PersistedConfig> {
+  return (await loadConfigStackAsync(paseoHome, logger)).effective;
+}
+
+function deepDiff(
+  desired: Record<string, unknown>,
+  otherLayers: Record<string, unknown>,
+): Record<string, unknown> {
+  const diff: Record<string, unknown> = {};
+  for (const [key, desiredValue] of Object.entries(desired)) {
+    const otherValue = otherLayers[key];
+    if (isDeepStrictEqual(desiredValue, otherValue)) continue;
+    if (isConfigRecord(desiredValue) && isConfigRecord(otherValue)) {
+      const nested = deepDiff(desiredValue, otherValue);
+      if (Object.keys(nested).length > 0) diff[key] = nested;
+      continue;
+    }
+    diff[key] = desiredValue;
+  }
+  return diff;
+}
+
+function collectDifferentPaths(desired: unknown, actual: unknown, prefix: string[] = []): string[] {
+  if (isDeepStrictEqual(desired, actual)) return [];
+  if (!isConfigRecord(desired) || !isConfigRecord(actual)) return [prefix.join(".")];
+
+  const paths: string[] = [];
+  const keys = new Set([...Object.keys(desired), ...Object.keys(actual)]);
+  for (const key of keys) {
+    const nextPrefix = [...prefix, key];
+    const desiredHasKey = Object.hasOwn(desired, key);
+    const actualHasKey = Object.hasOwn(actual, key);
+    if (!desiredHasKey || !actualHasKey) {
+      paths.push(nextPrefix.join("."));
+      continue;
+    }
+    paths.push(...collectDifferentPaths(desired[key], actual[key], nextPrefix));
+  }
+  return paths;
+}
+
+function definesPath(config: PersistedConfig, fieldPath: string): boolean {
+  let current: unknown = config;
+  for (const segment of fieldPath.split(".")) {
+    if (!isConfigRecord(current) || !Object.hasOwn(current, segment)) return false;
+    current = current[segment];
+  }
+  return true;
+}
+
+function findShadowingLayer(stack: ConfigStack, fieldPath: string): ConfigLayer | undefined {
+  for (let index = stack.layers.length - 1; index >= 0; index -= 1) {
+    const layer = stack.layers[index];
+    if (layer.path !== stack.writeTargetPath && definesPath(layer.body, fieldPath)) return layer;
+  }
+  return undefined;
+}
+
+function validateConfigToSave(config: PersistedConfig): PersistedConfigSchemaOutput {
+  const result = PersistedConfigSchema.safeParse(config);
+  if (!result.success) {
+    throw new Error(`[Config] Invalid config to save:\n${formatValidationIssues(result.error)}`);
+  }
+  return result.data;
+}
+
+function* writeConfigFile(
+  configPath: string,
+  config: PersistedConfigSchemaOutput,
+  logger?: LoggerLike,
+): ConfigIo<void> {
+  try {
+    yield* writeConfigText(configPath, JSON.stringify(config, null, 2) + "\n");
+    logger?.info(`Saved to ${configPath}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[Config] Failed to write ${configPath}: ${message}`, { cause: err });
+  }
+}
+
+function* writeConfigStack(
+  stack: ConfigStack,
+  config: PersistedConfig,
+  logger?: LoggerLike,
+): ConfigIo<void> {
+  const desired = splitConfig(validateConfigToSave(config)).body;
+  const writeTarget = stack.layers.find((layer) => layer.path === stack.writeTargetPath);
+  if (!writeTarget) {
+    throw new Error(`[Config] Writable config file ${stack.writeTargetPath} is not in the stack`);
+  }
+
+  const otherLayers = stack.layers.filter((layer) => layer.path !== stack.writeTargetPath);
+  const otherEffective = mergeLayers(otherLayers);
+  const candidateBody = deepDiff(desired, otherEffective) as PersistedConfig;
+  const candidateConfig = validateConfigToSave({
+    ...writeTarget.structural,
+    ...candidateBody,
+  });
+  const candidateLayer: ConfigLayer = {
+    ...writeTarget,
+    body: splitConfig(candidateConfig).body,
+  };
+  const simulated = validateEffectiveConfig(
+    mergeLayers(stack.layers, candidateLayer),
+    "merged config",
+  );
+
+  if (!isDeepStrictEqual(simulated, desired)) {
+    const fieldPaths = collectDifferentPaths(desired, simulated);
+    const issues = fieldPaths.map((fieldPath) => {
+      const shadowingLayer = findShadowingLayer(stack, fieldPath);
+      if (!shadowingLayer) {
+        return `${fieldPath} cannot be represented by the writable config file.`;
+      }
+      return `${fieldPath} is defined in ${shadowingLayer.path}, which overrides the writable config file. Change it there instead.`;
+    });
+    throw new Error(`[Config] Cannot save config:\n  - ${issues.join("\n  - ")}`);
+  }
+
+  yield* writeConfigFile(stack.writeTargetPath, candidateConfig, getLogger(logger));
+}
+
+export function saveConfigStack(
+  stack: ConfigStack,
+  config: PersistedConfig,
+  logger?: LoggerLike,
+): void {
+  runConfigIoSync(writeConfigStack(stack, config, logger));
+}
+
+export function saveConfigStackAsync(
+  stack: ConfigStack,
+  config: PersistedConfig,
+  logger?: LoggerLike,
+): Promise<void> {
+  return runConfigIo(writeConfigStack(stack, config, logger));
+}
+
+function* restoreWriteTarget(stack: ConfigStack, logger?: LoggerLike): ConfigIo<void> {
+  const writeTarget = stack.layers.find((layer) => layer.path === stack.writeTargetPath);
+  if (!writeTarget) {
+    throw new Error(`[Config] Writable config file ${stack.writeTargetPath} is not in the stack`);
+  }
+  try {
+    yield* writeConfigText(stack.writeTargetPath, writeTarget.raw);
+    getLogger(logger)?.info(`Restored ${stack.writeTargetPath}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[Config] Failed to restore ${stack.writeTargetPath}: ${message}`, {
+      cause: err,
+    });
+  }
+}
+
+export function restoreConfigWriteTarget(stack: ConfigStack, logger?: LoggerLike): void {
+  runConfigIoSync(restoreWriteTarget(stack, logger));
+}
+
+export function restoreConfigWriteTargetAsync(
+  stack: ConfigStack,
+  logger?: LoggerLike,
+): Promise<void> {
+  return runConfigIo(restoreWriteTarget(stack, logger));
 }
 
 /** Editors such as Windows Notepad save UTF-8 with a byte order mark, which JSON.parse rejects. */
@@ -677,53 +1078,31 @@ export function editPersistedConfig(
   return config;
 }
 
+function* writePersistedConfig(
+  paseoHome: string,
+  config: PersistedConfig,
+  logger?: LoggerLike,
+): ConfigIo<void> {
+  const configPath = getConfigPath(paseoHome);
+  if (!(yield* configFileExists(configPath))) {
+    yield* writeConfigFile(configPath, validateConfigToSave(config), getLogger(logger));
+    return;
+  }
+  yield* writeConfigStack(yield* readConfigStack(paseoHome, logger), config, logger);
+}
+
 export function savePersistedConfig(
   paseoHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
 ): void {
-  const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
-
-  const data = serializePersistedConfig(config);
-
-  try {
-    writePrivateFileAtomicSync(configPath, data);
-    log?.info(`Saved to ${configPath}`);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`[Config] Failed to write ${configPath}: ${message}`, {
-      cause: err,
-    });
-  }
+  runConfigIoSync(writePersistedConfig(paseoHome, config, logger));
 }
 
-function serializePersistedConfig(config: PersistedConfig): string {
-  const result = PersistedConfigSchema.safeParse(config);
-  if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
-      .join("\n");
-    throw new Error(`[Config] Invalid config to save:\n${issues}`);
-  }
-
-  return JSON.stringify(result.data, null, 2) + "\n";
-}
-
-export async function savePersistedConfigAsync(
+export function savePersistedConfigAsync(
   paseoHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
 ): Promise<void> {
-  const configPath = getConfigPath(paseoHome);
-  const data = serializePersistedConfig(config);
-  try {
-    await writePrivateFileAtomic(configPath, data);
-    getLogger(logger)?.info(`Saved to ${configPath}`);
-  } catch (error) {
-    throw new Error(
-      `[Config] Failed to write ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
-  }
+  return runConfigIo(writePersistedConfig(paseoHome, config, logger));
 }

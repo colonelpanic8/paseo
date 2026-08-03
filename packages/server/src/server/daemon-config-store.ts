@@ -1,7 +1,11 @@
 import {
+  deepMerge,
   loadPersistedConfig,
-  savePersistedConfigAsync,
   loadPersistedConfigAsync,
+  loadConfigStackAsync,
+  restoreConfigWriteTargetAsync,
+  saveConfigStackAsync,
+  type ConfigStack,
   type PersistedConfig,
 } from "./persisted-config.js";
 import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
@@ -85,27 +89,6 @@ function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function deepMerge<T extends Record<string, unknown>>(
-  current: T,
-  patch: Record<string, unknown>,
-): T {
-  const next: Record<string, unknown> = { ...current };
-
-  for (const [key, patchValue] of Object.entries(patch)) {
-    if (patchValue === undefined) {
-      continue;
-    }
-    const currentValue = next[key];
-    if (isRecord(currentValue) && isRecord(patchValue)) {
-      next[key] = deepMerge(currentValue, patchValue);
-      continue;
-    }
-    next[key] = patchValue;
-  }
-
-  return next as T;
 }
 
 function omitProvidersFromConfig<T extends { providers?: Record<string, unknown> }>(
@@ -441,7 +424,7 @@ export class DaemonConfigStore {
       return this.current;
     }
 
-    const { previous: persistedBeforePatch, knownNext } = await this.persistConfig(
+    const { previous: stackBeforePatch, knownNext } = await this.persistConfig(
       patch,
       removedProviders,
     );
@@ -450,7 +433,7 @@ export class DaemonConfigStore {
       try {
         this.applyReplacement(next, { removedProviders });
       } catch (error) {
-        await savePersistedConfigAsync(this.paseoHome, persistedBeforePatch, this.logger);
+        await restoreConfigWriteTargetAsync(stackBeforePatch, this.logger);
         throw error;
       }
     }
@@ -668,8 +651,8 @@ export class DaemonConfigStore {
   private async persistConfig(
     patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
     removeProviders: readonly string[],
-  ): Promise<{ previous: PersistedConfig; knownNext: PersistedConfig }> {
-    const persisted = await loadPersistedConfigAsync(this.paseoHome, this.logger);
+  ): Promise<{ previous: ConfigStack; knownNext: PersistedConfig }> {
+    const stack = await loadConfigStackAsync(this.paseoHome, this.logger);
     const merge = (source: PersistedConfig) =>
       mergeMutablePatchIntoPersistedConfig({
         persisted: source,
@@ -677,10 +660,10 @@ export class DaemonConfigStore {
         removeProviders,
         persistRelayEnabled: this.relayEnabledMutable,
       });
-    const nextPersisted = merge(persisted);
+    const nextPersisted = merge(stack.effective);
     const knownNext = merge(this.lastKnownPersisted);
-    await savePersistedConfigAsync(this.paseoHome, nextPersisted, this.logger);
-    return { previous: persisted, knownNext };
+    await saveConfigStackAsync(stack, nextPersisted, this.logger);
+    return { previous: stack, knownNext };
   }
 }
 
