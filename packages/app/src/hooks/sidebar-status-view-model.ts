@@ -51,7 +51,7 @@ export function buildStatusGroups(
     const rows = bucketRows.get(bucket);
     if (!rows || rows.length === 0) continue;
 
-    rows.sort((a, b) => compareStatusRows(a, b, projectNamesByViewKey));
+    rows.sort((a, b) => compareStatusRows(a, b, bucket, projectNamesByViewKey));
     groups.push({ bucket, label: STATUS_BUCKET_LABELS[bucket], rows });
   }
 
@@ -61,10 +61,11 @@ export function buildStatusGroups(
 function compareStatusRows(
   a: SidebarWorkspaceEntry,
   b: SidebarWorkspaceEntry,
+  bucket: StatusBucket,
   projectNamesByViewKey: Map<string, string>,
 ): number {
-  const aTime = a.activityAt?.getTime() ?? null;
-  const bTime = b.activityAt?.getTime() ?? null;
+  const aTime = resolveStatusSortTime(a, bucket);
+  const bTime = resolveStatusSortTime(b, bucket);
 
   if (aTime !== null && bTime !== null) {
     if (aTime !== bTime) return bTime - aTime;
@@ -83,6 +84,17 @@ function compareStatusRows(
   if (nameCmp !== 0) return nameCmp;
 
   return a.workspaceKey.localeCompare(b.workspaceKey);
+}
+
+function resolveStatusSortTime(
+  workspace: SidebarWorkspaceEntry,
+  bucket: StatusBucket,
+): number | null {
+  const timestamp =
+    bucket === "running"
+      ? (workspace.lastUserMessageAt ?? workspace.activityAt)
+      : workspace.activityAt;
+  return timestamp?.getTime() ?? null;
 }
 
 export function buildStatusShortcutIndex(groups: StatusGroup[]): Map<string, number> {

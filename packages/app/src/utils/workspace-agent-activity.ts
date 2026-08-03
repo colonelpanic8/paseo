@@ -8,6 +8,7 @@ export interface WorkspaceAgentActivity {
   agentId: string;
   status: WorkspaceDescriptor["status"];
   enteredAt: Date | null;
+  lastUserMessageAt: Date | null;
   /**
    * Distinct providers with a live root agent in the workspace, ordered by each
    * provider's most recent activity, descending. `providers[0]` is the provider
@@ -22,6 +23,7 @@ export function buildWorkspaceAgentActivityIndex(
 ): Map<string, WorkspaceAgentActivity> {
   const activityByWorkspaceId = new Map<string, WorkspaceAgentActivity>();
   const latestActivityAtByWorkspaceId = new Map<string, Date>();
+  const lastUserMessageAtByWorkspaceId = new Map<string, Date>();
   // Providers are collected for every live root agent, not just the recency
   // winner, so the row can show one icon per provider working in the workspace.
   const providerActivityByWorkspaceId = new Map<string, Map<string, number>>();
@@ -31,6 +33,12 @@ export function buildWorkspaceAgentActivityIndex(
     if (agent.archivedAt || !agent.workspaceId || !isWorkspaceRootAgent(agent, parentAgent)) {
       continue;
     }
+
+    recordLastUserMessageAt({
+      lastUserMessageAtByWorkspaceId,
+      workspaceId: agent.workspaceId,
+      lastUserMessageAt: agent.lastUserMessageAt,
+    });
 
     const enteredAt = agent.attentionTimestamp ?? agent.updatedAt;
     recordProviderActivity({
@@ -57,6 +65,7 @@ export function buildWorkspaceAgentActivityIndex(
       agentId: agent.id,
       status,
       enteredAt,
+      lastUserMessageAt: null,
       providers: EMPTY_WORKSPACE_PROVIDERS,
     });
   }
@@ -72,22 +81,47 @@ export function buildWorkspaceAgentActivityIndex(
       previousActivity && areProviderListsEqual(previousActivity.providers, orderedProviders)
         ? previousActivity.providers
         : orderedProviders;
-
-    if (
-      previousActivity?.agentId === activity.agentId &&
-      previousActivity.status === activity.status &&
-      previousActivity.providers === providers
-    ) {
+    const lastUserMessageAt = lastUserMessageAtByWorkspaceId.get(workspaceId) ?? null;
+    const nextActivity = { ...activity, lastUserMessageAt, providers };
+    if (previousActivity && areWorkspaceAgentActivitiesEqual(previousActivity, nextActivity)) {
       activityByWorkspaceId.set(workspaceId, previousActivity);
       continue;
     }
-    activityByWorkspaceId.set(workspaceId, { ...activity, providers });
+    activityByWorkspaceId.set(workspaceId, nextActivity);
   }
 
   if (previous && areWorkspaceAgentActivityIndexesIdentical(previous, activityByWorkspaceId)) {
     return previous instanceof Map ? previous : new Map(previous);
   }
   return activityByWorkspaceId;
+}
+
+interface LastUserMessageInput {
+  lastUserMessageAtByWorkspaceId: Map<string, Date>;
+  workspaceId: string;
+  lastUserMessageAt: Date | null;
+}
+
+function recordLastUserMessageAt(input: LastUserMessageInput): void {
+  if (!input.lastUserMessageAt) {
+    return;
+  }
+  const latestUserMessageAt = input.lastUserMessageAtByWorkspaceId.get(input.workspaceId);
+  if (!latestUserMessageAt || input.lastUserMessageAt > latestUserMessageAt) {
+    input.lastUserMessageAtByWorkspaceId.set(input.workspaceId, input.lastUserMessageAt);
+  }
+}
+
+function areWorkspaceAgentActivitiesEqual(
+  left: WorkspaceAgentActivity,
+  right: WorkspaceAgentActivity,
+): boolean {
+  return (
+    left.agentId === right.agentId &&
+    left.status === right.status &&
+    left.lastUserMessageAt?.getTime() === right.lastUserMessageAt?.getTime() &&
+    left.providers === right.providers
+  );
 }
 
 function recordProviderActivity(input: {

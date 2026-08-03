@@ -26,6 +26,7 @@ function ws(
     currentBranch: input.currentBranch ?? null,
     statusBucket: input.statusBucket ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
+    lastUserMessageAt: input.lastUserMessageAt ?? null,
     activityAt: input.activityAt ?? null,
     archivingAt: null,
     diffStat: null,
@@ -99,6 +100,54 @@ describe("buildStatusGroups", () => {
     const groups = buildStatusGroups(workspaces, emptyProjectNames);
 
     expect(groups[0]?.rows.map((r) => r.workspaceKey)).toEqual(["srv:new", "srv:mid", "srv:old"]);
+  });
+
+  it("keeps working rows ordered by their last user message as agent activity advances", () => {
+    const workspaces = [
+      ws({
+        workspaceKey: "srv:first-prompt",
+        statusBucket: "running",
+        lastUserMessageAt: d("2026-06-01T10:00:00Z"),
+        activityAt: d("2026-06-01T10:05:00Z"),
+      }),
+      ws({
+        workspaceKey: "srv:latest-prompt",
+        statusBucket: "running",
+        lastUserMessageAt: d("2026-06-01T10:02:00Z"),
+        activityAt: d("2026-06-01T10:03:00Z"),
+      }),
+    ];
+
+    const groups = buildStatusGroups(workspaces, emptyProjectNames);
+
+    expect(groups[0]?.rows.map((row) => row.workspaceKey)).toEqual([
+      "srv:latest-prompt",
+      "srv:first-prompt",
+    ]);
+  });
+
+  it("keeps non-working rows ordered by activity instead of the last user message", () => {
+    const workspaces = [
+      ws({
+        workspaceKey: "srv:latest-prompt",
+        statusBucket: "done",
+        lastUserMessageAt: d("2026-06-01T10:02:00Z"),
+        activityAt: d("2026-06-01T10:03:00Z"),
+      }),
+      ws({
+        workspaceKey: "srv:latest-activity",
+        statusBucket: "done",
+        lastUserMessageAt: d("2026-06-01T10:00:00Z"),
+        activityAt: d("2026-06-01T10:05:00Z"),
+      }),
+    ];
+
+    const groups = buildStatusGroups(workspaces, emptyProjectNames);
+
+    expect(groups[0]?.rows.map((row) => row.workspaceKey)).toEqual([
+      "srv:latest-activity",
+      "srv:latest-prompt",
+    ]);
   });
 
   it("sorts null timestamps last within a bucket", () => {
