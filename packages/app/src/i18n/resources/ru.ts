@@ -2164,13 +2164,16 @@ export const ru: TranslationResources = {
       actions: {
         menu: "{{name}} actions",
         addAccount: "Добавить аккаунт",
+        editAccount: "Изменить аккаунт",
         remove: "Remove provider",
         removing: "Removing...",
       },
       account: {
         title: "Добавить аккаунт {{provider}}",
-        errorTitle: "Не удалось добавить аккаунт",
+        editTitle: "Изменить аккаунт {{provider}}",
+        errorTitle: "Не удалось сохранить аккаунт",
         submit: "Добавить аккаунт",
+        save: "Сохранить изменения",
         fields: {
           label: "Название",
           providerId: "ID провайдера",
