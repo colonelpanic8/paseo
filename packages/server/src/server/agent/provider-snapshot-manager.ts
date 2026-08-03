@@ -113,6 +113,7 @@ interface ProviderSnapshotReadOptions {
 
 interface ApplyMutableProviderConfigOptions {
   removeProviders?: readonly string[];
+  replaceProviders?: readonly string[];
 }
 
 interface ProviderSnapshotProviderOptions {
@@ -392,10 +393,10 @@ export class ProviderSnapshotManager {
     mutableProviders: MutableDaemonConfig["providers"] | undefined,
     options: ApplyMutableProviderConfigOptions = {},
   ): AgentManagerProviderState {
-    this.baseProviderOverrides = omitProviderOverrides(
-      this.baseProviderOverrides,
-      options.removeProviders ?? [],
-    );
+    this.baseProviderOverrides = omitProviderOverrides(this.baseProviderOverrides, [
+      ...(options.removeProviders ?? []),
+      ...(options.replaceProviders ?? []),
+    ]);
     this.providerOverrides = applyMutableProviderConfigToOverrides(
       this.baseProviderOverrides,
       mutableProviders,

@@ -76,6 +76,7 @@ interface CodexAuthRecord {
 interface CodexQuotaProviderOptions {
   logger: Logger;
   codexHome?: string;
+  includeDefaultAuthPaths?: boolean;
   fetch?: ProviderApiFetch;
 }
 
@@ -94,10 +95,12 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
   readonly displayName = "Codex";
 
   private readonly codexHome: string;
+  private readonly includeDefaultAuthPaths: boolean;
   private readonly fetchApi: ProviderApiFetch;
 
   constructor(options: CodexQuotaProviderOptions) {
     this.codexHome = options.codexHome || process.env["CODEX_HOME"] || join(homedir(), ".codex");
+    this.includeDefaultAuthPaths = options.includeDefaultAuthPaths ?? true;
     this.fetchApi = options.fetch ?? fetch;
   }
 
@@ -196,8 +199,10 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
 
   private async readCodexAuth(): Promise<CodexAuthRecord | null> {
     const candidates = [
-      ...(process.env["CODEX_HOME"] ? [join(process.env["CODEX_HOME"], "auth.json")] : []),
-      join(homedir(), ".config", "codex", "auth.json"),
+      ...(this.includeDefaultAuthPaths && process.env["CODEX_HOME"]
+        ? [join(process.env["CODEX_HOME"], "auth.json")]
+        : []),
+      ...(this.includeDefaultAuthPaths ? [join(homedir(), ".config", "codex", "auth.json")] : []),
       join(this.codexHome, "auth.json"),
     ];
     for (const path of candidates) {
