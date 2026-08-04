@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { createPaseoDaemon, formatListenTarget } from "./bootstrap.js";
 import { loadConfig } from "./config.js";
+import { resolveDaemonLogPath } from "./daemon-log-path.js";
 import { resolvePaseoHome } from "./paseo-home.js";
 import { createRootLogger } from "./logger.js";
 import type { DaemonLifecycleIntent } from "./bootstrap.js";
@@ -42,12 +43,11 @@ function isPidAlive(pid: number): boolean {
 }
 
 function writeWorkerLifecycleLog(
-  paseoHome: string,
+  logPath: string,
   message: string,
   fields: Record<string, unknown> = {},
 ): void {
   try {
-    const logPath = path.join(paseoHome, "daemon.log");
     mkdirSync(path.dirname(logPath), { recursive: true });
     appendFileSync(
       logPath,
@@ -129,6 +129,7 @@ function applyCliFlagOverrides(config: ReturnType<typeof loadConfig>): void {
 
 async function main() {
   const { paseoHome, logger, config } = bootstrapFromEnvironment();
+  const workerLogPath = resolveDaemonLogPath(paseoHome, { log: config.log });
   let daemon: Awaited<ReturnType<typeof createPaseoDaemon>> | null = null;
   let shutdownPromise: Promise<number> | null = null;
   let exitHookInstalled = false;
@@ -252,7 +253,7 @@ async function main() {
       }
       supervisorExitRequested = true;
 
-      writeWorkerLifecycleLog(paseoHome, "Supervisor liveness lost; worker exiting", {
+      writeWorkerLifecycleLog(workerLogPath, "Supervisor liveness lost; worker exiting", {
         reason,
         ...getProcessDiagnostics(),
         supervisorPid,
