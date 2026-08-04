@@ -239,7 +239,8 @@ async function readAppSettings(
     };
   }
 
-  return { settings: DEFAULT_CLIENT_SETTINGS, needsWrite: true };
+  // Persisted defaults would shadow a seed layer that supplies its own values.
+  return { settings: DEFAULT_CLIENT_SETTINGS, needsWrite: false };
 }
 
 export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Settings> {
