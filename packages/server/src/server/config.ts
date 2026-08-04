@@ -543,8 +543,15 @@ function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) 
   };
 }
 
-function resolveAgentPurposeSummariesEnabled(env: NodeJS.ProcessEnv): boolean {
-  return parseBooleanEnv(env.PASEO_AGENT_PURPOSE_SUMMARIES) ?? true;
+function resolveAgentPurposeSummariesEnabled(
+  env: NodeJS.ProcessEnv,
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): boolean {
+  return (
+    parseBooleanEnv(env.PASEO_AGENT_PURPOSE_SUMMARIES) ??
+    persisted.features?.agentPurposeSummaries?.enabled ??
+    true
+  );
 }
 
 function resolveStaticLoadConfigSettings(
@@ -632,7 +639,7 @@ export function resolveConfigFromPersisted(
     paseoHome,
     desktopManaged: env.PASEO_DESKTOP_MANAGED === "1",
     worktreesRoot: resolveWorktreesRoot(paseoHome, persisted),
-    agentPurposeSummariesEnabled: resolveAgentPurposeSummariesEnabled(env),
+    agentPurposeSummariesEnabled: resolveAgentPurposeSummariesEnabled(env, persisted),
     pluginRegistries: persisted.pluginRegistries,
     pluginRegistryUrl: env.PASEO_PLUGIN_REGISTRY,
     mcpDebug: env.MCP_DEBUG === "1",
