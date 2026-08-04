@@ -928,7 +928,6 @@ export const ru: TranslationResources = {
       show: {
         label: "Показывать",
         host: "Хост",
-        alwaysShowHost: "Всегда показывать хост",
         changeRequest: "Pull request",
         checks: "Проверки",
         scripts: "Скрипты",
@@ -1855,6 +1854,14 @@ export const ru: TranslationResources = {
           claude: "Клод",
           ghostty: "Призрачный",
           auto: "Система",
+        },
+      },
+      sidebar: {
+        title: "Боковая панель",
+        alwaysShowHostLabels: {
+          title: "Всегда показывать метки хоста",
+          description:
+            "Показывает метки хоста, даже когда все видимые рабочие области находятся на этом устройстве",
         },
       },
       detailLevel: {

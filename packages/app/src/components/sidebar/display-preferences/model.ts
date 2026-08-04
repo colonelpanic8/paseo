@@ -5,12 +5,7 @@ import {
   type WorkspaceTitleSource,
 } from "@/hooks/use-settings";
 import { useSidebarViewStore, type SidebarGroupMode } from "@/stores/sidebar-view-store";
-import {
-  DEFAULT_SIDEBAR_ROW_ITEMS,
-  resolveHostPair,
-  type SidebarRowItem,
-  type SidebarRowItems,
-} from "./row-items";
+import { DEFAULT_SIDEBAR_ROW_ITEMS, type SidebarRowItem, type SidebarRowItems } from "./row-items";
 
 /** The trailing slot holds one thing, so these are a choice rather than toggles. */
 export type SidebarTrailingChoice = Exclude<SidebarWorkspaceTrailing, "none">;
@@ -22,12 +17,6 @@ export interface SidebarDisplayPreferences {
   setTitleSource: (source: WorkspaceTitleSource) => void;
   rowItems: SidebarRowItems;
   toggleRowItem: (item: SidebarRowItem) => void;
-  alwaysShowHostLabels: boolean;
-  /**
-   * Overrides the automatic "only once the sidebar spans more than one host" policy. Kept in
-   * step with the host row item so the pair can never sit ticked while nothing is drawn.
-   */
-  toggleAlwaysShowHostLabels: () => void;
   trailing: SidebarWorkspaceTrailing;
   /** Picking the choice that is already showing clears the slot. */
   toggleTrailing: (choice: SidebarTrailingChoice) => void;
@@ -52,12 +41,7 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
   const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
 
   const {
-    settings: {
-      workspaceTitleSource,
-      sidebarWorkspaceTrailing,
-      sidebarRowItems,
-      alwaysShowHostLabels,
-    },
+    settings: { workspaceTitleSource, sidebarWorkspaceTrailing, sidebarRowItems },
     updateSettings,
   } = useAppSettings();
 
@@ -68,22 +52,13 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
     [updateSettings],
   );
 
-  const flipHostPair = useCallback(
-    (flipped: SidebarRowItem | "alwaysShowHostLabels") => {
-      const next = resolveHostPair({ rowItems: sidebarRowItems, alwaysShowHostLabels }, flipped);
+  const toggleRowItem = useCallback(
+    (item: SidebarRowItem) => {
       void updateSettings({
-        sidebarRowItems: next.rowItems,
-        alwaysShowHostLabels: next.alwaysShowHostLabels,
+        sidebarRowItems: { ...sidebarRowItems, [item]: !sidebarRowItems[item] },
       });
     },
-    [updateSettings, sidebarRowItems, alwaysShowHostLabels],
-  );
-
-  const toggleRowItem = useCallback((item: SidebarRowItem) => flipHostPair(item), [flipHostPair]);
-
-  const toggleAlwaysShowHostLabels = useCallback(
-    () => flipHostPair("alwaysShowHostLabels"),
-    [flipHostPair],
+    [updateSettings, sidebarRowItems],
   );
 
   const toggleTrailing = useCallback(
@@ -103,8 +78,6 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       setTitleSource,
       rowItems: sidebarRowItems,
       toggleRowItem,
-      alwaysShowHostLabels,
-      toggleAlwaysShowHostLabels,
       trailing: sidebarWorkspaceTrailing,
       toggleTrailing,
       hostFilters,
@@ -118,8 +91,6 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       setTitleSource,
       sidebarRowItems,
       toggleRowItem,
-      alwaysShowHostLabels,
-      toggleAlwaysShowHostLabels,
       sidebarWorkspaceTrailing,
       toggleTrailing,
       hostFilters,

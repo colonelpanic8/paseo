@@ -1057,7 +1057,6 @@ export const zhCN: TranslationResources = {
         branch: "分支",
         project: "项目",
         host: "主机",
-        alwaysShowHost: "始终显示 Host",
         changeRequest: "拉取请求",
         checks: "检查",
         services: "服务",
@@ -2085,6 +2084,13 @@ export const zhCN: TranslationResources = {
           ghostty: "Ghostty",
           pureBlack: "纯黑",
           auto: "系统",
+        },
+      },
+      sidebar: {
+        title: "侧边栏",
+        alwaysShowHostLabels: {
+          title: "始终显示主机标签",
+          description: "即使所有可见工作区都在此设备上，也显示主机标签",
         },
       },
       detailLevel: {

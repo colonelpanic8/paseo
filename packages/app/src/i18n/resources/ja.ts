@@ -1076,7 +1076,6 @@ export const ja: TranslationResources = {
         branch: "ブランチ",
         project: "プロジェクト",
         host: "ホスト",
-        alwaysShowHost: "ホストを常に表示",
         changeRequest: "プルリクエスト",
         checks: "チェック",
         services: "サービス",
@@ -2126,6 +2125,14 @@ export const ja: TranslationResources = {
           ghostty: "Ghostty",
           pureBlack: "ピュアブラック",
           auto: "システム",
+        },
+      },
+      sidebar: {
+        title: "サイドバー",
+        alwaysShowHostLabels: {
+          title: "ホストラベルを常に表示",
+          description:
+            "表示中のすべてのワークスペースがこのデバイス上にある場合もホストラベルを表示します",
         },
       },
       detailLevel: {

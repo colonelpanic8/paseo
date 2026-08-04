@@ -1090,7 +1090,6 @@ export const ptBR: TranslationResources = {
         branch: "Branch",
         project: "Projeto",
         host: "Host",
-        alwaysShowHost: "Sempre mostrar o host",
         changeRequest: "Pull request",
         checks: "Verificações",
         services: "Serviços",
@@ -2143,6 +2142,14 @@ export const ptBR: TranslationResources = {
           ghostty: "Ghostty",
           pureBlack: "Preto puro",
           auto: "Sistema",
+        },
+      },
+      sidebar: {
+        title: "Barra lateral",
+        alwaysShowHostLabels: {
+          title: "Sempre mostrar rótulos do host",
+          description:
+            "Mostra os rótulos do host mesmo quando todos os espaços de trabalho visíveis estão neste dispositivo",
         },
       },
       detailLevel: {
