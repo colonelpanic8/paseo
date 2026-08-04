@@ -14,6 +14,7 @@ import {
   CircleDashed,
   Clock,
   Diff,
+  Eye,
   Folder,
   GitBranch,
   GitPullRequest,
@@ -43,6 +44,7 @@ import { SIDEBAR_ROW_ITEMS, type SidebarRowItem } from "./row-items";
 const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const ThemedSettings2 = withUnistyles(Settings2);
+const ThemedEye = withUnistyles(Eye);
 
 /** Fits the item's 16pt leading slot with a hair of room, matching the trailing check. */
 const OPTION_ICON_SIZE = 14;
@@ -296,9 +298,9 @@ function OptionList<Value extends string>({
 }
 
 /**
- * Two groups, split by the separator. Above it, what a row may say about a workspace. Below it,
- * the one thing the slot to the right of the title holds, so picking the one already showing
- * empties the slot and gives the width back to the title.
+ * Two groups, split by the separator. Above it, what a row may say about a workspace, with a
+ * shortcut to its client-wide host-label policy. Below it, the one thing the slot to the right of
+ * the title holds, so picking the one already showing empties the slot and gives the width back.
  */
 function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
   const { t } = useTranslation();
@@ -315,6 +317,17 @@ function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
             onSelect={preferences.toggleRowItem}
             testID={`sidebar-row-item-${item}`}
           />
+          {item === "host" ? (
+            <OptionItem
+              value="alwaysShowHost"
+              icon={ThemedEye}
+              label={t("settings.appearance.sidebar.alwaysShowHostLabels.title")}
+              selected={preferences.alwaysShowHostLabels}
+              closeOnSelect={false}
+              onSelect={preferences.toggleAlwaysShowHostLabels}
+              testID="sidebar-always-show-host-labels"
+            />
+          ) : null}
         </Fragment>
       ))}
       <MenuSeparator />
