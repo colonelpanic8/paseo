@@ -34,9 +34,18 @@ function contributionLabel(contribution: CommandCenterContribution): string | nu
   return contribution.presentation.path.slice(1).join(" · ");
 }
 
+function shortcutTargetId(shortcutId: string, group: CommandShortcutSettingsGroup): string {
+  const target = shortcutId.slice(group.length + 1);
+  if (group === "thinking") return target;
+  const separator = target.indexOf(":");
+  return separator < 0 ? target : target.slice(separator + 1);
+}
+
+// Availability comes from the sticky catalog, not the live contribution set: the
+// settings route renders while the composer that registers agent-control
+// contributions is unmounted, so the live set is always empty there.
 export function buildCommandShortcutSettingsRows(
   catalog: readonly CommandCenterContribution[],
-  activeContributions: readonly CommandCenterContribution[],
   overrides: Readonly<Record<string, string>>,
 ): CommandShortcutSettingsRow[] {
   const contributionsByShortcutId = new Map<string, CommandCenterContribution[]>();
@@ -47,23 +56,16 @@ export function buildCommandShortcutSettingsRows(
     contributionsByShortcutId.set(contribution.shortcutId, matches);
   }
 
-  const activeCounts = new Map<string, number>();
-  for (const contribution of activeContributions) {
-    if (!contribution.shortcutId) continue;
-    activeCounts.set(contribution.shortcutId, (activeCounts.get(contribution.shortcutId) ?? 0) + 1);
-  }
-
   const shortcutIds = new Set(contributionsByShortcutId.keys());
   for (const bindingId of Object.keys(overrides)) {
     const shortcutId = getCommandShortcutIdFromBindingId(bindingId);
     if (shortcutId && getGroup(shortcutId)) shortcutIds.add(shortcutId);
   }
 
-  return [...shortcutIds].flatMap((shortcutId) => {
+  const rows = [...shortcutIds].flatMap((shortcutId) => {
     const group = getGroup(shortcutId);
     if (!group) return [];
     const matches = contributionsByShortcutId.get(shortcutId) ?? [];
-    const available = activeCounts.get(shortcutId) === 1;
     const bindingId = getCommandShortcutBindingId(shortcutId);
     return [
       {
@@ -74,8 +76,21 @@ export function buildCommandShortcutSettingsRows(
           (matches.length === 1 ? contributionLabel(matches[0]) : null) ??
           fallbackLabel(shortcutId, group),
         combo: overrides[bindingId],
-        available,
+        available: matches.length === 1,
       },
     ];
   });
+
+  // Distinct targets can share a display label (e.g. two codex models both
+  // labeled "GPT-5.6-Luna"); append the target id so the rows are tellable apart.
+  const labelCounts = new Map<string, number>();
+  for (const row of rows) {
+    const key = `${row.group}:${row.label}`;
+    labelCounts.set(key, (labelCounts.get(key) ?? 0) + 1);
+  }
+  for (const row of rows) {
+    if ((labelCounts.get(`${row.group}:${row.label}`) ?? 0) < 2) continue;
+    row.label = `${row.label} (${shortcutTargetId(row.shortcutId, row.group)})`;
+  }
+  return rows;
 }

@@ -241,13 +241,8 @@ export function KeyboardShortcutsSection() {
   const isDesktopApp = getIsElectronRuntime();
   const sections = buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp });
   const directShortcutRows = useMemo(
-    () =>
-      buildCommandShortcutSettingsRows(
-        commandCenterSnapshot.shortcutCatalog,
-        commandCenterSnapshot.contributions,
-        overrides,
-      ),
-    [commandCenterSnapshot.contributions, commandCenterSnapshot.shortcutCatalog, overrides],
+    () => buildCommandShortcutSettingsRows(commandCenterSnapshot.shortcutCatalog, overrides),
+    [commandCenterSnapshot.shortcutCatalog, overrides],
   );
   const directShortcutGroups = useMemo(
     () => [
