@@ -2726,17 +2726,27 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     },
   };
 
-  const resumed = await manager.resumeAgentFromPersistence(handle, {
-    cwd: workdir,
-    systemPrompt: "new prompt",
-    mcpServers: {
-      paseo: {
-        type: "stdio",
-        command: "node",
-        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
+  const lastMessageAt = new Date("2025-01-02T03:04:05.000Z");
+  const resumed = await manager.resumeAgentFromPersistence(
+    handle,
+    {
+      cwd: workdir,
+      systemPrompt: "new prompt",
+      mcpServers: {
+        paseo: {
+          type: "stdio",
+          command: "node",
+          args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
+        },
       },
     },
-  });
+    undefined,
+    {
+      createdAt: lastMessageAt,
+      updatedAt: lastMessageAt,
+      lastMessageAt,
+    },
+  );
 
   expect(resumed.config.systemPrompt).toBe("new prompt");
   expect(resumed.config.mcpServers).toEqual({
@@ -2765,6 +2775,8 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
       PASEO_AGENT_CWD: workdir,
     },
   });
+  expect(resumed.lastMessageAt).toEqual(lastMessageAt);
+  expect(resumed.updatedAt.getTime()).toBeGreaterThan(lastMessageAt.getTime());
 });
 
 test("importProviderSession imports the selected session without listing and publishes ready state", async () => {
@@ -2875,6 +2887,7 @@ test("importProviderSession imports the selected session without listing and pub
   });
   expect(imported.lifecycle).toBe("idle");
   expect(imported.historyPrimed).toBe(true);
+  expect(imported.lastMessageAt?.toISOString()).toBe("2026-01-02T00:00:01.000Z");
   expect(manager.getTimeline(imported.id)).toEqual([
     { type: "user_message", text: "Trace provider imports" },
     { type: "assistant_message", text: "Done" },
@@ -3938,6 +3951,13 @@ test("reloadAgentSession cancels active run and resumes existing session once th
   );
   expect(snapshot.persistence).toBeNull();
 
+  await manager.appendTimelineItem(snapshot.id, {
+    type: "user_message",
+    text: "earlier canonical message",
+  });
+  const messageTimestamp = manager.getAgent(snapshot.id)?.lastMessageAt;
+  expect(messageTimestamp).not.toBeNull();
+
   const stream = manager.streamAgent(snapshot.id, "hello");
   const first = await stream.next();
   expect(first.done).toBe(false);
@@ -3952,6 +3972,7 @@ test("reloadAgentSession cancels active run and resumes existing session once th
 
   const active = manager.getAgent(snapshot.id);
   expect(active?.lifecycle).toBe("running");
+  expect(active?.lastMessageAt).toEqual(messageTimestamp);
 
   const reloaded = await manager.reloadAgentSession(snapshot.id, {
     systemPrompt: "voice mode on",
@@ -3960,6 +3981,7 @@ test("reloadAgentSession cancels active run and resumes existing session once th
   expect(client.createSessionCalls).toBe(1);
   expect(client.resumeSessionCalls).toBe(1);
   expect(reloaded.persistence?.sessionId).toBe("delayed-session-1");
+  expect(reloaded.lastMessageAt).toEqual(messageTimestamp);
 
   // Drain stream after cancellation to ensure clean shutdown.
   while (true) {
@@ -8274,7 +8296,7 @@ test("hydrateTimeline keeps provider user_message items when no canonical user h
   expect(assistantMessages).toHaveLength(2);
 });
 
-test("hydrateTimeline preserves provider replay timestamps and marks missing ones untrusted", async () => {
+test("hydrateTimeline preserves provider replay timestamps without changing agent activity", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-history-timestamps-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -8339,6 +8361,7 @@ test("hydrateTimeline preserves provider replay timestamps and marks missing one
     item: { type: "user_message", text: "hello", messageId: "msg_history_1" },
   });
   expect(timeline[1]?.timestamp).toEqual(expect.any(String));
+  expect(manager.getAgent(snapshot.id)?.lastMessageAt).toEqual(snapshot.lastMessageAt);
 });
 
 test("provider user_message is recorded from the live stream", async () => {

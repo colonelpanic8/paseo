@@ -401,7 +401,7 @@ async function expectWorkspaceRowInStatusBucket(
   await page.getByTestId("sidebar-grouping-status").click();
   await expect(
     page
-      .getByTestId(`sidebar-status-group-rows-${input.bucket}`)
+      .getByTestId(`sidebar-status-row-${input.bucket}`)
       .getByTestId(`sidebar-workspace-row-${input.serverId}:${input.workspaceId}`),
   ).toBeVisible({ timeout: 30_000 });
 }
