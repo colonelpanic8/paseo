@@ -172,6 +172,7 @@ import type {
   BrowserAutomationExecuteRequest,
   BrowserAutomationExecuteResponse,
 } from "@getpaseo/protocol/browser-automation/rpc-schemas";
+import { encodeWebSocketBearerProtocol } from "@getpaseo/protocol/websocket-auth";
 import type {
   LiveVoiceJsonObject,
   VoiceLiveAgentNotification,
@@ -278,7 +279,9 @@ function chooseConnectionAuth(
   return {
     helloAuth,
     headers,
-    ...(compatibleBearer ? { protocols: [`paseo.bearer.${compatibleBearer}`] } : {}),
+    ...(!localCredential && password
+      ? { protocols: [encodeWebSocketBearerProtocol(password)] }
+      : {}),
   };
 }
 
@@ -1400,7 +1403,6 @@ export class DaemonClient {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
-
     try {
       const resolution = resolveConnectionAuth(this.config);
       const selected = resolution instanceof Promise ? await resolution : resolution;
