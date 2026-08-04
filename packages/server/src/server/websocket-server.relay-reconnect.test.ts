@@ -256,6 +256,7 @@ function createServer(options?: {
   logger?: ReturnType<typeof createLogger>;
   startPaused?: boolean;
   auth?: { password: string; localCredential: () => string | null };
+  worktreesRoot?: string;
 }) {
   const speechReadiness = options?.speechReadiness ?? null;
   const daemonConfigStore = {
@@ -331,6 +332,9 @@ function createServer(options?: {
     undefined,
     undefined,
     createProviderSnapshotManagerStub().manager,
+    options?.worktreesRoot
+      ? { listen: null, worktreesRoot: options.worktreesRoot, getRelayConfig: () => null }
+      : undefined,
   );
 }
 
@@ -1160,6 +1164,34 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.["terminal-grapheme-widths"]).toBe(true);
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
     expect(serverInfo.permissions).toEqual(DAEMON_PERMISSIONS);
+    await server.close();
+  });
+
+  test("reports the default worktrees root in initial server_info", async () => {
+    const server = createServer();
+    const socket = new MockSocket();
+
+    const serverInfo = await attachRelayAndHello({
+      server,
+      socket,
+      clientId: "cid-default-worktrees-root",
+    });
+
+    expect(serverInfo.worktreesRoot).toBe("/tmp/paseo-test/worktrees");
+    await server.close();
+  });
+
+  test("reports a configured worktrees root in initial server_info", async () => {
+    const server = createServer({ worktreesRoot: "/mnt/scratch/paseo-trees" });
+    const socket = new MockSocket();
+
+    const serverInfo = await attachRelayAndHello({
+      server,
+      socket,
+      clientId: "cid-custom-worktrees-root",
+    });
+
+    expect(serverInfo.worktreesRoot).toBe("/mnt/scratch/paseo-trees");
     await server.close();
   });
 
