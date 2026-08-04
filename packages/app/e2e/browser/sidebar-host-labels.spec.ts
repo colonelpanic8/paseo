@@ -1,5 +1,6 @@
 import { expect, test } from "../support/fixtures";
 import { gotoAppShell, openSettings } from "../support/helpers/app";
+import { openSidebarDisplayPreferences } from "../support/helpers/hosts";
 import { clickSettingsBackToWorkspace, openSettingsSection } from "../support/helpers/settings";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
@@ -26,6 +27,13 @@ test("always-show host labels is a client Appearance setting", async ({ page }) 
 
     await clickSettingsBackToWorkspace(page);
     await expect(hostBadge).toBeVisible();
+
+    await openSidebarDisplayPreferences(page);
+    const sidebarShortcut = page.getByTestId("sidebar-always-show-host-labels");
+    await expect(sidebarShortcut).toHaveAttribute("aria-checked", "true");
+    await sidebarShortcut.click();
+    await expect(sidebarShortcut).toHaveAttribute("aria-checked", "false");
+    await expect(hostBadge).toHaveCount(0);
   } finally {
     await workspace.cleanup();
   }
