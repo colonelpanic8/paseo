@@ -135,12 +135,15 @@ function toRootAgentTreeRow(agent: Agent): PaseoAgentTreeRow {
 
 /**
  * Mirrors how the subagents track names a row: the task it was given, then the
- * subagent type, then the provider's own compact context.
+ * subagent type, then the provider's own compact context. The task line and the
+ * compact context are provider-only — a managed agent has a real title, so it
+ * never carries either.
  */
 function resolveChildAgentTreeLabel(row: SubagentRow): string {
+  const providerDescription = row.kind === "provider" ? resolveRowLabel(row.description) : null;
   const providerSubtitle = row.kind === "provider" ? resolveRowLabel(row.subtitle) : null;
   return (
-    resolveRowLabel(row.description) ??
+    providerDescription ??
     resolveRowLabel(row.title) ??
     providerSubtitle ??
     formatProviderLabel(row.provider)
