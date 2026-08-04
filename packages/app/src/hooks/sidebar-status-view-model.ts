@@ -8,6 +8,7 @@ export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
   "attention",
   "running",
   "done",
+  "snoozed",
 ] as const;
 
 export const STATUS_BUCKET_LABELS: Record<StatusBucket, string> = {
@@ -16,6 +17,7 @@ export const STATUS_BUCKET_LABELS: Record<StatusBucket, string> = {
   attention: "Ready to review",
   running: "Working",
   done: "Done",
+  snoozed: "Snoozed",
 };
 
 export interface StatusGroup {
@@ -46,11 +48,36 @@ export function buildStatusGroups(
     const rows = bucketRows.get(bucket);
     if (!rows || rows.length === 0) continue;
 
-    rows.sort((a, b) => compareStatusRows(a, b, projectNamesByViewKey));
+    rows.sort((a, b) =>
+      bucket === "snoozed"
+        ? compareSnoozedRows(a, b, projectNamesByViewKey)
+        : compareStatusRows(a, b, projectNamesByViewKey),
+    );
     groups.push({ bucket, label: STATUS_BUCKET_LABELS[bucket], rows });
   }
 
   return groups;
+}
+
+// The Snoozed group orders by wake time ascending — the workspace that wakes
+// soonest sits on top. Rows without a wake time (shouldn't happen) sort last.
+function compareSnoozedRows(
+  a: SidebarWorkspaceEntry,
+  b: SidebarWorkspaceEntry,
+  projectNamesByViewKey: Map<string, string>,
+): number {
+  const aWake = a.snoozeWakeAt?.getTime() ?? null;
+  const bWake = b.snoozeWakeAt?.getTime() ?? null;
+
+  if (aWake !== null && bWake !== null) {
+    if (aWake !== bWake) return aWake - bWake;
+  } else if (aWake !== null) {
+    return -1;
+  } else if (bWake !== null) {
+    return 1;
+  }
+
+  return compareStatusRows(a, b, projectNamesByViewKey);
 }
 
 function compareStatusRows(
