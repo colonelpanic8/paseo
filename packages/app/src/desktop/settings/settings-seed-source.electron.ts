@@ -1,5 +1,5 @@
 import { invokeDesktopCommand } from "@/desktop/electron/invoke";
-import type { SettingsSeed } from "./types";
+import type { SettingsSeed } from "@/storage/settings-seed/types";
 
 /**
  * One IPC round-trip per page load. Editing the seed file takes effect on reload, which matches

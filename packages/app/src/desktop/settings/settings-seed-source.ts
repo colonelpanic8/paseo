@@ -1,4 +1,4 @@
-import type { SettingsSeed } from "./types";
+import type { SettingsSeed } from "@/storage/settings-seed/types";
 
 /**
  * Only the Electron desktop build has a seed file. iOS, Android and browser web have no
