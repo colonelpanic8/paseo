@@ -1805,7 +1805,12 @@ export class AgentManager {
     await this.drainSessionEvents(agentId);
 
     agent.config.model = normalizedModelId ?? undefined;
-    if (agent.runtimeInfo) {
+    // A model selection made during a turn applies to the next turn. Keep the
+    // runtime display on what the provider is actually running until this turn
+    // terminates; the provider session defers its observation reset for the
+    // same reason.
+    const hasActiveTurn = agent.activeTurnId !== null || agent.activeForegroundTurnId !== null;
+    if (agent.runtimeInfo && !hasActiveTurn) {
       agent.runtimeInfo = { ...agent.runtimeInfo, model: normalizedModelId };
     }
     this.touchUpdatedAt(agent);
@@ -1829,7 +1834,10 @@ export class AgentManager {
     await this.drainSessionEvents(agentId);
 
     agent.config.thinkingOptionId = normalizedThinkingOptionId ?? undefined;
-    if (agent.runtimeInfo) {
+    // Match setAgentModel: the selected effort applies next turn, so do not
+    // repaint the runtime display while the current turn is still running.
+    const hasActiveTurn = agent.activeTurnId !== null || agent.activeForegroundTurnId !== null;
+    if (agent.runtimeInfo && !hasActiveTurn) {
       agent.runtimeInfo = {
         ...agent.runtimeInfo,
         thinkingOptionId: normalizedThinkingOptionId,
