@@ -12,6 +12,7 @@ import {
   createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   shouldShowSidebarHostLabels,
   type ProjectStatusSession,
   type SidebarProjectEntry,
@@ -31,6 +32,7 @@ function workspaceWithForge(forge: string | undefined, prUrl: string): Workspace
     title: null,
     status: "done",
     statusEnteredAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     scripts: [],
@@ -149,6 +151,7 @@ function workspace(input: {
   status?: WorkspaceDescriptor["status"];
   statusEnteredAt?: Date | null;
   snoozeStatus?: WorkspaceDescriptor["snoozeStatus"];
+  activityAt?: Date | null;
 }): WorkspaceDescriptor {
   return {
     id: input.id,
@@ -162,6 +165,7 @@ function workspace(input: {
     status: input.status ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
     snoozeStatus: input.snoozeStatus ?? null,
+    activityAt: input.activityAt ?? null,
     archivingAt: null,
     diffStat: null,
     scripts: [],
@@ -791,7 +795,6 @@ describe("deriveSidebarLoadingState", () => {
     ).toEqual({ isLoading: false, isInitialLoad: false, isRevalidating: false });
   });
 });
-
 function workspacePlacement(input: {
   serverId?: string;
   workspaceId: string;
@@ -1060,5 +1063,45 @@ describe("deriveProjectStatusBucket", () => {
         },
       }),
     ).toBe("done");
+  });
+});
+
+describe("resolveSidebarServerIds", () => {
+  const allServerIds = ["alpha", "beta", "gamma"];
+
+  it("shows every host when no filter is set", () => {
+    expect(
+      resolveSidebarServerIds({ allServerIds, hostFilters: [], hostRegistryLoaded: true }),
+    ).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  it("narrows to the filtered hosts, preserving registry order", () => {
+    expect(
+      resolveSidebarServerIds({
+        allServerIds,
+        hostFilters: ["gamma", "alpha"],
+        hostRegistryLoaded: true,
+      }),
+    ).toEqual(["alpha", "gamma"]);
+  });
+
+  it("falls back to every host once the registry settles with no surviving filter", () => {
+    expect(
+      resolveSidebarServerIds({
+        allServerIds,
+        hostFilters: ["deleted-host"],
+        hostRegistryLoaded: true,
+      }),
+    ).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  it("stays empty while the registry is still loading so hosts do not flash in", () => {
+    expect(
+      resolveSidebarServerIds({
+        allServerIds,
+        hostFilters: ["deleted-host"],
+        hostRegistryLoaded: false,
+      }),
+    ).toEqual([]);
   });
 });

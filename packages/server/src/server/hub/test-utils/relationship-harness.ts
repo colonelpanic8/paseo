@@ -110,6 +110,16 @@ export class SetupFailingArchiveWatchFiles implements ArchiveWatchFiles {
   }
 }
 
+/** Simulates a platform watcher that silently drops every change notification. */
+export class NonNotifyingArchiveWatchFiles implements ArchiveWatchFiles {
+  watchDirectory(): ArchiveWatcher {
+    return {
+      close: () => {},
+      onError: () => {},
+    };
+  }
+}
+
 interface PersistedRelationship {
   version: number;
   state: string;
@@ -876,6 +886,7 @@ export class HubRelationshipHarness {
       (resolve, reject) => {
         const watchers: ArchiveWatcher[] = [];
         let settled = false;
+        let poll: ReturnType<typeof setInterval> | null = null;
         const timeout = setTimeout(
           () => finish(new Error(`Timed out waiting for owned agent ${agentId} to archive`)),
           15_000,
@@ -883,6 +894,7 @@ export class HubRelationshipHarness {
         timeout.unref?.();
         const closeWatchers = () => {
           clearTimeout(timeout);
+          if (poll) clearInterval(poll);
           for (const watcher of watchers) watcher.close();
         };
         const finish = (
@@ -918,6 +930,11 @@ export class HubRelationshipHarness {
           watchers.push(worktreeWatcher);
           worktreeWatcher.onError(finish);
           void observeCompletion();
+          // fs.watch can coalesce or drop rename events on Windows. Polling the
+          // persisted archive state makes this observation deterministic while
+          // watchers keep the common case immediate.
+          poll = setInterval(() => void observeCompletion(), 100);
+          poll.unref?.();
         } catch (error) {
           finish(error instanceof Error ? error : new Error(String(error)));
         }
