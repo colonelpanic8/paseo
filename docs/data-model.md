@@ -206,6 +206,9 @@ result. Normal config patches persist only the requested fields, so launch overr
 defaults never leak into the file. Startup-only fields remain compared with the daemon's launch
 snapshot so a mixed edit can apply its live subset and still name the paths that require restart.
 
+Client-side preferences layer the same way through the desktop settings seed — see
+[Settings seed (desktop)](#settings-seed-desktop).
+
 ```
 {
   version: 1,
@@ -531,6 +534,41 @@ These small files are not validated as full Zod schemas but are persisted under 
 ## Client-side stores (App)
 
 These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the daemon filesystem.
+
+### Settings seed (desktop)
+
+On Electron desktop, `settings-seed.json` in the Electron `userData` directory (`~/.config/Paseo/`
+on Linux, `~/Library/Application Support/Paseo/` on macOS) supplies read-only defaults under the
+locally persisted settings. The app never writes it, so a dotfiles repo can symlink it directly.
+
+```json
+{
+  "app": {
+    "appSettings": { "theme": "dark" },
+    "keyboardShortcutOverrides": { "<binding-id>": "<combo>" },
+    "preferredEditor": "zed",
+    "changesPreferences": { "layout": "split" },
+    "createAgentPreferences": { "provider": "claude" }
+  },
+  "desktop": {
+    "releaseChannel": "stable",
+    "daemon": { "manageBuiltInDaemon": true, "keepRunningAfterQuit": false }
+  }
+}
+```
+
+The `app` section seeds the AsyncStorage preference stores. Layering is opt-in per storage key —
+the registry in `packages/app/src/storage/settings-seed/registry.ts` maps the five seed fields
+above to their storage keys, and every other key (caches, drafts, layout state, client identity,
+the daemon registry) passes through untouched. The `desktop` section seeds `desktop-settings.json`
+the same way.
+
+Reads merge the seed under the local value; local wins per field. Saves follow the daemon-config
+rule: persist only the difference from the seed, so a value set back to the seed's drops out of
+local storage and later dotfiles edits keep applying. Removing a seed-provided value — resetting a
+seeded keyboard shortcut, clearing a seeded editor — fails with the seed file path; change it in
+that file instead. With no seed file, and always on iOS, Android, and plain web, behavior is
+unchanged.
 
 ### Keying convention: directory-backed vs workspace-owned
 
