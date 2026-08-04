@@ -51,6 +51,7 @@ export type KeyboardActionId =
   | "view.toggle.focus"
   | "theme.cycle"
   | "live-voice.mute.toggle"
+  | "live-voice.mute.hold-invert"
   | "message-input.action";
 
 export type KeyboardShortcutPayload =
