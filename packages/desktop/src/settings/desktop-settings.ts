@@ -2,9 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { z } from "zod";
-
 import type { AppReleaseChannel } from "../features/auto-updater.js";
+import { loadSettingsSeed, type SettingsSeedDocument } from "./settings-seed.js";
 
 export interface DesktopSettings {
   releaseChannel: AppReleaseChannel;
@@ -21,6 +20,22 @@ interface DesktopSettingsPatch {
   releaseChannel?: AppReleaseChannel;
   notifications?: Partial<DesktopSettings["notifications"]>;
   daemon?: Partial<DesktopSettings["daemon"]>;
+}
+
+interface PersistedDesktopSettingsDocument {
+  version: 1;
+  // Without a seed file this holds the full settings, exactly as older versions
+  // wrote it. With a seed file it holds only the diff against defaults ⊕ seed,
+  // so later seed edits keep applying to everything the user has not overridden.
+  settings: DesktopSettingsPatch;
+  migrations: {
+    legacyRendererSettingsImported: boolean;
+    // Installs created before the stop-on-quit default persisted the old
+    // `keepRunningAfterQuit: true` default to disk, so the new default alone
+    // would only reach fresh installs. Reset it once; a later explicit toggle
+    // persists this flag and is never overridden again.
+    daemonStopOnQuitDefaultApplied: boolean;
+  };
 }
 
 export interface DesktopSettingsStore {
@@ -42,57 +57,18 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
 
 const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
 
-const ReleaseChannelSchema = z.enum(["stable", "beta"]);
-
-const NotificationsSchema = z
-  .looseObject({
-    playSound: z.boolean().catch(DEFAULT_DESKTOP_SETTINGS.notifications.playSound),
-  })
-  .catch(() => ({ ...DEFAULT_DESKTOP_SETTINGS.notifications }));
-
-const DaemonSchema = z
-  .looseObject({
-    manageBuiltInDaemon: z.boolean().catch(DEFAULT_DESKTOP_SETTINGS.daemon.manageBuiltInDaemon),
-    keepRunningAfterQuit: z.boolean().catch(DEFAULT_DESKTOP_SETTINGS.daemon.keepRunningAfterQuit),
-  })
-  .catch(() => ({ ...DEFAULT_DESKTOP_SETTINGS.daemon }));
-
-const DesktopSettingsSchema = z
-  .looseObject({
-    releaseChannel: ReleaseChannelSchema.catch(DEFAULT_DESKTOP_SETTINGS.releaseChannel),
-    notifications: NotificationsSchema,
-    daemon: DaemonSchema,
-  })
-  .catch(() => buildDefaultSettings());
-
-const MigrationsSchema = z
-  .looseObject({
-    legacyRendererSettingsImported: z.boolean().catch(false),
-    daemonStopOnQuitDefaultApplied: z.boolean().catch(false),
-  })
-  .catch(() => ({
-    legacyRendererSettingsImported: false,
-    daemonStopOnQuitDefaultApplied: false,
-  }));
-
-const PersistedDocumentSchema = z
-  .looseObject({
-    version: z.literal(1).catch(1),
-    settings: DesktopSettingsSchema,
-    migrations: MigrationsSchema,
-  })
-  .catch(() => buildDefaultDocument());
-
-type StoredDesktopSettings = z.output<typeof DesktopSettingsSchema>;
-type PersistedDesktopSettingsDocument = z.output<typeof PersistedDocumentSchema>;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function coerceReleaseChannel(value: unknown): AppReleaseChannel | null {
-  const result = ReleaseChannelSchema.safeParse(value);
-  return result.success ? result.data : null;
+  if (value === "beta") {
+    return "beta";
+  }
+  if (value === "stable") {
+    return "stable";
+  }
+  return null;
 }
 
 function coerceBoolean(value: unknown): boolean | null {
@@ -103,7 +79,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error;
 }
 
-function buildDefaultSettings(): StoredDesktopSettings {
+function cloneDefaultSettings(): DesktopSettings {
   return {
     releaseChannel: DEFAULT_DESKTOP_SETTINGS.releaseChannel,
     notifications: { ...DEFAULT_DESKTOP_SETTINGS.notifications },
@@ -111,24 +87,13 @@ function buildDefaultSettings(): StoredDesktopSettings {
   };
 }
 
-function buildDefaultDocument(): PersistedDesktopSettingsDocument {
+function buildDefaultDocument(hasSeed: boolean): PersistedDesktopSettingsDocument {
   return {
     version: 1,
-    settings: buildDefaultSettings(),
+    settings: hasSeed ? {} : cloneDefaultSettings(),
     migrations: {
       legacyRendererSettingsImported: false,
       daemonStopOnQuitDefaultApplied: true,
-    },
-  };
-}
-
-function toDesktopSettings(stored: StoredDesktopSettings): DesktopSettings {
-  return {
-    releaseChannel: stored.releaseChannel,
-    notifications: { playSound: stored.notifications.playSound },
-    daemon: {
-      manageBuiltInDaemon: stored.daemon.manageBuiltInDaemon,
-      keepRunningAfterQuit: stored.daemon.keepRunningAfterQuit,
     },
   };
 }
@@ -139,6 +104,7 @@ function coerceDesktopSettingsPatch(input: unknown): DesktopSettingsPatch {
   }
 
   const patch: DesktopSettingsPatch = {};
+
   const releaseChannel = coerceReleaseChannel(input.releaseChannel);
   if (releaseChannel) {
     patch.releaseChannel = releaseChannel;
@@ -146,9 +112,7 @@ function coerceDesktopSettingsPatch(input: unknown): DesktopSettingsPatch {
 
   if (isRecord(input.notifications)) {
     const playSound = coerceBoolean(input.notifications.playSound);
-    if (playSound !== null) {
-      patch.notifications = { playSound };
-    }
+    if (playSound !== null) patch.notifications = { playSound };
   }
 
   if (isRecord(input.daemon)) {
@@ -191,44 +155,109 @@ function pickDesktopSettingsFromLegacyRendererSettings(
 }
 
 function mergeDesktopSettings(
-  current: StoredDesktopSettings,
+  current: DesktopSettings,
   patch: DesktopSettingsPatch,
-): StoredDesktopSettings {
+): DesktopSettings {
   return {
-    ...current,
     releaseChannel: patch.releaseChannel ?? current.releaseChannel,
     notifications: { ...current.notifications, ...patch.notifications },
     daemon: { ...current.daemon, ...patch.daemon },
   };
 }
 
+function diffDesktopSettings(
+  desired: DesktopSettings,
+  base: DesktopSettings,
+): DesktopSettingsPatch {
+  const delta: DesktopSettingsPatch = {};
+
+  if (desired.releaseChannel !== base.releaseChannel) {
+    delta.releaseChannel = desired.releaseChannel;
+  }
+
+  if (desired.notifications.playSound !== base.notifications.playSound) {
+    delta.notifications = { playSound: desired.notifications.playSound };
+  }
+
+  const daemon: Partial<DesktopSettings["daemon"]> = {};
+  if (desired.daemon.manageBuiltInDaemon !== base.daemon.manageBuiltInDaemon) {
+    daemon.manageBuiltInDaemon = desired.daemon.manageBuiltInDaemon;
+  }
+  if (desired.daemon.keepRunningAfterQuit !== base.daemon.keepRunningAfterQuit) {
+    daemon.keepRunningAfterQuit = desired.daemon.keepRunningAfterQuit;
+  }
+  if (Object.keys(daemon).length > 0) {
+    delta.daemon = daemon;
+  }
+
+  return delta;
+}
+
 function hasLegacyRendererOwnedPatch(patch: DesktopSettingsPatch): boolean {
   return patch.releaseChannel !== undefined || patch.daemon?.manageBuiltInDaemon !== undefined;
 }
 
-function coerceDocument(input: unknown): PersistedDesktopSettingsDocument {
-  const document = PersistedDocumentSchema.parse(input);
-  if (document.migrations.daemonStopOnQuitDefaultApplied) {
-    return document;
+// Drops the stored keep-running override so the value falls back to the layer
+// underneath it: the seed when there is one, otherwise the app default.
+function withoutKeepRunningAfterQuit(settings: DesktopSettingsPatch): DesktopSettingsPatch {
+  if (settings.daemon?.keepRunningAfterQuit === undefined) {
+    return settings;
+  }
+
+  const { keepRunningAfterQuit: _dropped, ...daemon } = settings.daemon;
+  const next: DesktopSettingsPatch = {};
+  if (settings.releaseChannel !== undefined) {
+    next.releaseChannel = settings.releaseChannel;
+  }
+  if (Object.keys(daemon).length > 0) {
+    next.daemon = daemon;
+  }
+  return next;
+}
+
+function coerceDocument(input: unknown, hasSeed: boolean): PersistedDesktopSettingsDocument {
+  if (!isRecord(input)) {
+    return buildDefaultDocument(hasSeed);
+  }
+
+  let settings = coerceDesktopSettingsPatch(input.settings);
+  const migrations = isRecord(input.migrations)
+    ? {
+        legacyRendererSettingsImported: input.migrations.legacyRendererSettingsImported === true,
+        daemonStopOnQuitDefaultApplied: input.migrations.daemonStopOnQuitDefaultApplied === true,
+      }
+    : {
+        legacyRendererSettingsImported: false,
+        daemonStopOnQuitDefaultApplied: false,
+      };
+
+  if (!migrations.daemonStopOnQuitDefaultApplied) {
+    settings = withoutKeepRunningAfterQuit(settings);
+    migrations.daemonStopOnQuitDefaultApplied = true;
   }
 
   return {
-    ...document,
-    settings: {
-      ...document.settings,
-      daemon: {
-        ...document.settings.daemon,
-        keepRunningAfterQuit: DEFAULT_DESKTOP_SETTINGS.daemon.keepRunningAfterQuit,
-      },
-    },
-    migrations: { ...document.migrations, daemonStopOnQuitDefaultApplied: true },
+    version: 1,
+    settings,
+    migrations,
   };
+}
+
+interface ResolvedDesktopSettings {
+  document: PersistedDesktopSettingsDocument;
+  /** Defaults merged with the seed layer; the floor the local delta is diffed against. */
+  base: DesktopSettings;
+  /** `base` merged with the locally persisted delta. */
+  effective: DesktopSettings;
+  hasSeed: boolean;
 }
 
 export function createDesktopSettingsStore({
   userDataPath,
+  loadSeed = () => loadSettingsSeed({ userDataPath }),
 }: {
   userDataPath: string;
+  loadSeed?: () => Promise<SettingsSeedDocument | null>;
 }): DesktopSettingsStore {
   const filePath = path.join(userDataPath, DESKTOP_SETTINGS_FILENAME);
   let cachedDocument: PersistedDesktopSettingsDocument | null = null;
@@ -247,7 +276,7 @@ export function createDesktopSettingsStore({
     await queued;
   }
 
-  async function loadDocument(): Promise<PersistedDesktopSettingsDocument> {
+  async function loadDocument(hasSeed: boolean): Promise<PersistedDesktopSettingsDocument> {
     if (cachedDocument) {
       return cachedDocument;
     }
@@ -259,67 +288,109 @@ export function createDesktopSettingsStore({
       if (!isNodeError(error) || error.code !== "ENOENT") {
         throw error;
       }
-      const document = buildDefaultDocument();
+      const document = buildDefaultDocument(hasSeed);
       await persistDocument(document);
       return document;
     }
-    const document = coerceDocument(JSON.parse(raw));
+    const document = coerceDocument(JSON.parse(raw), hasSeed);
     cachedDocument = document;
     return document;
   }
 
-  async function initializeLegacyRendererMigration(): Promise<PersistedDesktopSettingsDocument> {
+  // An unreadable seed must not take desktop settings down with it: they gate
+  // built-in daemon management at startup.
+  async function loadSeedBase(): Promise<{ base: DesktopSettings; hasSeed: boolean }> {
+    let seed: SettingsSeedDocument | null;
     try {
-      return await loadDocument();
+      seed = await loadSeed();
+    } catch (error) {
+      console.error("[desktop-settings] Ignoring unreadable settings seed:", error);
+      return { base: cloneDefaultSettings(), hasSeed: false };
+    }
+
+    if (!seed) {
+      return { base: cloneDefaultSettings(), hasSeed: false };
+    }
+    return {
+      base: mergeDesktopSettings(cloneDefaultSettings(), coerceDesktopSettingsPatch(seed.desktop)),
+      hasSeed: true,
+    };
+  }
+
+  async function resolveSettings(): Promise<ResolvedDesktopSettings> {
+    const { base, hasSeed } = await loadSeedBase();
+    const document = await loadDocument(hasSeed);
+    return {
+      document,
+      base,
+      hasSeed,
+      effective: mergeDesktopSettings(base, document.settings),
+    };
+  }
+
+  async function persistSettings(
+    resolved: ResolvedDesktopSettings,
+    desired: DesktopSettings,
+    migrations: PersistedDesktopSettingsDocument["migrations"],
+  ): Promise<void> {
+    await persistDocument({
+      version: 1,
+      settings: resolved.hasSeed ? diffDesktopSettings(desired, resolved.base) : desired,
+      migrations,
+    });
+  }
+
+  async function resolveWritableSettings(): Promise<ResolvedDesktopSettings> {
+    const resolved = await resolveSettings();
+    await persistSettings(resolved, resolved.effective, resolved.document.migrations);
+    return resolved;
+  }
+
+  async function initializeLegacyRendererMigration(): Promise<ResolvedDesktopSettings> {
+    try {
+      return await resolveSettings();
     } catch {
-      const document = buildDefaultDocument();
+      const { base, hasSeed } = await loadSeedBase();
+      const document = buildDefaultDocument(hasSeed);
       await persistDocument(document);
-      return document;
+      return { document, base, hasSeed, effective: mergeDesktopSettings(base, document.settings) };
     }
   }
 
   return {
     async get(): Promise<DesktopSettings> {
-      const document = await loadDocument();
-      return toDesktopSettings(document.settings);
+      const resolved = await resolveSettings();
+      return resolved.effective;
     },
 
     async patch(patch: unknown): Promise<DesktopSettings> {
-      const current = await loadDocument();
+      const current = await resolveWritableSettings();
       const coercedPatch = coerceDesktopSettingsPatch(patch);
-      const next = mergeDesktopSettings(current.settings, coercedPatch);
-      await persistDocument({
-        ...current,
-        settings: next,
-        migrations: {
-          ...current.migrations,
-          legacyRendererSettingsImported:
-            current.migrations.legacyRendererSettingsImported ||
-            hasLegacyRendererOwnedPatch(coercedPatch),
-        },
+      const next = mergeDesktopSettings(current.effective, coercedPatch);
+      await persistSettings(current, next, {
+        ...current.document.migrations,
+        legacyRendererSettingsImported:
+          current.document.migrations.legacyRendererSettingsImported ||
+          hasLegacyRendererOwnedPatch(coercedPatch),
       });
-      return toDesktopSettings(next);
+      return next;
     },
 
     async migrateLegacyRendererSettings(legacySettings: unknown): Promise<DesktopSettings> {
       const current = await initializeLegacyRendererMigration();
-      if (current.migrations.legacyRendererSettingsImported) {
-        return toDesktopSettings(current.settings);
+      if (current.document.migrations.legacyRendererSettingsImported) {
+        return current.effective;
       }
 
       const next = mergeDesktopSettings(
-        current.settings,
+        current.effective,
         pickDesktopSettingsFromLegacyRendererSettings(legacySettings),
       );
-      await persistDocument({
-        ...current,
-        settings: next,
-        migrations: {
-          ...current.migrations,
-          legacyRendererSettingsImported: true,
-        },
+      await persistSettings(current, next, {
+        ...current.document.migrations,
+        legacyRendererSettingsImported: true,
       });
-      return toDesktopSettings(next);
+      return next;
     },
   };
 }
