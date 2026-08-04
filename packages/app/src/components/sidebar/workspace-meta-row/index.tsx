@@ -120,6 +120,7 @@ function MetaItemNode({
 }
 
 function HostItem({ hostBadge }: { hostBadge: HostBadgeModel }) {
+  const color = hostColorValue(hostBadge.color);
   return (
     <View
       style={styles.hostItem}
@@ -128,7 +129,7 @@ function HostItem({ hostBadge }: { hostBadge: HostBadgeModel }) {
     >
       <ThemedServer size={META_ICON_SIZE} uniProps={hostIconMapping(hostBadge.color)} />
       {hostBadge.showLabel ? (
-        <Text style={styles.hostLabel} numberOfLines={1}>
+        <Text style={[styles.hostLabel, color ? { color } : null]} numberOfLines={1}>
           {hostBadge.label}
         </Text>
       ) : null}

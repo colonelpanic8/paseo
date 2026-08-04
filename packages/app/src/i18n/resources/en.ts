@@ -1081,7 +1081,6 @@ export const en = {
         branch: "Branch",
         project: "Project",
         host: "Host",
-        alwaysShowHost: "Always show host",
         changeRequest: "Pull request",
         checks: "Checks",
         services: "Services",
@@ -2222,6 +2221,13 @@ export const en = {
           ghostty: "Ghostty",
           pureBlack: "Pure black",
           auto: "System",
+        },
+      },
+      sidebar: {
+        title: "Sidebar",
+        alwaysShowHostLabels: {
+          title: "Always show host labels",
+          description: "Show host labels even when every visible workspace is on this device",
         },
       },
       detailLevel: {

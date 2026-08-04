@@ -2155,6 +2155,14 @@ export const ru: TranslationResources = {
           auto: "Системная",
         },
       },
+      sidebar: {
+        title: "Боковая панель",
+        alwaysShowHostLabels: {
+          title: "Всегда показывать метки хоста",
+          description:
+            "Показывает метки хоста, даже когда все видимые рабочие области находятся на этом устройстве",
+        },
+      },
       detailLevel: {
         title: "Уровень детализации",
       },
