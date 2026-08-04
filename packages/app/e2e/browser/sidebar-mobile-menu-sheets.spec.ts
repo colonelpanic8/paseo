@@ -4,6 +4,7 @@ import { gotoAppShell } from "../support/helpers/app";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
+import { expectMobileAgentSidebarVisible } from "../support/helpers/sidebar";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -44,6 +45,9 @@ test("project and workspace kebabs open action sheets on compact layouts", async
     await gotoAppShell(page);
     await page.getByRole("button", { name: "Open menu", exact: true }).click();
     await waitForSidebarHydration(page);
+    // The panel slides in on translateX, and both rails below are read from live geometry — a
+    // measurement taken mid-slide reports whatever x the panel happened to be at.
+    await expectMobileAgentSidebarVisible(page);
 
     const closeGlyphRight = await paintedSvgRight(page.getByTestId("sidebar-close").locator("svg"));
     const trailingRail = await paintedSvgRight(
