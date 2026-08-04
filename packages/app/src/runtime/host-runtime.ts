@@ -1746,7 +1746,7 @@ export class HostRuntimeStore {
     const directory = new DirectorySync(
       newServerId,
       {
-        onAgentStoppedRunning: (agentId) => this.drainQueuedAgentMessage(newServerId, agentId),
+        onAgentStoppedRunning: (agentId) => this.onAgentStoppedRunning(newServerId, agentId),
         markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
         markAgentReady: () => controller.markAgentDirectorySyncReady(),
         markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2146,7 +2146,7 @@ export class HostRuntimeStore {
           host.serverId,
           {
             onAgentStoppedRunning: (agentId) =>
-              this.drainQueuedAgentMessage(host.serverId, agentId),
+              this.onAgentStoppedRunning(host.serverId, agentId),
             markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
             markAgentReady: () => controller.markAgentDirectorySyncReady(),
             markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2474,6 +2474,13 @@ export class HostRuntimeStore {
     }
   }
 
+  /**
+   * The one funnel for "an agent stopped running". Draining its queued message
+   * is only half of it — Live Voice subscribes here to report the agent it was
+   * waiting on. Wiring a caller straight to `drainQueuedAgentMessage` still
+   * sends the message, so the loss is silent: the queue looks right and the
+   * call simply never speaks.
+   */
   private onAgentStoppedRunning(serverId: string, agentId: string): void {
     this.drainQueuedAgentMessage(serverId, agentId);
     for (const listener of this.agentStoppedRunningListeners.get(serverId) ?? []) {
