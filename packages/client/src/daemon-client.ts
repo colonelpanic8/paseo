@@ -2604,6 +2604,26 @@ export class DaemonClient {
     return { pinnedAt: payload.pinnedAt };
   }
 
+  async setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId?: string,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.snooze.set.request",
+        workspaceId,
+        snoozedUntil,
+      },
+      responseType: "workspace.snooze.set.response",
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "setWorkspaceSnooze rejected");
+    }
+    return { snoozeStatus: payload.snoozeStatus };
+  }
+
   async inspectWorkspaceRecovery(
     workspaceId: string,
     requestId?: string,
