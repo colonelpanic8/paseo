@@ -7,7 +7,7 @@
  * is still the only source of truth. Deleting the canonical slash deletes the pill.
  */
 
-import { DEFAULT_COMMAND_SIGIL, type ComposerSigils } from "./sigils";
+import { DEFAULT_COMMAND_SIGIL, type ComposerSigil, type ComposerSigils } from "./sigils";
 
 export type ComposerTokenType = "command" | "skill";
 
@@ -119,12 +119,18 @@ export function collectSubmittedComposerTokens(text: string): ComposerToken[] {
   return scanComposerTokens(text, CANONICAL_SUBMISSION_SIGILS);
 }
 
+export function getComposerTokenSigil(
+  token: Pick<ComposerToken, "type">,
+  sigils: ComposerSigils,
+): ComposerSigil {
+  return token.type === "command" ? sigils.command : sigils.skill;
+}
+
 export function getComposerTokenDisplayText(
   token: Pick<ComposerToken, "type" | "name">,
   sigils: ComposerSigils,
 ): string {
-  const sigil = token.type === "command" ? sigils.command : sigils.skill;
-  return `${sigil}${token.name}`;
+  return `${getComposerTokenSigil(token, sigils)}${token.name}`;
 }
 
 /**

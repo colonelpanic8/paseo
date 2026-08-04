@@ -70,7 +70,7 @@ with pills. The textarea paints its own text transparent (`color: transparent` p
 selection, IME and the native context menu.
 
 **THE INVARIANT: the mirror must lay out character-for-character identically to the
-textarea.** Two consequences, both load-bearing:
+textarea.** Three consequences, all load-bearing:
 
 1. Every property affecting line breaking is _copied from the live textarea_ via
    `getComputedStyle` (`COPIED_STYLES`), not restated in a stylesheet. The composer's
@@ -79,12 +79,21 @@ textarea.** Two consequences, both load-bearing:
 2. **A pill may not change the advance width of the text it decorates.** Horizontal
    padding is cancelled by an equal negative margin, so the pill grows visually around
    the glyphs without moving them. Never change one without the other.
+3. **The display sigil is not as wide as the canonical slash it stands in for.** The UI
+   font is proportional — `$` runs 3.2px wider than `/` at the default size — so an
+   uncorrected substitution shifts every glyph after the token to the right, leaving the
+   caret behind the text it belongs to, and can wrap the mirror onto a line the textarea
+   does not have. `useSigilAdvanceCorrections` measures both characters inside the mirror
+   (the font is user-configurable, so a hardcoded table would be wrong) and hands the
+   difference back as margins, half on each side, keeping the sigil centred on the slot
+   the slash occupies. Only the sigil itself overhangs; every other glyph lands exactly
+   where the textarea puts it.
 
-Consequence (2) is why the pill replaces only the canonical slash with the configured
-one-character display sigil (`$release-beta`) rather than adding an icon or prettified
-display name — either would add width and desynchronise the wrap, putting the caret off
-the glyphs. Getting icons and display names on web means replacing the textarea with a
-contenteditable editor; it cannot be done with a mirror.
+Consequences (2) and (3) are why the pill shows the token text under a one-character
+sigil rather than an icon or a prettified display name: correcting a whole substituted
+string means squeezing glyphs, not nudging one. Getting icons and display names on web
+means replacing the textarea with a contenteditable editor; it cannot be done with a
+mirror.
 
 ### Colors
 
@@ -109,10 +118,12 @@ Two smaller details that are easy to lose:
 - A trailing newline collapses unless something follows it, which would shift the
   mirror's last line relative to the textarea's. Hence the zero-width span.
 
-To re-verify alignment after touching any of this: render the same string in both
-layers with the textarea's text a visible color instead of transparent. The two sets of
-glyphs must coincide exactly, and the wrap point must match, including when a token
-straddles the wrap boundary.
+`e2e/browser/composer-tokens.spec.ts` guards alignment by measuring the mirror's last
+line against a probe holding the canonical draft in the same inherited font. To check by
+eye after touching any of this: render the same string in both layers with the
+textarea's text a visible color instead of transparent. The two sets of glyphs must
+coincide exactly, and the wrap point must match, including when a token straddles the
+wrap boundary.
 
 ## Native: plain text by design
 
