@@ -12,7 +12,6 @@ import {
 import { DEFAULT_SIDEBAR_CHECKS_DISPLAY, type SidebarChecksDisplay } from "./checks-display";
 import {
   DEFAULT_SIDEBAR_ROW_ITEMS,
-  resolveHostPair,
   type SidebarRowItem,
   type SidebarRowItems,
 } from "./row-items";
@@ -31,8 +30,6 @@ export interface SidebarDisplayPreferences {
   toggleRowItem: (item: SidebarRowItem) => void;
   checksDisplay: SidebarChecksDisplay;
   setChecksDisplay: (display: SidebarChecksDisplay) => void;
-  alwaysShowHostLabels: boolean;
-  toggleAlwaysShowHostLabels: () => void;
   trailing: SidebarWorkspaceTrailing;
   /** Picking the choice that is already showing clears the slot. */
   toggleTrailing: (choice: SidebarTrailingChoice) => void;
@@ -77,7 +74,6 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       sidebarWorkspaceTrailing,
       sidebarRowItems,
       sidebarChecksDisplay,
-      alwaysShowHostLabels,
     },
     updateSettings,
   } = useAppSettings();
@@ -89,20 +85,13 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
     [updateSettings],
   );
 
-  const flipHostPair = useCallback(
-    (flipped: SidebarRowItem | "alwaysShowHostLabels") => {
-      const next = resolveHostPair({ rowItems: sidebarRowItems, alwaysShowHostLabels }, flipped);
+  const toggleRowItem = useCallback(
+    (item: SidebarRowItem) => {
       void updateSettings({
-        sidebarRowItems: next.rowItems,
-        alwaysShowHostLabels: next.alwaysShowHostLabels,
+        sidebarRowItems: { ...sidebarRowItems, [item]: !sidebarRowItems[item] },
       });
     },
-    [updateSettings, sidebarRowItems, alwaysShowHostLabels],
-  );
-  const toggleRowItem = useCallback((item: SidebarRowItem) => flipHostPair(item), [flipHostPair]);
-  const toggleAlwaysShowHostLabels = useCallback(
-    () => flipHostPair("alwaysShowHostLabels"),
-    [flipHostPair],
+    [updateSettings, sidebarRowItems],
   );
 
   const setChecksDisplay = useCallback(
@@ -133,8 +122,6 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       toggleRowItem,
       checksDisplay: sidebarChecksDisplay,
       setChecksDisplay,
-      alwaysShowHostLabels,
-      toggleAlwaysShowHostLabels,
       trailing: sidebarWorkspaceTrailing,
       toggleTrailing,
       hostFilters,
@@ -158,8 +145,6 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       toggleRowItem,
       sidebarChecksDisplay,
       setChecksDisplay,
-      alwaysShowHostLabels,
-      toggleAlwaysShowHostLabels,
       sidebarWorkspaceTrailing,
       toggleTrailing,
       hostFilters,
