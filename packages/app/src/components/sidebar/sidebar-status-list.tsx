@@ -34,6 +34,7 @@ import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
 import { SidebarWorkspaceRowFrame } from "@/components/sidebar/sidebar-workspace-row-content";
+import { useOpenKebabMenuVisibility } from "@/components/sidebar/use-open-kebab-menu-visibility";
 import { selectWorkspaceScriptSummary } from "@/components/sidebar/workspace-meta-row";
 import {
   SidebarStatusRowArchiveAction,
@@ -695,6 +696,7 @@ function StatusWorkspaceRowInner({
 }) {
   const isTouchPlatform = platformIsNative;
   const archiveCollapse = useArchiveCollapse(isArchiving);
+  const kebab = useOpenKebabMenuVisibility(false);
 
   const isDesktop = !isTouchPlatform;
   const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
@@ -714,7 +716,9 @@ function StatusWorkspaceRowInner({
         {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
           // Touch platforms have no hover, so the kebab is permanent there and the
           // inline archive text button never appears.
-          const showActions = Boolean(onArchive && (isHovered || isTouchPlatform));
+          const showActions = Boolean(
+            onArchive && (isHovered || isTouchPlatform || kebab.showKebab),
+          );
           const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
           return (
             <View style={styles.workspaceRowContainer} {...hoverHandlers}>
@@ -748,6 +752,7 @@ function StatusWorkspaceRowInner({
                   accessibilityRole="button"
                   accessibilityState={accessibilityState}
                   style={workspaceRowStyle}
+                  highlightStyle={styles.workspaceRowHovered}
                   onPress={onPress}
                   testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
                 >
@@ -764,6 +769,7 @@ function StatusWorkspaceRowInner({
                   >
                     {showActions && onArchive ? (
                       <StatusWorkspaceQuickActions
+                        {...kebab.menuProps}
                         workspace={workspace}
                         showInlineArchive={!isTouchPlatform}
                         isPinned={isPinned}
@@ -801,6 +807,8 @@ function StatusWorkspaceQuickActions({
   onRename,
   onMarkAsRead,
   onArchive,
+  open,
+  onOpenChange,
   archiveLabel,
   archiveStatus,
   archivePendingLabel,
@@ -815,6 +823,8 @@ function StatusWorkspaceQuickActions({
   onRename?: () => void;
   onMarkAsRead?: () => void;
   onArchive: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   archiveLabel: string;
   archiveStatus?: "idle" | "pending" | "success";
   archivePendingLabel?: string;
@@ -826,6 +836,8 @@ function StatusWorkspaceQuickActions({
         <SidebarStatusRowArchiveAction label={archiveLabel} onArchive={onArchive} />
       ) : null}
       <SidebarWorkspaceMenu
+        open={open}
+        onOpenChange={onOpenChange}
         workspaceKey={workspace.workspaceKey}
         onCopyPath={onCopyPath}
         onCopyBranchName={onCopyBranchName}

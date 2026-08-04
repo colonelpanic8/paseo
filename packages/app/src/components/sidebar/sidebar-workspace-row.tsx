@@ -34,6 +34,7 @@ import {
   SidebarWorkspaceTrailingActionOverlay,
   SidebarWorkspaceTrailingActionSlot,
 } from "@/components/sidebar/sidebar-workspace-row-content";
+import { useOpenKebabMenuVisibility } from "@/components/sidebar/use-open-kebab-menu-visibility";
 import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
 import { selectWorkspaceScriptSummary } from "@/components/sidebar/workspace-meta-row";
 import {
@@ -331,6 +332,7 @@ function WorkspaceRowBody({
                 accessibilityRole="button"
                 accessibilityState={accessibilityState}
                 style={workspaceRowStyle}
+                highlightStyle={styles.workspaceRowHovered}
                 onPressIn={draggable ? interaction.handlePressIn : undefined}
                 onTouchMove={draggable ? interaction.handleTouchMove : undefined}
                 onPressOut={draggable ? interaction.handlePressOut : undefined}
@@ -427,6 +429,7 @@ function WorkspaceRowTrailingActions({
     isTouchPlatform,
     showShortcut,
   });
+  const kebab = useOpenKebabMenuVisibility(showKebabInSlot);
 
   return (
     <>
@@ -438,9 +441,10 @@ function WorkspaceRowTrailingActions({
           <SidebarWorkspaceTrailingActionBase visible={showTrailing}>
             <SidebarWorkspaceTrailingContent workspace={workspace} trailing={trailing} />
           </SidebarWorkspaceTrailingActionBase>
-          <SidebarWorkspaceTrailingActionOverlay visible={showKebabInSlot} scrim={showScrim}>
+          <SidebarWorkspaceTrailingActionOverlay visible={kebab.showKebab} scrim={showScrim}>
             {onArchive ? (
               <SidebarWorkspaceMenu
+                {...kebab.menuProps}
                 workspaceKey={workspace.workspaceKey}
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
