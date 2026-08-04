@@ -6,7 +6,6 @@ import {
   Alert,
   Pressable,
   ScrollView,
-  Switch,
   Text,
   View,
   type PressableStateCallbackType,
