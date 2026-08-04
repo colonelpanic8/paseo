@@ -389,8 +389,10 @@ async function readAppSettings(
     };
   }
 
+
   const defaultStored = StoredAppSettingsSchema.parse({});
-  return { settings: DEFAULT_CLIENT_SETTINGS, needsWrite: true, stored: defaultStored };
+  // Do not persist defaults before the seed layer has a chance to contribute.
+  return { settings: DEFAULT_CLIENT_SETTINGS, needsWrite: false, stored: defaultStored };
 }
 
 export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Settings> {
