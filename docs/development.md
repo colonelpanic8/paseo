@@ -536,25 +536,6 @@ npx expo-doctor
 
 Diagnoses version mismatches and native module issues.
 
-### A poisoned Metro cache fails browser e2e as a layout bug
-
-Metro's on-disk cache lives in the OS temp directory and is shared by every checkout on the
-machine. Editing one app source file rebuilds that module against everything else's cached
-output, and the Unistyles styles can come back desynced: rows lose `flexDirection: row`, glyph
-rails move by whole pixels, and the alignment specs fail with real-looking numbers. Reverting
-the edit makes them pass again, which reads exactly like the edit broke the layout.
-
-Rule out the cache before believing any e2e layout failure that only appears with your changes
-applied. `E2E_METRO_CACHE_VERSION` gives the run a private cache namespace without deleting
-anyone else's entries:
-
-```bash
-E2E_METRO_CACHE_VERSION=my-branch npx playwright test --project=browser <spec>
-```
-
-The first run rebundles from scratch and can exceed the harness's 120s Metro warmup; re-run it
-once and the namespace is warm. CI always builds cold, so it never sees this.
-
 ## Typecheck
 
 Always run typecheck after changes:

@@ -120,8 +120,4 @@ if (process.env.PASEO_SERVE_SIM_PREVIEW === "1") {
   };
 }
 
-if (process.env.E2E_METRO_CACHE_VERSION) {
-  config.cacheVersion = process.env.E2E_METRO_CACHE_VERSION;
-}
-
 module.exports = config;
