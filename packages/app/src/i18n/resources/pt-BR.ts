@@ -1624,8 +1624,6 @@ export const ptBR: TranslationResources = {
     },
     actions: {
       start: "Iniciar voz ao vivo",
-      startForeground: "Iniciar em primeiro plano",
-      startBackground: "Iniciar em segundo plano",
       unavailable: "Voz ao vivo indisponível",
       stop: "Parar voz ao vivo",
       mute: "Silenciar microfone",
@@ -1634,10 +1632,6 @@ export const ptBR: TranslationResources = {
       showTranscript: "Mostrar transcrição",
       hideTranscript: "Ocultar transcrição",
       dismiss: "Dispensar",
-    },
-    modes: {
-      foreground: "Modo em primeiro plano",
-      background: "Modo em segundo plano",
     },
     unavailable: {
       platform: "A voz ao vivo não é compatível com este dispositivo.",
@@ -2205,9 +2199,12 @@ export const ptBR: TranslationResources = {
         queueMessage: "Enfileirar mensagem",
         muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
         muteUnmuteLiveVoice: "Silenciar/ativar voz ao vivo",
+        holdInvertLiveVoiceMute: "Segurar para inverter o silêncio da voz ao vivo",
         switchProject: "Trocar projeto",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute:
+          "Aperte para falar quando silenciado; aperte para silenciar quando ativo.",
         showKeyboardShortcuts:
           "Disponível quando o foco não está em um campo de texto ou terminal.",
       },
