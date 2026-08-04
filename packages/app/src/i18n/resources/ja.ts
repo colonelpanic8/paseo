@@ -1742,8 +1742,6 @@ export const ja: TranslationResources = {
     },
     actions: {
       start: "ライブ音声を開始",
-      startForeground: "フォアグラウンドで開始",
-      startBackground: "バックグラウンドで開始",
       unavailable: "ライブ音声は利用できません",
       stop: "ライブ音声を停止",
       mute: "マイクをミュート",
@@ -1752,10 +1750,6 @@ export const ja: TranslationResources = {
       showTranscript: "文字起こしを表示",
       hideTranscript: "文字起こしを非表示",
       dismiss: "閉じる",
-    },
-    modes: {
-      foreground: "フォアグラウンドモード",
-      background: "バックグラウンドモード",
     },
     unavailable: {
       platform: "このデバイスはライブ音声に対応していません。",
@@ -2339,9 +2333,12 @@ export const ja: TranslationResources = {
         queueMessage: "メッセージをキューに追加",
         muteUnmuteVoiceMode: "音声モードのミュートを切り替え",
         muteUnmuteLiveVoice: "ライブ音声のミュートを切り替え",
+        holdInvertLiveVoiceMute: "長押しでライブ音声のミュートを反転",
         switchProject: "プロジェクトを切り替え",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute:
+          "ミュート中は押している間だけ発話、通話中は押している間だけミュート。",
         showKeyboardShortcuts:
           "テキストフィールドまたはターミナルにフォーカスがない場合に利用できます。",
       },
