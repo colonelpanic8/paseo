@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   describeCompactTimeAgo,
+  formatClockTime,
   formatCompactTimeAgo,
   formatDuration,
   formatMessageTimestamp,
@@ -12,7 +13,8 @@ describe("formatTimeAgo", () => {
 
   it.each([
     ["2026-07-16T11:59:55.000Z", "just now"],
-    ["2026-07-16T11:59:30.000Z", "30s ago"],
+    ["2026-07-16T11:59:30.000Z", "just now"],
+    ["2026-07-16T11:59:00.001Z", "just now"],
     ["2026-07-16T11:55:00.000Z", "5m ago"],
     ["2026-07-16T10:00:00.000Z", "2h ago"],
     ["2026-07-13T12:00:00.000Z", "3d ago"],
@@ -60,6 +62,13 @@ describe("describeCompactTimeAgo", () => {
   it("keeps formatCompactTimeAgo as the label alone", () => {
     const date = new Date("2026-07-16T10:00:00.000Z");
     expect(formatCompactTimeAgo(date, now)).toBe(describeCompactTimeAgo(date, now).label);
+  });
+});
+
+describe("formatClockTime", () => {
+  it("uses the runtime's 12-hour or 24-hour clock preference", () => {
+    const date = new Date(2026, 6, 16, 15, 42);
+    expect(formatClockTime(date)).toMatch(/3:42 PM|15:42/);
   });
 });
 

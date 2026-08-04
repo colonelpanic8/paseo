@@ -29,6 +29,8 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
     currentBranch: null,
     statusBucket: "done",
     statusEnteredAt: null,
+    lastUserMessageAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -37,6 +39,8 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
     scripts: [],
     hasRunningScripts: false,
     snoozeWakeAt: null,
+    remoteUrl: null,
+    providers: [],
   };
 }
 

@@ -247,8 +247,8 @@ test.describe("Model B sidebar shape", () => {
 
       // The busy workspace is grouped under Working, the idle one under Done:
       // changing one workspace's status moved only that row.
-      const workingRows = page.getByTestId("sidebar-status-group-rows-running");
-      const doneRows = page.getByTestId("sidebar-status-group-rows-done");
+      const workingRows = page.getByTestId("sidebar-status-row-running");
+      const doneRows = page.getByTestId("sidebar-status-row-done");
       await expect(
         workingRows.getByTestId(`sidebar-workspace-row-${getServerId()}:${activeMock.workspaceId}`),
       ).toBeVisible({ timeout: 60_000 });
