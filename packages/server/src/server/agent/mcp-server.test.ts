@@ -3950,6 +3950,191 @@ describe("rename_workspace MCP tool", () => {
   });
 });
 
+describe("workspace snooze MCP tools", () => {
+  const logger = createTestLogger();
+
+  function createSnoozeFixture(
+    snoozeStatus: {
+      snoozedAt: string;
+      snoozedUntil: string;
+    } | null = null,
+  ) {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const workspace = {
+      ...createPersistedWorkspaceRecord({
+        workspaceId: "wks_parent",
+        projectId: "proj_parent",
+        cwd: REPO_CWD,
+        kind: "local_checkout",
+        displayName: "main",
+        createdAt: "2026-07-03T09:00:00.000Z",
+        updatedAt: "2026-07-03T09:00:00.000Z",
+      }),
+      snoozeStatus,
+    };
+    const workspaces = new Map([[workspace.workspaceId, workspace]]);
+    const upsertedWorkspaces: PersistedWorkspaceRecord[] = [];
+    const emittedWorkspaceIds: string[][] = [];
+    spies.agentManager.getAgent.mockReturnValue(
+      createManagedAgent({
+        id: "parent-agent",
+        cwd: REPO_CWD,
+        workspaceId: workspace.workspaceId,
+      }),
+    );
+    const createServer = () =>
+      createAgentMcpServer({
+        agentManager,
+        agentStorage,
+        providerSnapshotManager: createOpenCodeManager().manager,
+        workspaceRegistry: {
+          get: async (workspaceId) => workspaces.get(workspaceId) ?? null,
+          list: async () => Array.from(workspaces.values()),
+          upsert: async (record) => {
+            upsertedWorkspaces.push(record);
+            workspaces.set(record.workspaceId, record);
+          },
+        },
+        emitWorkspaceUpdatesForWorkspaceIds: async (workspaceIds) => {
+          emittedWorkspaceIds.push(Array.from(workspaceIds));
+        },
+        callerAgentId: "parent-agent",
+        logger,
+      });
+    return { createServer, emittedWorkspaceIds, upsertedWorkspaces, workspace, workspaces };
+  }
+
+  it("snoozes the caller workspace for a relative duration", async () => {
+    const { createServer, emittedWorkspaceIds, workspaces } = createSnoozeFixture();
+    const tool = registeredTool(await createServer(), "snooze_workspace");
+    const before = Date.now();
+
+    const response = await invokeToolWithParsedInput(tool, { duration: "2h" });
+
+    const stored = workspaces.get("wks_parent")?.snoozeStatus;
+    expect(stored).not.toBeNull();
+    const wakeMs = Date.parse(stored?.snoozedUntil ?? "");
+    expect(wakeMs).toBeGreaterThanOrEqual(before + 2 * 60 * 60 * 1000);
+    expect(wakeMs).toBeLessThan(before + 2 * 60 * 60 * 1000 + 60_000);
+    expect(response.structuredContent).toEqual({
+      success: true,
+      workspaceId: "wks_parent",
+      snoozed: true,
+      snoozeStatus: stored,
+    });
+    expect(emittedWorkspaceIds).toEqual([["wks_parent"]]);
+  });
+
+  it("snoozes an explicit workspace until an absolute wake time", async () => {
+    const { createServer, workspaces } = createSnoozeFixture();
+    const tool = registeredTool(await createServer(), "snooze_workspace");
+    const until = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const response = await invokeToolWithParsedInput(tool, { workspaceId: "wks_parent", until });
+
+    expect(workspaces.get("wks_parent")?.snoozeStatus).toEqual({
+      snoozedAt: expect.any(String),
+      snoozedUntil: until,
+    });
+    expect(response.structuredContent).toMatchObject({ snoozed: true });
+  });
+
+  it("rejects past wake times, missing wake input, and unparseable durations", async () => {
+    const { createServer, workspaces } = createSnoozeFixture();
+    const tool = registeredTool(await createServer(), "snooze_workspace");
+
+    await expect(
+      invokeToolWithParsedInput(tool, { until: "2020-01-01T00:00:00.000Z" }),
+    ).rejects.toThrow(/future/i);
+    await expect(invokeToolWithParsedInput(tool, {})).rejects.toThrow(/exactly one/i);
+    await expect(invokeToolWithParsedInput(tool, { duration: "soon" })).rejects.toThrow(
+      /duration/i,
+    );
+    expect(workspaces.get("wks_parent")?.snoozeStatus).toBeNull();
+  });
+
+  it("wakes a snoozed workspace and stays a no-op when it is not snoozed", async () => {
+    const { createServer, emittedWorkspaceIds, workspaces } = createSnoozeFixture({
+      snoozedAt: "2026-07-03T09:00:00.000Z",
+      snoozedUntil: "2099-07-03T09:00:00.000Z",
+    });
+    const tool = registeredTool(await createServer(), "wake_workspace");
+
+    const response = await invokeToolWithParsedInput(tool, {});
+
+    expect(workspaces.get("wks_parent")?.snoozeStatus).toBeNull();
+    expect(response.structuredContent).toEqual({
+      success: true,
+      workspaceId: "wks_parent",
+      snoozed: false,
+      snoozeStatus: null,
+    });
+
+    const again = await invokeToolWithParsedInput(tool, {});
+    expect(again.structuredContent).toMatchObject({ snoozed: false, snoozeStatus: null });
+    expect(emittedWorkspaceIds).toEqual([["wks_parent"], ["wks_parent"]]);
+  });
+
+  it("refuses to snooze an archived workspace", async () => {
+    const { createServer, upsertedWorkspaces, workspaces } = createSnoozeFixture();
+    const workspace = workspaces.get("wks_parent");
+    if (!workspace) {
+      throw new Error("fixture workspace missing");
+    }
+    workspaces.set("wks_parent", { ...workspace, archivedAt: "2026-07-03T10:00:00.000Z" });
+    const tool = registeredTool(await createServer(), "snooze_workspace");
+
+    await expect(invokeToolWithParsedInput(tool, { duration: "2h" })).rejects.toThrow(
+      "Workspace wks_parent is archived",
+    );
+    expect(upsertedWorkspaces).toEqual([]);
+  });
+
+  it("keeps snoozed workspaces in list_workspaces and expires the flag on its own", async () => {
+    const { createServer, workspaces } = createSnoozeFixture({
+      snoozedAt: "2026-07-03T09:00:00.000Z",
+      snoozedUntil: "2099-07-03T09:00:00.000Z",
+    });
+    const listTool = registeredTool(await createServer(), "list_workspaces");
+
+    const snoozedResponse = await listTool.handler({});
+    expect(snoozedResponse.structuredContent.workspaces).toEqual([
+      expect.objectContaining({
+        workspaceId: "wks_parent",
+        snoozed: true,
+        snoozeStatus: {
+          snoozedAt: "2026-07-03T09:00:00.000Z",
+          snoozedUntil: "2099-07-03T09:00:00.000Z",
+        },
+      }),
+    ]);
+
+    const workspace = workspaces.get("wks_parent");
+    if (!workspace) {
+      throw new Error("fixture workspace missing");
+    }
+    workspaces.set("wks_parent", {
+      ...workspace,
+      snoozeStatus: {
+        snoozedAt: "2026-07-03T09:00:00.000Z",
+        snoozedUntil: "2026-07-03T10:00:00.000Z",
+      },
+    });
+
+    const expiredResponse = await listTool.handler({});
+    expect(expiredResponse.structuredContent.workspaces).toEqual([
+      expect.objectContaining({
+        workspaceId: "wks_parent",
+        snoozed: false,
+        snoozeStatus: {
+          snoozedAt: "2026-07-03T09:00:00.000Z",
+          snoozedUntil: "2026-07-03T10:00:00.000Z",
+        },
+      }),
+    ]);
+  });
+});
+
 describe("create_schedule MCP tool", () => {
   const logger = createTestLogger();
 

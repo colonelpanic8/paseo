@@ -21,7 +21,9 @@ import {
   type ProjectPlacementPayload,
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
+  type WorkspaceSnoozeStatus,
 } from "./messages.js";
+import { resolveWorkspaceSnooze } from "./workspace-snooze.js";
 import type {
   TerminalManager,
   TerminalWorkspaceContributionChangedEvent,
@@ -3062,7 +3064,7 @@ export class Session {
     this.sessionLogger.info(logContext, "session: workspace.snooze.set.request");
     const emitResponse = (
       accepted: boolean,
-      snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null,
+      snoozeStatus: WorkspaceSnoozeStatus | null,
       error: string | null,
     ) => {
       this.emit({
@@ -3073,28 +3075,22 @@ export class Session {
 
     try {
       const now = new Date();
-      if (snoozedUntil !== null && !(Date.parse(snoozedUntil) > now.getTime())) {
-        emitResponse(false, null, "Workspace snooze wake time must be a valid future timestamp");
+      const resolved = resolveWorkspaceSnooze({ snoozedUntil, now });
+      if (!resolved.ok) {
+        emitResponse(false, null, resolved.error);
         return;
       }
-      const nextSnoozeStatus =
-        snoozedUntil === null
-          ? null
-          : {
-              snoozedAt: now.toISOString(),
-              snoozedUntil: new Date(Date.parse(snoozedUntil)).toISOString(),
-            };
       const updatedAt = now.toISOString();
       const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
         ...existing,
-        snoozeStatus: nextSnoozeStatus,
+        snoozeStatus: resolved.snoozeStatus,
         updatedAt,
       }));
       if (!updated) {
         emitResponse(false, null, "Workspace not found");
         return;
       }
-      emitResponse(true, nextSnoozeStatus, null);
+      emitResponse(true, resolved.snoozeStatus, null);
       await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
     } catch (error) {
       this.sessionLogger.error(

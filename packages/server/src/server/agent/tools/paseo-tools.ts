@@ -75,6 +75,11 @@ import type {
   WorkspaceRegistry,
 } from "../../workspace-registry.js";
 import { resolveWorktreeSourceCwd } from "../../workspace-source.js";
+import {
+  isWorkspaceSnoozed,
+  resolveSnoozeWakeTime,
+  resolveWorkspaceSnooze,
+} from "../../workspace-snooze.js";
 import type { WorkspaceScriptsService } from "../../session/workspace-scripts/workspace-scripts-service.js";
 import {
   type ArchiveCommandDependencies,
@@ -171,6 +176,11 @@ interface ProviderSummary {
   error?: string;
 }
 
+const WorkspaceSnoozeStatusSummarySchema = z.object({
+  snoozedAt: z.string(),
+  snoozedUntil: z.string(),
+});
+
 const WorkspaceAutomationSummarySchema = z.object({
   workspaceId: z.string(),
   projectId: z.string(),
@@ -178,9 +188,13 @@ const WorkspaceAutomationSummarySchema = z.object({
   isolation: z.enum(["local", "worktree"]),
   kind: z.enum(["directory", "local_checkout", "worktree"]),
   title: z.string().nullable(),
+  // Snoozed workspaces stay listed; the flag is the stored pair resolved
+  // against the clock, so it flips back to false on its own at the wake time.
+  snoozed: z.boolean(),
+  snoozeStatus: WorkspaceSnoozeStatusSummarySchema.nullable(),
 });
 
-function toWorkspaceAutomationSummary(workspace: PersistedWorkspaceRecord) {
+function toWorkspaceAutomationSummary(workspace: PersistedWorkspaceRecord, now: Date = new Date()) {
   return {
     workspaceId: workspace.workspaceId,
     projectId: workspace.projectId,
@@ -188,6 +202,8 @@ function toWorkspaceAutomationSummary(workspace: PersistedWorkspaceRecord) {
     isolation: workspace.kind === "worktree" ? ("worktree" as const) : ("local" as const),
     kind: workspace.kind,
     title: workspace.title,
+    snoozed: isWorkspaceSnoozed(workspace.snoozeStatus, now),
+    snoozeStatus: workspace.snoozeStatus,
   };
 }
 
@@ -673,7 +689,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     return options.ensureWorkspaceForCreate(resolvedCwd);
   }
 
-  function resolveWorkspaceIdForRename(requestedWorkspaceId?: string): string {
+  function resolveTargetWorkspaceId(requestedWorkspaceId?: string): string {
     const explicitWorkspaceId = requestedWorkspaceId?.trim();
     if (explicitWorkspaceId) {
       return explicitWorkspaceId;
@@ -1329,7 +1345,8 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     "list_workspaces",
     {
       title: "List workspaces",
-      description: "List active workspaces.",
+      description:
+        "List active workspaces, including snoozed ones. Each entry carries snoozed (true while the snooze is still in effect) and snoozeStatus ({ snoozedAt, snoozedUntil }).",
       inputSchema: {},
       outputSchema: { workspaces: z.array(WorkspaceAutomationSummarySchema) },
     },
@@ -1337,9 +1354,10 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       if (!options.workspaceRegistry) {
         throw new Error("Workspace registry is not configured");
       }
+      const now = new Date();
       const workspaces = (await options.workspaceRegistry.list())
         .filter((workspace) => !workspace.archivedAt)
-        .map(toWorkspaceAutomationSummary);
+        .map((workspace) => toWorkspaceAutomationSummary(workspace, now));
       return {
         content: [],
         structuredContent: ensureValidJson({ workspaces }),
@@ -2197,7 +2215,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         throw new Error("Workspace update emitter is required to rename workspaces");
       }
 
-      const workspaceId = resolveWorkspaceIdForRename(requestedWorkspaceId);
+      const workspaceId = resolveTargetWorkspaceId(requestedWorkspaceId);
       const existing = await options.workspaceRegistry.get(workspaceId);
       if (!existing) {
         throw new Error(`Workspace ${workspaceId} not found`);
@@ -2222,6 +2240,123 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         }),
       };
     },
+  );
+
+  async function applyWorkspaceSnooze(input: {
+    requestedWorkspaceId: string | undefined;
+    snoozedUntil: string | null;
+    action: "snooze" | "wake";
+  }) {
+    if (!options.workspaceRegistry) {
+      throw new Error(`Workspace registry is required to ${input.action} workspaces`);
+    }
+    if (!options.emitWorkspaceUpdatesForWorkspaceIds) {
+      throw new Error(`Workspace update emitter is required to ${input.action} workspaces`);
+    }
+
+    const workspaceId = resolveTargetWorkspaceId(input.requestedWorkspaceId);
+    const existing = await options.workspaceRegistry.get(workspaceId);
+    if (!existing) {
+      throw new Error(`Workspace ${workspaceId} not found`);
+    }
+    if (existing.archivedAt) {
+      throw new Error(`Workspace ${workspaceId} is archived`);
+    }
+
+    const now = new Date();
+    const resolved = resolveWorkspaceSnooze({ snoozedUntil: input.snoozedUntil, now });
+    if (!resolved.ok) {
+      throw new Error(resolved.error);
+    }
+
+    await options.workspaceRegistry.upsert({
+      ...existing,
+      snoozeStatus: resolved.snoozeStatus,
+      updatedAt: now.toISOString(),
+    });
+    await options.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
+
+    return {
+      content: [],
+      structuredContent: ensureValidJson({
+        success: true,
+        workspaceId,
+        snoozed: isWorkspaceSnoozed(resolved.snoozeStatus, now),
+        snoozeStatus: resolved.snoozeStatus,
+      }),
+    };
+  }
+
+  const workspaceSnoozeOutputSchema = {
+    success: z.boolean(),
+    workspaceId: z.string(),
+    snoozed: z.boolean(),
+    snoozeStatus: WorkspaceSnoozeStatusSummarySchema.nullable(),
+  };
+
+  registerTool(
+    "snooze_workspace",
+    {
+      title: "Snooze workspace",
+      description:
+        "Snooze a workspace until a wake time. It stays listed and keeps running; snoozing only marks it as not needing attention until then. Pass exactly one of until or duration. Omit workspaceId to snooze your current workspace. Reverse it with wake_workspace.",
+      inputSchema: {
+        workspaceId: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Workspace id to snooze. Omit to snooze your current workspace."),
+        until: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Absolute wake time as an ISO 8601 timestamp. Must be in the future."),
+        duration: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe('Relative wake time, for example "45m", "2h", "3d", or "1w".'),
+      },
+      outputSchema: workspaceSnoozeOutputSchema,
+    },
+    async ({ workspaceId, until, duration }) => {
+      const wakeTime = resolveSnoozeWakeTime({ until, duration, now: new Date() });
+      if (!wakeTime.ok) {
+        throw new Error(wakeTime.error);
+      }
+      return applyWorkspaceSnooze({
+        requestedWorkspaceId: workspaceId,
+        snoozedUntil: wakeTime.snoozedUntil,
+        action: "snooze",
+      });
+    },
+  );
+
+  registerTool(
+    "wake_workspace",
+    {
+      title: "Wake workspace",
+      description:
+        "Clear a workspace's snooze so it needs attention again. Omit workspaceId to wake your current workspace. Waking a workspace that is not snoozed is a no-op.",
+      inputSchema: {
+        workspaceId: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Workspace id to wake. Omit to wake your current workspace."),
+      },
+      outputSchema: workspaceSnoozeOutputSchema,
+    },
+    async ({ workspaceId }) =>
+      applyWorkspaceSnooze({
+        requestedWorkspaceId: workspaceId,
+        snoozedUntil: null,
+        action: "wake",
+      }),
   );
 
   registerTool(
