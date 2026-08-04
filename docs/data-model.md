@@ -187,8 +187,9 @@ which layer receives settings changes:
 
 Imports are flattened depth-first. Later imports override earlier ones, and each file overrides its
 imports. Relative paths start from the referencing file's directory; paths beginning with `~/`
-start from the user's home directory. `writeTo` must name the root or a file in its import graph and
-is allowed only in the root. Without `writeTo`, settings changes write to the root.
+start from the user's home directory. A file reached through more than one branch participates once
+at its first depth-first position. `writeTo` must name the root or a file in its import graph and is
+allowed only in the root. Without `writeTo`, settings changes write to the root.
 
 Settings changes rewrite only the selected layer's difference from all other layers. Imported files
 are read without changing their permissions, so shared configuration can live in a Nix store or Git
