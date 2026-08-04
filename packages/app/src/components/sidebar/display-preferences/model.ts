@@ -17,6 +17,9 @@ export interface SidebarDisplayPreferences {
   setTitleSource: (source: WorkspaceTitleSource) => void;
   rowItems: SidebarRowItems;
   toggleRowItem: (item: SidebarRowItem) => void;
+  alwaysShowHostLabels: boolean;
+  /** A shortcut to the persisted Appearance preference. */
+  toggleAlwaysShowHostLabels: () => void;
   trailing: SidebarWorkspaceTrailing;
   /** Picking the choice that is already showing clears the slot. */
   toggleTrailing: (choice: SidebarTrailingChoice) => void;
@@ -41,7 +44,12 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
   const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
 
   const {
-    settings: { workspaceTitleSource, sidebarWorkspaceTrailing, sidebarRowItems },
+    settings: {
+      workspaceTitleSource,
+      sidebarWorkspaceTrailing,
+      sidebarRowItems,
+      alwaysShowHostLabels,
+    },
     updateSettings,
   } = useAppSettings();
 
@@ -61,6 +69,10 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
     [updateSettings, sidebarRowItems],
   );
 
+  const toggleAlwaysShowHostLabels = useCallback(() => {
+    void updateSettings({ alwaysShowHostLabels: !alwaysShowHostLabels });
+  }, [alwaysShowHostLabels, updateSettings]);
+
   const toggleTrailing = useCallback(
     (choice: SidebarTrailingChoice) => {
       void updateSettings({
@@ -78,6 +90,8 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       setTitleSource,
       rowItems: sidebarRowItems,
       toggleRowItem,
+      alwaysShowHostLabels,
+      toggleAlwaysShowHostLabels,
       trailing: sidebarWorkspaceTrailing,
       toggleTrailing,
       hostFilters,
@@ -91,6 +105,8 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       setTitleSource,
       sidebarRowItems,
       toggleRowItem,
+      alwaysShowHostLabels,
+      toggleAlwaysShowHostLabels,
       sidebarWorkspaceTrailing,
       toggleTrailing,
       hostFilters,
