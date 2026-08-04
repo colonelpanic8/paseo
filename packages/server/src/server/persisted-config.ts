@@ -500,6 +500,7 @@ interface LoadLayerParams {
   requestedPath: string;
   importingPath?: string;
   ancestry: string[];
+  loadedByPath: Map<string, ConfigLayer>;
   isRoot: boolean;
 }
 
@@ -528,6 +529,11 @@ function loadLayer(params: LoadLayerParams): { layer: ConfigLayer; layers: Confi
     throw new Error(`[Config] Config import cycle: ${cycle}`);
   }
 
+  const loaded = params.loadedByPath.get(configPath);
+  if (loaded) {
+    return { layer: loaded, layers: [] };
+  }
+
   let raw: string;
   try {
     if (params.isRoot) ensurePrivateFile(configPath);
@@ -545,6 +551,7 @@ function loadLayer(params: LoadLayerParams): { layer: ConfigLayer; layers: Confi
   }
 
   const layer: ConfigLayer = { path: configPath, raw, ...parsed };
+  params.loadedByPath.set(configPath, layer);
   const ancestry = [...params.ancestry, configPath];
   const layers: ConfigLayer[] = [];
   for (const importedPath of layer.structural.imports ?? []) {
@@ -552,6 +559,7 @@ function loadLayer(params: LoadLayerParams): { layer: ConfigLayer; layers: Confi
       requestedPath: resolveConfigReference(configPath, importedPath),
       importingPath: configPath,
       ancestry,
+      loadedByPath: params.loadedByPath,
       isRoot: false,
     });
     layers.push(...imported.layers);
@@ -598,6 +606,7 @@ export function loadConfigStack(paseoHome: string, logger?: LoggerLike): ConfigS
   const loaded = loadLayer({
     requestedPath: requestedRootPath,
     ancestry: [],
+    loadedByPath: new Map(),
     isRoot: true,
   });
   const rootPath = loaded.layer.path;

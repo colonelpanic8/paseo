@@ -15,6 +15,7 @@ import {
   loadConfigStack,
   loadPersistedConfig,
   PersistedConfigSchema,
+  saveConfigStack,
   savePersistedConfig,
 } from "./persisted-config.js";
 import { PRIVATE_FILE_MODE } from "./private-files.js";
@@ -32,6 +33,10 @@ function modeOf(filePath: string): number {
 
 function writeJson(filePath: string, value: unknown): void {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function readJson(filePath: string): unknown {
+  return JSON.parse(readFileSync(filePath, "utf-8"));
 }
 
 describe("PersistedConfigSchema daemon auth config", () => {
@@ -803,6 +808,67 @@ describe("loadPersistedConfig", () => {
         mcp: { enabled: false, injectIntoAgents: false },
         git: { maxProcessConcurrency: 4 },
         cors: { allowedOrigins: ["https://second.example"] },
+        relay: { enabled: true },
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("loads a shared diamond import once without reapplying it over an importer", () => {
+    const home = createTempHome();
+    const sharedPath = path.join(home, "shared.json");
+    const firstPath = path.join(home, "first.json");
+    const secondPath = path.join(home, "second.json");
+    const configPath = path.join(home, "config.json");
+    try {
+      writeJson(sharedPath, {
+        daemon: {
+          mcp: { enabled: true },
+          git: { maxProcessConcurrency: 2 },
+        },
+      });
+      writeJson(firstPath, {
+        imports: ["shared.json"],
+        daemon: { mcp: { enabled: false } },
+      });
+      writeJson(secondPath, {
+        imports: ["shared.json"],
+        daemon: { relay: { enabled: true } },
+      });
+      writeJson(configPath, {
+        imports: ["first.json", "second.json"],
+        writeTo: "shared.json",
+      });
+
+      const stack = loadConfigStack(home);
+
+      expect(stack.layers.map((layer) => layer.path)).toEqual([
+        sharedPath,
+        firstPath,
+        secondPath,
+        configPath,
+      ]);
+      expect(stack.effective.daemon).toEqual({
+        mcp: { enabled: false },
+        git: { maxProcessConcurrency: 2 },
+        relay: { enabled: true },
+      });
+
+      saveConfigStack(stack, {
+        daemon: {
+          mcp: { enabled: false },
+          git: { maxProcessConcurrency: 8 },
+          relay: { enabled: true },
+        },
+      });
+
+      expect(readJson(sharedPath)).toEqual({
+        daemon: { git: { maxProcessConcurrency: 8 } },
+      });
+      expect(loadPersistedConfig(home).daemon).toEqual({
+        mcp: { enabled: false },
+        git: { maxProcessConcurrency: 8 },
         relay: { enabled: true },
       });
     } finally {
