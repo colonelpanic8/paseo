@@ -926,7 +926,7 @@ test("passes password as HTTP bearer header and WebSocket subprotocol", async ()
   expect(transportFactory).toHaveBeenCalledWith({
     url: "ws://test",
     headers: { Authorization: "Bearer shared-secret" },
-    protocols: ["paseo.bearer.shared-secret"],
+    protocols: ["paseo.bearer64.c2hhcmVkLXNlY3JldA"],
   });
 });
 
@@ -1038,6 +1038,7 @@ test("sends a password containing spaces in hello without an invalid WebSocket s
   expect(transportFactory).toHaveBeenCalledWith({
     url: "ws://test",
     headers: {},
+    protocols: ["paseo.bearer64.dHdvIHdvcmRz"],
   });
   expect(JSON.parse(assertStr(mock.sent[0]))).toMatchObject({
     type: "hello",
