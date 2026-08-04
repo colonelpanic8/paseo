@@ -2,12 +2,15 @@ export interface CollapsedProjectsState {
   collapsedProjectKeys: Set<string>;
   collapsedStatusGroupKeys: Set<string>;
   collapsedPinned: boolean;
+  /** Workspace keys (`${serverId}:${workspaceId}`) whose agent tree is open. */
+  expandedAgentTreeWorkspaceKeys: Set<string>;
 }
 
 export interface PersistedCollapsedProjects {
   collapsedProjectKeys?: unknown;
   collapsedStatusGroupKeys?: unknown;
   collapsedPinned?: unknown;
+  expandedAgentTreeWorkspaceKeys?: unknown;
 }
 
 export function togglePinnedCollapsed(state: CollapsedProjectsState): CollapsedProjectsState {
@@ -56,6 +59,19 @@ export function toggleStatusGroupCollapsed(
   return { ...state, collapsedStatusGroupKeys: next };
 }
 
+export function toggleAgentTreeExpanded(
+  state: CollapsedProjectsState,
+  workspaceKey: string,
+): CollapsedProjectsState {
+  const next = new Set(state.expandedAgentTreeWorkspaceKeys);
+  if (next.has(workspaceKey)) {
+    next.delete(workspaceKey);
+  } else {
+    next.add(workspaceKey);
+  }
+  return { ...state, expandedAgentTreeWorkspaceKeys: next };
+}
+
 export function setProjectCollapsed(
   state: CollapsedProjectsState,
   projectKey: string,
@@ -74,11 +90,13 @@ export function serializeCollapsedProjects(state: CollapsedProjectsState): {
   collapsedProjectKeys: string[];
   collapsedStatusGroupKeys: string[];
   collapsedPinned: boolean;
+  expandedAgentTreeWorkspaceKeys: string[];
 } {
   return {
     collapsedProjectKeys: Array.from(state.collapsedProjectKeys),
     collapsedStatusGroupKeys: Array.from(state.collapsedStatusGroupKeys),
     collapsedPinned: state.collapsedPinned,
+    expandedAgentTreeWorkspaceKeys: Array.from(state.expandedAgentTreeWorkspaceKeys),
   };
 }
 
@@ -89,12 +107,14 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   if (
     !persisted?.collapsedProjectKeys &&
     !persisted?.collapsedStatusGroupKeys &&
+    !persisted?.expandedAgentTreeWorkspaceKeys &&
     persisted?.collapsedPinned === undefined
   ) {
     return current;
   }
   const restoredProjects = deserializeCollapsedKeys(persisted.collapsedProjectKeys);
   const restoredStatusGroups = deserializeCollapsedKeys(persisted.collapsedStatusGroupKeys);
+  const restoredAgentTrees = deserializeCollapsedKeys(persisted.expandedAgentTreeWorkspaceKeys);
   const restoredPinned =
     typeof persisted.collapsedPinned === "boolean"
       ? persisted.collapsedPinned
@@ -102,6 +122,7 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   if (
     areSetsEqual(current.collapsedProjectKeys, restoredProjects) &&
     areSetsEqual(current.collapsedStatusGroupKeys, restoredStatusGroups) &&
+    areSetsEqual(current.expandedAgentTreeWorkspaceKeys, restoredAgentTrees) &&
     current.collapsedPinned === restoredPinned
   ) {
     return current;
@@ -111,6 +132,7 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
     collapsedProjectKeys: restoredProjects,
     collapsedStatusGroupKeys: restoredStatusGroups,
     collapsedPinned: restoredPinned,
+    expandedAgentTreeWorkspaceKeys: restoredAgentTrees,
   };
 }
 

@@ -1038,6 +1038,11 @@ export const ja: TranslationResources = {
         hideConfirm: "非表示",
         cancel: "キャンセル",
       },
+      agentTree: {
+        show: "エージェントを表示",
+        hide: "エージェントを非表示",
+        swipeAction: "エージェント",
+      },
       rename: {
         title: "ワークスペースの名前を変更",
         submit: "名前を変更",

@@ -1,8 +1,10 @@
 import { memo, useId, useMemo, useCallback, useState, type ReactNode } from "react";
-import { Text, View, type ViewStyle } from "react-native";
+import { type GestureResponderEvent, Pressable, Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
-import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
+import { ChevronRight, CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
+import { isWeb } from "@/constants/platform";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { PulsingStatusDot } from "@/components/sidebar/pulsing-status-dot";
@@ -41,6 +43,9 @@ const SCRIM_SOLID_OFFSET = "55%";
  */
 const WORKSPACE_ROW_INDENT = 12;
 
+// Matches project-leading-visual's LEADING_SLOT_HEIGHT.
+const PROJECT_LEADING_SLOT_HEIGHT = 20;
+
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
 const DEFAULT_STATUS_DOT_OFFSET = 0;
@@ -49,6 +54,7 @@ const EMPHASIZED_STATUS_DOT_OFFSET = -1;
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 
+const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolder = withUnistyles(Folder);
@@ -80,6 +86,12 @@ function TrailingActionScrimSvg({ gradientId, color }: { gradientId: string; col
 const ThemedTrailingActionScrimSvg = withUnistyles(TrailingActionScrimSvg);
 
 const scrimColorMapping = (theme: Theme) => ({ color: theme.colors.surfaceSidebarHover });
+
+/** Expanded state and toggle for a row's agent tree, wherever the row surfaces it. */
+export interface SidebarWorkspaceRowDisclosure {
+  expanded: boolean;
+  onToggle: () => void;
+}
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -194,18 +206,18 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             loading={isLoading}
             reserveIdleSpace={reserveIdleStatusIndicatorSpace}
           />
-          )}
-          <View style={styles.workspaceContentColumn}>
-            <View style={styles.workspaceTitleRow}>
-              <SidebarWorkspaceInlineTitle
-                displayValue={workspaceLabel}
-                renameValue={workspace.title ?? workspace.name}
-                editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
-                onSubmit={onSubmitRename}
-                style={workspaceBranchTextStyle}
-                testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
-              />
-              <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
+        )}
+        <View style={styles.workspaceContentColumn}>
+          <View style={styles.workspaceTitleRow}>
+            <SidebarWorkspaceInlineTitle
+              displayValue={workspaceLabel}
+              renameValue={workspace.title ?? workspace.name}
+              editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+              onSubmit={onSubmitRename}
+              style={workspaceBranchTextStyle}
+              testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+            />
+            <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
           </View>
           <WorkspaceMetaRow
             hostBadge={hostBadge ?? null}
@@ -222,6 +234,74 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     </View>
   );
 });
+
+/**
+ * Trailing-edge agent-tree chevron, shared by both grouping modes. The leading
+ * icon is never touched: identity stays put and the toggle lives at the end of
+ * the row, after the kebab.
+ *
+ * Web only — it is hover-revealed, and hover does not exist on native. Native
+ * reaches the tree through the row menu (project mode) and the swipe underlay
+ * (status mode) instead.
+ *
+ * Presses are stopped here so the surrounding row Pressable does not also
+ * navigate.
+ */
+export function SidebarWorkspaceAgentTreeToggle({
+  expanded,
+  onToggle,
+  testID,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  testID: string;
+}) {
+  const { t } = useTranslation();
+  const handlePressIn = useCallback((event: GestureResponderEvent) => event.stopPropagation(), []);
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      onToggle();
+    },
+    [onToggle],
+  );
+  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
+
+  return (
+    <Pressable
+      // The row itself is a <button> on web; a nested button is invalid HTML.
+      accessibilityRole={isWeb ? undefined : "button"}
+      accessibilityLabel={
+        expanded ? t("sidebar.workspace.agentTree.hide") : t("sidebar.workspace.agentTree.show")
+      }
+      accessibilityState={accessibilityState}
+      hitSlop={4}
+      onPressIn={handlePressIn}
+      onPress={handlePress}
+      style={styles.agentTreeToggle}
+      testID={testID}
+    >
+      <View
+        style={
+          expanded
+            ? [styles.agentTreeChevron, styles.agentTreeChevronExpanded]
+            : styles.agentTreeChevron
+        }
+      >
+        <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Holds the chevron's width whether or not it is showing, so hover-revealing it
+ * never reflows the row. Only rendered for rows that have a tree to open, so a
+ * row without agents gives up no width at all.
+ */
+export function SidebarWorkspaceAgentTreeToggleSlot({ children }: { children: ReactNode }) {
+  return <View style={styles.agentTreeToggleSlot}>{children}</View>;
+}
 
 function WorkspaceStatusIndicator({
   bucket,
@@ -574,6 +654,28 @@ const styles = StyleSheet.create((theme) => ({
     position: "absolute",
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
+  },
+  agentTreeChevron: {
+    width: theme.iconSize.sm,
+    height: theme.iconSize.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  agentTreeChevronExpanded: {
+    transform: [{ rotate: "90deg" }],
+  },
+  agentTreeToggle: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Matches the chevron's own footprint so reserving the slot and filling it are
+  // the same width.
+  agentTreeToggleSlot: {
+    width: theme.iconSize.sm,
+    minHeight: PROJECT_LEADING_SLOT_HEIGHT,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
   standaloneStatusDot: {
     width: 8,

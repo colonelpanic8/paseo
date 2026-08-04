@@ -15,7 +15,7 @@ import {
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
-import type { Theme } from "@/styles/theme";
+import { SPACING, type Theme } from "@/styles/theme";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
@@ -25,6 +25,12 @@ import { isNative, isWeb } from "@/constants/platform";
 import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
 
 const PROJECT_ICON_SIZE = 40;
+/**
+ * The agent tree's top-level rows sit on the status row's own leading rail
+ * (its left padding) rather than the title rail — hierarchy reads from the
+ * per-depth steps, not from a large base offset.
+ */
+export const STATUS_ROW_AGENT_TREE_INDENT = SPACING[2];
 const STATUS_DOT_SIZE = 12;
 const MAX_PROVIDER_ICONS = 3;
 const PROVIDER_ICON_SIZE = 14;
@@ -82,6 +88,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   showShortcutBadge = false,
   showActions,
   showSnoozedChip = false,
+  showAgentTreeToggle = false,
   onSubmitRename,
   children,
 }: {
@@ -101,8 +108,13 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
    * the time-ago text instead of staying empty.
    */
   showSnoozedChip?: boolean;
+  /**
+   * An expanded tree keeps its chevron on an unhovered row, so the trailing slot
+   * has to render even when the quick actions do not.
+   */
+  showAgentTreeToggle?: boolean;
   onSubmitRename?: (value: string) => Promise<void>;
-  /** The quick-action cluster, or just the snooze chip when only it is shown. */
+  /** The quick-action cluster, or just the snooze chip and/or agent-tree chevron. */
   children?: ReactNode;
 }) {
   const {
@@ -115,14 +127,12 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   const activityLabel = workspace.activityAt
     ? `${formatCompactTimeAgo(workspace.activityAt, activityNow)} · ${formatClockTime(workspace.activityAt)}`
     : null;
-  // Web swaps the activity label for the quick actions on hover, inside a fixed slot so
-  // the row never reflows. Touch platforms have no hover: the kebab is permanent,
-  // so it sits beside the activity label instead of covering it.
-  const showOverlayActions = showActions && !showShortcut && !isNative;
-  const showInlineActions = showActions && !showShortcut && isNative;
-  // Not hovered but snoozed: the chip sits beside the time-ago text, the same
-  // place the inline actions occupy on touch.
-  const showSnoozeChipOnly = !showActions && showSnoozedChip && !showShortcut;
+  const { showOverlayActions, showTrailingActions } = resolveStatusRowMetaLayout({
+    showActions,
+    showShortcut,
+    showSnoozedChip,
+    showAgentTreeToggle,
+  });
 
   return (
     <View style={styles.rowContent}>
@@ -134,7 +144,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
             isArchiving={isArchiving}
             activityLabel={activityLabel}
             showTimestamp={!showOverlayActions && !showShortcut}
-            showTrailingActions={showOverlayActions || showInlineActions || showSnoozeChipOnly}
+            showTrailingActions={showTrailingActions}
           >
             {children}
           </StatusRowMetaLine>
@@ -318,6 +328,40 @@ function StatusRowTimestamp({
     return null;
   }
   return <Text style={styles.timestamp}>{activityLabel}</Text>;
+}
+
+/**
+ * Who owns the meta line's trailing slot. Web swaps the activity label for the
+ * quick actions on hover, inside a fixed slot so the row never reflows. Touch
+ * platforms have no hover: the kebab is permanent, so it sits beside the
+ * activity label instead of covering it. The snooze chip and the agent-tree
+ * chevron each keep the slot alive on their own for a row that is not hovered,
+ * and they sit beside the time-ago text the way the inline actions do.
+ */
+function resolveStatusRowMetaLayout({
+  showActions,
+  showShortcut,
+  showSnoozedChip,
+  showAgentTreeToggle,
+}: {
+  showActions: boolean;
+  showShortcut: boolean;
+  showSnoozedChip: boolean;
+  showAgentTreeToggle: boolean;
+}): { showOverlayActions: boolean; showTrailingActions: boolean } {
+  // The shortcut badge owns the row while a modifier is held; nothing else
+  // competes for the slot, the chevron included.
+  if (showShortcut) {
+    return { showOverlayActions: false, showTrailingActions: false };
+  }
+  const showOverlayActions = showActions && !isNative;
+  const showInlineActions = showActions && isNative;
+  const showSnoozeChipOnly = !showActions && showSnoozedChip;
+  return {
+    showOverlayActions,
+    showTrailingActions:
+      showOverlayActions || showInlineActions || showSnoozeChipOnly || showAgentTreeToggle,
+  };
 }
 
 function StatusRowLeadingVisual({
