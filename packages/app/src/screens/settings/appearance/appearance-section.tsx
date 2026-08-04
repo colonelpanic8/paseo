@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Text, View } from "react-native";
+import { Switch, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import {
   SYNTAX_THEME_OPTIONS,
@@ -50,6 +50,33 @@ function sizeDraftToOverride(value: string): number | undefined {
   if (value.length === 0) return undefined;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+interface AlwaysShowHostLabelsRowProps {
+  value: boolean;
+  onChange: (value: boolean) => void;
+}
+
+function AlwaysShowHostLabelsRow({ value, onChange }: AlwaysShowHostLabelsRowProps) {
+  const { t } = useTranslation();
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {t("settings.appearance.sidebar.alwaysShowHostLabels.title")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.appearance.sidebar.alwaysShowHostLabels.description")}
+        </Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        accessibilityLabel={t("settings.appearance.sidebar.alwaysShowHostLabels.title")}
+        testID="app-settings-always-show-host-labels"
+      />
+    </View>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +363,13 @@ export function AppearanceSection() {
     [updateSettings],
   );
 
+  const handleAlwaysShowHostLabelsChange = useCallback(
+    (alwaysShowHostLabels: boolean) => {
+      void updateSettings({ alwaysShowHostLabels });
+    },
+    [updateSettings],
+  );
+
   const commitUiFontFamily = useCallback(
     (value: string) => {
       const sanitized = sanitizeFontFamily(value);
@@ -433,6 +467,14 @@ export function AppearanceSection() {
       <SettingsSection title={t("settings.appearance.theme.title")}>
         <View style={[settingsStyles.card, styles.themeCard]}>
           <ThemePicker />
+        </View>
+      </SettingsSection>
+      <SettingsSection title={t("settings.appearance.sidebar.title")}>
+        <View style={settingsStyles.card}>
+          <AlwaysShowHostLabelsRow
+            value={settings.alwaysShowHostLabels}
+            onChange={handleAlwaysShowHostLabelsChange}
+          />
         </View>
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.fonts.title")}>

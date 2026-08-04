@@ -1258,7 +1258,6 @@ export const es: TranslationResources = {
         branch: "Rama",
         project: "Proyecto",
         host: "Host",
-        alwaysShowHost: "Mostrar siempre el host",
         changeRequest: "Pull request",
         checks: "Comprobaciones",
         services: "Servicios",
@@ -2636,6 +2635,12 @@ export const es: TranslationResources = {
         description: "Muestra un esquema para saltar entre instrucciones",
       },
       sidebar: {
+        title: "Barra lateral",
+        alwaysShowHostLabels: {
+          title: "Mostrar siempre las etiquetas de host",
+          description:
+            "Muestra las etiquetas de host incluso cuando todos los espacios de trabajo visibles están en este dispositivo",
+        },
         view: {
           title: "Vista de la barra lateral",
           label: "Vista",

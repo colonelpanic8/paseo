@@ -2,8 +2,7 @@
  * Which facts a sidebar workspace row is allowed to show about a workspace.
  *
  * Each item is independent — this is not a mode. Turning one off removes it from every row and
- * gives the space back to the title. The one exception is the host, which pairs with
- * `alwaysShowHostLabels`; `resolveHostPair` below keeps the two in step.
+ * gives the space back to the title.
  *
  * CI is not here: it has three answers rather than two, so it is its own setting in
  * `checks-display.ts`.
@@ -70,37 +69,4 @@ export function parseSidebarRowItems(value: unknown): SidebarRowItems {
     }
   }
   return result;
-}
-
-/** The host's two switches: whether a row may draw a host at all, and when it does. */
-export interface HostPairState {
-  rowItems: SidebarRowItems;
-  alwaysShowHostLabels: boolean;
-}
-
-/**
- * Both host switches after one of them is flipped.
- *
- * They are separate settings but a single decision, so neither is allowed to sit ticked while
- * the other makes it draw nothing: switching the host off drops the override with it, and
- * asking for the host unconditionally switches the item back on. Every other row item answers
- * only for itself and passes straight through.
- */
-export function resolveHostPair(
-  current: HostPairState,
-  flipped: SidebarRowItem | "alwaysShowHostLabels",
-): HostPairState {
-  if (flipped === "alwaysShowHostLabels") {
-    const alwaysShowHostLabels = !current.alwaysShowHostLabels;
-    return {
-      alwaysShowHostLabels,
-      rowItems: alwaysShowHostLabels ? { ...current.rowItems, host: true } : current.rowItems,
-    };
-  }
-
-  const enabled = !current.rowItems[flipped];
-  return {
-    rowItems: { ...current.rowItems, [flipped]: enabled },
-    alwaysShowHostLabels: flipped === "host" && !enabled ? false : current.alwaysShowHostLabels,
-  };
 }
