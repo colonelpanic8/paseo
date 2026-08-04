@@ -3,7 +3,9 @@
  * their thresholds can't drift apart; they differ only in how much room they have to say it.
  *
  * `elapsed` takes an "ago" in prose, `now` and `date` read as absolutes and never do.
- * The finest granularity is one minute because sidebar callers refresh through useMinuteNow.
+ *
+ * Finest granularity is deliberately one minute: callers refresh at most once a minute
+ * (see useMinuteNow), and a seconds readout would visibly freeze between renders.
  */
 type Elapsed =
   | { kind: "now" }
@@ -89,14 +91,6 @@ export function describeCompactTimeAgo(date: Date, now: Date = new Date()): Comp
 
 export function formatCompactTimeAgo(date: Date, now: Date = new Date()): string {
   return describeCompactTimeAgo(date, now).label;
-}
-
-export function formatCompactRelativeTime(date: Date, now: Date = new Date()): string {
-  const label = formatTimeAgo(date, now);
-  if (label === "just now") {
-    return "now";
-  }
-  return label.endsWith(" ago") ? label.slice(0, -4) : label;
 }
 
 function isSameLocalDay(a: Date, b: Date): boolean {

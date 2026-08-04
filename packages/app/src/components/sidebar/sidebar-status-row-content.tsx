@@ -1,14 +1,17 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Archive, GitPullRequest, Globe, Server, SquareTerminal } from "lucide-react-native";
+import { Archive } from "lucide-react-native";
 import { DiffStat } from "@/components/diff-stat";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SyncedLoader } from "@/components/synced-loader";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SidebarWorkspaceShortcutBadge } from "@/components/sidebar/sidebar-workspace-row-content";
+import {
+  WorkspaceMetaRow,
+  type WorkspaceScriptSummary,
+} from "@/components/sidebar/workspace-meta-row";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
@@ -16,17 +19,9 @@ import type { Theme } from "@/styles/theme";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
-import { formatClockTime, formatCompactRelativeTime } from "@/utils/time";
-import { getHostColorTextStyle } from "@/styles/host-color";
+import { formatClockTime, formatCompactTimeAgo } from "@/utils/time";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isNative, isWeb } from "@/constants/platform";
-import type { PrHint } from "@/git/use-pr-status-query";
-import { getForgePresentation, normalizeForge } from "@/git/forge";
-import { ForgeBrandIcon } from "@/git/forge-icon";
-import { openExternalUrl } from "@/utils/open-external-url";
-import { identityColor } from "@/styles/identity-colors";
-
-type SidebarWorkspaceScriptIconKind = "service" | "command";
 
 const PROJECT_ICON_SIZE = 40;
 const STATUS_DOT_SIZE = 12;
@@ -37,9 +32,6 @@ const ARCHIVE_ICON_SIZE = 14;
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const providerIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.statusMutedDanger });
-const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusMutedSuccess });
-const mergedColorMapping = (theme: Theme) => ({ color: theme.colors.statusMutedMerged });
 const syncedLoaderColorMapping = (theme: Theme) => ({
   color:
     theme.colorScheme === "light"
@@ -50,10 +42,6 @@ const syncedLoaderColorMapping = (theme: Theme) => ({
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedGlobe = withUnistyles(Globe);
-const ThemedSquareTerminal = withUnistyles(SquareTerminal);
-const ThemedServer = withUnistyles(Server);
 
 function DynamicProviderIcon({
   provider,
@@ -69,79 +57,6 @@ function DynamicProviderIcon({
 }
 
 const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
-
-function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
-  return (
-    <View
-      style={styles.workspaceTitleAccessory}
-      accessibilityLabel="Scripts available"
-      testID={kind === "service" ? "workspace-globe-icon" : "workspace-terminal-icon"}
-    >
-      {kind === "service" ? (
-        <ThemedGlobe size={12} uniProps={successColorMapping} />
-      ) : (
-        <ThemedSquareTerminal size={12} uniProps={successColorMapping} />
-      )}
-    </View>
-  );
-}
-
-function PullRequestIcon({ hint }: { hint: PrHint }) {
-  const { t } = useTranslation();
-  const presentation = getForgePresentation(normalizeForge(hint.forge));
-  const handlePressIn = useCallback((event: GestureResponderEvent) => event.stopPropagation(), []);
-  const handlePress = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      void openExternalUrl(hint.url);
-    },
-    [hint.url],
-  );
-
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={t("workspace.git.pr.accessibility.pullRequest", {
-        number: hint.number,
-        context: presentation.changeRequestContext,
-      })}
-      hitSlop={4}
-      onPressIn={handlePressIn}
-      onPress={handlePress}
-      style={pullRequestIconStyle}
-    >
-      <ThemedGitPullRequest size={12} uniProps={getPrIconColorMapping(hint.state)} />
-    </Pressable>
-  );
-}
-
-function ChecksBadge({ checks, forge }: { checks: PrHint["checks"]; forge: PrHint["forge"] }) {
-  if (!checks || checks.length === 0) return null;
-  const failed = checks.filter((check) => check.status === "failure").length;
-  if (failed === 0) return null;
-  const icon = getForgePresentation(normalizeForge(forge)).icon;
-  return (
-    <View style={styles.checksBadge}>
-      <ForgeBrandIcon iconKind={icon} size={10} uniProps={dangerColorMapping} />
-      <Text style={styles.checksText}>{failed} failed</Text>
-    </View>
-  );
-}
-
-function getPrIconColorMapping(state: PrHint["state"]) {
-  switch (state) {
-    case "merged":
-      return mergedColorMapping;
-    case "open":
-      return successColorMapping;
-    case "closed":
-      return dangerColorMapping;
-  }
-}
-
-function pullRequestIconStyle({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) {
-  return [styles.pullRequestIcon, (Boolean(hovered) || pressed) && styles.pullRequestIconActive];
-}
 
 /**
  * Status-mode row body. Project mode keeps `SidebarWorkspaceRowContent`; this is
@@ -160,7 +75,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   workspace,
   iconDataUri,
   hostBadge,
-  scriptIconKind = null,
+  scriptSummary = null,
   isArchiving,
   shortcutNumber = null,
   showShortcutBadge = false,
@@ -171,7 +86,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostBadge: HostBadgeModel | null;
-  scriptIconKind?: SidebarWorkspaceScriptIconKind | null;
+  scriptSummary?: WorkspaceScriptSummary | null;
   isArchiving: boolean;
   shortcutNumber?: number | null;
   showShortcutBadge?: boolean;
@@ -188,7 +103,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   const repoSlug = deriveRemoteSlug(workspace.remoteUrl) ?? workspace.projectName;
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const activityLabel = workspace.activityAt
-    ? `${formatCompactRelativeTime(workspace.activityAt, activityNow)} · ${formatClockTime(workspace.activityAt)}`
+    ? `${formatCompactTimeAgo(workspace.activityAt, activityNow)} · ${formatClockTime(workspace.activityAt)}`
     : null;
   // Web swaps the activity label for the quick actions on hover, inside a fixed slot so
   // the row never reflows. Touch platforms have no hover: the kebab is permanent,
@@ -211,7 +126,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
           >
             {children}
           </StatusRowMetaLine>
-          <StatusRowTitleLine primaryLabel={primaryLabel} scriptIconKind={scriptIconKind} />
+          <StatusRowTitleLine primaryLabel={primaryLabel} />
         </View>
       </View>
       <StatusRowDetailLine
@@ -219,6 +134,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
         diffStat={workspace.diffStat}
         prHint={workspace.prHint}
         hostBadge={hostBadge}
+        scriptSummary={scriptSummary}
         providers={workspace.providers}
       />
       {showShortcut && shortcutNumber !== null ? (
@@ -265,34 +181,35 @@ function StatusRowMetaLine({
   );
 }
 
-function StatusRowTitleLine({
-  primaryLabel,
-  scriptIconKind,
-}: {
-  primaryLabel: string;
-  scriptIconKind: SidebarWorkspaceScriptIconKind | null;
-}) {
+function StatusRowTitleLine({ primaryLabel }: { primaryLabel: string }) {
   return (
     <View style={styles.titleRow}>
       <Text style={styles.title} numberOfLines={1}>
         {primaryLabel}
       </Text>
-      {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
     </View>
   );
 }
 
+/**
+ * The card's own detail line. The branch and diff belong to this workspace alone, so they
+ * lead; everything the compact row would also show — host, change request, checks, running
+ * service — comes from `WorkspaceMetaRow` so both grouping modes honour the same display
+ * preferences and render the same glyphs.
+ */
 function StatusRowDetailLine({
   secondaryLabel,
   diffStat,
   prHint,
   hostBadge,
+  scriptSummary,
   providers,
 }: {
   secondaryLabel: string | null;
   diffStat: SidebarWorkspaceEntry["diffStat"];
   prHint: SidebarWorkspaceEntry["prHint"];
   hostBadge: HostBadgeModel | null;
+  scriptSummary: WorkspaceScriptSummary | null;
   providers: readonly string[];
 }) {
   return (
@@ -306,39 +223,12 @@ function StatusRowDetailLine({
         {diffStat ? (
           <DiffStat additions={diffStat.additions} deletions={diffStat.deletions} />
         ) : null}
-        {prHint ? <PullRequestIcon hint={prHint} /> : null}
-        {prHint ? <ChecksBadge checks={prHint.checks} forge={prHint.forge} /> : null}
       </View>
       <View style={styles.detailRight}>
-        {hostBadge ? <StatusRowHostIdentity hostBadge={hostBadge} /> : null}
+        <WorkspaceMetaRow hostBadge={hostBadge} prHint={prHint} scriptSummary={scriptSummary} />
         <StatusRowProviderIcons providers={providers} />
       </View>
     </View>
-  );
-}
-
-// The card shows the host as tinted text when its badge display is "name"; icon
-// mode reuses the compact rows' pill so the two modes stay recognizably the same
-// host across grouping modes.
-function StatusRowHostIdentity({ hostBadge }: { hostBadge: HostBadgeModel }) {
-  if (!hostBadge.showLabel) {
-    return (
-      <View
-        accessibilityLabel={hostBadge.label}
-        testID={`sidebar-host-badge-${hostBadge.serverId}`}
-      >
-        {hostBadge.color === "none" ? (
-          <ThemedServer size={12} uniProps={foregroundMutedColorMapping} />
-        ) : (
-          <Server size={12} color={identityColor(hostBadge.color)} />
-        )}
-      </View>
-    );
-  }
-  return (
-    <Text style={[styles.hostLabel, getHostColorTextStyle(hostBadge.color)]} numberOfLines={1}>
-      {hostBadge.label}
-    </Text>
   );
 }
 
@@ -594,32 +484,6 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
   },
-  workspaceTitleAccessory: {
-    height: 20,
-    flexShrink: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pullRequestIcon: {
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  pullRequestIconActive: {
-    opacity: 0.82,
-  },
-  checksBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  checksText: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
-    color: theme.colors.statusMutedDanger,
-  },
   // Sibling of the header block, so it starts at the row's left padding and
   // runs the full width instead of being inset under the project icon.
   detailRow: {
@@ -651,12 +515,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     flexShrink: 0,
     marginLeft: "auto",
-  },
-  hostLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    lineHeight: 16,
   },
   providerIcons: {
     flexDirection: "row",

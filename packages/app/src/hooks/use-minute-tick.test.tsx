@@ -4,7 +4,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatCompactRelativeTime } from "@/utils/time";
+import { formatCompactTimeAgo } from "@/utils/time";
 
 vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -38,7 +38,7 @@ function createProbe(useMinuteNow: () => Date, activityAt?: Date): Probe {
     renders += 1;
     const now = useMinuteNow();
     minute = Math.floor(now.getTime() / MINUTE);
-    relativeLabel = activityAt ? formatCompactRelativeTime(activityAt, now) : null;
+    relativeLabel = activityAt ? formatCompactTimeAgo(activityAt, now) : null;
     return null;
   }
 

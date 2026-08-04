@@ -1997,6 +1997,8 @@ function SidebarStatusModeWrapper({
   listHeaderComponent?: ReactElement | null;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
+  // Only status mode renders the archived tail, so the query lives here rather
+  // than in the shared sidebar model — project mode never pays for it.
   const hostFilters = useSidebarViewStore((state) => state.hostFilters);
   const hostRegistryLoaded = useHostRegistryLoaded();
   const archivedServerIds = useMemo(

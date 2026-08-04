@@ -698,7 +698,6 @@ function StatusWorkspaceRowInner({
 
   const isDesktop = !isTouchPlatform;
   const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
-  const scriptIconKind = scriptSummary?.kind ?? null;
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
@@ -757,7 +756,7 @@ function StatusWorkspaceRowInner({
                     workspace={workspace}
                     iconDataUri={iconDataUri}
                     hostBadge={hostBadge}
-                    scriptIconKind={scriptIconKind}
+                    scriptSummary={scriptSummary}
                     isArchiving={isArchiving}
                     shortcutNumber={shortcutNumber}
                     showShortcutBadge={showShortcutBadge}
