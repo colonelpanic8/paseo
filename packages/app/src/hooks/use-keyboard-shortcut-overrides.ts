@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { layeredSettingsStorage } from "@/storage/settings-seed";
 
 const STORAGE_KEY = "@paseo:keyboard-shortcut-overrides";
 const QUERY_KEY = ["keyboard-shortcut-overrides"];
@@ -25,29 +25,47 @@ export function useKeyboardShortcutOverrides(): UseKeyboardShortcutOverridesRetu
     gcTime: Infinity,
   });
 
+  // Persisting can fail when a seed layer owns the binding, so the optimistic cache write is
+  // rolled back before the error reaches the caller.
+  const persist = useCallback(
+    async (prev: Record<string, string>, next: Record<string, string>) => {
+      queryClient.setQueryData<Record<string, string>>(QUERY_KEY, next);
+      try {
+        await layeredSettingsStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (err) {
+        queryClient.setQueryData<Record<string, string>>(QUERY_KEY, prev);
+        throw err;
+      }
+    },
+    [queryClient],
+  );
+
   const setOverride = useCallback(
     async (bindingId: string, comboString: string) => {
       const prev = queryClient.getQueryData<Record<string, string>>(QUERY_KEY) ?? EMPTY_OVERRIDES;
-      const next = { ...prev, [bindingId]: comboString };
-      queryClient.setQueryData<Record<string, string>>(QUERY_KEY, next);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      await persist(prev, { ...prev, [bindingId]: comboString });
     },
-    [queryClient],
+    [persist, queryClient],
   );
 
   const removeOverride = useCallback(
     async (bindingId: string) => {
       const prev = queryClient.getQueryData<Record<string, string>>(QUERY_KEY) ?? EMPTY_OVERRIDES;
       const { [bindingId]: _, ...next } = prev;
-      queryClient.setQueryData<Record<string, string>>(QUERY_KEY, next);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      await persist(prev, next);
     },
-    [queryClient],
+    [persist, queryClient],
   );
 
   const resetAll = useCallback(async () => {
+    const prev = queryClient.getQueryData<Record<string, string>>(QUERY_KEY) ?? EMPTY_OVERRIDES;
     queryClient.setQueryData<Record<string, string>>(QUERY_KEY, EMPTY_OVERRIDES);
-    await AsyncStorage.removeItem(STORAGE_KEY);
+    try {
+      await layeredSettingsStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      queryClient.setQueryData<Record<string, string>>(QUERY_KEY, prev);
+      throw err;
+    }
   }, [queryClient]);
 
   const overrides = data ?? EMPTY_OVERRIDES;
@@ -64,7 +82,7 @@ export function useKeyboardShortcutOverrides(): UseKeyboardShortcutOverridesRetu
 
 async function loadOverridesFromStorage(): Promise<Record<string, string>> {
   try {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    const stored = await layeredSettingsStorage.getItem(STORAGE_KEY);
     if (stored) {
       return JSON.parse(stored) as Record<string, string>;
     }

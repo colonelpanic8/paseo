@@ -147,7 +147,8 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
       return next;
     }
 
-    await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(DEFAULT_CLIENT_SETTINGS));
+    // Deliberately not persisted: writing untouched defaults would pin them above a seed layer
+    // that has not been read yet, so a fresh install would ignore its own seeded settings.
     return DEFAULT_CLIENT_SETTINGS;
   } catch (error) {
     console.error("[AppSettings] Failed to load settings:", error);

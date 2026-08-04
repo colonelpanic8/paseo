@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { layeredSettingsStorage } from "@/storage/settings-seed";
 
 type EditorTargetId = string;
 
@@ -8,7 +8,7 @@ const PREFERRED_EDITOR_STORAGE_KEY = "@paseo:preferred-editor";
 const PREFERRED_EDITOR_QUERY_KEY = ["preferred-editor"];
 
 async function loadPreferredEditor(): Promise<EditorTargetId | null> {
-  const stored = await AsyncStorage.getItem(PREFERRED_EDITOR_STORAGE_KEY);
+  const stored = await layeredSettingsStorage.getItem(PREFERRED_EDITOR_STORAGE_KEY);
   if (!stored) {
     return null;
   }
@@ -42,12 +42,21 @@ export function usePreferredEditor() {
 
   const updatePreferredEditor = useCallback(
     async (editorId: EditorTargetId | null) => {
+      // Persisting can fail when a seed layer owns the value, so the optimistic cache write is
+      // rolled back before the error reaches the caller.
+      const prev =
+        queryClient.getQueryData<EditorTargetId | null>(PREFERRED_EDITOR_QUERY_KEY) ?? null;
       queryClient.setQueryData(PREFERRED_EDITOR_QUERY_KEY, editorId);
-      if (editorId) {
-        await AsyncStorage.setItem(PREFERRED_EDITOR_STORAGE_KEY, editorId);
-        return;
+      try {
+        if (editorId) {
+          await layeredSettingsStorage.setItem(PREFERRED_EDITOR_STORAGE_KEY, editorId);
+          return;
+        }
+        await layeredSettingsStorage.removeItem(PREFERRED_EDITOR_STORAGE_KEY);
+      } catch (err) {
+        queryClient.setQueryData(PREFERRED_EDITOR_QUERY_KEY, prev);
+        throw err;
       }
-      await AsyncStorage.removeItem(PREFERRED_EDITOR_STORAGE_KEY);
     },
     [queryClient],
   );

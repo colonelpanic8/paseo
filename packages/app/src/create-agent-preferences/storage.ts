@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { layeredSettingsStorage } from "@/storage/settings-seed";
 import type { FormPreferences } from "./preferences";
 
 export const CREATE_AGENT_PREFERENCES_STORAGE_KEY = "@paseo:create-agent-preferences";
@@ -10,7 +10,7 @@ export interface CreateAgentPreferenceStorage {
 
 export class AsyncStorageCreateAgentPreferenceStorage implements CreateAgentPreferenceStorage {
   async read(): Promise<unknown> {
-    const stored = await AsyncStorage.getItem(CREATE_AGENT_PREFERENCES_STORAGE_KEY);
+    const stored = await layeredSettingsStorage.getItem(CREATE_AGENT_PREFERENCES_STORAGE_KEY);
     if (!stored) {
       return null;
     }
@@ -23,6 +23,9 @@ export class AsyncStorageCreateAgentPreferenceStorage implements CreateAgentPref
   }
 
   async write(preferences: FormPreferences): Promise<void> {
-    await AsyncStorage.setItem(CREATE_AGENT_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+    await layeredSettingsStorage.setItem(
+      CREATE_AGENT_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(preferences),
+    );
   }
 }
