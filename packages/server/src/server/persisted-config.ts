@@ -698,6 +698,7 @@ interface LoadLayerParams {
   requestedPath: string;
   importingPath?: string;
   ancestry: string[];
+  loadedByPath: Map<string, ConfigLayer>;
   isRoot: boolean;
   logger?: LoggerLike;
 }
@@ -728,6 +729,11 @@ function* loadLayer(
     throw new Error(`[Config] Config import cycle: ${cycle}`);
   }
 
+  const loaded = params.loadedByPath.get(configPath);
+  if (loaded) {
+    return { layer: loaded, layers: [] };
+  }
+
   let raw: string;
   try {
     raw = yield* readConfigFile(configPath, params.isRoot);
@@ -744,6 +750,7 @@ function* loadLayer(
   }
 
   const layer: ConfigLayer = { path: configPath, raw, ...parsed };
+  params.loadedByPath.set(configPath, layer);
   const ancestry = [...params.ancestry, configPath];
   const layers: ConfigLayer[] = [];
   for (const importedPath of layer.structural.imports ?? []) {
@@ -751,6 +758,7 @@ function* loadLayer(
       requestedPath: resolveConfigReference(configPath, importedPath),
       importingPath: configPath,
       ancestry,
+      loadedByPath: params.loadedByPath,
       isRoot: false,
       logger: params.logger,
     });
@@ -797,6 +805,7 @@ function* readConfigStack(paseoHome: string, logger?: LoggerLike): ConfigIo<Conf
   const loaded = yield* loadLayer({
     requestedPath: requestedRootPath,
     ancestry: [],
+    loadedByPath: new Map(),
     isRoot: true,
     logger: log,
   });
