@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useCallback,
   useMemo,
   useState,
@@ -17,7 +16,6 @@ import {
   CircleDashed,
   Clock,
   Diff,
-  Eye,
   EyeOff,
   Folder,
   GitBranch,
@@ -64,7 +62,6 @@ import { WorkspaceLabelManagerModal } from "@/workspace-labels/manager-modal";
 const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const ThemedSettings2 = withUnistyles(Settings2);
-const ThemedEye = withUnistyles(Eye);
 /** CI's mark: the subject of the checks row, and the shape the icon-only option leaves behind. */
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircle = withUnistyles(Circle);
@@ -556,28 +553,16 @@ function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
   return (
     <>
       {SIDEBAR_ROW_ITEMS.map((item) => (
-        <Fragment key={item}>
-          <OptionItem
-            value={item}
-            icon={ROW_ITEM_ICONS[item]}
-            label={t(ROW_ITEM_LABEL_KEYS[item])}
-            selected={preferences.rowItems[item]}
-            closeOnSelect={false}
-            onSelect={preferences.toggleRowItem}
-            testID={`sidebar-row-item-${item}`}
-          />
-          {item === "host" ? (
-            <OptionItem
-              value="alwaysShowHost"
-              icon={ThemedEye}
-              label={t("sidebar.display.show.alwaysShowHost")}
-              selected={preferences.alwaysShowHostLabels}
-              closeOnSelect={false}
-              onSelect={preferences.toggleAlwaysShowHostLabels}
-              testID="sidebar-always-show-host-labels"
-            />
-          ) : null}
-        </Fragment>
+        <OptionItem
+          key={item}
+          value={item}
+          icon={ROW_ITEM_ICONS[item]}
+          label={t(ROW_ITEM_LABEL_KEYS[item])}
+          selected={preferences.rowItems[item]}
+          closeOnSelect={false}
+          onSelect={preferences.toggleRowItem}
+          testID={`sidebar-row-item-${item}`}
+        />
       ))}
       <ChecksSubTrigger />
       <MenuSeparator />

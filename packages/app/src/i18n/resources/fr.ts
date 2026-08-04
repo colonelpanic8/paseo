@@ -1142,7 +1142,6 @@ export const fr: TranslationResources = {
         branch: "Branche",
         project: "Projet",
         host: "Hôte",
-        alwaysShowHost: "Toujours afficher l’hôte",
         changeRequest: "Pull request",
         checks: "Vérifications",
         services: "Services",
@@ -2240,6 +2239,12 @@ export const fr: TranslationResources = {
         description: "Afficher un plan pour passer d’une requête à l’autre",
       },
       sidebar: {
+        title: "Barre latérale",
+        alwaysShowHostLabels: {
+          title: "Toujours afficher les étiquettes d’hôte",
+          description:
+            "Affiche les étiquettes d’hôte même lorsque tous les espaces de travail visibles sont sur cet appareil",
+        },
         header: {
           title: "En-tête",
           description:
