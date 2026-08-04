@@ -19,6 +19,10 @@
  *     the pill shows the literal token text (`$release-beta`) rather than an icon
  *     plus a prettified display name — either would add width and desynchronise
  *     the wrap. The upside is that what you read is exactly what gets sent.
+ *  3. Swapping the canonical slash for the configured sigil is a one-character
+ *     substitution but *not* a width-neutral one: the UI font is proportional, so
+ *     `$` is 3.2px wider than `/` at the default size. The difference is measured
+ *     and given back as margins on the sigil — see useSigilAdvanceCorrections.
  *
  * Theme colors arrive as props through `withUnistyles` (alternative 3 in
  * docs/unistyles.md) because this component draws raw DOM rather than `style`-tracked
@@ -26,13 +30,15 @@
  * `var(--colors-*)` here: nothing in Unistyles emits those variables.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { withUnistyles } from "react-native-unistyles";
+import { DEFAULT_COMMAND_SIGIL, type ComposerSigils } from "@/composer/tokens/sigils";
 import {
   collectComposerTokens,
-  getComposerTokenDisplayText,
+  getComposerTokenSigil,
   segmentComposerText,
+  type ComposerTokenType,
 } from "@/composer/tokens/tokens";
 import type { Theme } from "@/styles/theme";
 import type { ComposerTokenHighlightProps } from "./token-highlight-types";
@@ -117,11 +123,14 @@ function installSelectionStyles(accentBrightColor: string): void {
 function useMirroredStyles(
   textareaRef: RefObject<HTMLElement | null>,
   enabled: boolean,
-): CSSProperties {
+): { styles: CSSProperties; signature: string } {
   // Values come straight off `getComputedStyle`, so they are strings rather than
   // the narrow literal unions CSSProperties declares for keywords like
   // `direction`. The browser produced them, so they are valid by construction.
-  const [styles, setStyles] = useState<CSSProperties>({});
+  const [mirrored, setMirrored] = useState<{ styles: CSSProperties; signature: string }>({
+    styles: {},
+    signature: "",
+  });
   const previousRef = useRef("");
 
   useEffect(() => {
@@ -146,7 +155,7 @@ function useMirroredStyles(
         return;
       }
       previousRef.current = signature;
-      setStyles(next as CSSProperties);
+      setMirrored({ styles: next as CSSProperties, signature });
     };
 
     read();
@@ -167,7 +176,76 @@ function useMirroredStyles(
     };
   }, [textareaRef, enabled]);
 
-  return styles;
+  return mirrored;
+}
+
+type SigilAdvanceCorrections = Record<ComposerTokenType, number>;
+
+const NO_SIGIL_CORRECTIONS: SigilAdvanceCorrections = { command: 0, skill: 0 };
+
+/**
+ * The canonical slash's advance width minus each configured display sigil's, in
+ * CSS pixels — negative when the sigil is the wider glyph, which `$` is.
+ *
+ * Substituting one character for another is not width-neutral in a proportional
+ * font: `$` is 3.2px wider than `/` at the default 16px UI font. Left uncorrected
+ * the mirror's glyphs drift right of the textarea's from the first token onward,
+ * so the caret trails the text it belongs to, and a token near the wrap point can
+ * push the mirror onto a line the textarea does not have.
+ *
+ * Measured in the mirror itself rather than tabulated, because the font family and
+ * size are both user-configurable.
+ */
+function useSigilAdvanceCorrections(
+  containerRef: RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  sigils: ComposerSigils,
+  styleSignature: string,
+): SigilAdvanceCorrections {
+  const [corrections, setCorrections] = useState<SigilAdvanceCorrections>(NO_SIGIL_CORRECTIONS);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!enabled || !container) {
+      return;
+    }
+
+    const probe = document.createElement("span");
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.whiteSpace = "pre";
+    container.append(probe);
+    const advanceOf = (character: string) => {
+      probe.textContent = character;
+      return probe.getBoundingClientRect().width;
+    };
+    const canonical = advanceOf(DEFAULT_COMMAND_SIGIL);
+    const next: SigilAdvanceCorrections = {
+      command: canonical - advanceOf(sigils.command),
+      skill: canonical - advanceOf(sigils.skill),
+    };
+    probe.remove();
+
+    setCorrections((previous) =>
+      previous.command === next.command && previous.skill === next.skill ? previous : next,
+    );
+  }, [containerRef, enabled, sigils.command, sigils.skill, styleSignature]);
+
+  return corrections;
+}
+
+/**
+ * Give the correction back as margins, half on each side, so the sigil stays
+ * centred on the slot the canonical slash occupies in the textarea. Every glyph
+ * after the sigil then lands exactly where the textarea puts it; only the sigil
+ * itself overhangs, into the pill's own padding on the left and into the gap
+ * before the name on the right.
+ */
+function sigilStyle(correction: number): CSSProperties | undefined {
+  if (correction === 0) {
+    return undefined;
+  }
+  return { marginLeft: correction / 2, marginRight: correction / 2 };
 }
 
 /**
@@ -198,8 +276,13 @@ function ComposerTokenHighlight({
   accentBrightColor,
   foregroundColor,
 }: ThemedProps) {
-  const mirroredStyles = useMirroredStyles(textareaRef, enabled);
+  const { styles: mirroredStyles, signature: mirroredSignature } = useMirroredStyles(
+    textareaRef,
+    enabled,
+  );
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollLayerRef = useRef<HTMLDivElement | null>(null);
+  const corrections = useSigilAdvanceCorrections(containerRef, enabled, sigils, mirroredSignature);
 
   useEffect(() => {
     if (!enabled) return;
@@ -240,20 +323,30 @@ function ComposerTokenHighlight({
   );
 
   const tokenStyle = useMemo(() => pillStyle(accentBrightColor), [accentBrightColor]);
+  const sigilStyles = useMemo(
+    () => ({
+      command: sigilStyle(corrections.command),
+      skill: sigilStyle(corrections.skill),
+    }),
+    [corrections],
+  );
 
   if (!enabled) {
     return null;
   }
 
   return (
-    <div aria-hidden="true" data-composer-token-mirror="" style={containerStyle}>
+    <div ref={containerRef} aria-hidden="true" data-composer-token-mirror="" style={containerStyle}>
       <div ref={scrollLayerRef}>
         {segments.map((segment) =>
           segment.kind === "text" ? (
             <span key={segment.start}>{segment.text}</span>
           ) : (
             <span key={segment.start} style={tokenStyle}>
-              {getComposerTokenDisplayText(segment.token, sigils)}
+              <span style={sigilStyles[segment.token.type]}>
+                {getComposerTokenSigil(segment.token, sigils)}
+              </span>
+              {segment.token.name}
             </span>
           ),
         )}

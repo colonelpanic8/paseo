@@ -27,6 +27,46 @@ async function expectStoredSigils(
     .toEqual(expected);
 }
 
+/**
+ * The mirror has to lay out character-for-character like the textarea, or the
+ * caret drifts away from the glyphs it belongs to. The display sigil is not the
+ * same width as the canonical slash it stands in for, so assert the rendered
+ * pills end where the draft text would: measure the mirror's last line against a
+ * probe holding the canonical draft in the same inherited font.
+ */
+async function expectMirrorAlignedWithDraft(
+  page: import("@playwright/test").Page,
+  draft: string,
+): Promise<void> {
+  const drift = await page.locator("[data-composer-token-mirror]").evaluate((node, canonical) => {
+    const layer = (node as HTMLElement).firstElementChild as HTMLElement;
+    // The pill's vertical padding lifts its rect above the plain spans on the
+    // same line, so group rects into lines by proximity rather than equality.
+    const lastLineRight = (rects: DOMRect[]) => {
+      const bottom = Math.max(...rects.map((rect) => rect.bottom));
+      return Math.max(
+        ...rects.filter((rect) => bottom - rect.bottom < 8).map((rect) => rect.right),
+      );
+    };
+
+    const renderedRange = document.createRange();
+    renderedRange.selectNodeContents(layer);
+    const renderedRight = lastLineRight(Array.from(renderedRange.getClientRects()));
+
+    const probe = document.createElement("div");
+    probe.textContent = canonical;
+    layer.append(probe);
+    const probeRange = document.createRange();
+    probeRange.selectNodeContents(probe);
+    const probeRight = lastLineRight(Array.from(probeRange.getClientRects()));
+    probe.remove();
+
+    return renderedRight - probeRight;
+  }, draft);
+
+  expect(Math.abs(drift)).toBeLessThan(0.5);
+}
+
 test("composer token pills and trigger settings stay aligned", async ({
   page,
   withWorkspace,
@@ -56,6 +96,7 @@ test("composer token pills and trigger settings stay aligned", async ({
   const mirror = page.locator("[data-composer-token-mirror]");
   await expect(mirror).toBeVisible();
   await expect(mirror.getByText("$release-beta", { exact: true })).toBeVisible();
+  await expectMirrorAlignedWithDraft(page, "please run /release-beta ");
   await expect
     .poll(() => composer.evaluate((element) => getComputedStyle(element).color))
     .toBe("rgba(0, 0, 0, 0)");
@@ -97,6 +138,7 @@ test("composer token pills and trigger settings stay aligned", async ({
   await expect(composer).toHaveValue("please run /release-beta ");
   await expect(composer).toHaveAttribute("data-composer-tokenized", "");
   await expect(mirror.getByText("!release-beta", { exact: true })).toBeVisible();
+  await expectMirrorAlignedWithDraft(page, "please run /release-beta ");
 
   await composer.fill("plain draft");
   await expect(composer).not.toHaveAttribute("data-composer-tokenized", "");
