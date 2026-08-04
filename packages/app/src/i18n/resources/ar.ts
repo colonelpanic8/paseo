@@ -1769,8 +1769,6 @@ export const ar: TranslationResources = {
     },
     actions: {
       start: "بدء الصوت المباشر",
-      startForeground: "البدء في المقدمة",
-      startBackground: "البدء في الخلفية",
       unavailable: "الصوت المباشر غير متاح",
       stop: "إيقاف الصوت المباشر",
       mute: "كتم الميكروفون",
@@ -1779,10 +1777,6 @@ export const ar: TranslationResources = {
       showTranscript: "عرض النص",
       hideTranscript: "إخفاء النص",
       dismiss: "تجاهل",
-    },
-    modes: {
-      foreground: "وضع المقدمة",
-      background: "وضع الخلفية",
     },
     unavailable: {
       platform: "الصوت المباشر غير مدعوم على هذا الجهاز.",
@@ -2366,9 +2360,11 @@ export const ar: TranslationResources = {
         queueMessage: "رسالة قائمة الانتظار",
         muteUnmuteVoiceMode: "كتم وضع الصوت /unmute",
         muteUnmuteLiveVoice: "كتم/إلغاء كتم الصوت المباشر",
+        holdInvertLiveVoiceMute: "اضغط مع الاستمرار لعكس كتم الصوت المباشر",
         switchProject: "تبديل المشروع",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute: "اضغط للتحدث أثناء الكتم، واضغط للكتم أثناء البث.",
         showKeyboardShortcuts: "متاح عندما لا يكون التركيز في حقل نص أو محطة طرفية.",
       },
     },
