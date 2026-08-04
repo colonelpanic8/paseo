@@ -17,6 +17,10 @@ function seedFilePath(userDataPath: string): string {
   return path.join(userDataPath, "settings-seed.json");
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 describe("settings-seed", () => {
   afterEach(async () => {
     await Promise.all(
@@ -102,7 +106,7 @@ describe("settings-seed", () => {
     await writeFile(seedFilePath(userDataPath), "{ nope");
 
     await expect(loadSettingsSeed({ userDataPath })).rejects.toThrow(
-      new RegExp(`Invalid JSON in ${seedFilePath(userDataPath)}`),
+      new RegExp(`Invalid JSON in ${escapeRegExp(seedFilePath(userDataPath))}`),
     );
   });
 
@@ -111,7 +115,9 @@ describe("settings-seed", () => {
     await writeFile(seedFilePath(userDataPath), JSON.stringify(["app"]));
 
     await expect(loadSettingsSeed({ userDataPath })).rejects.toThrow(
-      new RegExp(`Expected a JSON object at the root of ${seedFilePath(userDataPath)}`),
+      new RegExp(
+        `Expected a JSON object at the root of ${escapeRegExp(seedFilePath(userDataPath))}`,
+      ),
     );
   });
 
