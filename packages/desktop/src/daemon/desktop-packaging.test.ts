@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { hasKeychainIdentity } from "../../electron-builder-signing.cjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -152,6 +153,13 @@ describe("desktop packaging", () => {
     });
 
     expect(optedOut.mac.hardenedRuntime).toBe(false);
+  });
+
+  it("does not mistake an empty keychain for a signing identity", () => {
+    const env = { CSC_IDENTITY_AUTO_DISCOVERY: undefined };
+    const run = () => "     0 valid identities found";
+
+    expect(hasKeychainIdentity(env, { platform: "darwin", run })).toBe(false);
   });
 
   it("keeps the hardened runtime for a signed release build", () => {

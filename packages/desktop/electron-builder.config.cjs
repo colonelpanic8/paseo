@@ -22,26 +22,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const yaml = require("js-yaml");
+const { isMacSigningAvailable } = require("./electron-builder-signing.cjs");
 
 const CONFIG_PATH = path.join(__dirname, "electron-builder.yml");
-
-/** An identity handed to us explicitly, the way CI passes a certificate. */
-function hasConfiguredSigningIdentity(env) {
-  return ["CSC_LINK", "CSC_NAME", "CSC_IDENTITY"].some((name) => (env[name] ?? "").trim() !== "");
-}
-
-/**
- * electron-builder also searches the local keychain. A CI runner has none of
- * the developer's certificates, so a bare `CI` with no credentials in the
- * environment is the fork-build case this exists for.
- */
-function canDiscoverKeychainIdentity(env) {
-  return !env.CI && env.CSC_IDENTITY_AUTO_DISCOVERY !== "false";
-}
-
-function isMacSigningAvailable(env) {
-  return hasConfiguredSigningIdentity(env) || canDiscoverKeychainIdentity(env);
-}
 
 const config = yaml.load(fs.readFileSync(CONFIG_PATH, "utf8"));
 
