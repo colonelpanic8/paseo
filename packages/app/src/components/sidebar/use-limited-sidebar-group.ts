@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 
-const INITIAL_VISIBLE_ITEMS = 20;
+export const INITIAL_VISIBLE_ITEMS = 20;
 
 export function useLimitedSidebarGroup<T>(
   items: readonly T[],

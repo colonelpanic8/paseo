@@ -17,7 +17,7 @@ import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle
 import {
   archivedRowEnter,
   archivedRowExit,
-  sidebarListSettle,
+  useSidebarListSettle,
 } from "@/components/sidebar/sidebar-motion";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { Theme } from "@/styles/theme";
@@ -27,7 +27,6 @@ const ARCHIVED_GROUP_ENTERING = archivedRowEnter;
 const ARCHIVED_GROUP_EXITING = archivedRowExit;
 const ARCHIVED_ROW_ENTERING = archivedRowEnter;
 const ARCHIVED_ROW_EXITING = archivedRowExit;
-const ARCHIVED_ROW_LAYOUT = sidebarListSettle;
 // The unarchive slot swaps between a spinner and the restore button; a short
 // cross-fade keeps the settle from popping.
 const UNARCHIVE_SLOT_SWAP_IN = FadeIn.duration(160);
@@ -67,6 +66,7 @@ export function SidebarArchivedGroup({
     canToggle,
     toggleExpanded,
   } = useLimitedSidebarGroup(entries, INITIAL_VISIBLE_ARCHIVED_ROWS);
+  const listSettle = useSidebarListSettle();
   const isReceivingArchive = entries.some((entry) => entry.phase === "archiving");
 
   if (entries.length === 0) {
@@ -83,7 +83,7 @@ export function SidebarArchivedGroup({
       <Animated.View
         entering={isReceivingArchive ? ARCHIVED_GROUP_ENTERING : undefined}
         exiting={ARCHIVED_GROUP_EXITING}
-        layout={ARCHIVED_ROW_LAYOUT}
+        layout={listSettle}
         collapsable={false}
       >
         <View style={styles.receded}>
@@ -103,11 +103,7 @@ export function SidebarArchivedGroup({
           ))
         : null}
       {!collapsed && canToggle ? (
-        <Animated.View
-          exiting={ARCHIVED_GROUP_EXITING}
-          layout={ARCHIVED_ROW_LAYOUT}
-          collapsable={false}
-        >
+        <Animated.View exiting={ARCHIVED_GROUP_EXITING} layout={listSettle} collapsable={false}>
           <View style={styles.receded}>
             <SidebarGroupToggleRow
               expanded={expanded}
@@ -231,12 +227,13 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
 
   const handleHoverIn = useCallback(() => setIsHovered(true), []);
   const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const listSettle = useSidebarListSettle();
 
   return (
     <Animated.View
       entering={isArchiving ? ARCHIVED_ROW_ENTERING : undefined}
       exiting={ARCHIVED_ROW_EXITING}
-      layout={ARCHIVED_ROW_LAYOUT}
+      layout={listSettle}
       collapsable={false}
       testID="sidebar-archived-row"
     >

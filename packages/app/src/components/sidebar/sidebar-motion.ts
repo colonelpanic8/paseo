@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { LayoutChangeEvent, ViewStyle } from "react-native";
 import {
   Easing,
@@ -12,6 +12,7 @@ import {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { isWeb } from "@/constants/platform";
 
 // Sidebar row motion. Archiving plays as two independent animations in
 // sequence, never as one hand-off choreography: first the row collapses out of
@@ -49,8 +50,56 @@ const settleEasing = Easing.bezier(0.4, 0, 0.2, 1);
 /** Decelerate-into-place curve for arrivals. */
 const arriveEasing = Easing.bezier(0.17, 0.67, 0.35, 1);
 
+function buildSidebarListSettle() {
+  return LinearTransition.duration(240).easing(settleEasing);
+}
+
 /** The one slide shared by all sidebar layout shifts, so neighbors move together. */
-export const sidebarListSettle = LinearTransition.duration(240).easing(settleEasing);
+export const sidebarListSettle = buildSidebarListSettle();
+
+type SidebarListSettle = typeof sidebarListSettle;
+
+/**
+ * The settle every animated wrapper in the status sidebar's flat flow passes to
+ * its `layout` prop, so that a single list change moves headings, rows, and
+ * toggles as one.
+ *
+ * It has to come through context because the web backend only runs a layout
+ * transition for a component that re-rendered in the commit that moved it: it
+ * snapshots the old position in `getSnapshotBeforeUpdate`, which React calls on
+ * an update and never on a bail-out. Sidebar rows are memoized on their own
+ * workspace, and the React Compiler memoizes the JSX above them, so a row that
+ * is merely pushed along by a change elsewhere in the list does not re-render —
+ * it used to jump to its new position while the headings, which re-render on
+ * every projection rebuild, slid over the full 240ms. A context update reaches
+ * consumers through those bail-outs, and feeding its value into `layout` is
+ * what makes the memoized JSX rebuild.
+ */
+export const SidebarListSettleContext = createContext<SidebarListSettle>(sidebarListSettle);
+
+/** Read by every animated wrapper inside a {@link SidebarListSettleContext}. */
+export function useSidebarListSettle(): SidebarListSettle {
+  return useContext(SidebarListSettleContext);
+}
+
+/**
+ * Owns the value behind {@link SidebarListSettleContext}. `signature` describes
+ * the order the list is about to render; a fresh settle is minted whenever it
+ * changes, and only then, so rows re-render for layout changes and stay
+ * memoized for everything else.
+ *
+ * Web only. Native runs layout animations off its own layout observer rather
+ * than off React renders, so rows there already slide; handing it one settle
+ * for the app's lifetime keeps it from re-registering the same config on every
+ * list change.
+ */
+export function useSidebarListSettleValue(signature: string): SidebarListSettle {
+  const current = useRef<{ signature: string; settle: SidebarListSettle } | null>(null);
+  if (isWeb && (current.current === null || current.current.signature !== signature)) {
+    current.current = { signature, settle: buildSidebarListSettle() };
+  }
+  return current.current?.settle ?? sidebarListSettle;
+}
 
 /** Rows fading in where they land (unarchive restore, status-bucket moves). */
 export const sidebarRowEnter = FadeIn.duration(200).easing(arriveEasing);

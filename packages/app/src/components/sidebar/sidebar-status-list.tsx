@@ -48,11 +48,18 @@ import {
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
+import {
+  buildStatusLayoutSignature,
+  useLimitedStatusGroups,
+  type LimitedStatusGroup,
+} from "@/components/sidebar/sidebar-status-layout";
 import { SidebarArchivedGroup } from "@/components/sidebar/sidebar-archived-group";
 import {
-  sidebarListSettle,
+  SidebarListSettleContext,
   sidebarRowEnter,
   useArchiveCollapse,
+  useSidebarListSettle,
+  useSidebarListSettleValue,
 } from "@/components/sidebar/sidebar-motion";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
@@ -68,7 +75,6 @@ const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber
 const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
 const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
 const STATUS_ROW_ENTERING = sidebarRowEnter;
-const STATUS_ROW_LAYOUT = sidebarListSettle;
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
@@ -123,6 +129,22 @@ export function SidebarStatusWorkspaceList({
     canToggle: canTogglePinnedWorkspaces,
     toggleExpanded: togglePinnedWorkspacesExpanded,
   } = useLimitedSidebarGroup(pinnedWorkspaces);
+  // Owned here rather than per group so the signature below can describe every
+  // row the list is about to render.
+  const { limitedGroups, toggleGroupExpanded } = useLimitedStatusGroups(
+    groups,
+    collapsedStatusGroupKeys,
+  );
+  const listSettle = useSidebarListSettleValue(
+    buildStatusLayoutSignature({
+      hasListHeader: listHeaderComponent != null,
+      pinnedCollapsed,
+      visiblePinnedWorkspaces,
+      canTogglePinnedWorkspaces,
+      limitedGroups,
+      archivedWorkspaces,
+    }),
+  );
 
   // NestableScrollContainer forwards props to RNGH's ScrollView but does not
   // type them. Keeping vertical scroll simultaneous with the drawer-close pan
@@ -137,63 +159,65 @@ export function SidebarStatusWorkspaceList({
   // skipEntering silences row entrances for everything mounting with the list
   // itself (startup, grouping-mode switch); only rows added later animate in.
   const content = (
-    <LayoutAnimationConfig skipEntering>
-      {pinnedWorkspaces.length > 0 ? (
-        <View style={styles.pinnedSection} testID="sidebar-pinned-section">
-          <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
-          {pinnedCollapsed ? null : (
-            <>
-              {visiblePinnedWorkspaces.map((workspace) => (
-                <StatusWorkspaceRow
-                  key={workspace.workspaceKey}
-                  activityNow={activityNow}
-                  workspace={workspace}
-                  iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
-                  hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
-                  shortcutNumber={statusShortcutIndex.get(workspace.workspaceKey) ?? null}
-                  showShortcutBadge={showShortcutBadges}
-                  canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-                  onToggleWorkspacePin={onToggleWorkspacePin}
-                  onWorkspacePress={onWorkspacePress}
-                  parentGestureRef={parentGestureRef}
-                />
-              ))}
-              {canTogglePinnedWorkspaces ? (
-                <Animated.View layout={STATUS_ROW_LAYOUT} collapsable={false}>
-                  <SidebarGroupToggleRow
-                    expanded={pinnedWorkspacesExpanded}
-                    onPress={togglePinnedWorkspacesExpanded}
-                    testID="sidebar-pinned-show-more"
+    <SidebarListSettleContext value={listSettle}>
+      <LayoutAnimationConfig skipEntering>
+        {pinnedWorkspaces.length > 0 ? (
+          <View style={styles.pinnedSection} testID="sidebar-pinned-section">
+            <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
+            {pinnedCollapsed ? null : (
+              <>
+                {visiblePinnedWorkspaces.map((workspace) => (
+                  <StatusWorkspaceRow
+                    key={workspace.workspaceKey}
+                    activityNow={activityNow}
+                    workspace={workspace}
+                    iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
+                    hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
+                    shortcutNumber={statusShortcutIndex.get(workspace.workspaceKey) ?? null}
+                    showShortcutBadge={showShortcutBadges}
+                    canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+                    onToggleWorkspacePin={onToggleWorkspacePin}
+                    onWorkspacePress={onWorkspacePress}
+                    parentGestureRef={parentGestureRef}
                   />
-                </Animated.View>
-              ) : null}
-            </>
-          )}
-        </View>
-      ) : null}
-      {listHeaderComponent ? (
-        <Animated.View layout={STATUS_ROW_LAYOUT} collapsable={false}>
-          {listHeaderComponent}
-        </Animated.View>
-      ) : null}
-      <StatusGroupList
-        activityNow={activityNow}
-        groups={groups}
-        collapsedStatusGroupKeys={collapsedStatusGroupKeys}
-        projectIconByProjectViewKey={projectIconByProjectViewKey}
-        shortcutIndex={statusShortcutIndex}
-        showShortcutBadges={showShortcutBadges}
-        onWorkspacePress={onWorkspacePress}
-        hostBadgeByServerId={hostBadgeByServerId}
-        supportsPinningByServerId={supportsPinningByServerId}
-        onToggleWorkspacePin={onToggleWorkspacePin}
-        parentGestureRef={parentGestureRef}
-      />
-      <SidebarArchivedGroup
-        entries={archivedWorkspaces}
-        hostBadgeByServerId={hostBadgeByServerId}
-      />
-    </LayoutAnimationConfig>
+                ))}
+                {canTogglePinnedWorkspaces ? (
+                  <Animated.View layout={listSettle} collapsable={false}>
+                    <SidebarGroupToggleRow
+                      expanded={pinnedWorkspacesExpanded}
+                      onPress={togglePinnedWorkspacesExpanded}
+                      testID="sidebar-pinned-show-more"
+                    />
+                  </Animated.View>
+                ) : null}
+              </>
+            )}
+          </View>
+        ) : null}
+        {listHeaderComponent ? (
+          <Animated.View layout={listSettle} collapsable={false}>
+            {listHeaderComponent}
+          </Animated.View>
+        ) : null}
+        <StatusGroupList
+          activityNow={activityNow}
+          limitedGroups={limitedGroups}
+          onToggleGroupExpanded={toggleGroupExpanded}
+          projectIconByProjectViewKey={projectIconByProjectViewKey}
+          shortcutIndex={statusShortcutIndex}
+          showShortcutBadges={showShortcutBadges}
+          onWorkspacePress={onWorkspacePress}
+          hostBadgeByServerId={hostBadgeByServerId}
+          supportsPinningByServerId={supportsPinningByServerId}
+          onToggleWorkspacePin={onToggleWorkspacePin}
+          parentGestureRef={parentGestureRef}
+        />
+        <SidebarArchivedGroup
+          entries={archivedWorkspaces}
+          hostBadgeByServerId={hostBadgeByServerId}
+        />
+      </LayoutAnimationConfig>
+    </SidebarListSettleContext>
   );
 
   return (
@@ -224,8 +248,8 @@ export function SidebarStatusWorkspaceList({
 
 function StatusGroupList({
   activityNow,
-  groups,
-  collapsedStatusGroupKeys,
+  limitedGroups,
+  onToggleGroupExpanded,
   projectIconByProjectViewKey,
   shortcutIndex,
   showShortcutBadges,
@@ -236,8 +260,8 @@ function StatusGroupList({
   parentGestureRef,
 }: {
   activityNow: Date;
-  groups: StatusGroup[];
-  collapsedStatusGroupKeys: ReadonlySet<string>;
+  limitedGroups: LimitedStatusGroup[];
+  onToggleGroupExpanded: (bucket: string) => void;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   shortcutIndex: Map<string, number>;
   showShortcutBadges: boolean;
@@ -249,12 +273,12 @@ function StatusGroupList({
 }) {
   return (
     <>
-      {groups.map((group) => (
+      {limitedGroups.map((limited) => (
         <StatusGroupRows
-          key={group.bucket}
+          key={limited.group.bucket}
           activityNow={activityNow}
-          group={group}
-          collapsed={collapsedStatusGroupKeys.has(group.bucket)}
+          limited={limited}
+          onToggleGroupExpanded={onToggleGroupExpanded}
           projectIconByProjectViewKey={projectIconByProjectViewKey}
           shortcutIndex={shortcutIndex}
           showShortcutBadges={showShortcutBadges}
@@ -271,8 +295,8 @@ function StatusGroupList({
 
 function StatusGroupRows({
   activityNow,
-  group,
-  collapsed,
+  limited,
+  onToggleGroupExpanded,
   projectIconByProjectViewKey,
   shortcutIndex,
   showShortcutBadges,
@@ -283,8 +307,8 @@ function StatusGroupRows({
   parentGestureRef,
 }: {
   activityNow: Date;
-  group: StatusGroup;
-  collapsed: boolean;
+  limited: LimitedStatusGroup;
+  onToggleGroupExpanded: (bucket: string) => void;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   shortcutIndex: Map<string, number>;
   showShortcutBadges: boolean;
@@ -294,12 +318,11 @@ function StatusGroupRows({
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }) {
-  const {
-    visibleItems: visibleWorkspaces,
-    expanded: workspacesExpanded,
-    canToggle: canToggleWorkspaces,
-    toggleExpanded: toggleWorkspacesExpanded,
-  } = useLimitedSidebarGroup(group.rows);
+  const { group, collapsed, visibleRows, expanded, canToggle } = limited;
+  const listSettle = useSidebarListSettle();
+  const handleToggleExpanded = useCallback(() => {
+    onToggleGroupExpanded(group.bucket);
+  }, [group.bucket, onToggleGroupExpanded]);
 
   // Flat siblings, not a group container: an animated wrapper around the whole
   // group would resize when its own rows change, and the web backend animates
@@ -308,11 +331,11 @@ function StatusGroupRows({
   // spacer is invisible, so it can snap.
   return (
     <>
-      <Animated.View entering={STATUS_ROW_ENTERING} layout={STATUS_ROW_LAYOUT} collapsable={false}>
+      <Animated.View entering={STATUS_ROW_ENTERING} layout={listSettle} collapsable={false}>
         <StatusGroupHeader group={group} collapsed={collapsed} />
       </Animated.View>
       {!collapsed
-        ? visibleWorkspaces.map((workspace) => (
+        ? visibleRows.map((workspace) => (
             <StatusWorkspaceRow
               key={workspace.workspaceKey}
               activityNow={activityNow}
@@ -329,15 +352,11 @@ function StatusGroupRows({
             />
           ))
         : null}
-      {!collapsed && canToggleWorkspaces ? (
-        <Animated.View
-          entering={STATUS_ROW_ENTERING}
-          layout={STATUS_ROW_LAYOUT}
-          collapsable={false}
-        >
+      {!collapsed && canToggle ? (
+        <Animated.View entering={STATUS_ROW_ENTERING} layout={listSettle} collapsable={false}>
           <SidebarGroupToggleRow
-            expanded={workspacesExpanded}
-            onPress={toggleWorkspacesExpanded}
+            expanded={expanded}
+            onPress={handleToggleExpanded}
             testID={`sidebar-status-show-more-${group.bucket}`}
           />
         </Animated.View>
@@ -696,6 +715,7 @@ function StatusWorkspaceRowInner({
 }) {
   const isTouchPlatform = platformIsNative;
   const archiveCollapse = useArchiveCollapse(isArchiving);
+  const listSettle = useSidebarListSettle();
   const kebab = useOpenKebabMenuVisibility(false);
 
   const isDesktop = !isTouchPlatform;
@@ -706,7 +726,7 @@ function StatusWorkspaceRowInner({
   return (
     <Animated.View
       entering={STATUS_ROW_ENTERING}
-      layout={STATUS_ROW_LAYOUT}
+      layout={listSettle}
       onLayout={archiveCollapse.onLayout}
       style={archiveCollapse.style}
       collapsable={false}
