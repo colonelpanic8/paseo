@@ -852,6 +852,7 @@ function createToolCatalog(
       name,
       title: config.title,
       description: config.description ?? name,
+      readOnly: config.readOnly,
       inputSchema: config.inputSchema,
       outputSchema: config.outputSchema,
       handler: handler as PaseoToolDefinition["handler"],
@@ -1616,6 +1617,7 @@ function createToolCatalog(
     "list_workspaces",
     {
       title: "List workspaces",
+      readOnly: true,
       description: "List active workspaces.",
       inputSchema: { includeBackground: z.boolean().optional().default(false) },
       outputSchema: { workspaces: z.array(WorkspaceAutomationSummarySchema) },
@@ -2172,6 +2174,7 @@ function createToolCatalog(
     "get_agent_status",
     {
       title: "Get agent status",
+      readOnly: true,
       description:
         "Return the latest snapshot for an agent, including lifecycle state, capabilities, and pending permissions.",
       inputSchema: {
@@ -2222,6 +2225,7 @@ function createToolCatalog(
     "list_agents",
     {
       title: "List agents",
+      readOnly: true,
       description: "List recent agents as compact metadata.",
       inputSchema: {
         includeBackground: z.boolean().optional().default(false),
@@ -2466,6 +2470,7 @@ function createToolCatalog(
     "list_workspace_scripts",
     {
       title: "List workspace scripts",
+      readOnly: true,
       description:
         "List configured workspace scripts and their lifecycle, service port, proxy URL, health, and terminal ID.",
       inputSchema: {
@@ -2543,6 +2548,7 @@ function createToolCatalog(
     "list_terminals",
     {
       title: "List terminals",
+      readOnly: true,
       description: "List terminals for a working directory or across all working directories.",
       inputSchema: {
         cwd: z
@@ -2661,6 +2667,7 @@ function createToolCatalog(
     "capture_terminal",
     {
       title: "Capture terminal",
+      readOnly: true,
       description: "Capture plain-text terminal output lines from a terminal session.",
       inputSchema: {
         terminalId: z.string(),
@@ -2870,6 +2877,7 @@ function createToolCatalog(
     "list_schedules",
     {
       title: "List schedules",
+      readOnly: true,
       description: "List all schedules managed by the daemon.",
       inputSchema: {},
       outputSchema: {
@@ -2895,6 +2903,7 @@ function createToolCatalog(
     "inspect_schedule",
     {
       title: "Inspect schedule",
+      readOnly: true,
       description: "Inspect a schedule and its run history.",
       inputSchema: {
         id: z.string(),
@@ -3068,6 +3077,7 @@ function createToolCatalog(
     "schedule_logs",
     {
       title: "Schedule logs",
+      readOnly: true,
       description: "Get the run history (logs) for a schedule.",
       inputSchema: {
         id: z.string(),
@@ -3115,6 +3125,7 @@ function createToolCatalog(
     "list_providers",
     {
       title: "List providers",
+      readOnly: true,
       description: "List configured agent providers, availability, and their modes.",
       inputSchema: {},
       outputSchema: {
@@ -3136,6 +3147,7 @@ function createToolCatalog(
     "list_models",
     {
       title: "List models",
+      readOnly: true,
       description: "List models for an agent provider.",
       inputSchema: {
         provider: AgentProviderEnum,
@@ -3188,6 +3200,7 @@ function createToolCatalog(
     "inspect_provider",
     {
       title: "Inspect provider",
+      readOnly: true,
       description:
         "Inspect compact provider capabilities for orchestration, including modes and draft feature settings. Use list_models for the full model list.",
       inputSchema: inspectProviderInputSchema,
@@ -3250,6 +3263,7 @@ function createToolCatalog(
     "get_agent_activity",
     {
       title: "Get agent activity",
+      readOnly: true,
       description: "Return recent agent timeline entries as a curated summary.",
       inputSchema: {
         agentId: z.string(),
@@ -3313,6 +3327,7 @@ function createToolCatalog(
     "list_pending_permissions",
     {
       title: "List pending permissions",
+      readOnly: true,
       description:
         "Return all pending permission requests across all agents with the normalized payloads.",
       inputSchema: {},
@@ -3377,6 +3392,7 @@ function createToolCatalog(
     "list_paseo_tools",
     {
       title: "Discover Paseo tools",
+      readOnly: true,
       description:
         "List ordinary Paseo tools and their input schemas. Use toolName for one exact definition, or query as a keyword filter — every word is matched separately and the best matches come first.",
       inputSchema: {
