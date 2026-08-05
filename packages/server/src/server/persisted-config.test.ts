@@ -12,7 +12,8 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { resolvePaseoPaths } from "./paseo-paths.js";
+import { resolvePaseoPaths, XDG_LAYOUT_MARKER } from "./paseo-paths.js";
+import { loadConfig } from "./config.js";
 import {
   loadConfigStack,
   loadPersistedConfig,
@@ -1064,7 +1065,7 @@ describe("config.json location by category", () => {
     const home = mkdtempSync(path.join(tmpdir(), "paseo-config-home-"));
     homes.push(home);
     vi.stubEnv("HOME", home);
-    vi.stubEnv("PASEO_HOME", "");
+    vi.stubEnv("PASEO_HOME", undefined);
     // Every XDG root has to be redirected too. Stubbing only HOME leaves an inherited
     // XDG_CONFIG_HOME pointing at the real one, and the test then writes a config file into the
     // developer's actual ~/.config/paseo.
@@ -1087,12 +1088,35 @@ describe("config.json location by category", () => {
     "a fresh install reads config from the config root, not the daemon's data root",
     () => {
       const home = stubHome();
-      const paths = resolvePaseoPaths(process.env);
+      const paths = resolvePaseoPaths(process.env, process.platform, home);
+      expect(paths.layout).toBe("xdg");
+      expect(paths.config).toBe(path.join(home, "config", "paseo"));
 
-      loadPersistedConfig(paths.home);
+      loadPersistedConfig(paths.home, undefined, paths);
 
       expect(existsSync(path.join(home, "config", "paseo", "config.json"))).toBe(true);
       expect(existsSync(path.join(paths.data, "config.json"))).toBe(false);
+      expect(modeOf(path.join(paths.data, XDG_LAYOUT_MARKER))).toBe(PRIVATE_FILE_MODE);
+    },
+  );
+
+  test.skipIf(process.platform !== "linux")(
+    "loadConfig uses the same injected XDG environment that selected the data root",
+    () => {
+      const home = stubHome();
+      const env: NodeJS.ProcessEnv = {
+        XDG_CONFIG_HOME: path.join(home, "injected-config"),
+        XDG_DATA_HOME: path.join(home, "injected-data"),
+      };
+      const paths = resolvePaseoPaths(env, process.platform, home);
+      mkdirSync(paths.config, { recursive: true });
+      writeFileSync(
+        path.join(paths.config, "config.json"),
+        JSON.stringify({ version: 1, daemon: { listen: "127.0.0.1:7777" } }),
+        { encoding: "utf8", flag: "wx" },
+      );
+
+      expect(loadConfig(paths.home, { env, paths }).listen).toBe("127.0.0.1:7777");
     },
   );
 
