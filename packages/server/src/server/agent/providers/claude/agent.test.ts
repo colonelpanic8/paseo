@@ -2557,6 +2557,30 @@ describe("ClaudeAgentSession context window usage", () => {
     }
   });
 
+  test("surfaces Claude API retries as non-terminal timeline errors", async () => {
+    const session = await createSessionForTest();
+
+    const events = session.translateMessageToEvents({
+      type: "system",
+      subtype: "api_retry",
+      attempt: 6,
+      max_retries: 10,
+      retry_delay_ms: 18_583,
+      error_status: 529,
+      error: "overloaded",
+      uuid: "retry-1",
+      session_id: "session-retry-1",
+    });
+
+    expect(events).toEqual([
+      {
+        type: "timeline",
+        provider: "claude",
+        item: { type: "error", message: "Claude retry 6/10 in 19s: 529 overloaded" },
+      },
+    ]);
+  });
+
   test("result.result is surfaced as an assistant message when no model output was produced", async () => {
     const session = await createSessionForTest();
 
