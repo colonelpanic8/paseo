@@ -1842,6 +1842,17 @@ export const es: TranslationResources = {
         description: "Se usa en llamadas nuevas. Una llamada activa conserva su voz actual.",
         default: "Predeterminada",
       },
+      backendModel: {
+        label: "Modelo de acciones",
+        description:
+          "Ejecuta las acciones de la llamada en segundo plano. El predeterminado es rápido y barato; elige un modelo más potente si las acciones requieren más criterio.",
+        default: "Predeterminado (rápido)",
+      },
+      backendThinking: {
+        label: "Razonamiento de acciones",
+        description: "Profundidad de razonamiento del modelo de acciones.",
+        default: "Predeterminado",
+      },
       agentReports: {
         label: "Informar actividad de agentes",
         description:
@@ -2129,6 +2140,7 @@ export const es: TranslationResources = {
     sections: {
       general: "General",
       chat: "Chat",
+      voice: "Voz en vivo",
       appearance: "Apariencia",
       sidebar: "Barra lateral",
       terminal: "Terminal",
