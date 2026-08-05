@@ -1654,6 +1654,17 @@ export const ru: TranslationResources = {
         description: "Используется для новых звонков. Активный звонок сохраняет текущий голос.",
         default: "По умолчанию",
       },
+      backendModel: {
+        label: "Модель действий",
+        description:
+          "Выполняет действия звонка в фоне. По умолчанию — быстрая и дешёвая; выберите модель сильнее, если действиям нужно больше рассудительности.",
+        default: "По умолчанию (быстрая)",
+      },
+      backendThinking: {
+        label: "Мышление действий",
+        description: "Глубина рассуждений модели действий.",
+        default: "По умолчанию",
+      },
       agentReports: {
         label: "Сообщать об активности агентов",
         description:
@@ -1936,6 +1947,7 @@ export const ru: TranslationResources = {
     groupInfo: "О{{title}}",
     sections: {
       general: "Общий",
+      voice: "Живой голос",
       appearance: "Появление",
       editor: "Редактор",
       shortcuts: "Ярлыки",
