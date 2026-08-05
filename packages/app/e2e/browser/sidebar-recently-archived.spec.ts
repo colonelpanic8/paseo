@@ -3,7 +3,10 @@ import { expect, test } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
-import { archiveWorkspaceFromSidebar } from "../support/helpers/sidebar";
+import {
+  archiveWorkspaceFromSidebar,
+  selectSidebarStatusGrouping,
+} from "../support/helpers/sidebar";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 
 async function wasRecentlyArchivedPendingSeen(page: Page): Promise<boolean> {
@@ -29,8 +32,7 @@ test.describe("Recently archived sidebar transition", () => {
     try {
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
-      await page.getByTestId("sidebar-display-preferences-menu").click();
-      await page.getByTestId("sidebar-grouping-status").click();
+      await selectSidebarStatusGrouping(page);
       await expect(liveRow).toBeVisible({ timeout: 30_000 });
 
       await page.evaluate(() => {
