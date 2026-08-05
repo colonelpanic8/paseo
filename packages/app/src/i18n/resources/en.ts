@@ -1837,6 +1837,17 @@ export const en = {
         description: "Used for new calls. An active call keeps its current voice.",
         default: "Default",
       },
+      backendModel: {
+        label: "Action model",
+        description:
+          "Runs the call's actions behind the scenes. Default is fast and cheap; pick a stronger model if actions need more judgement.",
+        default: "Default (fast)",
+      },
+      backendThinking: {
+        label: "Action thinking",
+        description: "Reasoning depth for the action model.",
+        default: "Default",
+      },
       agentReports: {
         label: "Report agent activity",
         description:
@@ -2120,6 +2131,7 @@ export const en = {
     sections: {
       general: "General",
       chat: "Chat",
+      voice: "Live voice",
       appearance: "Appearance",
       sidebar: "Sidebar",
       editor: "Editor",

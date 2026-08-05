@@ -1846,6 +1846,17 @@ export const ptBR: TranslationResources = {
         description: "Usada em novas chamadas. Uma chamada ativa mantém a voz atual.",
         default: "Padrão",
       },
+      backendModel: {
+        label: "Modelo de ações",
+        description:
+          "Executa as ações da chamada nos bastidores. O padrão é rápido e barato; escolha um modelo mais forte se as ações exigirem mais critério.",
+        default: "Padrão (rápido)",
+      },
+      backendThinking: {
+        label: "Raciocínio das ações",
+        description: "Profundidade de raciocínio do modelo de ações.",
+        default: "Padrão",
+      },
       agentReports: {
         label: "Avisar sobre atividade de agentes",
         description:
@@ -2133,6 +2144,7 @@ export const ptBR: TranslationResources = {
     sections: {
       general: "Geral",
       chat: "Chat",
+      voice: "Voz ao vivo",
       appearance: "Aparência",
       sidebar: "Barra lateral",
       terminal: "Terminal",
