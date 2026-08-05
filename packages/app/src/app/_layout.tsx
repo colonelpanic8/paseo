@@ -576,6 +576,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
           <View style={flexStyle}>{children}</View>
         </WindowChromeRegion>
       )}
+      {/* Both compact panels overlay the content row, not the whole surface, so
+          anything docked below the row — the Live Voice strip — stays on screen
+          and reachable while a panel is open. */}
+      {isCompactLayout ? sidebarChrome : null}
     </View>
   );
 
@@ -599,7 +603,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         </WindowChromeRegion>
       ) : null}
       <FloatingPanelPortalHost />
-      {isCompactLayout ? sidebarChrome : null}
       <DownloadToast />
       <RosettaCalloutSource />
       <UpdateCalloutSource />
