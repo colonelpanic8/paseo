@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ensurePrivateDirectory } from "./private-files.js";
 
 /**
  * The four lifecycles Paseo's on-disk files fall into. Call sites name the category they want
@@ -70,20 +69,26 @@ function flatPaths(root: string): PaseoPaths {
  * 1. `PASEO_HOME` set — the flat layout, rooted where the user asked. Unchanged from before.
  * 2. `~/.paseo` already exists — the flat layout. Every install that predates this code takes
  *    this branch and keeps its exact current directory layout until a migration is requested.
- * 3. Otherwise (a fresh install, with no legacy directory to honor) — the XDG layout.
+ * 3. Not Linux — the flat layout. XDG is a Linux convention; macOS and Windows have their own,
+ *    and choosing one for them is a separate decision from separating config out of the home
+ *    directory. Nothing changes on those platforms.
+ * 4. Otherwise (a fresh Linux install, with no legacy directory to honor) — the XDG layout.
  *
- * Detection deliberately runs before any directory is created: `ensurePrivateDirectory` would
- * otherwise make `~/.paseo` on the first call and pin every later call to the flat layout.
+ * Resolving is free of side effects, so detection cannot be poisoned by a directory an earlier
+ * call created: creating `~/.paseo` here would pin every later call to the flat layout.
  */
-export function resolvePaseoPaths(env: NodeJS.ProcessEnv = process.env): PaseoPaths {
+export function resolvePaseoPaths(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): PaseoPaths {
   const configuredHome = env.PASEO_HOME?.trim();
   if (configuredHome) {
-    return ensurePaths(flatPaths(expandHomeDir(configuredHome, env)));
+    return flatPaths(expandHomeDir(configuredHome, env));
   }
 
   const legacyHome = expandHomeDir(LEGACY_PASEO_HOME, env);
-  if (existsSync(legacyHome)) {
-    return ensurePaths(flatPaths(legacyHome));
+  if (existsSync(legacyHome) || platform !== "linux") {
+    return flatPaths(legacyHome);
   }
 
   // Only `config` diverges for now. `data`, `state` and `cache` are distinct categories at every
@@ -91,21 +96,14 @@ export function resolvePaseoPaths(env: NodeJS.ProcessEnv = process.env): PaseoPa
   // that classifies them. Pointing them at their own XDG roots later is a change here plus a
   // migration for the files that move — not another pass over the call sites.
   const data = xdgRoot(env, "XDG_DATA_HOME", ".local/share");
-  return ensurePaths({
+  return {
     home: data,
     config: xdgRoot(env, "XDG_CONFIG_HOME", ".config"),
     data,
     state: data,
     cache: data,
     layout: "xdg",
-  });
-}
-
-function ensurePaths(paths: PaseoPaths): PaseoPaths {
-  for (const directory of new Set([paths.config, paths.data, paths.state, paths.cache])) {
-    ensurePrivateDirectory(directory);
-  }
-  return paths;
+  };
 }
 
 export function resolvePaseoPath(
