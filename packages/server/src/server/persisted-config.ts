@@ -8,7 +8,7 @@ import {
   ProviderOverridesSchema,
 } from "./agent/provider-launch-config.js";
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
-import { resolvePaseoPaths } from "./paseo-paths.js";
+import { resolvePaseoPaths, type PaseoPaths } from "./paseo-paths.js";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 import {
   AgentProfileSchema,
@@ -374,13 +374,15 @@ interface LoggerLike {
  * tool inspecting a specific home — keeps reading and writing inside the directory it named,
  * which is also exactly what happens under the flat layout, where the two roots are equal.
  */
-function resolveConfigRoot(paseoHome: string, env: NodeJS.ProcessEnv = process.env): string {
-  const paths = resolvePaseoPaths(env);
+function resolveConfigRoot(paseoHome: string, paths: PaseoPaths): string {
   return paths.home === path.resolve(paseoHome) ? paths.config : paseoHome;
 }
 
-function getConfigPath(paseoHome: string): string {
-  return path.join(resolveConfigRoot(paseoHome), CONFIG_FILENAME);
+export function resolvePersistedConfigPath(
+  paseoHome: string,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): string {
+  return path.join(resolveConfigRoot(paseoHome, paths), CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
@@ -426,9 +428,13 @@ function stripRemovedConfigFields(parsed: unknown): unknown {
   return root;
 }
 
-export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
+export function loadPersistedConfig(
+  paseoHome: string,
+  logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): PersistedConfig {
   const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
+  const configPath = resolvePersistedConfigPath(paseoHome, paths);
 
   if (!existsSync(configPath)) {
     try {
@@ -481,9 +487,10 @@ export function savePersistedConfig(
   paseoHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
 ): void {
   const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
+  const configPath = resolvePersistedConfigPath(paseoHome, paths);
 
   const result = PersistedConfigSchema.safeParse(config);
   if (!result.success) {

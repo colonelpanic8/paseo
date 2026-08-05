@@ -12,6 +12,7 @@ import {
   LogLevelSchema,
   type PersistedConfig,
 } from "./persisted-config.js";
+import { resolvePaseoPaths, type PaseoPaths } from "./paseo-paths.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProviderRuntimeSettingsMap,
@@ -548,6 +549,10 @@ interface ResolveConfigFromPersistedOptions {
   relayEnabledFallback?: boolean;
 }
 
+interface LoadConfigOptions extends Omit<ResolveConfigFromPersistedOptions, "relayEnabledFallback"> {
+  paths?: PaseoPaths;
+}
+
 export function resolveConfigFromPersisted(
   paseoHome: string,
   persisted: PersistedConfig,
@@ -653,9 +658,11 @@ export function resolveConfigFromPersisted(
 
 export function loadConfig(
   paseoHome: string,
-  options?: Omit<ResolveConfigFromPersistedOptions, "relayEnabledFallback">,
+  options?: LoadConfigOptions,
 ): PaseoDaemonConfig {
-  const persisted = loadPersistedConfig(paseoHome);
+  const env = options?.env ?? process.env;
+  const paths = options?.paths ?? resolvePaseoPaths(env);
+  const persisted = loadPersistedConfig(paseoHome, undefined, paths);
   return resolveConfigFromPersisted(paseoHome, persisted, options);
 }
 

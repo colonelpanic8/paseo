@@ -8,7 +8,7 @@ category: Configuration
 
 # Configuration
 
-Paseo loads configuration from a single JSON file in your Paseo home directory, with optional environment variable and CLI overrides.
+Paseo loads configuration from a single JSON file, with optional environment variable and CLI overrides.
 
 ## Where config lives
 
@@ -25,13 +25,15 @@ you edit is separate from the directories Paseo writes state and caches into:
 ~/.config/paseo/config.json          # or $XDG_CONFIG_HOME/paseo/config.json
 ```
 
-Paseo picks one of these once, in this order, and existing installs never change shape:
+Paseo picks one of these once, in this order:
 
 1. `PASEO_HOME` (or `--home`) is set — everything lives in that one directory.
-2. `~/.paseo` exists — everything lives there, exactly as it always has.
-3. macOS and Windows — `~/.paseo`, as before. XDG is a Linux convention, and these platforms
+2. macOS and Windows — `~/.paseo`, as before. XDG is a Linux convention, and these platforms
    keep the single-directory layout.
-4. A fresh Linux install — config lives under `$XDG_CONFIG_HOME`, the rest under
+3. A Linux install has already selected XDG — keep using that layout, even if a legacy
+   `~/.paseo` directory later appears.
+4. `~/.paseo` exists — everything lives there, exactly as it always has.
+5. A fresh Linux install — config lives under `$XDG_CONFIG_HOME`, the rest under
    `$XDG_DATA_HOME`.
 
 Setting `PASEO_HOME` always wins, so an existing layout can be pinned explicitly. There is no

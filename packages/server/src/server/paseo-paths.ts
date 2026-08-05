@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 
 /**
- * The four lifecycles Paseo's on-disk files fall into. Call sites name the category they want
- * instead of joining off a single root, so the roots can diverge without another sweep.
+ * The four lifecycles Paseo's on-disk files fall into. New and migrated call sites name the
+ * category they want so the roots can diverge incrementally.
  */
 export type PaseoPathCategory = "config" | "data" | "state" | "cache";
 
@@ -24,30 +24,28 @@ export interface PaseoPaths {
 }
 
 export const LEGACY_PASEO_HOME = "~/.paseo";
+export const XDG_LAYOUT_MARKER = ".xdg-layout";
 
-/**
- * `HOME` from the caller's env rather than `os.homedir()`, so an injected environment resolves
- * consistently: the XDG variables and the `~` they may contain have to agree on one home.
- */
-function homeDirectory(env: NodeJS.ProcessEnv): string {
-  return env.HOME?.trim() || os.homedir();
-}
-
-function expandHomeDir(input: string, env: NodeJS.ProcessEnv): string {
+function expandHomeDir(input: string, homeDirectory: string): string {
   if (input.startsWith("~/")) {
-    return path.join(homeDirectory(env), input.slice(2));
+    return path.join(homeDirectory, input.slice(2));
   }
   if (input === "~") {
-    return homeDirectory(env);
+    return homeDirectory;
   }
   return input;
 }
 
-function xdgRoot(env: NodeJS.ProcessEnv, variable: string, fallback: string): string {
+function xdgRoot(
+  env: NodeJS.ProcessEnv,
+  variable: string,
+  fallback: string,
+  homeDirectory: string,
+): string {
   const configured = env[variable]?.trim();
-  const base = configured
-    ? expandHomeDir(configured, env)
-    : path.join(homeDirectory(env), fallback);
+  const expanded = configured ? expandHomeDir(configured, homeDirectory) : null;
+  const base =
+    expanded && path.isAbsolute(expanded) ? expanded : path.join(homeDirectory, fallback);
   return path.join(path.resolve(base), "paseo");
 }
 
@@ -67,67 +65,78 @@ function flatPaths(root: string): PaseoPaths {
  * Resolution order, chosen so no existing install changes shape on upgrade:
  *
  * 1. `PASEO_HOME` set — the flat layout, rooted where the user asked. Unchanged from before.
- * 2. `~/.paseo` already exists — the flat layout. Every install that predates this code takes
- *    this branch and keeps its exact current directory layout until a migration is requested.
- * 3. Not Linux — the flat layout. XDG is a Linux convention; macOS and Windows have their own,
+ * 2. Not Linux — the flat layout. XDG is a Linux convention; macOS and Windows have their own,
  *    and choosing one for them is a separate decision from separating config out of the home
  *    directory. Nothing changes on those platforms.
- * 4. Otherwise (a fresh Linux install, with no legacy directory to honor) — the XDG layout.
+ * 3. The XDG data directory contains Paseo's layout marker — the XDG layout. Once a fresh
+ *    install has selected XDG, a later `~/.paseo` created by an older binary must not switch it
+ *    back on restart.
+ * 4. `~/.paseo` already exists — the flat layout. Every install that predates this code takes
+ *    this branch and keeps its exact current directory layout until a migration is requested.
+ * 5. Otherwise (a fresh Linux install, with no existing layout to honor) — the XDG layout.
  *
  * Resolving is free of side effects, so detection cannot be poisoned by a directory an earlier
  * call created: creating `~/.paseo` here would pin every later call to the flat layout.
  *
- * The answer is also decided once per environment and cached. Step 2 asks the filesystem a
- * question whose answer can change while the process runs — an older release or another tool
- * creating `~/.paseo` — and without the cache a daemon that started under XDG would silently
- * begin reading and writing `~/.paseo/config.json` while its data root stayed where it was.
- * The layout a process starts with is the layout it keeps.
+ * The answer is also decided once per installation and cached. Layout detection asks the
+ * filesystem a question whose answer can change while the process runs — an older release or
+ * another tool creating `~/.paseo` — and without the cache a daemon that started under XDG would
+ * silently begin reading and writing `~/.paseo/config.json` while its data root stayed where it
+ * was. The layout a process starts with is the layout it keeps.
  */
 const resolvedPaths = new Map<string, PaseoPaths>();
 
 export function resolvePaseoPaths(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
+  homeDirectory: string = os.homedir(),
 ): PaseoPaths {
-  // Every input resolution reads. A new one must be added here too, or two environments that
-  // differ only by it would share an answer.
-  const key = JSON.stringify([
-    platform,
-    env.PASEO_HOME,
-    env.HOME,
-    env.XDG_CONFIG_HOME,
-    env.XDG_DATA_HOME,
-    env.XDG_STATE_HOME,
-    env.XDG_CACHE_HOME,
-  ]);
+  // The installation identity is stable for the process lifetime. XDG variables are deliberately
+  // absent: changing one after startup must not move files out from under a running daemon.
+  const key = JSON.stringify([platform, env.PASEO_HOME, homeDirectory]);
   const cached = resolvedPaths.get(key);
   if (cached) {
     return cached;
   }
-  const paths = computePaseoPaths(env, platform);
+  const paths = computePaseoPaths(env, platform, homeDirectory);
   resolvedPaths.set(key, paths);
   return paths;
 }
 
-function computePaseoPaths(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): PaseoPaths {
-  const configuredHome = env.PASEO_HOME?.trim();
-  if (configuredHome) {
-    return flatPaths(expandHomeDir(configuredHome, env));
+function computePaseoPaths(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+  homeDirectory: string,
+): PaseoPaths {
+  const configuredHome = env.PASEO_HOME;
+  if (configuredHome !== undefined) {
+    return flatPaths(expandHomeDir(configuredHome, homeDirectory));
   }
 
-  const legacyHome = expandHomeDir(LEGACY_PASEO_HOME, env);
-  if (existsSync(legacyHome) || platform !== "linux") {
+  const legacyHome = expandHomeDir(LEGACY_PASEO_HOME, homeDirectory);
+  if (platform !== "linux") {
+    return flatPaths(legacyHome);
+  }
+
+  const data = xdgRoot(env, "XDG_DATA_HOME", ".local/share", homeDirectory);
+  if (existsSync(path.join(data, XDG_LAYOUT_MARKER))) {
+    return xdgPaths(env, data, homeDirectory);
+  }
+  if (existsSync(legacyHome)) {
     return flatPaths(legacyHome);
   }
 
   // Only `config` diverges for now. `data`, `state` and `cache` are distinct categories at every
-  // call site but resolve to one root, so no file can land in the wrong place before the sweep
-  // that classifies them. Pointing them at their own XDG roots later is a change here plus a
-  // migration for the files that move — not another pass over the call sites.
-  const data = xdgRoot(env, "XDG_DATA_HOME", ".local/share");
+  // resolver but resolve to one root, so no file moves before its call sites are classified.
+  // Pointing them at their own XDG roots later requires classifying those call sites and a
+  // migration for the files that move.
+  return xdgPaths(env, data, homeDirectory);
+}
+
+function xdgPaths(env: NodeJS.ProcessEnv, data: string, homeDirectory: string): PaseoPaths {
   return {
     home: data,
-    config: xdgRoot(env, "XDG_CONFIG_HOME", ".config"),
+    config: xdgRoot(env, "XDG_CONFIG_HOME", ".config", homeDirectory),
     data,
     state: data,
     cache: data,

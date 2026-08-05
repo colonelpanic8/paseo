@@ -27,6 +27,16 @@ function promptSequence(values: string[]): PromptPassword {
   };
 }
 
+function restoreEnvironment(original: Record<string, string | undefined>): void {
+  for (const [name, value] of Object.entries(original)) {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
+  }
+}
+
 try {
   {
     console.log("Test 1: setDaemonPasswordInConfig writes hash and preserves config fields");
@@ -99,6 +109,55 @@ try {
         error.code === "PASSWORD_MISMATCH",
     );
     console.log("✓ command refuses password mismatch\n");
+  }
+
+  if (process.platform === "linux") {
+    console.log("Test 4: set-password reports and updates the XDG config path");
+    const originalEnv = {
+      HOME: process.env.HOME,
+      PASEO_HOME: process.env.PASEO_HOME,
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+      XDG_DATA_HOME: process.env.XDG_DATA_HOME,
+    };
+    const freshHome = join(root, "fresh-home");
+    const configRoot = join(freshHome, "config");
+    const dataRoot = join(freshHome, "data");
+    await mkdir(freshHome, { recursive: true });
+    process.env.HOME = freshHome;
+    delete process.env.PASEO_HOME;
+    process.env.XDG_CONFIG_HOME = configRoot;
+    process.env.XDG_DATA_HOME = dataRoot;
+
+    try {
+      const result = await setDaemonPasswordInConfig("xdg-secret");
+      const configPath = join(configRoot, "paseo", "config.json");
+      const config = JSON.parse(await readFile(configPath, "utf-8"));
+
+      assert.strictEqual(result.configPath, configPath);
+      assert.strictEqual(
+        isBearerTokenValid({ password: config.daemon.auth.password, token: "xdg-secret" }),
+        true,
+      );
+      await assert.rejects(readFile(join(dataRoot, "paseo", "config.json"), "utf-8"));
+      console.log("✓ set-password uses and reports the XDG config path\n");
+
+      const explicitHome = join(dataRoot, "paseo");
+      const explicitResult = await setDaemonPasswordInConfig("flat-secret", {
+        home: explicitHome,
+      });
+      const explicitConfig = JSON.parse(await readFile(join(explicitHome, "config.json"), "utf-8"));
+      assert.strictEqual(explicitResult.configPath, join(explicitHome, "config.json"));
+      assert.strictEqual(
+        isBearerTokenValid({
+          password: explicitConfig.daemon.auth.password,
+          token: "flat-secret",
+        }),
+        true,
+      );
+      console.log("✓ an explicit --home remains flat at the XDG data path\n");
+    } finally {
+      restoreEnvironment(originalEnv);
+    }
   }
 } finally {
   await rm(root, { recursive: true, force: true });

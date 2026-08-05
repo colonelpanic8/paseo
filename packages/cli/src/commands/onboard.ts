@@ -1,10 +1,15 @@
 import { cancel, confirm, intro, isCancel, log, note, outro, spinner } from "@clack/prompts";
 import { Command, Option } from "commander";
-import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadPersistedConfig, type PersistedConfig } from "@getpaseo/server";
+import {
+  loadPersistedConfig,
+  savePersistedConfig,
+  type PaseoPaths,
+  type PersistedConfig,
+} from "@getpaseo/server";
 import {
   resolveLocalPaseoHome,
+  resolveLocalPaseoPaths,
   resolveLocalDaemonState,
   resolveTcpHostFromListen,
   startLocalDaemonDetached,
@@ -67,11 +72,6 @@ function parseTimeoutMs(raw: string | undefined): number {
   }
 
   return Math.ceil(seconds * 1000);
-}
-
-function savePersistedConfig(paseoHome: string, config: OnboardPersistedConfig): void {
-  const configPath = path.join(paseoHome, "config.json");
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 function applyVoiceSelection(
@@ -326,9 +326,10 @@ export function onboardCommand(): Command {
 
 async function resolveAndPersistVoice(
   paseoHome: string,
+  paths: PaseoPaths,
   options: OnboardOptions,
 ): Promise<boolean> {
-  let persisted = loadPersistedConfig(paseoHome) as OnboardPersistedConfig;
+  let persisted = loadPersistedConfig(paseoHome, undefined, paths) as OnboardPersistedConfig;
   const persistedVoiceSelection = resolvePersistedVoiceSelection(persisted);
   const shouldPrompt = options.voice === "ask" || options.voice === undefined;
   let voiceEnabled: boolean;
@@ -350,7 +351,7 @@ async function resolveAndPersistVoice(
   }
 
   persisted = applyVoiceSelection(persisted, voiceEnabled);
-  savePersistedConfig(paseoHome, persisted);
+  savePersistedConfig(paseoHome, persisted, undefined, paths);
   return voiceEnabled;
 }
 
@@ -441,11 +442,12 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   }
 
   const paseoHome = resolveLocalPaseoHome(options.home);
+  const paths = resolveLocalPaseoPaths(options.home);
   if (richUi) {
     renderNote(paseoHome, "Paseo home");
   }
 
-  const voiceEnabled = await resolveAndPersistVoice(paseoHome, options);
+  const voiceEnabled = await resolveAndPersistVoice(paseoHome, paths, options);
   log.message(
     voiceEnabled
       ? "Voice features enabled. Local speech models will be downloaded automatically if missing."
