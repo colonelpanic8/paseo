@@ -118,6 +118,12 @@ definition, no longer eligible to begin.
   Reanimated layout props: a width keyed on the presentation reaches Android after React commits the
   switch, and a lost update left the workspace at the dock width. The dock sizes to its content and
   the overlay host fills the window.
+- Both compact panels mount inside the root layout's content row, never at the app surface root. The
+  row is what a panel is allowed to cover; anything the layout docks below it — today the Live Voice
+  strip — stays visible and interactive while a panel is open. A panel mounted at the surface root
+  covers that dock instead, which is how the strip once vanished whenever the agent list opened.
+  Panel content that pads for the home indicator reads `useScreenBottomInset`, since the docked
+  surface below already pays that inset.
 - The overlay's backdrop covers the whole window; safe-area padding applies to the sidebar and
   workspace content only. It closes by swiping back, tapping the backdrop, or picking a destination:
   every sidebar destination closes the overlay before it navigates.

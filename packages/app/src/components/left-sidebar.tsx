@@ -62,6 +62,7 @@ import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout"
 import { isNative as platformIsNative } from "@/constants/platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useImportSession } from "@/hooks/use-import-session";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import {
   type SidebarProjectEntry,
@@ -158,6 +159,9 @@ export const LeftSidebar = memo(function LeftSidebar({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  // The compact panel stops at the content row's bottom edge, so whatever is
+  // docked below it — the Live Voice strip — pays the home-indicator inset.
+  const compactBottomInset = useScreenBottomInset();
   const isCompactLayout = useIsCompactFormFactor();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
 
@@ -265,7 +269,7 @@ export const LeftSidebar = memo(function LeftSidebar({
             {...handlers}
             active={active}
             insetsTop={insets.top}
-            insetsBottom={insets.bottom}
+            insetsBottom={compactBottomInset}
             closeSidebar={showMobileAgent}
           />
         ) : (
