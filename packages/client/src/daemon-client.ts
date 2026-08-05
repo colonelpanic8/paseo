@@ -3892,6 +3892,8 @@ export class DaemonClient {
     disabledPromptComponents?: string[];
     /** The user's standing instructions for the whole call, verbatim. */
     customVoiceInstructions?: string;
+    /** Directory for a new workspace when the request names no workspace of its own. */
+    defaultWorkspaceDirectory?: string;
     /** Backend-executor model override; the daemon defaults to its fast model. */
     backendModel?: string;
     backendThinkingOptionId?: string;
@@ -3909,6 +3911,9 @@ export class DaemonClient {
           : {}),
         ...(input.customVoiceInstructions
           ? { customVoiceInstructions: input.customVoiceInstructions }
+          : {}),
+        ...(input.defaultWorkspaceDirectory
+          ? { defaultWorkspaceDirectory: input.defaultWorkspaceDirectory }
           : {}),
         ...(input.backendModel ? { backendModel: input.backendModel } : {}),
         ...(input.backendThinkingOptionId
