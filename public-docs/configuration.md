@@ -18,8 +18,8 @@ If you already have a `~/.paseo` directory, that is your Paseo home and the conf
 ~/.paseo/config.json
 ```
 
-On a machine with no `~/.paseo`, a fresh install follows the XDG base directory spec instead, so
-the file you edit is separate from the directories Paseo writes state and caches into:
+On Linux, a machine with no `~/.paseo` follows the XDG base directory spec instead, so the file
+you edit is separate from the directories Paseo writes state and caches into:
 
 ```bash
 ~/.config/paseo/config.json          # or $XDG_CONFIG_HOME/paseo/config.json
@@ -29,7 +29,10 @@ Paseo picks one of these once, in this order, and existing installs never change
 
 1. `PASEO_HOME` (or `--home`) is set — everything lives in that one directory.
 2. `~/.paseo` exists — everything lives there, exactly as it always has.
-3. Otherwise — config lives under `$XDG_CONFIG_HOME`, the rest under `$XDG_DATA_HOME`.
+3. macOS and Windows — `~/.paseo`, as before. XDG is a Linux convention, and these platforms
+   keep the single-directory layout.
+4. A fresh Linux install — config lives under `$XDG_CONFIG_HOME`, the rest under
+   `$XDG_DATA_HOME`.
 
 Setting `PASEO_HOME` always wins, so an existing layout can be pinned explicitly. There is no
 automatic migration between layouts: an install that has `~/.paseo` keeps using it until you move

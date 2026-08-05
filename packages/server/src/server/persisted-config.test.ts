@@ -808,15 +808,19 @@ describe("config.json location by category", () => {
     return home;
   }
 
-  test("a fresh install reads config from the config root, not the daemon's data root", () => {
-    const home = stubHome();
-    const paths = resolvePaseoPaths(process.env);
+  // The XDG layout is Linux-only, so this expectation only holds there.
+  test.skipIf(process.platform !== "linux")(
+    "a fresh install reads config from the config root, not the daemon's data root",
+    () => {
+      const home = stubHome();
+      const paths = resolvePaseoPaths(process.env);
 
-    loadPersistedConfig(paths.home);
+      loadPersistedConfig(paths.home);
 
-    expect(existsSync(path.join(home, ".config", "paseo", "config.json"))).toBe(true);
-    expect(existsSync(path.join(paths.data, "config.json"))).toBe(false);
-  });
+      expect(existsSync(path.join(home, ".config", "paseo", "config.json"))).toBe(true);
+      expect(existsSync(path.join(paths.data, "config.json"))).toBe(false);
+    },
+  );
 
   test("an existing ~/.paseo keeps config.json exactly where it is", () => {
     const home = stubHome();
