@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -39,6 +39,32 @@ test("configuration edits validate before writing and preserve unrelated setting
     await writeFile(path.join(home, "config.json"), "invalid json");
     expect(() => editPersistedConfig(home, "daemon.listen", { value: "12345" })).toThrow();
     expect(await readFile(path.join(home, "config.json"), "utf8")).toBe("invalid json");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("configuration edits preserve unrelated values in a writable imported layer", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "paseo-layered-config-edit-"));
+  const home = path.join(root, "home");
+  const rootConfig = path.join(home, "config.json");
+  const machineConfig = path.join(home, "machine.json");
+  try {
+    await mkdir(home);
+    await writeFile(
+      rootConfig,
+      JSON.stringify({ imports: ["machine.json"], writeTo: "machine.json" }),
+    );
+    await writeFile(
+      machineConfig,
+      JSON.stringify({ version: 1, features: { webUi: { enabled: true } } }),
+    );
+
+    editPersistedConfig(home, "daemon.listen", { value: "127.0.0.1:23456" });
+
+    const machine = JSON.parse(await readFile(machineConfig, "utf8"));
+    expect(machine.features.webUi.enabled).toBe(true);
+    expect(machine.daemon.listen).toBe("127.0.0.1:23456");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
