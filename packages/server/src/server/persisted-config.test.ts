@@ -805,6 +805,20 @@ describe("config.json location by category", () => {
     homes.push(home);
     vi.stubEnv("HOME", home);
     vi.stubEnv("PASEO_HOME", "");
+    // Every XDG root has to be redirected too. Stubbing only HOME leaves an inherited
+    // XDG_CONFIG_HOME pointing at the real one, and the test then writes a config file into the
+    // developer's actual ~/.config/paseo.
+    for (const variable of [
+      "XDG_CONFIG_HOME",
+      "XDG_DATA_HOME",
+      "XDG_STATE_HOME",
+      "XDG_CACHE_HOME",
+    ]) {
+      vi.stubEnv(
+        variable,
+        path.join(home, variable.toLowerCase().replace("xdg_", "").replace("_home", "")),
+      );
+    }
     return home;
   }
 
@@ -817,7 +831,7 @@ describe("config.json location by category", () => {
 
       loadPersistedConfig(paths.home);
 
-      expect(existsSync(path.join(home, ".config", "paseo", "config.json"))).toBe(true);
+      expect(existsSync(path.join(home, "config", "paseo", "config.json"))).toBe(true);
       expect(existsSync(path.join(paths.data, "config.json"))).toBe(false);
     },
   );
@@ -831,7 +845,7 @@ describe("config.json location by category", () => {
     savePersistedConfig(paths.home, loadPersistedConfig(paths.home));
 
     expect(existsSync(path.join(legacy, "config.json"))).toBe(true);
-    expect(existsSync(path.join(home, ".config", "paseo", "config.json"))).toBe(false);
+    expect(existsSync(path.join(home, "config", "paseo", "config.json"))).toBe(false);
   });
 
   test("an explicitly named directory stays self-contained", () => {
