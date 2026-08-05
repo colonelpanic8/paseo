@@ -76,11 +76,40 @@ function flatPaths(root: string): PaseoPaths {
  *
  * Resolving is free of side effects, so detection cannot be poisoned by a directory an earlier
  * call created: creating `~/.paseo` here would pin every later call to the flat layout.
+ *
+ * The answer is also decided once per environment and cached. Step 2 asks the filesystem a
+ * question whose answer can change while the process runs — an older release or another tool
+ * creating `~/.paseo` — and without the cache a daemon that started under XDG would silently
+ * begin reading and writing `~/.paseo/config.json` while its data root stayed where it was.
+ * The layout a process starts with is the layout it keeps.
  */
+const resolvedPaths = new Map<string, PaseoPaths>();
+
 export function resolvePaseoPaths(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
 ): PaseoPaths {
+  // Every input resolution reads. A new one must be added here too, or two environments that
+  // differ only by it would share an answer.
+  const key = JSON.stringify([
+    platform,
+    env.PASEO_HOME,
+    env.HOME,
+    env.XDG_CONFIG_HOME,
+    env.XDG_DATA_HOME,
+    env.XDG_STATE_HOME,
+    env.XDG_CACHE_HOME,
+  ]);
+  const cached = resolvedPaths.get(key);
+  if (cached) {
+    return cached;
+  }
+  const paths = computePaseoPaths(env, platform);
+  resolvedPaths.set(key, paths);
+  return paths;
+}
+
+function computePaseoPaths(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): PaseoPaths {
   const configuredHome = env.PASEO_HOME?.trim();
   if (configuredHome) {
     return flatPaths(expandHomeDir(configuredHome, env));
