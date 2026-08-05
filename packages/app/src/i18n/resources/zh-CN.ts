@@ -1790,6 +1790,17 @@ export const zhCN: TranslationResources = {
         description: "用于新通话。正在进行的通话会保留当前语音。",
         default: "默认",
       },
+      backendModel: {
+        label: "操作模型",
+        description:
+          "在后台执行通话的操作。默认模型快速且低成本；如果操作需要更强的判断力，请选择更强的模型。",
+        default: "默认（快速）",
+      },
+      backendThinking: {
+        label: "操作思考",
+        description: "操作模型的推理深度。",
+        default: "默认",
+      },
       agentReports: {
         label: "播报智能体动态",
         description:
@@ -2073,6 +2084,7 @@ export const zhCN: TranslationResources = {
     sections: {
       general: "通用",
       chat: "聊天",
+      voice: "实时语音",
       appearance: "外观",
       sidebar: "侧边栏",
       terminal: "终端",
