@@ -104,6 +104,22 @@ describe("resolvePaseoPaths", () => {
     expect(existsSync(paths.data)).toBe(false);
   });
 
+  test("the layout a process starts with is the layout it keeps", () => {
+    const home = makeHome();
+    const env = { HOME: home };
+
+    const before = resolvePaseoPaths(env, "linux");
+    expect(before.layout).toBe("xdg");
+
+    // An older release, or any other tool, creating this while the daemon runs must not move
+    // config out from under it: the data root would stay put while config.json silently moved.
+    mkdirSync(path.join(home, ".paseo"));
+
+    const after = resolvePaseoPaths(env, "linux");
+    expect(after.layout).toBe("xdg");
+    expect(after.config).toBe(before.config);
+  });
+
   test.each(["darwin", "win32"] as const)(
     "%s keeps the flat layout instead of borrowing Linux conventions",
     (platform) => {
