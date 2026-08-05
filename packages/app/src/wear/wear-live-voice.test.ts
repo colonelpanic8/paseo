@@ -15,7 +15,6 @@ const IDLE: LiveVoiceSnapshot = {
   phase: "idle",
   serverId: null,
   liveSessionId: null,
-  sessionMode: null,
   isMuted: false,
   isAudioBlocked: false,
   transcripts: [],
@@ -30,6 +29,8 @@ function host(serverId: string, label: string) {
     connectionStatus: "online" as const,
     version: "0.2.5",
     supportsLiveVoice: true,
+    supportsVoiceCatalog: true,
+    paseoToolsEnabled: true,
   };
 }
 
