@@ -12,6 +12,7 @@ import {
   ProviderOverridesSchema,
 } from "./agent/provider-launch-config.js";
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
+import { resolvePaseoPaths } from "./paseo-paths.js";
 import {
   ensurePrivateFile,
   ensurePrivateFileAsync,
@@ -429,8 +430,21 @@ interface LoggerLike {
   warn?(...args: unknown[]): void;
 }
 
+/**
+ * `config.json` belongs to the config category, which under the XDG layout is a different
+ * directory from the one the daemon writes state into.
+ *
+ * Only the canonical home is redirected. A caller that passes some other directory — a test, a
+ * tool inspecting a specific home — keeps reading and writing inside the directory it named,
+ * which is also exactly what happens under the flat layout, where the two roots are equal.
+ */
+function resolveConfigRoot(paseoHome: string, env: NodeJS.ProcessEnv = process.env): string {
+  const paths = resolvePaseoPaths(env);
+  return paths.home === path.resolve(paseoHome) ? paths.config : paseoHome;
+}
+
 function getConfigPath(paseoHome: string): string {
-  return path.resolve(paseoHome, CONFIG_FILENAME);
+  return path.resolve(resolveConfigRoot(paseoHome), CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
