@@ -10,7 +10,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SidebarWorkspaceShortcutBadge } from "@/components/sidebar/sidebar-workspace-row-content";
 import {
   WorkspaceMetaRow,
-  type WorkspaceScriptSummary,
+  type WorkspaceServiceSummary,
 } from "@/components/sidebar/workspace-meta-row";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { useAppSettings } from "@/hooks/use-settings";
@@ -75,7 +75,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   workspace,
   iconDataUri,
   hostBadge,
-  scriptSummary = null,
+  serviceSummary = null,
   isArchiving,
   shortcutNumber = null,
   showShortcutBadge = false,
@@ -86,7 +86,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
   hostBadge: HostBadgeModel | null;
-  scriptSummary?: WorkspaceScriptSummary | null;
+  serviceSummary?: WorkspaceServiceSummary | null;
   isArchiving: boolean;
   shortcutNumber?: number | null;
   showShortcutBadge?: boolean;
@@ -134,7 +134,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
         diffStat={workspace.diffStat}
         prHint={workspace.prHint}
         hostBadge={hostBadge}
-        scriptSummary={scriptSummary}
+        serviceSummary={serviceSummary}
         providers={workspace.providers}
       />
       {showShortcut && shortcutNumber !== null ? (
@@ -202,14 +202,14 @@ function StatusRowDetailLine({
   diffStat,
   prHint,
   hostBadge,
-  scriptSummary,
+  serviceSummary,
   providers,
 }: {
   secondaryLabel: string | null;
   diffStat: SidebarWorkspaceEntry["diffStat"];
   prHint: SidebarWorkspaceEntry["prHint"];
   hostBadge: HostBadgeModel | null;
-  scriptSummary: WorkspaceScriptSummary | null;
+  serviceSummary: WorkspaceServiceSummary | null;
   providers: readonly string[];
 }) {
   return (
@@ -225,7 +225,7 @@ function StatusRowDetailLine({
         ) : null}
       </View>
       <View style={styles.detailRight}>
-        <WorkspaceMetaRow hostBadge={hostBadge} prHint={prHint} scriptSummary={scriptSummary} />
+        <WorkspaceMetaRow hostBadge={hostBadge} prHint={prHint} serviceSummary={serviceSummary} />
         <StatusRowProviderIcons providers={providers} />
       </View>
     </View>

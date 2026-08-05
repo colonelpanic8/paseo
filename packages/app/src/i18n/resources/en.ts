@@ -919,9 +919,14 @@ export const en = {
         host: "Host",
         changeRequest: "Pull request",
         checks: "Checks",
-        scripts: "Scripts",
+        services: "Services",
         diff: "Diff stats",
         timestamp: "Last activity",
+      },
+      checks: {
+        iconAndText: "Icon and text",
+        icon: "Icon only",
+        none: "Hidden",
       },
       hostFilter: {
         label: "Host",
@@ -995,7 +1000,8 @@ export const en = {
     },
     workspace: {
       status: {
-        scriptsAvailable: "Scripts available",
+        serviceRunning: "Service {{name}} running",
+        serviceUnhealthy: "Service {{name}} unhealthy",
         creating: "Creating...",
       },
       actions: {
@@ -1761,6 +1767,7 @@ export const en = {
           es: "Spanish",
           fr: "French",
           ja: "Japanese",
+          ko: "Korean",
           ptBR: "Brazilian Portuguese",
           ru: "Russian",
           zhCN: "Simplified Chinese",

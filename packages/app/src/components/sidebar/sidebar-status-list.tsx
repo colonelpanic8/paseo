@@ -35,7 +35,8 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
 import { SidebarWorkspaceRowFrame } from "@/components/sidebar/sidebar-workspace-row-content";
 import { useOpenKebabMenuVisibility } from "@/components/sidebar/use-open-kebab-menu-visibility";
-import { selectWorkspaceScriptSummary } from "@/components/sidebar/workspace-meta-row";
+import { getStatusDotColor } from "@/utils/status-dot-color";
+import { selectWorkspaceServiceSummary } from "@/components/sidebar/workspace-meta-row";
 import {
   SidebarStatusRowArchiveAction,
   SidebarStatusRowContent,
@@ -71,9 +72,20 @@ import { useMinuteNow } from "@/hooks/use-minute-tick";
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
-const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
-const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
-const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
+// One mapping per bucket, resolved through the status-dot producer so a group header and
+// the rows under it cannot disagree about what "failed" looks like.
+const needsInputColorMapping = (theme: Theme) => ({
+  color: getStatusDotColor({ theme, bucket: "needs_input" }) ?? undefined,
+});
+const failedColorMapping = (theme: Theme) => ({
+  color: getStatusDotColor({ theme, bucket: "failed" }) ?? undefined,
+});
+const attentionColorMapping = (theme: Theme) => ({
+  color: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
+});
+const runningColorMapping = (theme: Theme) => ({
+  color: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
+});
 const STATUS_ROW_ENTERING = sidebarRowEnter;
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
@@ -357,6 +369,7 @@ function StatusGroupRows({
           <SidebarGroupToggleRow
             expanded={expanded}
             onPress={handleToggleExpanded}
+            indented
             testID={`sidebar-status-show-more-${group.bucket}`}
           />
         </Animated.View>
@@ -436,13 +449,13 @@ function StatusGroupLeadingVisual({
 function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
   switch (bucket) {
     case "needs_input":
-      return <ThemedCircleAlert size={14} uniProps={amberColorMapping} />;
+      return <ThemedCircleAlert size={14} uniProps={needsInputColorMapping} />;
     case "failed":
-      return <ThemedCircleX size={14} uniProps={redColorMapping} />;
+      return <ThemedCircleX size={14} uniProps={failedColorMapping} />;
     case "attention":
-      return <ThemedCircleCheck size={14} uniProps={greenColorMapping} />;
+      return <ThemedCircleCheck size={14} uniProps={attentionColorMapping} />;
     case "running":
-      return <ThemedCircleDot size={14} uniProps={amberColorMapping} />;
+      return <ThemedCircleDot size={14} uniProps={runningColorMapping} />;
     case "done":
       return <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />;
   }
@@ -719,7 +732,7 @@ function StatusWorkspaceRowInner({
   const kebab = useOpenKebabMenuVisibility(false);
 
   const isDesktop = !isTouchPlatform;
-  const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
+  const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
@@ -754,7 +767,7 @@ function StatusWorkspaceRowInner({
                   workspace={workspace}
                   leadingProjectName={workspace.projectName}
                   hostBadgeLabel={hostBadge?.label}
-                  scriptSummary={scriptSummary}
+                  serviceSummary={serviceSummary}
                   workspaceKey={workspace.workspaceKey}
                   onCopyPath={onCopyPath}
                   onCopyBranchName={onCopyBranchName}
@@ -781,7 +794,7 @@ function StatusWorkspaceRowInner({
                     workspace={workspace}
                     iconDataUri={iconDataUri}
                     hostBadge={hostBadge}
-                    scriptSummary={scriptSummary}
+                    serviceSummary={serviceSummary}
                     isArchiving={isArchiving}
                     shortcutNumber={shortcutNumber}
                     showShortcutBadge={showShortcutBadge}
@@ -951,7 +964,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   statusGroupTitle: {
-    color: theme.colors.foreground,
+    color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: "400",
     minWidth: 0,
