@@ -39,6 +39,7 @@ import {
   Files,
   Smartphone,
   Sparkles,
+  AudioLines,
   Mic,
   Blocks,
   Globe,
@@ -100,6 +101,7 @@ import {
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
 import { resolveLiveVoiceUnavailableMessage } from "@/live-voice/live-voice-unavailable-message";
 import { useLiveVoiceVoiceOptions } from "@/live-voice/live-voice-voice-catalog";
+import { useLiveVoiceBackendModelOptions } from "@/live-voice/live-voice-backend-model-catalog";
 import {
   LIVE_VOICE_OPTIONAL_PROMPT_COMPONENTS,
   MAX_AMBIENT_AGENT_GUIDANCE_LENGTH,
@@ -177,6 +179,7 @@ interface SidebarSectionItem {
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
+  { id: "voice", labelKey: "settings.sections.voice", icon: AudioLines, Content: VoiceSection },
   {
     id: "appearance",
     labelKey: "settings.sections.appearance",
@@ -418,7 +421,14 @@ function GeneralSection({ settings, handleLanguageChange }: GeneralSectionProps)
         </View>
         {isNative ? null : <ShowSetupAgainRow />}
       </View>
-      <Text style={styles.diagnosticsGroupTitle}>{t("liveVoice.settings.title")}</Text>
+    </SettingsSection>
+  );
+}
+
+function VoiceSection() {
+  const { t } = useTranslation();
+  return (
+    <SettingsSection title={t("settings.sections.voice")}>
       <LiveVoiceSettingsCard />
     </SettingsSection>
   );
@@ -456,6 +466,25 @@ function LiveVoiceSettingsCard() {
   const setCustomVoiceInstructions = useLiveVoiceSettingsStore(
     (state) => state.setCustomVoiceInstructions,
   );
+  const backendModelOptions = useLiveVoiceBackendModelOptions();
+  const backendModel = useLiveVoiceSettingsStore((state) => state.backendModel);
+  const setBackendModel = useLiveVoiceSettingsStore((state) => state.setBackendModel);
+  const backendThinkingOptionId = useLiveVoiceSettingsStore(
+    (state) => state.backendThinkingOptionId,
+  );
+  const setBackendThinkingOptionId = useLiveVoiceSettingsStore(
+    (state) => state.setBackendThinkingOptionId,
+  );
+  const selectedBackendModel = backendModelOptions.find((option) => option.id === backendModel);
+  const backendModelLabel = backendModel
+    ? (selectedBackendModel?.label ?? backendModel)
+    : t("liveVoice.settings.backendModel.default");
+  // The daemon default carries its own thinking level, so a thinking override
+  // only makes sense once a model is chosen. Options come from that model's
+  // catalog entry; a stale selection falls back to the id itself.
+  const backendThinkingOptions = selectedBackendModel?.thinkingOptionIds ?? [];
+  const backendThinkingLabel =
+    backendThinkingOptionId ?? t("liveVoice.settings.backendThinking.default");
 
   return (
     <View style={settingsStyles.card}>
@@ -522,6 +551,80 @@ function LiveVoiceSettingsCard() {
           </View>
         </View>
       ) : null}
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("liveVoice.settings.backendModel.label")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("liveVoice.settings.backendModel.description")}
+          </Text>
+        </View>
+        <DropdownMenu>
+          <DropdownTrigger
+            accessibilityRole="button"
+            accessibilityLabel={t("liveVoice.settings.backendModel.label")}
+            style={themeTriggerStyle}
+            testID="live-voice-backend-model-picker"
+          >
+            <Text style={styles.themeTriggerText}>{backendModelLabel}</Text>
+          </DropdownTrigger>
+          <DropdownMenuContent side="bottom" align="end" width={240}>
+            <LiveVoiceBackendOptionMenuItem
+              value={null}
+              label={t("liveVoice.settings.backendModel.default")}
+              selected={backendModel === null}
+              onChange={setBackendModel}
+            />
+            {backendModelOptions.map((option) => (
+              <LiveVoiceBackendOptionMenuItem
+                key={option.id}
+                value={option.id}
+                label={option.label}
+                selected={backendModel === option.id}
+                onChange={setBackendModel}
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </View>
+      {backendModel !== null && backendThinkingOptions.length > 0 ? (
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("liveVoice.settings.backendThinking.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("liveVoice.settings.backendThinking.description")}
+            </Text>
+          </View>
+          <DropdownMenu>
+            <DropdownTrigger
+              accessibilityRole="button"
+              accessibilityLabel={t("liveVoice.settings.backendThinking.label")}
+              style={themeTriggerStyle}
+              testID="live-voice-backend-thinking-picker"
+            >
+              <Text style={styles.themeTriggerText}>{backendThinkingLabel}</Text>
+            </DropdownTrigger>
+            <DropdownMenuContent side="bottom" align="end" width={200}>
+              <LiveVoiceBackendOptionMenuItem
+                value={null}
+                label={t("liveVoice.settings.backendThinking.default")}
+                selected={backendThinkingOptionId === null}
+                onChange={setBackendThinkingOptionId}
+              />
+              {backendThinkingOptions.map((optionId) => (
+                <LiveVoiceBackendOptionMenuItem
+                  key={optionId}
+                  value={optionId}
+                  label={optionId}
+                  selected={backendThinkingOptionId === optionId}
+                  onChange={setBackendThinkingOptionId}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </View>
+      ) : null}
       {LIVE_VOICE_OPTIONAL_PROMPT_COMPONENTS.map((componentId) => (
         <LiveVoicePromptComponentRow
           key={componentId}
@@ -551,6 +654,28 @@ function LiveVoiceSettingsCard() {
         </View>
       </View>
     </View>
+  );
+}
+
+function LiveVoiceBackendOptionMenuItem({
+  value,
+  label,
+  selected,
+  onChange,
+}: {
+  value: string | null;
+  label: string;
+  selected: boolean;
+  onChange: (value: string | null) => void;
+}) {
+  const handleSelect = useCallback(() => {
+    onChange(value);
+  }, [onChange, value]);
+
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {label}
+    </DropdownMenuItem>
   );
 }
 
@@ -1645,7 +1770,6 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     }
     return null;
   })();
-
   if (settingsLoading) {
     return (
       <View style={styles.loadingContainer}>
