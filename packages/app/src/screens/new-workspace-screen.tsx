@@ -22,6 +22,8 @@ import {
   resolveComposerAttachmentSubmitFormat,
   splitComposerAttachmentsForSubmit,
 } from "@/composer/attachments/submit";
+import { dispatchComposerAgentMessage } from "@/composer/actions";
+import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -2110,6 +2112,76 @@ export function NewWorkspaceScreen({
         setErrorMessage(null);
         await composerState?.persistFormPreferences();
         await updateFormPreferences({ launchTarget });
+        if (forkDraftSetup?.nativeFork) {
+          if (forkDraftSetup.nativeFork.serverId !== selectedServerId) {
+            throw new Error(t("message.actions.forkUnavailable"));
+          }
+          setPendingAction("chat");
+          const forkClient = withConnectedClient();
+          const { attachments: forkNamingAttachments } = splitComposerAttachmentsForSubmit(
+            payload.attachments,
+            {
+              format: resolveComposerAttachmentSubmitFormat({
+                supportsForgeAttachments: supportsForgeSearch,
+              }),
+            },
+          );
+          const forked = await createNativeForkInWorkspace({
+            client: forkClient,
+            agentId: forkDraftSetup.nativeFork.agentId,
+            boundaryMessageId: forkDraftSetup.nativeFork.boundaryMessageId,
+            sourceCwd: forkDraftSetup.setup.cwd,
+            sourceDirectory: forkDraftSetup.sourceDirectory,
+            destinationSourceDirectory: selectedSourceDirectory,
+            prompt: payload.text,
+            namingAttachments: getWorkspaceNamingAttachments(forkNamingAttachments),
+            ensureWorkspace: async (input) => {
+              const result = await ensureWorkspace(input);
+              return {
+                id: result.workspace.id,
+                workspaceDirectory: result.workspace.workspaceDirectory,
+              };
+            },
+            failureMessage: t("message.actions.forkFailed"),
+          });
+          useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId: draftId ?? "" });
+          clearChatDraft("sent");
+          navigateToWorkspace({
+            serverId: selectedServerId,
+            workspaceId: forked.workspaceId,
+            target: { kind: "agent", agentId: forked.agentId },
+          });
+          // The fork exists and the user is looking at it, so a failed first
+          // send reports on that agent — which is also where the unsent content
+          // is restored — instead of failing this screen back into a re-fork.
+          await sendNativeForkPrompt({
+            text: payload.text,
+            attachments: payload.attachments,
+            send: ({ text, attachments }) =>
+              dispatchComposerAgentMessage({
+                client: forkClient,
+                agentId: forked.agentId,
+                text,
+                attachments,
+                attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
+                  supportsForgeAttachments: supportsForgeSearch,
+                }),
+                encodeImages,
+                submission: createMessageSubmissionWriter(selectedServerId),
+              }),
+            restoreDraft: (draft) =>
+              useDraftStore.getState().saveDraftInput({
+                draftKey: buildDraftStoreKey({
+                  serverId: selectedServerId,
+                  agentId: forked.agentId,
+                }),
+                draft,
+              }),
+          }).catch((error) => {
+            toast.error(toErrorMessage(error));
+          });
+          return;
+        }
         if (isEmptyWorkspaceSubmission(payload)) {
           setPendingAction("empty");
           let outcome: SubmitOutcome = "background";
@@ -2167,6 +2239,7 @@ export function NewWorkspaceScreen({
       draftContextScopeKey,
       creationIdentity,
       chatDraft.clear,
+      draftId,
       draftKey,
       ensureWorkspace,
       forkDraftSetup,
