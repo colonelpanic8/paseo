@@ -75,6 +75,7 @@ export function configurationEnvironment(env: NodeJS.ProcessEnv): NodeJS.Process
 export function daemonLaunchEnvironment(input: {
   env: NodeJS.ProcessEnv;
   home: string;
+  paths?: PaseoPaths;
   mode: "managed" | "deployment";
   desktopManaged?: boolean;
 }): NodeJS.ProcessEnv {
@@ -84,7 +85,15 @@ export function daemonLaunchEnvironment(input: {
   }
   delete env.PASEO_HOST;
   delete env.PASEO_DESKTOP_MANAGED;
-  env.PASEO_HOME = input.home;
+  if (input.paths?.layout === "xdg") {
+    delete env.PASEO_HOME;
+    env.XDG_CONFIG_HOME = path.dirname(input.paths.config);
+    env.XDG_DATA_HOME = path.dirname(input.paths.data);
+  } else {
+    env.PASEO_HOME = input.home;
+  }
   if (input.desktopManaged) env.PASEO_DESKTOP_MANAGED = "1";
   return env;
 }
+import path from "node:path";
+import type { PaseoPaths } from "./paseo-paths.js";
