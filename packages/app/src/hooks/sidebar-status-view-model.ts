@@ -5,7 +5,6 @@ export type StatusBucket = SidebarWorkspaceEntry["statusBucket"];
 export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
   "needs_input",
   "failed",
-  "attention",
   "running",
   "done",
 ] as const;
@@ -13,7 +12,6 @@ export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
 export const STATUS_BUCKET_LABELS: Record<StatusBucket, string> = {
   needs_input: "Needs input",
   failed: "Failed",
-  attention: "Ready to review",
   running: "Working",
   done: "Done",
 };

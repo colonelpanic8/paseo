@@ -991,6 +991,8 @@ export const zhCN: TranslationResources = {
         showMore: "显示更多",
         showLess: "收起",
         createWorkspaceFor: "为 {{projectName}} 新建 workspace",
+        markAsRead: "标记为已读",
+        markAsReadError: "无法将工作区标记为已读。",
         copyPath: "复制路径",
         copyBranchName: "复制分支名称",
         rename: "重命名 workspace",

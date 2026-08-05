@@ -165,9 +165,11 @@ export function SidebarWorkspaceRow({
   });
   const handleMarkAsRead = useCallback(() => {
     void clearAttention().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.actions.markAsReadError"),
+      );
     });
-  }, [clearAttention, toast]);
+  }, [clearAttention, t, toast]);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,

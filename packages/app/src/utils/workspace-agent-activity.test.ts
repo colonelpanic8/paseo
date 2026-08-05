@@ -99,6 +99,7 @@ describe("workspace agent activity index", () => {
             agentId: "permission",
             status: "needs_input",
             enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+            readyToReview: false,
           },
         ],
         [
@@ -107,6 +108,7 @@ describe("workspace agent activity index", () => {
             agentId: "attention",
             status: "attention",
             enteredAt: new Date("2026-06-01T10:02:00.000Z"),
+            readyToReview: true,
           },
         ],
       ]),
@@ -153,6 +155,7 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "running",
       enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+      readyToReview: false,
     });
   });
 
@@ -188,6 +191,7 @@ describe("workspace agent activity index", () => {
             agentId: "parent",
             status: "done",
             enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+            readyToReview: false,
           },
         ],
         [
@@ -196,6 +200,7 @@ describe("workspace agent activity index", () => {
             agentId: "child",
             status: "running",
             enteredAt: new Date("2026-06-01T10:03:00.000Z"),
+            readyToReview: false,
           },
         ],
       ]),
@@ -272,6 +277,40 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "needs_input",
       enteredAt: new Date("2026-06-01T10:05:00.000Z"),
+      readyToReview: false,
+    });
+  });
+
+  it("keeps finished attention alongside newer running activity", () => {
+    const index = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "finished",
+          agent({
+            id: "finished",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            requiresAttention: true,
+            attentionReason: "finished",
+          }),
+        ],
+        [
+          "running",
+          agent({
+            id: "running",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:01:00.000Z",
+          }),
+        ],
+      ]),
+    );
+
+    expect(index.get("workspace-a")).toEqual({
+      agentId: "running",
+      status: "running",
+      enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+      readyToReview: true,
     });
   });
 });

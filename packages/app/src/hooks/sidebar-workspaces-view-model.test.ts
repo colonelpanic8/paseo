@@ -10,6 +10,7 @@ import {
   buildSidebarProjectsFromStructure,
   computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
+  deriveProjectStatus,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
   shouldShowSidebarHostLabels,
@@ -86,6 +87,18 @@ describe("createSidebarWorkspaceEntry workspace directory label", () => {
     const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
 
     expect(entry.workspaceDirectoryLabel).toBe("~/external/feature");
+  });
+});
+
+describe("createSidebarWorkspaceEntry ready to review", () => {
+  it("keeps attention in Done and exposes it as an annotation", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.status = "attention";
+
+    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
+
+    expect(entry.statusBucket).toBe("done");
+    expect(entry.readyToReview).toBe(true);
   });
 });
 
@@ -839,7 +852,7 @@ describe("deriveProjectStatusBucket", () => {
     ).toBe("failed");
   });
 
-  it("keeps a project on attention when only one workspace awaits review", () => {
+  it("keeps a project in done when only one workspace awaits review", () => {
     expect(
       deriveProjectStatusBucket({
         workspaces: [
@@ -852,7 +865,26 @@ describe("deriveProjectStatusBucket", () => {
           }),
         },
       }),
-    ).toBe("attention");
+    ).toBe("done");
+  });
+
+  it("carries ready to review independently from a running project status", () => {
+    expect(
+      deriveProjectStatus({
+        workspaces: [
+          workspacePlacement({ workspaceId: "ws-1" }),
+          workspacePlacement({ workspaceId: "ws-2" }),
+        ],
+        sessions: {
+          srv: sessionWith({
+            workspaces: [
+              projectWorkspace("ws-1", "running"),
+              projectWorkspace("ws-2", "attention"),
+            ],
+          }),
+        },
+      }),
+    ).toEqual({ statusBucket: "running", readyToReview: true });
   });
 
   it("aggregates across the hosts a project spans", () => {

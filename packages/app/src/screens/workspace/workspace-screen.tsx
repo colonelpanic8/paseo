@@ -20,6 +20,7 @@ import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { DiffStat } from "@/components/diff-stat";
 import {
+  CircleCheck,
   CopyX,
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -72,6 +73,7 @@ import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useToast } from "@/contexts/toast-context";
+import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
 import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
 import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
 import { traceInstant } from "@/performance/native-trace";
@@ -249,6 +251,7 @@ const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
@@ -289,6 +292,7 @@ const MENU_NEW_TERMINAL_ICON = <ThemedSquareTerminal size={16} uniProps={mutedCo
 const MENU_NEW_BROWSER_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
 const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedColorMapping} />;
 const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedColorMapping} />;
+const MENU_MARK_AS_READ_ICON = <ThemedCircleCheck size={16} uniProps={mutedColorMapping} />;
 const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedColorMapping} />;
 const GATED_WORKSPACE_HEADER_LEFT = <SidebarMenuToggle />;
 
@@ -986,6 +990,7 @@ function useCloseTabs(): UseCloseTabsResult {
 
 interface WorkspaceHeaderMenuProps {
   normalizedServerId: string;
+  normalizedWorkspaceId: string;
   currentBranchName: string | null;
   showWorkspaceSetup: boolean;
   showCreateBrowserTab: boolean;
@@ -1061,6 +1066,7 @@ function WorkspaceHeaderMenuTriggerIcon({ hovered, open }: { hovered: boolean; o
 
 function WorkspaceHeaderMenu({
   normalizedServerId,
+  normalizedWorkspaceId,
   currentBranchName,
   showWorkspaceSetup,
   showCreateBrowserTab,
@@ -1085,7 +1091,20 @@ function WorkspaceHeaderMenu({
 }: WorkspaceHeaderMenuProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const toast = useToast();
   const { config } = useDaemonConfig(normalizedServerId);
+  const { hasClearableAttention, clearAttention } = useClearWorkspaceAttention({
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
+  });
+
+  const handleMarkAsRead = useCallback(() => {
+    void clearAttention().catch((error) => {
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.actions.markAsReadError"),
+      );
+    });
+  }, [clearAttention, t, toast]);
   const profiles = useMemo(
     () => resolveTerminalProfiles(config?.terminalProfiles),
     [config?.terminalProfiles],
@@ -1158,6 +1177,15 @@ function WorkspaceHeaderMenu({
             onSelect={onCopyBranchName}
           >
             {t("workspace.header.actions.copyBranchName")}
+          </DropdownMenuItem>
+        ) : null}
+        {hasClearableAttention ? (
+          <DropdownMenuItem
+            testID="workspace-header-mark-as-read"
+            leading={MENU_MARK_AS_READ_ICON}
+            onSelect={handleMarkAsRead}
+          >
+            {t("sidebar.workspace.actions.markAsRead")}
           </DropdownMenuItem>
         ) : null}
         {showWorkspaceSetup ? (
@@ -1333,6 +1361,7 @@ function WorkspaceHeaderTitleBar({
       <View style={styles.compactHeaderMenuCluster}>
         <WorkspaceHeaderMenu
           normalizedServerId={normalizedServerId}
+          normalizedWorkspaceId={normalizedWorkspaceId}
           currentBranchName={currentBranchName}
           showWorkspaceSetup={showWorkspaceSetup}
           showCreateBrowserTab={showCreateBrowserTab}

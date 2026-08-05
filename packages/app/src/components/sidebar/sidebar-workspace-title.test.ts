@@ -36,7 +36,12 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
 describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
   it("includes the visible host badge with the workspace title", () => {
     const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        statusBucket: "done",
+        readyToReview: false,
+      },
       workspaceTitleSource: "title",
       hostBadgeLabel: "Build host",
     });
@@ -50,6 +55,7 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
         name: "Investigate search",
         currentBranch: "fix/search",
         statusBucket: "running",
+        readyToReview: false,
       },
       workspaceTitleSource: "branch",
       leadingProjectName: "Search project",
@@ -65,12 +71,31 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
 
   it("omits the idle status from the workspace label", () => {
     const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        statusBucket: "done",
+        readyToReview: false,
+      },
       workspaceTitleSource: "title",
       leadingProjectName: "Search project",
       hostBadgeLabel: "Build host",
     });
 
     expect(label).toBe("Search project, Investigate search, Build host");
+  });
+
+  it("announces ready to review independently from the workspace status", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        statusBucket: "running",
+        readyToReview: true,
+      },
+      workspaceTitleSource: "title",
+    });
+
+    expect(label).toBe("Investigate search, Working, Ready to review");
   });
 });

@@ -1023,6 +1023,8 @@ export const ptBR: TranslationResources = {
         showMore: "Mostrar mais",
         showLess: "Mostrar menos",
         createWorkspaceFor: "Criar um novo workspace para {{projectName}}",
+        markAsRead: "Marcar como lido",
+        markAsReadError: "Não foi possível marcar o workspace como lido.",
         copyPath: "Copiar caminho",
         copyBranchName: "Copiar nome da branch",
         rename: "Renomear workspace",

@@ -13,7 +13,10 @@ export function resolveSidebarWorkspacePrimaryLabel(input: {
 }
 
 export function resolveSidebarWorkspaceAccessibilityLabel(input: {
-  workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch" | "statusBucket">;
+  workspace: Pick<
+    SidebarWorkspaceEntry,
+    "name" | "currentBranch" | "statusBucket" | "readyToReview"
+  >;
   workspaceTitleSource: WorkspaceTitleSource;
   leadingProjectName?: string | null;
   hostBadgeLabel?: string | null;
@@ -29,6 +32,7 @@ export function resolveSidebarWorkspaceAccessibilityLabel(input: {
     input.workspace.statusBucket === "done"
       ? null
       : STATUS_BUCKET_LABELS[input.workspace.statusBucket],
+    input.workspace.readyToReview ? "Ready to review" : null,
   ]
     .filter((label): label is string => Boolean(label))
     .join(", ");

@@ -6,6 +6,20 @@ export interface WorkspaceAgentActivity {
   agentId: string;
   status: WorkspaceDescriptor["status"];
   enteredAt: Date | null;
+  readyToReview: boolean;
+}
+
+function collectReadyToReviewWorkspaceIds(agents: ReadonlyMap<string, Agent>): Set<string> {
+  const workspaceIds = new Set<string>();
+  for (const agent of agents.values()) {
+    const parentAgent = agent.parentAgentId ? agents.get(agent.parentAgentId) : undefined;
+    const isRoot = isWorkspaceRootAgent(agent, parentAgent);
+    const isReady = agent.requiresAttention === true && agent.attentionReason === "finished";
+    if (!agent.archivedAt && agent.workspaceId && isRoot && isReady) {
+      workspaceIds.add(agent.workspaceId);
+    }
+  }
+  return workspaceIds;
 }
 
 export function buildWorkspaceAgentActivityIndex(
@@ -14,6 +28,7 @@ export function buildWorkspaceAgentActivityIndex(
 ): Map<string, WorkspaceAgentActivity> {
   const activityByWorkspaceId = new Map<string, WorkspaceAgentActivity>();
   const latestActivityAtByWorkspaceId = new Map<string, Date>();
+  const readyToReviewWorkspaceIds = collectReadyToReviewWorkspaceIds(agents);
 
   for (const agent of agents.values()) {
     const parentAgent = agent.parentAgentId ? agents.get(agent.parentAgentId) : undefined;
@@ -38,6 +53,7 @@ export function buildWorkspaceAgentActivityIndex(
       agentId: agent.id,
       status,
       enteredAt,
+      readyToReview: readyToReviewWorkspaceIds.has(agent.workspaceId),
     });
   }
 
@@ -45,7 +61,8 @@ export function buildWorkspaceAgentActivityIndex(
     const previousActivity = previous?.get(workspaceId);
     if (
       previousActivity?.agentId === activity.agentId &&
-      previousActivity.status === activity.status
+      previousActivity.status === activity.status &&
+      previousActivity.readyToReview === activity.readyToReview
     ) {
       activityByWorkspaceId.set(workspaceId, previousActivity);
     }

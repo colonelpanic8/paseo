@@ -26,6 +26,7 @@ import {
 } from "@/utils/status-indicator-geometry";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { ReadyToReviewBadge } from "@/components/sidebar/ready-to-review-badge";
 
 // The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
 // SCRIM_SOLID_OFFSET rightward, which keeps the kebab itself off the gradient entirely.
@@ -175,17 +176,29 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             displayName={leadingProjectName}
             projectViewKey={workspace.projectViewKey}
             statusBucket={workspace.statusBucket}
+            readyToReview={workspace.readyToReview}
             backdrop={backdrop}
             loading={isLoading}
             testID={`sidebar-row-project-icon-${workspace.workspaceKey}`}
           />
         ) : (
-          <WorkspaceStatusIndicator
-            bucket={workspace.statusBucket}
-            workspaceKind={workspace.workspaceKind}
-            loading={isLoading}
-            reserveIdleSpace={reserveIdleStatusIndicatorSpace}
-          />
+          <View style={styles.workspaceStatusWithReviewIndicator}>
+            {workspace.readyToReview && workspace.statusBucket === "done" && !isLoading ? (
+              <ReadyToReviewBadge />
+            ) : (
+              <WorkspaceStatusIndicator
+                bucket={workspace.statusBucket}
+                workspaceKind={workspace.workspaceKind}
+                loading={isLoading}
+                reserveIdleSpace={reserveIdleStatusIndicatorSpace}
+              />
+            )}
+            {workspace.readyToReview && workspace.statusBucket !== "done" && !isLoading ? (
+              <View style={styles.readyToReviewBadge}>
+                <ReadyToReviewBadge />
+              </View>
+            ) : null}
+          </View>
         )}
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
@@ -245,14 +258,6 @@ function WorkspaceStatusIndicator({
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-needs_input">
         <ThemedCircleAlert size={STATUS_INDICATOR_ALERT_SIZE} uniProps={needsInputColorMapping} />
-      </View>
-    );
-  }
-
-  if (bucket === "attention") {
-    return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-attention">
-        <View style={styles.standaloneStatusDot} />
       </View>
     );
   }
@@ -329,8 +334,6 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
       return styles.statusDotFailed;
     case "running":
       return styles.statusDotRunning;
-    case "attention":
-      return styles.statusDotAttention;
     case "done":
       return null;
   }
@@ -567,16 +570,23 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  workspaceStatusWithReviewIndicator: {
+    position: "relative",
+    width: theme.iconSize.md,
+    height: 20,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readyToReviewBadge: {
+    position: "absolute",
+    right: -3,
+    bottom: -2,
+  },
   statusDotOverlay: {
     position: "absolute",
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
-  },
-  standaloneStatusDot: {
-    width: STATUS_INDICATOR_DOT_SIZE,
-    height: STATUS_INDICATOR_DOT_SIZE,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
   },
   standaloneRunningDot: {
     width: STATUS_INDICATOR_DOT_SIZE,
@@ -618,10 +628,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusDotRunning: {
     backgroundColor: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
-    borderColor: theme.colors.surface0,
-  },
-  statusDotAttention: {
-    backgroundColor: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
     borderColor: theme.colors.surface0,
   },
 }));

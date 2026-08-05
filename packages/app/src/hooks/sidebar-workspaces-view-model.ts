@@ -15,7 +15,7 @@ import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
 
-export type SidebarStateBucket = WorkspaceDescriptor["status"];
+export type SidebarStateBucket = Exclude<WorkspaceDescriptor["status"], "attention">;
 
 export interface SidebarWorkspacePlacement {
   workspaceKey: string;
@@ -33,6 +33,7 @@ export interface SidebarWorkspacePlacement {
 export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlacement {
   statusBucket: SidebarStateBucket;
   statusEnteredAt: Date | null;
+  readyToReview: boolean;
 }
 
 export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
@@ -122,8 +123,13 @@ export function areSidebarWorkspaceSessionsEqual(
 }
 
 interface EffectiveWorkspaceStatus {
-  status: WorkspaceDescriptor["status"];
+  status: SidebarStateBucket;
   enteredAt: Date | null;
+  readyToReview: boolean;
+}
+
+function toSidebarStatusBucket(status: WorkspaceDescriptor["status"]): SidebarStateBucket {
+  return status === "attention" ? "done" : status;
 }
 
 function projectNameForWorkspace(workspace: WorkspaceDescriptor): string {
@@ -169,6 +175,7 @@ export function createSidebarWorkspaceEntry(input: {
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
+    readyToReview: effectiveStatus.readyToReview,
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
     prHint: selectPrHintFromStatus(
@@ -188,8 +195,16 @@ function deriveEffectiveWorkspaceStatus(input: {
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
 }): EffectiveWorkspaceStatus {
+  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
+  const readyToReview =
+    input.workspace.status === "attention" || rootAgentActivity?.readyToReview === true;
+
   if (input.workspace.status !== "done") {
-    return { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt };
+    return {
+      status: toSidebarStatusBucket(input.workspace.status),
+      enteredAt: input.workspace.statusEnteredAt,
+      readyToReview,
+    };
   }
 
   const pendingStartedAt = getPendingInitialAgentCreateStartedAt({
@@ -198,15 +213,22 @@ function deriveEffectiveWorkspaceStatus(input: {
     pendingCreateAttempts: input.pendingCreateAttempts,
   });
   if (pendingStartedAt) {
-    return { status: "running", enteredAt: pendingStartedAt };
+    return { status: "running", enteredAt: pendingStartedAt, readyToReview };
   }
 
-  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
   if (rootAgentActivity && rootAgentActivity.status !== "done") {
-    return rootAgentActivity;
+    return {
+      status: toSidebarStatusBucket(rootAgentActivity.status),
+      enteredAt: rootAgentActivity.enteredAt,
+      readyToReview,
+    };
   }
 
-  return { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt };
+  return {
+    status: "done",
+    enteredAt: input.workspace.statusEnteredAt,
+    readyToReview,
+  };
 }
 
 function getPendingInitialAgentCreateStartedAt(input: {
@@ -232,6 +254,11 @@ export interface ProjectStatusSession {
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
 }
 
+export interface SidebarProjectStatus {
+  statusBucket: SidebarStateBucket;
+  readyToReview: boolean;
+}
+
 /**
  * Most urgent status among a project's workspaces. Backs the status dot on a collapsed
  * project row, which otherwise hides every workspace-level signal it contains.
@@ -241,11 +268,11 @@ export interface ProjectStatusSession {
  * activity-index + effective-status pipeline as per-workspace rows (one pass over the
  * session's agents per server, not per workspace) rather than re-deriving it.
  */
-export function deriveProjectStatusBucket(input: {
+export function deriveProjectStatus(input: {
   workspaces: readonly SidebarWorkspacePlacement[];
   sessions: Record<string, ProjectStatusSession | undefined>;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
-}): SidebarStateBucket {
+}): SidebarProjectStatus {
   const workspaceIdsByServer = new Map<string, string[]>();
   for (const placement of input.workspaces) {
     const existing = workspaceIdsByServer.get(placement.serverId);
@@ -257,6 +284,7 @@ export function deriveProjectStatusBucket(input: {
   }
 
   const buckets: SidebarStateBucket[] = [];
+  let readyToReview = false;
   for (const [serverId, workspaceIds] of workspaceIdsByServer) {
     const session = input.sessions[serverId];
     if (!session) continue;
@@ -267,18 +295,27 @@ export function deriveProjectStatusBucket(input: {
       });
       const workspace = workspaceKey ? session.workspaces.get(workspaceKey) : undefined;
       if (!workspace) continue;
-      buckets.push(
-        deriveEffectiveWorkspaceStatus({
-          serverId,
-          workspace,
-          pendingCreateAttempts: input.pendingCreateAttempts,
-          workspaceAgentActivity: session.workspaceAgentActivity,
-        }).status,
-      );
+      const status = deriveEffectiveWorkspaceStatus({
+        serverId,
+        workspace,
+        pendingCreateAttempts: input.pendingCreateAttempts,
+        workspaceAgentActivity: session.workspaceAgentActivity,
+      });
+      buckets.push(status.status);
+      readyToReview ||= status.readyToReview;
     }
   }
 
-  return aggregateSidebarStateBuckets(buckets);
+  return {
+    statusBucket: toSidebarStatusBucket(aggregateSidebarStateBuckets(buckets)),
+    readyToReview,
+  };
+}
+
+export function deriveProjectStatusBucket(
+  input: Parameters<typeof deriveProjectStatus>[0],
+): SidebarStateBucket {
+  return deriveProjectStatus(input).statusBucket;
 }
 
 export function buildSidebarWorkspacePlacementModel(input: {

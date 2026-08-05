@@ -72,9 +72,6 @@ const needsInputColorMapping = (theme: Theme) => ({
 const failedColorMapping = (theme: Theme) => ({
   color: getStatusDotColor({ theme, bucket: "failed" }) ?? undefined,
 });
-const attentionColorMapping = (theme: Theme) => ({
-  color: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
-});
 const runningColorMapping = (theme: Theme) => ({
   color: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
 });
@@ -402,8 +399,6 @@ function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
       return <ThemedCircleAlert size={14} uniProps={needsInputColorMapping} />;
     case "failed":
       return <ThemedCircleX size={14} uniProps={failedColorMapping} />;
-    case "attention":
-      return <ThemedCircleCheck size={14} uniProps={attentionColorMapping} />;
     case "running":
       return <ThemedCircleDot size={14} uniProps={runningColorMapping} />;
     case "done":
@@ -580,9 +575,11 @@ function StatusWorkspaceRowWithMenu({
   });
   const handleMarkAsRead = useCallback(() => {
     void clearAttention().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.actions.markAsReadError"),
+      );
     });
-  }, [clearAttention, toast]);
+  }, [clearAttention, t, toast]);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,

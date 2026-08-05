@@ -26,6 +26,7 @@ function ws(
     currentBranch: input.currentBranch ?? null,
     statusBucket: input.statusBucket ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
+    readyToReview: input.readyToReview ?? false,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -169,7 +170,8 @@ describe("buildStatusGroups", () => {
       }),
       ws({
         workspaceKey: "srv:att",
-        statusBucket: "attention",
+        statusBucket: "done",
+        readyToReview: true,
         statusEnteredAt: d("2026-01-01T00:00:00Z"),
       }),
       ws({
@@ -177,7 +179,6 @@ describe("buildStatusGroups", () => {
         statusBucket: "running",
         statusEnteredAt: d("2026-01-01T00:00:00Z"),
       }),
-      ws({ workspaceKey: "srv:dn", statusBucket: "done", statusEnteredAt: null }),
     ];
 
     const groups = buildStatusGroups(workspaces, emptyProjectNames);
@@ -191,6 +192,7 @@ describe("buildStatusGroups", () => {
       expect(group.rows).toHaveLength(1);
       expect(group.rows[0]?.statusBucket).toBe(group.bucket);
     }
+    expect(groups.some((group) => group.label === "Ready to review")).toBe(false);
   });
 });
 
