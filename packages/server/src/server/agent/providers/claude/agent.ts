@@ -3936,6 +3936,19 @@ class ClaudeAgentSession implements AgentSession {
       }
       return;
     }
+    if (message.subtype === "api_retry") {
+      const retryDelaySeconds = Math.ceil(message.retry_delay_ms / 1_000);
+      const status = message.error_status === null ? "" : `${message.error_status} `;
+      events.push({
+        type: "timeline",
+        provider: "claude",
+        item: {
+          type: "error",
+          message: `Claude retry ${message.attempt}/${message.max_retries} in ${retryDelaySeconds}s: ${status}${message.error.replaceAll("_", " ")}`,
+        },
+      });
+      return;
+    }
     if (message.subtype === "compact_boundary") {
       const compactMetadata = readCompactionMetadata(message);
       events.push({

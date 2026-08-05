@@ -45,6 +45,7 @@ describe("combined model selector data", () => {
         label: "Claude (Work)",
         source: "custom",
         baseProviderId: "claude",
+        models: [{ provider: "claude-work", id: "fable", label: "Fable 5" }],
       }),
     ]);
 
@@ -54,6 +55,15 @@ describe("combined model selector data", () => {
     const accountRows =
       providers[1].modelSelection.kind === "models" ? providers[1].modelSelection.rows : [];
     expect(accountRows[0]?.iconProviderId).toBe("claude");
+    expect(accountRows[0]?.modelLabel).toBe("Claude (Work) · Fable 5");
+    expect(
+      resolveSelectedModelLabel({
+        providers,
+        selectedProvider: "claude-work",
+        selectedModel: "fable",
+        isLoading: false,
+      }),
+    ).toBe("Claude (Work) · Fable 5");
   });
 
   it("builds selector providers from ready enabled snapshot entries", () => {
