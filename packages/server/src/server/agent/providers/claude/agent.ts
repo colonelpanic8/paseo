@@ -77,6 +77,7 @@ import {
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { claudeQuery, type ClaudeOptions, type ClaudeQueryFactory } from "./query.js";
 import {
+  forkClaudeSession,
   realClaudeRewindSdk,
   revertClaudeConversation,
   revertClaudeFiles,
@@ -322,6 +323,7 @@ const CLAUDE_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindConversation: true,
   supportsRewindFiles: true,
   supportsRewindBoth: true,
+  supportsNativeFork: true,
 };
 
 const DEFAULT_MODES: AgentMode[] = [
@@ -2795,6 +2797,24 @@ class ClaudeAgentSession implements AgentSession {
   async revertBoth(input: { messageId: string }): Promise<void> {
     await this.revertFiles(input);
     await this.revertConversation(input);
+  }
+
+  async forkNativeSession(input: { messageId?: string }): Promise<{ providerHandleId: string }> {
+    if (!input.messageId) {
+      throw new Error("Claude requires a turn boundary to fork a session");
+    }
+    const target = this.resolveConversationRewindTarget(input.messageId);
+    if (target.kind === "fresh-session") {
+      // Forking before the first turn would produce an empty session, which is
+      // just a new agent — the caller should not have offered a native fork.
+      throw new Error("Cannot fork a Claude session before its first turn");
+    }
+    return forkClaudeSession({
+      sdk: realClaudeRewindSdk,
+      sessionId: this.claudeSessionId,
+      messageId: target.messageId,
+      resolveMessageId: (messageId) => this.resolveClaudeMessageId(messageId),
+    });
   }
 
   private resolveSlashCommandInvocation(prompt: AgentPromptInput): SlashCommandInvocation | null {
