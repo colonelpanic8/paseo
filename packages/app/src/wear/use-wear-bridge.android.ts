@@ -74,9 +74,7 @@ export function useWearBridge(): void {
           subscribe: liveVoiceRuntime.subscribe,
           getSnapshot: liveVoiceRuntime.getSnapshot,
           readAvailability: readLiveVoiceAvailability,
-          // Background mode: a call placed from the wrist is one where the phone
-          // is in a pocket, so it has to survive the screen going off.
-          start: (serverId) => liveVoiceRuntime.start(serverId, "background"),
+          start: liveVoiceRuntime.start,
           stop: liveVoiceRuntime.stop,
           toggleMute: liveVoiceRuntime.toggleMute,
         }
