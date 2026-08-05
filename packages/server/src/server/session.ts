@@ -2388,7 +2388,7 @@ export class Session {
     // remain healthy, so updates and routed requests follow the session across
     // socket replacement.
     const result = await coordinator.start({
-      offerSdp: msg.offerSdp,
+      offerSdp: msg.negotiation.offerSdp,
       ...(voice ? { voice } : {}),
       owner: { sessionKey: this },
       emit: (update) => {
@@ -2424,7 +2424,7 @@ export class Session {
         requestId: msg.requestId,
         accepted: true,
         liveSessionId: result.liveSessionId,
-        answerSdp: result.answerSdp,
+        negotiation: { kind: "webrtc_sdp", answerSdp: result.answerSdp },
       });
       return;
     }
