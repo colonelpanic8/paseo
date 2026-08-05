@@ -1,8 +1,17 @@
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { resolvePaseoPaths } from "./paseo-paths.js";
 import {
   loadPersistedConfig,
   PersistedConfigSchema,
@@ -778,5 +787,56 @@ describe.skipIf(process.platform === "win32")("persisted config file permissions
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
+  });
+});
+
+describe("config.json location by category", () => {
+  const homes: string[] = [];
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    while (homes.length > 0) {
+      rmSync(homes.pop() as string, { recursive: true, force: true });
+    }
+  });
+
+  function stubHome(): string {
+    const home = mkdtempSync(path.join(tmpdir(), "paseo-config-home-"));
+    homes.push(home);
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("PASEO_HOME", "");
+    return home;
+  }
+
+  test("a fresh install reads config from the config root, not the daemon's data root", () => {
+    const home = stubHome();
+    const paths = resolvePaseoPaths(process.env);
+
+    loadPersistedConfig(paths.home);
+
+    expect(existsSync(path.join(home, ".config", "paseo", "config.json"))).toBe(true);
+    expect(existsSync(path.join(paths.data, "config.json"))).toBe(false);
+  });
+
+  test("an existing ~/.paseo keeps config.json exactly where it is", () => {
+    const home = stubHome();
+    const legacy = path.join(home, ".paseo");
+    mkdirSync(legacy);
+    const paths = resolvePaseoPaths(process.env);
+
+    savePersistedConfig(paths.home, loadPersistedConfig(paths.home));
+
+    expect(existsSync(path.join(legacy, "config.json"))).toBe(true);
+    expect(existsSync(path.join(home, ".config", "paseo", "config.json"))).toBe(false);
+  });
+
+  test("an explicitly named directory stays self-contained", () => {
+    stubHome();
+    const explicitHome = createTempHome();
+    homes.push(explicitHome);
+
+    loadPersistedConfig(explicitHome);
+
+    expect(existsSync(path.join(explicitHome, "config.json"))).toBe(true);
   });
 });
