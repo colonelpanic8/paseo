@@ -2803,6 +2803,9 @@ export class Session {
       ...(msg.customVoiceInstructions
         ? { customVoiceInstructions: msg.customVoiceInstructions }
         : {}),
+      ...(msg.defaultWorkspaceDirectory
+        ? { defaultWorkspaceDirectory: msg.defaultWorkspaceDirectory }
+        : {}),
       ...(msg.backendModel ? { backendModel: msg.backendModel } : {}),
       ...(msg.backendThinkingOptionId
         ? { backendThinkingOptionId: msg.backendThinkingOptionId }
