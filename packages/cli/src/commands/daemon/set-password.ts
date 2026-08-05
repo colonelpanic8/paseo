@@ -1,11 +1,8 @@
 import type { Command } from "commander";
 import { isCancel, password as passwordPrompt } from "@clack/prompts";
 import { hashDaemonPassword } from "@getpaseo/server/auth";
-import {
-  loadConfigStack,
-  savePersistedConfig,
-  type PersistedConfig,
-} from "@getpaseo/server/configuration";
+import { loadConfigStack, savePersistedConfig, type PersistedConfig } from "@getpaseo/server/configuration";
+import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server";
 import { resolvePaseoHome } from "@getpaseo/server/daemon-control";
 import type {
   CommandError,
@@ -26,6 +23,7 @@ export type PromptPassword = (message: string) => Promise<string | symbol>;
 
 export interface SetPasswordOptions {
   home?: string;
+  paths?: PaseoPaths;
   promptPassword?: PromptPassword;
 }
 
@@ -89,8 +87,11 @@ export async function setDaemonPasswordInConfig(
   newPassword: string,
   options: SetPasswordOptions = {},
 ): Promise<SetPasswordResult> {
-  const paseoHome = resolvePaseoHome({ PASEO_HOME: options.home });
-  const stack = loadConfigStack(paseoHome);
+  const env =
+    options.home === undefined ? process.env : { ...process.env, PASEO_HOME: options.home };
+  const paths = options.paths ?? resolvePaseoPaths(env);
+  const paseoHome = options.paths?.home ?? resolvePaseoHome(env);
+  const stack = loadConfigStack(paseoHome, undefined, paths);
   const configPath = stack.writeTargetPath;
   const persisted = stack.effective;
   const nextConfig: PersistedConfig = {
@@ -104,7 +105,7 @@ export async function setDaemonPasswordInConfig(
     },
   };
 
-  savePersistedConfig(paseoHome, nextConfig);
+  savePersistedConfig(paseoHome, nextConfig, undefined, paths);
 
   return {
     action: "password_set",
@@ -125,6 +126,7 @@ export async function runSetPasswordCommand(
   const newPassword = await promptForPassword(promptPassword);
   const result = await setDaemonPasswordInConfig(newPassword, {
     home: options.daemonTarget.kind === "instance" ? options.daemonTarget.home : undefined,
+    paths: options.daemonTarget.kind === "instance" ? options.daemonTarget.paths : undefined,
   });
 
   return {

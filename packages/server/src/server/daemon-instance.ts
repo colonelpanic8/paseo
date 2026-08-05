@@ -12,6 +12,7 @@ import {
 import { daemonLaunchEnvironment } from "./config-environment.js";
 import { readPersistedConfig } from "./persisted-config.js";
 import { reapTerminalWorkers } from "../terminal/terminal-worker-reaper.js";
+import type { PaseoPaths } from "./paseo-paths.js";
 import treeKill from "tree-kill";
 const killTree = (pid: number, signal: string): Promise<void> =>
   new Promise((resolve, reject) =>
@@ -248,6 +249,7 @@ async function closeLeftoverTerminals(
 
 export async function startDaemonInstance(input: {
   home: string;
+  paths?: PaseoPaths;
   command: string;
   args: string[];
   env: NodeJS.ProcessEnv;

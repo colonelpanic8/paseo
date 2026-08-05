@@ -12,7 +12,7 @@ import {
   ProviderOverridesSchema,
 } from "./agent/provider-launch-config.js";
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
-import { resolvePaseoPaths } from "./paseo-paths.js";
+import { persistPaseoLayoutSelection, resolvePaseoPaths, type PaseoPaths } from "./paseo-paths.js";
 import {
   ensurePrivateFile,
   ensurePrivateFileAsync,
@@ -438,13 +438,15 @@ interface LoggerLike {
  * tool inspecting a specific home — keeps reading and writing inside the directory it named,
  * which is also exactly what happens under the flat layout, where the two roots are equal.
  */
-function resolveConfigRoot(paseoHome: string, env: NodeJS.ProcessEnv = process.env): string {
-  const paths = resolvePaseoPaths(env);
+function resolveConfigRoot(paseoHome: string, paths: PaseoPaths): string {
   return paths.home === path.resolve(paseoHome) ? paths.config : paseoHome;
 }
 
-function getConfigPath(paseoHome: string): string {
-  return path.resolve(resolveConfigRoot(paseoHome), CONFIG_FILENAME);
+export function resolvePersistedConfigPath(
+  paseoHome: string,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): string {
+  return path.resolve(resolveConfigRoot(paseoHome, paths), CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
@@ -578,23 +580,6 @@ function splitConfig(config: PersistedConfigSchemaOutput): {
   return { structural, body: jsonBody };
 }
 
-/** Observe one config file without initializing a home or default configuration. */
-export function readPersistedConfig(
-  paseoHome: string,
-  options: { defaultsIfMissing?: boolean } = {},
-): PersistedConfig {
-  const configPath = getConfigPath(paseoHome);
-  let raw: string;
-  try {
-    raw = readFileSync(configPath, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT")
-      return options.defaultsIfMissing ? structuredClone(DEFAULT_PERSISTED_CONFIG) : {};
-    throw error;
-  }
-  return parseConfigFile(raw, configPath).body;
-}
-
 function parseConfigFile(
   raw: string,
   configPath: string,
@@ -717,6 +702,7 @@ interface LoadLayerParams {
   loadedByPath: Map<string, ConfigLayer>;
   isRoot: boolean;
   logger?: LoggerLike;
+  ensureRootPrivate: boolean;
 }
 
 function* loadLayer(
@@ -752,7 +738,7 @@ function* loadLayer(
 
   let raw: string;
   try {
-    raw = yield* readConfigFile(configPath, params.isRoot);
+    raw = yield* readConfigFile(configPath, params.isRoot && params.ensureRootPrivate);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`[Config] Failed to read ${configPath}: ${message}`, { cause: err });
@@ -777,6 +763,7 @@ function* loadLayer(
       loadedByPath: params.loadedByPath,
       isRoot: false,
       logger: params.logger,
+      ensureRootPrivate: params.ensureRootPrivate,
     });
     layers.push(...imported.layers);
   }
@@ -811,19 +798,33 @@ function* initializeRootConfig(configPath: string, logger?: LoggerLike): ConfigI
   }
 }
 
-function* readConfigStack(paseoHome: string, logger?: LoggerLike): ConfigIo<ConfigStack> {
+function* readConfigStack(
+  paseoHome: string,
+  logger: LoggerLike | undefined,
+  paths: PaseoPaths,
+): ConfigIo<ConfigStack> {
   const log = getLogger(logger);
-  const requestedRootPath = getConfigPath(paseoHome);
+  if (paths.home === path.resolve(paseoHome)) persistPaseoLayoutSelection(paths);
+  const requestedRootPath = resolvePersistedConfigPath(paseoHome, paths);
   if (!(yield* configFileExists(requestedRootPath))) {
     yield* initializeRootConfig(requestedRootPath, log);
   }
 
+  return yield* readExistingConfigStack(requestedRootPath, log, true);
+}
+
+function* readExistingConfigStack(
+  requestedRootPath: string,
+  log: LoggerLike | undefined,
+  ensureRootPrivate: boolean,
+): ConfigIo<ConfigStack> {
   const loaded = yield* loadLayer({
     requestedPath: requestedRootPath,
     ancestry: [],
     loadedByPath: new Map(),
     isRoot: true,
     logger: log,
+    ensureRootPrivate,
   });
   const rootPath = loaded.layer.path;
   const effective = validateEffectiveConfig(mergeLayers(loaded.layers), "merged config");
@@ -852,24 +853,37 @@ function* readConfigStack(paseoHome: string, logger?: LoggerLike): ConfigIo<Conf
   };
 }
 
-export function loadConfigStack(paseoHome: string, logger?: LoggerLike): ConfigStack {
-  return runConfigIoSync(readConfigStack(paseoHome, logger));
+export function loadConfigStack(
+  paseoHome: string,
+  logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): ConfigStack {
+  return runConfigIoSync(readConfigStack(paseoHome, logger, paths));
 }
 
-export function loadConfigStackAsync(paseoHome: string, logger?: LoggerLike): Promise<ConfigStack> {
-  return runConfigIo(readConfigStack(paseoHome, logger));
+export function loadConfigStackAsync(
+  paseoHome: string,
+  logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): Promise<ConfigStack> {
+  return runConfigIo(readConfigStack(paseoHome, logger, paths));
 }
 
-export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
-  return loadConfigStack(paseoHome, logger).effective;
+export function loadPersistedConfig(
+  paseoHome: string,
+  logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): PersistedConfig {
+  return loadConfigStack(paseoHome, logger, paths).effective;
 }
 
 /** Runtime config IO. Startup and offline CLI consumers retain their synchronous entry points. */
 export async function loadPersistedConfigAsync(
   paseoHome: string,
   logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
 ): Promise<PersistedConfig> {
-  return (await loadConfigStackAsync(paseoHome, logger)).effective;
+  return (await loadConfigStackAsync(paseoHome, logger, paths)).effective;
 }
 
 function deepDiff(
@@ -1038,6 +1052,18 @@ function parseConfigText(raw: string): unknown {
   return JSON.parse(raw.replace(/^\uFEFF/, ""));
 }
 
+/** Observe the effective config without initializing a home or default configuration. */
+export function readPersistedConfig(
+  paseoHome: string,
+  options: { defaultsIfMissing?: boolean } = {},
+  paths: PaseoPaths = resolvePaseoPaths(),
+): PersistedConfig {
+  const configPath = resolvePersistedConfigPath(paseoHome, paths);
+  if (!existsSync(configPath))
+    return options.defaultsIfMissing ? structuredClone(DEFAULT_PERSISTED_CONFIG) : {};
+  return runConfigIoSync(readExistingConfigStack(configPath, undefined, false)).effective;
+}
+
 function configPathParts(field: string): string[] {
   const parts = field.split(".");
   let schema: z.ZodType = PersistedConfigSchema;
@@ -1084,7 +1110,8 @@ export function editPersistedConfig(
   if (field === "daemon.auth" || field.startsWith("daemon.auth.")) {
     throw new Error("Use daemon set-password to change the daemon password.");
   }
-  const config = readPersistedConfig(paseoHome, { defaultsIfMissing: true });
+  const stack = loadConfigStack(paseoHome);
+  const config = structuredClone(stack.effective);
   let object = config as Record<string, unknown>;
   for (const part of parts.slice(0, -1)) {
     object[part] ??= {};
@@ -1102,35 +1129,39 @@ export function editPersistedConfig(
   }
   if ("unset" in edit) delete object[key];
   else object[key] = edit.value;
-  savePersistedConfig(paseoHome, config);
+  saveConfigStack(stack, config);
   return config;
 }
 
 function* writePersistedConfig(
   paseoHome: string,
   config: PersistedConfig,
-  logger?: LoggerLike,
+  logger: LoggerLike | undefined,
+  paths: PaseoPaths,
 ): ConfigIo<void> {
-  const configPath = getConfigPath(paseoHome);
+  const configPath = resolvePersistedConfigPath(paseoHome, paths);
   if (!(yield* configFileExists(configPath))) {
+    if (paths.home === path.resolve(paseoHome)) persistPaseoLayoutSelection(paths);
     yield* writeConfigFile(configPath, validateConfigToSave(config), getLogger(logger));
     return;
   }
-  yield* writeConfigStack(yield* readConfigStack(paseoHome, logger), config, logger);
+  yield* writeConfigStack(yield* readConfigStack(paseoHome, logger, paths), config, logger);
 }
 
 export function savePersistedConfig(
   paseoHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
 ): void {
-  runConfigIoSync(writePersistedConfig(paseoHome, config, logger));
+  runConfigIoSync(writePersistedConfig(paseoHome, config, logger, paths));
 }
 
 export function savePersistedConfigAsync(
   paseoHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
 ): Promise<void> {
-  return runConfigIo(writePersistedConfig(paseoHome, config, logger));
+  return runConfigIo(writePersistedConfig(paseoHome, config, logger, paths));
 }

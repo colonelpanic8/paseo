@@ -3,7 +3,6 @@ import path from "node:path";
 import { app, ipcMain, powerMonitor } from "electron";
 import log from "electron-log/main";
 import {
-  resolvePaseoHome,
   startDaemonInstance,
   DaemonInstanceError,
   stopDaemonInstance,
@@ -12,6 +11,7 @@ import {
   readLocalCredentialForTarget,
   type DaemonInstance,
 } from "@getpaseo/server/daemon-control";
+import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server";
 import {
   copyAttachmentFileToManagedStorage,
   deleteManagedAttachmentFile,
@@ -132,8 +132,12 @@ function parseDesktopDaemonStopReason(
 // Utilities
 // ---------------------------------------------------------------------------
 
+function getPaseoPaths(): PaseoPaths {
+  return resolvePaseoPaths(process.env);
+}
+
 function getPaseoHome(): string {
-  return resolvePaseoHome(process.env);
+  return getPaseoPaths().home;
 }
 
 function logFilePath(): string {
@@ -230,7 +234,8 @@ function resolveDesktopAppVersion(): string {
 // ---------------------------------------------------------------------------
 
 export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus> {
-  const home = getPaseoHome();
+  const paths = getPaseoPaths();
+  const home = paths.home;
 
   try {
     // The app polls this while no local daemon runs. Answer that case in-process,
@@ -239,11 +244,11 @@ export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus>
       return statusFromDaemonProbe({ localDaemon: "stopped" }, home);
     }
 
+    const targetArgs = paths.layout === "xdg" ? [] : ["--home", home];
     const payload = (await runExternalCliJsonCommand([
       "daemon",
       "status",
-      "--home",
-      home,
+      ...targetArgs,
       "--json",
     ])) as Record<string, unknown>;
     return statusFromDaemonProbe(payload, home);
@@ -309,7 +314,8 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
     }
   }
 
-  const home = getPaseoHome();
+  const paths = getPaseoPaths();
+  const home = paths.home;
   const invocation = createNodeEntrypointInvocation({
     entrypoint: resolveDaemonRunnerEntrypoint(),
     argvMode: "node-script",
@@ -319,6 +325,7 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
   try {
     await startDaemonInstance({
       home,
+      paths,
       timeoutMs: 30_000,
       ...invocation,
       env: { ...invocation.env, PASEO_CLI: getBundledCliShimPath() },
