@@ -24,7 +24,7 @@ describe("resolvePaseoPaths", () => {
     const home = makeHome();
     const paseoHome = path.join(home, "custom");
 
-    const paths = resolvePaseoPaths({ HOME: home, PASEO_HOME: paseoHome });
+    const paths = resolvePaseoPaths({ HOME: home, PASEO_HOME: paseoHome }, "linux");
 
     expect(paths.layout).toBe("flat");
     expect([paths.home, paths.config, paths.data, paths.state, paths.cache]).toEqual([
@@ -41,11 +41,14 @@ describe("resolvePaseoPaths", () => {
     const legacy = path.join(home, ".paseo");
     mkdirSync(legacy);
 
-    const paths = resolvePaseoPaths({
-      HOME: home,
-      XDG_CONFIG_HOME: path.join(home, "xdg-config"),
-      XDG_CACHE_HOME: path.join(home, "xdg-cache"),
-    });
+    const paths = resolvePaseoPaths(
+      {
+        HOME: home,
+        XDG_CONFIG_HOME: path.join(home, "xdg-config"),
+        XDG_CACHE_HOME: path.join(home, "xdg-cache"),
+      },
+      "linux",
+    );
 
     expect(paths.layout).toBe("flat");
     expect(paths.config).toBe(legacy);
@@ -56,7 +59,7 @@ describe("resolvePaseoPaths", () => {
   test("a fresh install splits the categories across XDG roots", () => {
     const home = makeHome();
 
-    const paths = resolvePaseoPaths({ HOME: home });
+    const paths = resolvePaseoPaths({ HOME: home }, "linux");
 
     expect(paths.layout).toBe("xdg");
     expect(paths.config).toBe(path.join(home, ".config", "paseo"));
@@ -67,7 +70,7 @@ describe("resolvePaseoPaths", () => {
   test("state and cache share the data root until they are split", () => {
     const home = makeHome();
 
-    const paths = resolvePaseoPaths({ HOME: home });
+    const paths = resolvePaseoPaths({ HOME: home }, "linux");
 
     expect(paths.state).toBe(paths.data);
     expect(paths.cache).toBe(paths.data);
@@ -76,22 +79,43 @@ describe("resolvePaseoPaths", () => {
   test("a fresh install honors the XDG variables when they are set", () => {
     const home = makeHome();
 
-    const paths = resolvePaseoPaths({
-      HOME: home,
-      XDG_CONFIG_HOME: path.join(home, "conf"),
-      XDG_DATA_HOME: "~/dat",
-    });
+    const paths = resolvePaseoPaths(
+      {
+        HOME: home,
+        XDG_CONFIG_HOME: path.join(home, "conf"),
+        XDG_DATA_HOME: "~/dat",
+      },
+      "linux",
+    );
 
     expect(paths.config).toBe(path.join(home, "conf", "paseo"));
     expect(paths.data).toBe(path.join(home, "dat", "paseo"));
   });
 
-  test("resolving never creates the legacy directory, so detection stays stable", () => {
+  test("resolving creates nothing at all", () => {
     const home = makeHome();
 
-    resolvePaseoPaths({ HOME: home });
+    const paths = resolvePaseoPaths({ HOME: home }, "linux");
 
-    // Creating ~/.paseo here would silently pin every later call to the flat layout.
+    // Creating ~/.paseo would silently pin every later call to the flat layout, and creating the
+    // XDG roots would make merely asking for a path a side effect on someone else's home.
     expect(existsSync(path.join(home, ".paseo"))).toBe(false);
+    expect(existsSync(paths.config)).toBe(false);
+    expect(existsSync(paths.data)).toBe(false);
   });
+
+  test.each(["darwin", "win32"] as const)(
+    "%s keeps the flat layout instead of borrowing Linux conventions",
+    (platform) => {
+      const home = makeHome();
+
+      const paths = resolvePaseoPaths(
+        { HOME: home, XDG_CONFIG_HOME: path.join(home, "conf") },
+        platform,
+      );
+
+      expect(paths.layout).toBe("flat");
+      expect(paths.config).toBe(path.join(home, ".paseo"));
+    },
+  );
 });
