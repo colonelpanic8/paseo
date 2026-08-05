@@ -1871,6 +1871,17 @@ export const fr: TranslationResources = {
         description: "Utilisée pour les nouveaux appels. Un appel actif conserve sa voix actuelle.",
         default: "Par défaut",
       },
+      backendModel: {
+        label: "Modèle d’actions",
+        description:
+          "Exécute les actions de l’appel en arrière-plan. Le modèle par défaut est rapide et économique ; choisissez-en un plus puissant si les actions demandent plus de jugement.",
+        default: "Par défaut (rapide)",
+      },
+      backendThinking: {
+        label: "Réflexion des actions",
+        description: "Profondeur de raisonnement du modèle d’actions.",
+        default: "Par défaut",
+      },
       agentReports: {
         label: "Signaler l’activité des agents",
         description:
@@ -2161,6 +2172,7 @@ export const fr: TranslationResources = {
     sections: {
       general: "Général",
       chat: "Discussion",
+      voice: "Voix en direct",
       appearance: "Apparence",
       sidebar: "Barre latérale",
       terminal: "Terminal",
