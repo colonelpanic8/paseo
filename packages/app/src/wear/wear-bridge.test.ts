@@ -1594,6 +1594,8 @@ describe("WearBridge live voice", () => {
         connectionStatus: "online",
         version: "0.2.5",
         supportsLiveVoice: true,
+        supportsVoiceCatalog: true,
+        paseoToolsEnabled: true,
       },
     ],
   };
@@ -1602,7 +1604,6 @@ describe("WearBridge live voice", () => {
     phase: "idle",
     serverId: null,
     liveSessionId: null,
-    sessionMode: null,
     isMuted: false,
     isAudioBlocked: false,
     transcripts: [],
