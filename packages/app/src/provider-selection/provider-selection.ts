@@ -52,6 +52,14 @@ export interface ProviderSelectionReadiness {
   reason?: string;
 }
 
+function buildAccountAwareModelLabel(
+  providerLabel: string,
+  modelLabel: string,
+  iconProviderId?: string,
+): string {
+  return iconProviderId ? `${providerLabel} · ${modelLabel}` : modelLabel;
+}
+
 function buildModelRows(
   provider: string,
   providerLabel: string,
@@ -64,7 +72,7 @@ function buildModelRows(
     providerLabel,
     iconProviderId,
     modelId: model.id,
-    modelLabel: model.label,
+    modelLabel: buildAccountAwareModelLabel(providerLabel, model.label, iconProviderId),
     description: model.description ?? model.id,
     isDefault: model.isDefault,
   }));
@@ -81,7 +89,11 @@ function buildSyntheticDefaultRow(
     providerLabel,
     iconProviderId,
     modelId: "",
-    modelLabel: i18n.t("providerSelection.defaultModel"),
+    modelLabel: buildAccountAwareModelLabel(
+      providerLabel,
+      i18n.t("providerSelection.defaultModel"),
+      iconProviderId,
+    ),
     description: undefined,
     isDefault: true,
   };
