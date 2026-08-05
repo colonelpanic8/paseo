@@ -56,3 +56,18 @@ describe("known provider icon names", () => {
     }
   });
 });
+
+it("resolves account icons through their configured base without shadowing real providers", () => {
+  expect(resolveProviderIconName("claude-work", undefined, "claude")).toEqual({
+    kind: "builtin",
+    id: "claude",
+  });
+  expect(resolveProviderIconName("gemini-work", undefined, "gemini")).toEqual({
+    kind: "catalog",
+    id: "gemini",
+  });
+  expect(resolveProviderIconName("codex", undefined, "claude")).toEqual({
+    kind: "builtin",
+    id: "codex",
+  });
+});
