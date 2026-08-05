@@ -1521,6 +1521,17 @@ export const ar: TranslationResources = {
         description: "يُستخدم للمكالمات الجديدة. تحتفظ المكالمة النشطة بصوتها الحالي.",
         default: "الافتراضي",
       },
+      backendModel: {
+        label: "نموذج الإجراءات",
+        description:
+          "ينفّذ إجراءات المكالمة في الخلفية. الافتراضي سريع ورخيص؛ اختر نموذجًا أقوى إذا احتاجت الإجراءات إلى حكم أدق.",
+        default: "الافتراضي (سريع)",
+      },
+      backendThinking: {
+        label: "تفكير الإجراءات",
+        description: "عمق الاستدلال لنموذج الإجراءات.",
+        default: "الافتراضي",
+      },
       agentReports: {
         label: "الإبلاغ عن نشاط الوكلاء",
         description:
@@ -1781,6 +1792,7 @@ export const ar: TranslationResources = {
     groupInfo: "حول{{title}}",
     sections: {
       general: "عام",
+      voice: "الصوت المباشر",
       appearance: "مظهر",
       editor: "المحرر",
       shortcuts: "الاختصارات",
