@@ -1,6 +1,6 @@
 {
   "name": "@getpaseo/expo-wear-bridge",
-  "version": "0.2.3",
+  "version": "0.3.0-beta.2",
   "private": true,
   "description": "Wearable Data Layer bridge between the Paseo phone app and the Wear OS app",
   "keywords": [
