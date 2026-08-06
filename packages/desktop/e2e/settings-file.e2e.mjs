@@ -194,7 +194,7 @@ function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function runRegression({ page, userData, artifactDir }) {
+async function runRegression({ page, userData, seedPath, artifactDir }) {
   // (1) A fresh profile gets a file, written by the main process at mode 0600.
   const fresh = await waitForSettings(
     userData,
@@ -215,6 +215,14 @@ async function runRegression({ page, userData, artifactDir }) {
   const document = await page.evaluate(() => window.paseoDesktop.invoke("get_client_settings"));
   record("1b. get_client_settings IPC round-trip", document);
   assert(document?.version === 1, "get_client_settings returns the document");
+
+  const seed = await page.evaluate(() => window.paseoDesktop.invoke("get_settings_seed"));
+  record("1c. XDG settings seed IPC round-trip", seed);
+  assert(seed?.path === seedPath, "get_settings_seed reads the XDG config file");
+  assert(
+    seed?.app?.keyboardShortcutOverrides?.["toggle-sidebar"] === "ctrl+shift+b",
+    "get_settings_seed returns the configured shortcut",
+  );
 
   // (2) A registered preference changed in the settings UI lands in the file.
   await openAppearanceSettings(page);
@@ -343,8 +351,13 @@ async function main() {
   fs.mkdirSync(artifactDir, { recursive: true });
   const paseoHome = path.join(runtimeDir, "paseo-home");
   const userData = path.join(runtimeDir, "electron-user-data");
+  const configHome = path.join(runtimeDir, "xdg-config");
+  const seedPath = path.join(configHome, "paseo", "settings-seed.json");
   fs.mkdirSync(paseoHome, { recursive: true });
   fs.mkdirSync(userData, { recursive: true });
+  writeJson(seedPath, {
+    app: { keyboardShortcutOverrides: { "toggle-sidebar": "ctrl+shift+b" } },
+  });
 
   const [daemonPort, expoPort, cdpPort] = await Promise.all([
     reservePort(),
@@ -375,6 +388,7 @@ async function main() {
       PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: "0",
       PASEO_DICTATION_ENABLED: "0",
       PASEO_VOICE_MODE_ENABLED: "0",
+      XDG_CONFIG_HOME: configHome,
       FORCE_COLOR: "0",
       NO_COLOR: "1",
     };
@@ -427,7 +441,7 @@ async function main() {
     await waitForBridge(page);
     await delay(5_000);
 
-    const report = await runRegression({ page, userData, artifactDir });
+    const report = await runRegression({ page, userData, seedPath, artifactDir });
     writeJson(path.join(artifactDir, "result.json"), report);
     console.log("\nDesktop settings file E2E passed.");
   } catch (error) {
