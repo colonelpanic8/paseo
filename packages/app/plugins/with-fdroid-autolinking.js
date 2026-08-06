@@ -65,12 +65,27 @@ function withFdroidAutolinking(config) {
       const expo = packageJson.expo ?? {};
       const autolinking = expo.autolinking ?? {};
       const android = autolinking.android ?? {};
+      const overlayRoot = path.join(modConfig.modRequest.platformProjectRoot, "fdroid-autolinking");
+      // Autolinking resolves the local modules directory against its project
+      // root, which this overlay replaces, so the default ./modules lands in
+      // the overlay and nothing under packages/app/modules links at all.
+      const nativeModulesDir = path
+        .relative(
+          overlayRoot,
+          path.resolve(
+            modConfig.modRequest.projectRoot,
+            autolinking.nativeModulesDir ?? "./modules",
+          ),
+        )
+        .split(path.sep)
+        .join("/");
       const fdroidPackageJson = {
         ...packageJson,
         expo: {
           ...expo,
           autolinking: {
             ...autolinking,
+            nativeModulesDir,
             android: {
               ...android,
               buildFromSource: [".*"],
@@ -79,7 +94,6 @@ function withFdroidAutolinking(config) {
           },
         },
       };
-      const overlayRoot = path.join(modConfig.modRequest.platformProjectRoot, "fdroid-autolinking");
 
       await fs.mkdir(overlayRoot, { recursive: true });
       await fs.writeFile(
