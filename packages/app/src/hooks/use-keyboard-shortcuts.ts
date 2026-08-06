@@ -34,6 +34,7 @@ import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-over
 import { isNative } from "@/constants/platform";
 import { keyboardShortcutsAvailable } from "@/keyboard/availability";
 import { shortcutKeyFromCode } from "@/keyboard/shortcut-string";
+import { requestComposerAutoFocus } from "@/keyboard/composer-auto-focus";
 import {
   addHardwareKeyDownListener,
   setHardwareKeyEventsEnabled,
