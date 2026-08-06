@@ -442,8 +442,10 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
     backgroundColor: theme.colors.border,
   },
+  // The desktop card sizes to its content, so `flex: 1` here would resolve to a
+  // zero-height viewport and make the controls unreachable.
   controlsScroll: {
-    flex: 1,
+    flexShrink: 1,
     minHeight: 0,
   },
   mobileRootContent: {
