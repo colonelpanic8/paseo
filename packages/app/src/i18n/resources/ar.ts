@@ -2430,9 +2430,16 @@ export const ar: TranslationResources = {
       },
     },
     shortcuts: {
+      modKey: {
+        title: "مفتاح التعديل",
+        hint: "المفتاح المستخدم كمعدِّل للاختصارات",
+        auto: "تلقائي",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       dialogTitle: "الاختصارات",
       searchPlaceholder: "البحث في الاختصارات",
-      unavailableOnMobile: "اختصارات لوحة المفاتيح متاحة فقط على سطح المكتب",
+      unavailableOnMobile: "تخصيص الاختصارات متاح فقط على سطح المكتب",
       capturePrompt: "اضغط على الاختصار...",
       captureIndexPrompt: "اختم برقم من 1 إلى 9.",
       unassigned: "غير معين",
