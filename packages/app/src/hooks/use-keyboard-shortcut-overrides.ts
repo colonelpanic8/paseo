@@ -47,7 +47,11 @@ export function useKeyboardShortcutOverrides(): UseKeyboardShortcutOverridesRetu
   };
 }
 
-/** All hook instances sharing a query client must also share one serialized write queue. */
+/**
+ * One store per query client. Every component that calls the hook has to share
+ * a single write queue -- a store per hook instance would give each its own
+ * queue and reintroduce the interleaving the store exists to prevent.
+ */
 const stores = new WeakMap<QueryClient, ShortcutOverrideStore>();
 
 function getStore(queryClient: QueryClient): ShortcutOverrideStore {

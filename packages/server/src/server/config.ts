@@ -549,7 +549,10 @@ interface ResolveConfigFromPersistedOptions {
   relayEnabledFallback?: boolean;
 }
 
-interface LoadConfigOptions extends Omit<ResolveConfigFromPersistedOptions, "relayEnabledFallback"> {
+interface LoadConfigOptions extends Omit<
+  ResolveConfigFromPersistedOptions,
+  "relayEnabledFallback"
+> {
   paths?: PaseoPaths;
 }
 
@@ -656,10 +659,7 @@ export function resolveConfigFromPersisted(
   };
 }
 
-export function loadConfig(
-  paseoHome: string,
-  options?: LoadConfigOptions,
-): PaseoDaemonConfig {
+export function loadConfig(paseoHome: string, options?: LoadConfigOptions): PaseoDaemonConfig {
   const env = options?.env ?? process.env;
   const paths = options?.paths ?? resolvePaseoPaths(env);
   const persisted = loadPersistedConfig(paseoHome, undefined, paths);
