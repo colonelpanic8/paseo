@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { GestureDetector, type GestureType } from "react-native-gesture-handler";
 import { StyleSheet } from "react-native-unistyles";
+import {
+  resolveSidebarResizeHandleGeometry,
+  type SidebarResizeEdge,
+} from "@/components/sidebar-resize-handle-layout";
 import { isWeb } from "@/constants/platform";
+import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 
 interface SidebarResizeHandleProps {
-  edge: "left" | "right";
+  edge: SidebarResizeEdge;
   gesture: GestureType;
   testID: string;
 }
@@ -18,13 +23,29 @@ const webResizeCursorStyle = isWeb
     } as object)
   : null;
 
+function edgeOffsetStyle(edge: SidebarResizeEdge, edgeOffset: number) {
+  return edge === "left" ? { left: edgeOffset } : { right: edgeOffset };
+}
+
 export function SidebarResizeHandle({ edge, gesture, testID }: SidebarResizeHandleProps) {
+  const finePointer = useHasFinePointer();
+
+  if (finePointer) {
+    return <PointerResizeHandle edge={edge} gesture={gesture} testID={testID} />;
+  }
+  return <TouchResizeHandle edge={edge} gesture={gesture} testID={testID} />;
+}
+
+function PointerResizeHandle({ edge, gesture, testID }: SidebarResizeHandleProps) {
   const [highlighted, setHighlighted] = useState(false);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hitAreaStyle =
-    edge === "left"
-      ? [styles.hitArea, styles.leftEdge, webResizeCursorStyle]
-      : [styles.hitArea, styles.rightEdge, webResizeCursorStyle];
+  const geometry = resolveSidebarResizeHandleGeometry(true);
+  const hitAreaStyle = [
+    styles.hitArea,
+    { width: geometry.width },
+    edgeOffsetStyle(edge, geometry.edgeOffset),
+    webResizeCursorStyle,
+  ];
 
   const cancelHighlightTimer = useCallback(() => {
     if (highlightTimerRef.current === null) return;
@@ -63,19 +84,46 @@ export function SidebarResizeHandle({ edge, gesture, testID }: SidebarResizeHand
   );
 }
 
+function TouchResizeHandle({ edge, gesture, testID }: SidebarResizeHandleProps) {
+  const geometry = resolveSidebarResizeHandleGeometry(false);
+  // `box-none` keeps the full-height column out of hit-testing so only the
+  // centered grab target steals taps from the rows behind it.
+  const layerStyle = useMemo(
+    () => [
+      styles.touchLayer,
+      { width: geometry.width },
+      edgeOffsetStyle(edge, geometry.edgeOffset),
+    ],
+    [edge, geometry.edgeOffset, geometry.width],
+  );
+  const targetStyle = useMemo(
+    () => [styles.touchTarget, { width: geometry.width, height: geometry.height ?? undefined }],
+    [geometry.height, geometry.width],
+  );
+
+  return (
+    <View pointerEvents="box-none" style={layerStyle}>
+      <GestureDetector gesture={gesture}>
+        <View
+          testID={testID}
+          role="separator"
+          aria-orientation="vertical"
+          collapsable={false}
+          style={targetStyle}
+        >
+          <View pointerEvents="none" testID={`${testID}-grip`} style={styles.grip} />
+        </View>
+      </GestureDetector>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create((theme) => ({
   hitArea: {
     position: "absolute",
     top: 0,
     bottom: 0,
-    width: 10,
     zIndex: 10,
-  },
-  leftEdge: {
-    left: -5,
-  },
-  rightEdge: {
-    right: -5,
   },
   highlight: {
     position: "absolute",
@@ -85,5 +133,24 @@ const styles = StyleSheet.create((theme) => ({
     width: 1,
     backgroundColor: theme.colors.foreground,
     opacity: 0.25,
+  },
+  touchLayer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  touchTarget: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  grip: {
+    width: 4,
+    height: 36,
+    borderRadius: 2,
+    backgroundColor: theme.colors.foreground,
+    opacity: 0.3,
   },
 }));
