@@ -1,1 +1,1 @@
-export { EditingTextInput } from "./text-input.native";
+export { EditingTextInput, hasFocusedEditingTextInput } from "./text-input.native";

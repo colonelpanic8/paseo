@@ -2449,9 +2449,16 @@ export const fr: TranslationResources = {
       },
     },
     shortcuts: {
+      modKey: {
+        title: "Touche de modification",
+        hint: "Touche utilisée comme modificateur des raccourcis",
+        auto: "Auto",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       dialogTitle: "Raccourcis",
       searchPlaceholder: "Rechercher des raccourcis",
-      unavailableOnMobile: "Les raccourcis clavier ne sont disponibles que sur l’app de bureau",
+      unavailableOnMobile: "La personnalisation des raccourcis n’est disponible que sur ordinateur",
       capturePrompt: "Appuyez sur le raccourci…",
       captureIndexPrompt: "Terminez par un chiffre de 1 à 9.",
       unassigned: "Non attribué",
