@@ -10,6 +10,7 @@ let clientSettingsStore: ClientSettingsStore | null = null;
 export function getDesktopSettingsStore(): DesktopSettingsStore {
   desktopSettingsStore ??= createDesktopSettingsStore({
     userDataPath: app.getPath("userData"),
+    loadSeed: loadDesktopSettingsSeed,
   });
   return desktopSettingsStore;
 }
