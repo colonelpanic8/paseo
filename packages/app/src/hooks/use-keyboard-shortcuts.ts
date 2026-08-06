@@ -394,7 +394,7 @@ export function useKeyboardShortcuts({
         ctrlKey: nativeEvent.ctrlKey,
         metaKey: nativeEvent.metaKey,
         shiftKey: nativeEvent.shiftKey,
-        repeat: false,
+        repeat: nativeEvent.repeat ?? false,
       },
       focusScope,
       domEvent: null,
