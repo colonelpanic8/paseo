@@ -2181,7 +2181,6 @@ export const ar: TranslationResources = {
       },
       dialogTitle: "الاختصارات",
       searchPlaceholder: "البحث في الاختصارات",
-      unavailableOnMobile: "تخصيص الاختصارات متاح فقط على سطح المكتب",
       capturePrompt: "اضغط على الاختصار...",
       unassigned: "غير معين",
       actions: {
