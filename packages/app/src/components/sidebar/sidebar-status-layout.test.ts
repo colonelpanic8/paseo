@@ -19,6 +19,7 @@ function makeWorkspace(id: string): SidebarWorkspaceEntry {
     currentBranch: null,
     statusBucket: "done",
     statusEnteredAt: null,
+    snoozeWakeAt: null,
     lastUserMessageAt: null,
     activityAt: null,
     archivingAt: null,
