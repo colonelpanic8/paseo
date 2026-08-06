@@ -261,6 +261,18 @@ export function useKeyboardShortcuts({
     if (handled && isWorkspaceFocusModeEnabled && input.action.startsWith("sidebar.")) {
       exitFocusMode();
     }
+    if (
+      !handled &&
+      isNative &&
+      input.action === "message-input.action" &&
+      input.payload &&
+      typeof input.payload === "object" &&
+      "kind" in input.payload &&
+      input.payload.kind === "focus"
+    ) {
+      requestComposerAutoFocus();
+      return true;
+    }
     return handled;
   };
 
