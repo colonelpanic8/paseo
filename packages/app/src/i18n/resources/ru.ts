@@ -2443,7 +2443,6 @@ export const ru: TranslationResources = {
       },
       dialogTitle: "Сочетания клавиш",
       searchPlaceholder: "Поиск сочетаний клавиш",
-      unavailableOnMobile: "Настройка сочетаний клавиш доступна только на компьютере",
       capturePrompt: "Нажмите сочетание клавиш...",
       captureIndexPrompt: "Завершите цифрой от 1 до 9.",
       unassigned: "Не задано",
