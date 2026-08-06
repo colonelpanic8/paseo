@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 
 import { spawnProcess } from "../../../utils/spawn.js";
 import { terminateWithTreeKill } from "../../../utils/tree-kill.js";
+import type { ProcessEnvRecord } from "../../paseo-env.js";
 
 /** Default wall-clock timeout for control-plane / short RPC calls. */
 export const JSONL_RPC_DEFAULT_TIMEOUT_MS = 30_000;
@@ -25,7 +26,7 @@ export interface JsonlRpcLaunch {
   command: string;
   args: string[];
   cwd: string;
-  env?: Record<string, string>;
+  env?: ProcessEnvRecord;
 }
 
 interface JsonlRpcResponse {
