@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { getIsElectronRuntimeMac } from "@/constants/layout";
+import { getIsElectronRuntime, getIsElectronRuntimeMac } from "@/constants/layout";
 import type { ShortcutOs } from "@/utils/format-shortcut";
 import { isNative } from "@/constants/platform";
 import { isMacUserAgent } from "@/utils/mac-user-agent";
@@ -26,4 +26,14 @@ export function useShortcutOs(): ShortcutOs {
   if (preference === "cmd") return "mac";
   if (preference === "ctrl") return "non-mac";
   return getPlatformShortcutOs();
+}
+
+/**
+ * Whether the "desktop" binding variants apply. Web browsers reserve combos
+ * like Cmd/Ctrl+Digit, so web gets Alt-based fallbacks — but the native apps
+ * have no browser to conflict with (and iOS rewrites Option+key into special
+ * characters), so native uses the desktop set alongside Electron.
+ */
+export function usesDesktopShortcutBindings(): boolean {
+  return isNative || getIsElectronRuntime();
 }
