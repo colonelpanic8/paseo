@@ -633,6 +633,7 @@ export const ja: TranslationResources = {
       },
       menu: {
         openFor: "{{label}}のメニューを開く",
+        copyConversation: "会話をコピー",
         copyResumeCommand: "再開コマンドをコピー",
         copyAgentId: "エージェントIDをコピー",
         copyTerminalId: "ターミナルIDをコピー",
@@ -679,6 +680,9 @@ export const ja: TranslationResources = {
       },
       toasts: {
         copyFailed: "コピーに失敗しました",
+        copyingConversation: "会話をコピーしています...",
+        conversationCopiedLabel: "会話",
+        conversationEmpty: "コピーするメッセージがありません",
         agentIdCopiedLabel: "エージェントID",
         terminalIdCopiedLabel: "ターミナルID",
         resumeCommandCopiedLabel: "再開コマンド",
