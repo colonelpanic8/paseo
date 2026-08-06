@@ -5103,26 +5103,7 @@ class ClaudeAgentSession implements AgentSession {
     if (entry.type === "assistant" && typeof entry.uuid === "string") {
       this.rememberRewindAssistantAnchor(entry.uuid);
     }
-    if (entry.type === "assistant") {
-      // Re-seed the runtime observation from the transcript so a daemon
-      // restart doesn't blank the observed model until the next turn
-      // completes. Entries replay in order, so the last assistant wins.
-      // No model_changed dispatch here: nothing is subscribed during load,
-      // and the manager refreshes runtime info when it attaches.
-      const rawModel = toObjectRecord(entry.message)?.model;
-      const observedModel =
-        typeof rawModel === "string" ? resolveObservedClaudeModelId(rawModel) : null;
-      if (observedModel && typeof rawModel === "string") {
-        this.lastOptionsModel = observedModel;
-        this.lastRuntimeModel = rawModel;
-        this.cachedRuntimeInfo = null;
-      }
-      const observedEffort = resolveObservedClaudeEffort(entry.effort);
-      if (observedEffort) {
-        this.lastObservedEffort = observedEffort;
-        this.cachedRuntimeInfo = null;
-      }
-    }
+    this.reseedRuntimeObservationsFromHistoryEntry(entry);
 
     if (items.length > 0) {
       timeline.push(
@@ -5131,6 +5112,32 @@ class ClaudeAgentSession implements AgentSession {
           timestamp: historyTimestamp ?? undefined,
         })),
       );
+    }
+  }
+
+  /**
+   * Re-seed the runtime observation from the transcript so a daemon restart
+   * doesn't blank the observed model until the next turn completes. Entries
+   * replay in order, so the last assistant wins. No model_changed dispatch
+   * here: nothing is subscribed during load, and the manager refreshes runtime
+   * info when it attaches.
+   */
+  private reseedRuntimeObservationsFromHistoryEntry(entry: Record<string, unknown>): void {
+    if (entry.type !== "assistant") {
+      return;
+    }
+    const rawModel = toObjectRecord(entry.message)?.model;
+    const observedModel =
+      typeof rawModel === "string" ? resolveObservedClaudeModelId(rawModel) : null;
+    if (observedModel && typeof rawModel === "string") {
+      this.lastOptionsModel = observedModel;
+      this.lastRuntimeModel = rawModel;
+      this.cachedRuntimeInfo = null;
+    }
+    const observedEffort = resolveObservedClaudeEffort(entry.effort);
+    if (observedEffort) {
+      this.lastObservedEffort = observedEffort;
+      this.cachedRuntimeInfo = null;
     }
   }
 
