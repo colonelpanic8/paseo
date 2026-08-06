@@ -574,6 +574,7 @@ export const ru: TranslationResources = {
       },
       menu: {
         openFor: "Открыть меню для{{label}}",
+        copyConversation: "Копировать беседу",
         copyResumeCommand: "Копировать команду возобновления",
         copyAgentId: "Скопировать идентификатор агента",
         copyTerminalId: "Скопировать идентификатор терминала",
@@ -617,6 +618,9 @@ export const ru: TranslationResources = {
       },
       toasts: {
         copyFailed: "Не удалось скопировать",
+        copyingConversation: "Копирование беседы...",
+        conversationCopiedLabel: "Беседа",
+        conversationEmpty: "В этой беседе нет сообщений для копирования",
         agentIdCopiedLabel: "AgentID",
         terminalIdCopiedLabel: "Идентификатор терминала",
         resumeCommandCopiedLabel: "команда возобновления",
