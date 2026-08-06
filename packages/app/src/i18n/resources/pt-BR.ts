@@ -1842,6 +1842,11 @@ export const ptBR: TranslationResources = {
     archiveTooltip: "Arquivar subagente",
     archiveFinishedAction: "Arquivar subagentes concluídos",
     archiveFinishedRetry: "Tentar novamente ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Nativo",
+    },
+    rowAccessibilityLabel: "{{label}}, subagente {{ownership}}",
   },
   panels: {
     draft: {

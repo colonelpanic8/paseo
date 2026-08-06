@@ -1828,6 +1828,11 @@ export const ja: TranslationResources = {
     archiveTooltip: "サブエージェントをアーカイブ",
     archiveFinishedAction: "完了したサブエージェントをアーカイブ",
     archiveFinishedRetry: "再試行 ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "ネイティブ",
+    },
+    rowAccessibilityLabel: "{{label}}、{{ownership}}サブエージェント",
   },
   panels: {
     draft: {
