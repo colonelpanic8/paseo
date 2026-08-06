@@ -169,6 +169,14 @@ describe("buildSubagentRowPresentationData", () => {
     );
   });
 
+  it("reports paseo ownership for a managed subagent", () => {
+    expect(buildSubagentRowPresentationData(row({ id: "a" })).ownership).toBe("paseo");
+  });
+
+  it("reports native ownership for a provider-owned subagent", () => {
+    expect(buildSubagentRowPresentationData(providerRow({ id: "a" })).ownership).toBe("native");
+  });
+
   it("marks the row ready when the title resolves to a real label", () => {
     const presentation = buildSubagentRowPresentationData(row({ id: "a", title: "Build it" }));
     expect(presentation.titleState).toBe("ready");

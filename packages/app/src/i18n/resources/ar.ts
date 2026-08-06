@@ -1765,6 +1765,11 @@ export const ar: TranslationResources = {
     archiveTooltip: "أرشفة الوكيل الفرعي",
     archiveFinishedAction: "أرشفة الوكلاء الفرعيين المكتملين",
     archiveFinishedRetry: "إعادة المحاولة ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "أصلي",
+    },
+    rowAccessibilityLabel: "{{label}}، وكيل فرعي {{ownership}}",
   },
   panels: {
     draft: {
