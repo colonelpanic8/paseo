@@ -189,6 +189,7 @@ export function createSidebarWorkspaceEntry(input: {
   nowMs?: number;
 }): SidebarWorkspaceEntry {
   const projectViewKey = input.projectViewKey ?? input.workspace.projectId;
+  const agentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
   const effectiveStatus = deriveEffectiveWorkspaceStatus({
     ...input,
     nowMs: input.nowMs ?? Date.now(),
@@ -211,13 +212,11 @@ export function createSidebarWorkspaceEntry(input: {
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
     remoteUrl:
       input.workspace.gitRuntime?.remoteUrl ?? input.workspace.project?.checkout.remoteUrl ?? null,
-    providers:
-      input.workspaceAgentActivity?.get(input.workspace.id)?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
+    providers: agentActivity?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
     snoozeWakeAt: effectiveStatus.snoozeWakeAt,
-    lastUserMessageAt:
-      input.workspaceAgentActivity?.get(input.workspace.id)?.lastUserMessageAt ?? null,
+    lastUserMessageAt: agentActivity?.lastUserMessageAt ?? null,
     activityAt: input.workspace.activityAt,
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
@@ -253,13 +252,23 @@ function deriveEffectiveWorkspaceStatus(input: {
   // existing ready-to-review state — but NEW attention-ish activity that
   // arrives after snoozedAt breaks the workspace back out. running/done are
   // always suppressed while the snooze is active.
+  //
+  // Both timestamps must be newer than snoozedAt. enteredAt alone is not
+  // enough: the daemon's status history is in-memory, so a restart re-anchors
+  // it from agent updatedAt values that the restart itself bumps, and every
+  // pre-restart snooze would break out with nothing new having happened.
+  // activityAt comes from persisted message timestamps, which restarts leave
+  // alone, so it distinguishes real activity from a restamped anchor.
   const isAttentionish =
     base.status === "needs_input" || base.status === "failed" || base.status === "attention";
+  const activityAtMs = input.workspace.activityAt?.getTime() ?? null;
   const breaksThrough =
     isAttentionish &&
     base.enteredAt !== null &&
     Number.isFinite(snoozedAtMs) &&
-    base.enteredAt.getTime() > snoozedAtMs;
+    base.enteredAt.getTime() > snoozedAtMs &&
+    activityAtMs !== null &&
+    activityAtMs > snoozedAtMs;
   if (breaksThrough) {
     return { ...base, snoozeWakeAt: null };
   }

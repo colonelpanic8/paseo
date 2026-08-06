@@ -496,6 +496,7 @@ describe("snoozed workspace status", () => {
   function entryWith(input: {
     workspaceStatus?: WorkspaceDescriptor["status"];
     statusEnteredAt?: Date | null;
+    activityAt?: Date | null;
     snoozeStatus?: WorkspaceDescriptor["snoozeStatus"];
     activity?: Map<
       string,
@@ -512,6 +513,7 @@ describe("snoozed workspace status", () => {
         projectDisplayName: "proj",
         status: input.workspaceStatus ?? "done",
         statusEnteredAt: input.statusEnteredAt ?? null,
+        activityAt: input.activityAt ?? null,
         snoozeStatus: input.snoozeStatus === undefined ? SNOOZE_STATUS : input.snoozeStatus,
       }),
       workspaceAgentActivity: input.activity ?? new Map(),
@@ -553,14 +555,41 @@ describe("snoozed workspace status", () => {
       const entry = entryWith({
         workspaceStatus: status,
         statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
+        activityAt: new Date("2026-06-01T09:30:00.000Z"),
       });
       expect(entry.statusBucket).toBe(status);
       expect(entry.snoozeWakeAt).toBeNull();
     }
   });
 
+  // A daemon restart rebuilds the in-memory status history, restamping
+  // enteredAt from agent timestamps the restart itself touches. activityAt is
+  // anchored to persisted message times, so a restamped enteredAt without
+  // matching new activity must not break the snooze.
+  it("stays snoozed when enteredAt was restamped but nothing new happened", () => {
+    for (const status of ["needs_input", "failed", "attention"] as const) {
+      const entry = entryWith({
+        workspaceStatus: status,
+        statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
+        activityAt: new Date("2026-06-01T08:30:00.000Z"),
+      });
+      expect(entry.statusBucket).toBe("snoozed");
+      expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+    }
+  });
+
+  it("stays snoozed when the workspace has no recorded activity", () => {
+    const entry = entryWith({
+      workspaceStatus: "needs_input",
+      statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
+      activityAt: null,
+    });
+    expect(entry.statusBucket).toBe("snoozed");
+  });
+
   it("breaks out for new attention derived from agent activity", () => {
     const entry = entryWith({
+      activityAt: new Date("2026-06-01T09:45:00.000Z"),
       activity: new Map([
         [
           "ws-1",
