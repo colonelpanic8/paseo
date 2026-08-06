@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "expo-router";
+import { hasFocusedEditingTextInput } from "@/components/ui/text-input";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
@@ -26,12 +27,18 @@ import {
   type ShortcutAction,
   type ShortcutCallbackName,
 } from "@/keyboard/route-shortcut";
-import { getShortcutOs } from "@/utils/shortcut-platform";
+import { useShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { isNative } from "@/constants/platform";
 import { keyboardShortcutsAvailable } from "@/keyboard/availability";
+import { shortcutKeyFromCode } from "@/keyboard/shortcut-string";
+import {
+  addHardwareKeyDownListener,
+  setHardwareKeyEventsEnabled,
+} from "@/native/hardware-keyboard-events";
+import type { HardwareKeyDownEvent } from "@/native/hardware-keyboard-events.types";
 import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
@@ -68,7 +75,7 @@ export function useKeyboardShortcuts({
   const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
   const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const isDesktopApp = getIsElectronRuntime();
-  const isMac = getShortcutOs() === "mac";
+  const isMac = useShortcutOs() === "mac";
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
     step: 0,
@@ -374,6 +381,26 @@ export function useKeyboardShortcuts({
     }
   });
 
+  const handleHardwareKeyDown = useStableEvent((nativeEvent: HardwareKeyDownEvent) => {
+    const store = useKeyboardShortcutsStore.getState();
+    if (store.capturingShortcut) return;
+
+    const focusScope: KeyboardFocusScope = hasFocusedEditingTextInput() ? "editable" : "other";
+    resolveAndPerformShortcut({
+      event: {
+        key: shortcutKeyFromCode(nativeEvent.code, nativeEvent.shiftKey) ?? nativeEvent.code,
+        code: nativeEvent.code,
+        altKey: nativeEvent.altKey,
+        ctrlKey: nativeEvent.ctrlKey,
+        metaKey: nativeEvent.metaKey,
+        shiftKey: nativeEvent.shiftKey,
+        repeat: false,
+      },
+      focusScope,
+      domEvent: null,
+    });
+  });
+
   const handleBrowserShortcutInput = useStableEvent((payload: unknown) => {
     const input = parseBrowserShortcutInput(payload);
     if (!input) {
@@ -389,7 +416,23 @@ export function useKeyboardShortcuts({
 
   useEffect(() => {
     if (!enabled) return;
-    if (!shortcutsAvailable) return;
+    // On native, hardware-keyboard shortcuts flow through the Expo module
+    // instead of DOM listeners; the compact-layout gate doesn't apply because
+    // events only ever arrive from a connected hardware keyboard.
+    if (!isNative && !shortcutsAvailable) return;
+
+    if (isNative) {
+      setHardwareKeyEventsEnabled(true);
+      const subscription = addHardwareKeyDownListener(handleHardwareKeyDown);
+      return () => {
+        setHardwareKeyEventsEnabled(false);
+        subscription.remove();
+        if (chordStateRef.current.timeoutId !== null) {
+          clearTimeout(chordStateRef.current.timeoutId);
+          chordStateRef.current = { candidateIndices: [], step: 0, timeoutId: null };
+        }
+      };
+    }
 
     const handleBlurOrHide = () => {
       resetModifiers();
@@ -425,6 +468,7 @@ export function useKeyboardShortcuts({
   }, [
     enabled,
     handleBrowserShortcutInput,
+    handleHardwareKeyDown,
     handleKeyDown,
     handleKeyUp,
     resetModifiers,
