@@ -2429,9 +2429,16 @@ export const ptBR: TranslationResources = {
       },
     },
     shortcuts: {
+      modKey: {
+        title: "Tecla modificadora",
+        hint: "Tecla usada como modificador dos atalhos",
+        auto: "Auto",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       dialogTitle: "Atalhos",
       searchPlaceholder: "Pesquisar atalhos",
-      unavailableOnMobile: "Atalhos de teclado estão disponíveis apenas no desktop",
+      unavailableOnMobile: "A personalização de atalhos está disponível apenas no desktop",
       capturePrompt: "Pressione o atalho...",
       captureIndexPrompt: "Termine com um número de 1 a 9.",
       unassigned: "Não definido",
