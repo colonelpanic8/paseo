@@ -1744,6 +1744,11 @@ export const zhCN: TranslationResources = {
     archiveTooltip: "归档 subagent",
     archiveFinishedAction: "归档已完成的 subagent",
     archiveFinishedRetry: "重试 ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "原生",
+    },
+    rowAccessibilityLabel: "{{label}}，{{ownership}}子智能体",
   },
   panels: {
     draft: {

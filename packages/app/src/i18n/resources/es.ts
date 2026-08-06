@@ -1811,6 +1811,11 @@ export const es: TranslationResources = {
     archiveTooltip: "Subagente de archivo",
     archiveFinishedAction: "Archivar subagentes finalizados",
     archiveFinishedRetry: "Reintentar ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Nativo",
+    },
+    rowAccessibilityLabel: "{{label}}, subagente {{ownership}}",
   },
   panels: {
     draft: {

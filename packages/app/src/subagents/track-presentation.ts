@@ -15,9 +15,17 @@ function presentationStatus(row: SubagentRow) {
   return providerSubagentLifecycleStatus(row.status);
 }
 
+/**
+ * Which system owns the subagent. A Paseo row is a managed agent with its own
+ * lifecycle controls; a native row is a child execution the provider runs and
+ * Paseo only observes. The row controls differ, so the badge says which is which.
+ */
+export type SubagentOwnership = "paseo" | "native";
+
 export interface SubagentRowPresentationData {
   key: string;
   kind: "agent";
+  ownership: SubagentOwnership;
   label: string;
   /** Secondary provider context rendered after the row label. */
   subtitle: string;
@@ -48,6 +56,7 @@ export function buildSubagentRowPresentationData(
   return {
     key: `${row.kind}_subagent_${row.id}`,
     kind: "agent",
+    ownership: row.kind === "provider" ? "native" : "paseo",
     label: label ?? "",
     subtitle: subtitle ?? "",
     meta: modelDisplay ? formatAgentModelDisplayMeta(modelDisplay) : null,

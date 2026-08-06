@@ -1775,6 +1775,11 @@ export const en = {
     archiveTooltip: "Archive subagent",
     archiveFinishedAction: "Archive finished subagents",
     archiveFinishedRetry: "Retry ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Native",
+    },
+    rowAccessibilityLabel: "{{label}}, {{ownership}} subagent",
   },
   panels: {
     draft: {

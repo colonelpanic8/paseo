@@ -6,6 +6,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { getProviderIcon } from "@/components/provider-icons";
 import { ComposerTrackActions, ComposerTrackPill, ComposerTrackRow } from "@/composer/tracks";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import {
@@ -19,6 +20,7 @@ import {
   buildSubagentPillPresentation,
   buildSubagentRowPresentationData,
   countFinishedSubagents,
+  type SubagentOwnership,
 } from "./track-presentation";
 
 const ThemedArchive = withUnistyles(Archive);
@@ -44,13 +46,26 @@ const IDLE_ARCHIVE_FINISHED_STATUS: ArchiveFinishedStatus = { kind: "idle" };
 /** Leading and action glyphs share one size so rows keep a single icon column. */
 const ROW_ICON_SIZE = 14;
 
-function buildRowPresentation(row: SubagentRow): WorkspaceTabPresentation {
+interface SubagentRowView {
+  presentation: WorkspaceTabPresentation;
+  ownership: SubagentOwnership;
+}
+
+function buildRowView(row: SubagentRow): SubagentRowView {
   const data = buildSubagentRowPresentationData(row);
   return {
-    ...data,
-    tooltip: data.label,
-    modified: false,
-    icon: getProviderIcon(row.provider),
+    ownership: data.ownership,
+    presentation: {
+      key: data.key,
+      kind: data.kind,
+      label: data.label,
+      subtitle: data.subtitle,
+      tooltip: data.tooltip,
+      titleState: data.titleState,
+      statusBucket: data.statusBucket,
+      modified: false,
+      icon: getProviderIcon(row.provider),
+    },
   };
 }
 
@@ -180,9 +195,11 @@ function SubagentsTrackRow({
 }: SubagentsTrackRowProps): ReactElement {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const presentation = useMemo(() => buildRowPresentation(row), [row]);
+  const { presentation, ownership } = useMemo(() => buildRowView(row), [row]);
   const displayLabel =
     presentation.titleState === "loading" ? t("common.states.loading") : presentation.label;
+  const ownershipLabel =
+    ownership === "native" ? t("subagents.ownership.native") : t("subagents.ownership.paseo");
   const handlePress = useCallback(() => {
     if (row.kind === "provider") {
       onOpenProviderSubagent(row.parentAgentId, row.id);
@@ -210,6 +227,9 @@ function SubagentsTrackRow({
             {presentation.subtitle}
           </Text>
         ) : null}
+        <View testID={`subagents-track-row-ownership-${row.id}`}>
+          <StatusBadge label={ownershipLabel} />
+        </View>
         {row.kind === "paseo" ? (
           <SubagentRowActions
             rowId={row.id}
@@ -227,6 +247,7 @@ function SubagentsTrackRow({
       handleArchivePress,
       handleDetachPress,
       onDetachSubagent,
+      ownershipLabel,
       presentation,
       row.kind,
       row.id,
@@ -235,7 +256,10 @@ function SubagentsTrackRow({
 
   return (
     <ComposerTrackRow
-      accessibilityLabel={displayLabel}
+      accessibilityLabel={t("subagents.rowAccessibilityLabel", {
+        label: displayLabel,
+        ownership: ownershipLabel,
+      })}
       testID={`subagents-track-row-${row.id}`}
       onPress={handlePress}
     >
