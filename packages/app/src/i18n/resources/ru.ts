@@ -1924,6 +1924,11 @@ export const ru: TranslationResources = {
     archiveTooltip: "Архивировать субагента",
     archiveFinishedAction: "Архивировать завершенные субагенты",
     archiveFinishedRetry: "Повторить ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Нативный",
+    },
+    rowAccessibilityLabel: "{{label}}, субагент {{ownership}}",
   },
   panels: {
     draft: {
