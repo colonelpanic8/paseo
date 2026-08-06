@@ -21,6 +21,7 @@ import type { ToolPolicy } from "@getpaseo/protocol/agent-types";
 import type { ProviderPaseoToolsPolicy } from "@getpaseo/protocol/provider-config";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
+import type { ProcessEnvRecord } from "../paseo-env.js";
 
 import {
   getAgentStreamEventTurnId,
@@ -333,6 +334,12 @@ export interface AgentManagerOptions {
     agentId: string;
     expectedTurnId: string;
   }) => Promise<void>;
+  /**
+   * Resolves the directory environment an agent should launch with (direnv, in
+   * practice). Must resolve rather than reject: a broken directory environment
+   * cannot block an agent from starting.
+   */
+  resolveLaunchEnv?: (cwd: string) => Promise<ProcessEnvRecord>;
   logger: Logger;
 }
 
@@ -750,6 +757,7 @@ export class AgentManager {
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private readonly beforeSteerUnavailableFallback?: AgentManagerOptions["beforeSteerUnavailableFallback"];
+  private readonly resolveLaunchEnv?: (cwd: string) => Promise<ProcessEnvRecord>;
   private acceptingAgentRegistrations = true;
 
   constructor(options: AgentManagerOptions) {
@@ -764,6 +772,7 @@ export class AgentManager {
     this.configurePaseoTools(options);
     this.resolvePaseoToolPolicy = options.resolvePaseoToolPolicy ?? (() => undefined);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
+    this.resolveLaunchEnv = options.resolveLaunchEnv;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -5197,6 +5206,7 @@ export class AgentManager {
     const context: AgentLaunchContext = {
       agentId,
       env: {
+        ...(await this.resolveLaunchEnv?.(cwd)),
         ...env,
         PASEO_AGENT_ID: agentId,
         PASEO_AGENT_CWD: cwd,
