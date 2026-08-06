@@ -2215,7 +2215,6 @@ export const ptBR: TranslationResources = {
       },
       dialogTitle: "Atalhos",
       searchPlaceholder: "Pesquisar atalhos",
-      unavailableOnMobile: "A personalização de atalhos está disponível apenas no desktop",
       capturePrompt: "Pressione o atalho...",
       unassigned: "Não definido",
       actions: {
