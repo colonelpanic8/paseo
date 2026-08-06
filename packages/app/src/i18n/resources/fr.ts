@@ -2458,7 +2458,6 @@ export const fr: TranslationResources = {
       },
       dialogTitle: "Raccourcis",
       searchPlaceholder: "Rechercher des raccourcis",
-      unavailableOnMobile: "La personnalisation des raccourcis n’est disponible que sur ordinateur",
       capturePrompt: "Appuyez sur le raccourci…",
       captureIndexPrompt: "Terminez par un chiffre de 1 à 9.",
       unassigned: "Non attribué",
