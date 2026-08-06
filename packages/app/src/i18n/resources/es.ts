@@ -2363,7 +2363,6 @@ export const es: TranslationResources = {
       },
       dialogTitle: "Atajos",
       searchPlaceholder: "Buscar atajos",
-      unavailableOnMobile: "La personalización de atajos solo está disponible en escritorio",
       capturePrompt: "Presione el acceso directo...",
       unassigned: "Sin asignar",
       actions: {
