@@ -2,6 +2,14 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef 
 import { TextInput } from "react-native";
 import type { EditingTextInputHandle, EditingTextInputProps } from "./types";
 
+export function hasFocusedEditingTextInput(): boolean {
+  const activeElement = document.activeElement;
+  return (
+    activeElement instanceof HTMLElement &&
+    activeElement.matches("input, textarea, [contenteditable='true']")
+  );
+}
+
 interface WebTextInputElement extends TextInput {
   value?: string;
   setSelectionRange?: (start: number, end: number) => void;
