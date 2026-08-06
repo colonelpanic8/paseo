@@ -39,6 +39,10 @@ import { TerminalProfileSchema } from "./terminal-profile.js";
 export { TerminalProfileSchema, type TerminalProfile } from "./terminal-profile.js";
 import { z } from "zod";
 import { TerminalActivitySchema } from "./terminal-activity.js";
+import {
+  MutableAgentEnvironmentConfigPatchSchema,
+  MutableAgentEnvironmentConfigSchema,
+} from "./agent-environment.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
@@ -251,6 +255,9 @@ export const MutableDaemonConfigSchema = z
     // COMPAT(speechSettings): added in v0.12.0, optional because older daemons omit it.
     features: SpeechSettingsSchema.optional(),
     envOverrides: z.record(z.string(), z.string()).optional(),
+    // COMPAT(agentEnvironment): added in v0.3.1, optional so an older daemon's
+    // config still parses. Remove the optional when the floor is >= v0.3.1.
+    agentEnvironment: MutableAgentEnvironmentConfigSchema.optional(),
   })
   .passthrough();
 
@@ -276,6 +283,7 @@ export const MutableDaemonConfigPatchSchema = z
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
     features: SpeechSettingsPatchSchema.optional(),
+    agentEnvironment: MutableAgentEnvironmentConfigPatchSchema.optional(),
   })
   .partial()
   .passthrough();

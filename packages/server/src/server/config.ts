@@ -25,6 +25,11 @@ import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import { readSpeechSettings } from "./speech/speech-settings.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
+import {
+  DEFAULT_AGENT_ENVIRONMENT_TIMEOUT_MS,
+  type AgentEnvironmentConfig,
+} from "./agent-environment.js";
+import { DEFAULT_AGENT_ENVIRONMENT_ENTRIES } from "@getpaseo/protocol/agent-environment";
 
 export {
   loadPersistedConfig,
@@ -97,6 +102,18 @@ function normalizeLogEnv(value: string | undefined): string | undefined {
   }
 
   return value.trim().toLowerCase();
+}
+
+function resolveAgentEnvironmentConfig(
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): AgentEnvironmentConfig {
+  // Absent means never configured, so seed the defaults. An explicit [] is the
+  // user having emptied the list and must survive a restart.
+  const entries = persisted.agents?.environment?.entries ?? [...DEFAULT_AGENT_ENVIRONMENT_ENTRIES];
+  return {
+    entries,
+    timeoutMs: persisted.agents?.environment?.timeoutMs ?? DEFAULT_AGENT_ENVIRONMENT_TIMEOUT_MS,
+  };
 }
 
 function resolveGitProcessConfig(
@@ -599,6 +616,7 @@ export type ResolvedDaemonSettings = Pick<
   | "resumeOnStartup"
   | "resumePrompt"
   | "providerCatalogRefreshTimeoutMs"
+  | "agentEnvironment"
   | "metadataGeneration"
   | "providerOverrides"
 >;
@@ -687,6 +705,7 @@ export function resolveReloadableConfig(
     idleRuntimeCleanup: persisted.agents?.idleRuntimeCleanup ?? true,
     ...resolveRestartRecoveryConfig(persisted.agents),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
+    agentEnvironment: resolveAgentEnvironmentConfig(persisted),
     metadataGeneration: persisted.agents?.metadataGeneration,
     providerOverrides: extractProviderOverrides(
       persisted.agents?.providers as Record<string, unknown> | undefined,
