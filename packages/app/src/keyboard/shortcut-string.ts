@@ -249,7 +249,19 @@ export function chordStringToShortcutKeys(s: string): ShortcutKey[][] {
   return s.split(" ").map(comboStringToShortcutKeys);
 }
 
-export function heldModifiersFromEvent(event: KeyboardEvent): string | null {
+/**
+ * Structural subset of KeyboardEvent used for combo capture, so native
+ * hardware key events (which carry the same fields) can share the logic.
+ */
+export interface ComboKeyEventLike {
+  code: string;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+}
+
+export function heldModifiersFromEvent(event: ComboKeyEventLike): string | null {
   const parts: string[] = [];
   if (event.ctrlKey) parts.push("Ctrl");
   if (event.altKey) parts.push("Alt");
@@ -267,7 +279,7 @@ export function isModifierKeyCode(code: string): boolean {
   return MODIFIER_CODES.has(code);
 }
 
-export function keyboardEventToComboString(event: KeyboardEvent): string | null {
+export function keyboardEventToComboString(event: ComboKeyEventLike): string | null {
   if (isModifierKeyCode(event.code)) {
     return null;
   }
