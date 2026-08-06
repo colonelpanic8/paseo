@@ -2424,7 +2424,6 @@ export const ja: TranslationResources = {
       },
       dialogTitle: "ショートカット",
       searchPlaceholder: "ショートカットを検索",
-      unavailableOnMobile: "ショートカットのカスタマイズはデスクトップでのみ利用できます",
       capturePrompt: "ショートカットを押してください...",
       captureIndexPrompt: "最後に1〜9の数字を入力してください。",
       unassigned: "未設定",
