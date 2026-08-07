@@ -302,6 +302,8 @@ interface ConfigureProviderEntry {
   label?: string;
   description?: string;
   enabled?: boolean;
+  source?: "builtin" | "custom";
+  baseProviderId?: string;
   defaultModeId?: string;
   modes?: AgentMode[];
 }
@@ -318,6 +320,8 @@ function buildSnapshotEntry(entry: ConfigureProviderEntry): ProviderSnapshotEntr
       enabled: false,
       ...(entry.label !== undefined ? { label: entry.label } : {}),
       ...(entry.description !== undefined ? { description: entry.description } : {}),
+      ...(entry.source !== undefined ? { source: entry.source } : {}),
+      ...(entry.baseProviderId !== undefined ? { baseProviderId: entry.baseProviderId } : {}),
       ...(entry.defaultModeId !== undefined ? { defaultModeId: entry.defaultModeId } : {}),
       modes: [],
     };
@@ -328,6 +332,8 @@ function buildSnapshotEntry(entry: ConfigureProviderEntry): ProviderSnapshotEntr
     enabled: true,
     ...(entry.label !== undefined ? { label: entry.label } : {}),
     ...(entry.description !== undefined ? { description: entry.description } : {}),
+    ...(entry.source !== undefined ? { source: entry.source } : {}),
+    ...(entry.baseProviderId !== undefined ? { baseProviderId: entry.baseProviderId } : {}),
     ...(entry.defaultModeId !== undefined ? { defaultModeId: entry.defaultModeId } : {}),
     modes: entry.modes ?? [],
   };
@@ -5623,6 +5629,8 @@ describe("provider listing MCP tool", () => {
         provider: "zai" as AgentProvider,
         label: "ZAI",
         description: "Custom Claude profile",
+        source: "custom",
+        baseProviderId: "claude",
         defaultModeId: "default",
         modes: [{ id: "default", label: "Default", description: "Custom mode" }],
       }),
@@ -5654,6 +5662,8 @@ describe("provider listing MCP tool", () => {
           status: "available",
           description: "Custom Claude profile",
           enabled: true,
+          source: "custom",
+          baseProviderId: "claude",
           modes: [{ id: "default", label: "Default", description: "Custom mode" }],
         },
       ],
@@ -5883,6 +5893,37 @@ describe("provider MCP tools", () => {
         },
       ],
     });
+  });
+
+  it("identifies a provider account and its base provider", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const provStub = createProviderSnapshotManagerStub();
+    const accountEntry = buildSnapshotEntry({
+      provider: "claude-work",
+      label: "Claude Work",
+      description: "Work account",
+      source: "custom",
+      baseProviderId: "claude",
+    });
+    provStub.getProvider.mockResolvedValue(accountEntry);
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: provStub.manager,
+      logger,
+    });
+    const tool = registeredTool(server, "inspect_provider");
+
+    const response = await tool.handler({ provider: "claude-work", cwd: "~/repo" });
+
+    expect(response.structuredContent).toEqual(
+      expect.objectContaining({
+        provider: "claude-work",
+        label: "Claude Work",
+        source: "custom",
+        baseProviderId: "claude",
+      }),
+    );
   });
 
   it("rejects disabled providers without fetching models", async () => {
