@@ -17,6 +17,7 @@ import {
 const MAX_WORKSPACES = 24;
 const MAX_AGENTS_PER_WORKSPACE = 8;
 const MAX_SUMMARY_LENGTH = 160;
+const MAX_PERMISSION_DETAIL_LENGTH = 200;
 
 export interface WearSnapshotInput {
   serverId: string;
@@ -86,13 +87,20 @@ function permissionFor(agent: Agent): WearAgent["permission"] {
     .find((value): value is string => typeof value === "string");
 
   const detail = specific ?? request.description ?? request.title ?? request.name;
+  const normalizedDetail = detail.replace(/\s+/g, " ").trim();
+  // A watch can authorize this request by id, but it cannot expand a truncated
+  // operation. Omit oversized approvals rather than hiding a destructive suffix
+  // or letting one command overflow the whole snapshot DataItem.
+  if (normalizedDetail.length > MAX_PERMISSION_DETAIL_LENGTH) {
+    return undefined;
+  }
 
   return {
     id: request.id,
     title: request.title ?? titleForKind(request.kind, request.name),
     // Authorization is keyed by request id, so the watch must show the complete
     // operation rather than a misleading prefix that hides a destructive suffix.
-    detail: detail.replace(/\s+/g, " ").trim(),
+    detail: normalizedDetail,
   };
 }
 

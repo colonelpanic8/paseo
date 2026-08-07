@@ -1,5 +1,6 @@
 package sh.paseo.watch
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -60,15 +61,16 @@ private const val TRANSCRIPT_KEEPALIVE_MS = 60_000L
 private object Routes {
   const val WORKSPACES = "workspaces"
   const val PICKER = "picker/{workspaceId}"
-  const val AGENT = "agent/{agentId}"
-  const val PERMISSION = "permission/{agentId}"
+  const val AGENT = "agent/{serverId}/{agentId}"
+  const val PERMISSION = "permission/{serverId}/{agentId}"
   const val NEW_AGENT = "newAgent/{workspaceId}"
 
   fun picker(workspaceId: String) = "picker/$workspaceId"
 
-  fun agent(agentId: String) = "agent/$agentId"
+  fun agent(serverId: String, agentId: String) = "agent/${Uri.encode(serverId)}/${Uri.encode(agentId)}"
 
-  fun permission(agentId: String) = "permission/$agentId"
+  fun permission(serverId: String, agentId: String) =
+    "permission/${Uri.encode(serverId)}/${Uri.encode(agentId)}"
 
   fun newAgent(workspaceId: String) = "newAgent/$workspaceId"
 }
@@ -115,9 +117,9 @@ fun PaseoWatchApp(
               // pick" rule is applied. Keep it that way.
               when (val target = workspace.destination()) {
                 is WorkspaceDestination.Permission ->
-                  navController.navigate(Routes.permission(target.agentId))
+                  navController.navigate(Routes.permission(workspace.serverId, target.agentId))
                 is WorkspaceDestination.Agent ->
-                  navController.navigate(Routes.agent(target.agentId))
+                  navController.navigate(Routes.agent(workspace.serverId, target.agentId))
                 is WorkspaceDestination.Picker ->
                   navController.navigate(Routes.picker(target.workspaceId))
                 is WorkspaceDestination.NewAgent ->
@@ -139,7 +141,7 @@ fun PaseoWatchApp(
             AgentPickerScreen(
               workspace = workspace,
               listState = rememberScalingLazyListState(),
-              onAgentClick = { agent -> navController.navigate(Routes.agent(agent.id)) },
+              onAgentClick = { agent -> navController.navigate(Routes.agent(workspace.serverId, agent.id)) },
               onNewAgent = { navController.navigate(Routes.newAgent(workspace.id)) },
               icon = icons[workspace.projectKey],
             )
@@ -148,10 +150,14 @@ fun PaseoWatchApp(
 
         composable(
           Routes.AGENT,
-          arguments = listOf(navArgument("agentId") { type = NavType.StringType }),
+          arguments = listOf(
+            navArgument("serverId") { type = NavType.StringType },
+            navArgument("agentId") { type = NavType.StringType },
+          ),
         ) { entry ->
-          val agentId = entry.arguments?.getString("agentId")
-          val workspace = workspaces.workspaceOfAgent(agentId)
+          val serverId = entry.arguments?.getString("serverId")?.let(Uri::decode)
+          val agentId = entry.arguments?.getString("agentId")?.let(Uri::decode)
+          val workspace = workspaces.workspaceOfAgent(serverId, agentId)
           val agent = workspace?.agents?.firstOrNull { it.id == agentId }
           val pending = agent?.pendingPermission
           if (workspace == null || agent == null) {
@@ -164,7 +170,9 @@ fun PaseoWatchApp(
               agent = agent,
               request = pending,
               onRespond = { allow ->
-                scope.launch { repository.respondToPermission(pending.id, allow) }
+                scope.launch {
+                  repository.respondToPermission(workspace.serverId, agent.id, pending.id, allow)
+                }
               },
               icon = icons[workspace.projectKey],
             )
@@ -174,17 +182,17 @@ fun PaseoWatchApp(
             // probably grown. The short delay makes this a trailing debounce:
             // LaunchedEffect cancels the previous coroutine when the key changes, so
             // a burst of snapshots collapses into one request instead of one each.
-            LaunchedEffect(agent.id, agent.state, agent.age) {
+            LaunchedEffect(workspace.serverId, agent.id, agent.state, agent.age) {
               delay(TRANSCRIPT_REQUEST_DEBOUNCE_MS)
-              repository.requestTranscript(agent.id)
+              repository.requestTranscript(workspace.serverId, agent.id)
             }
             // Renew the phone's lease for as long as this screen is up. Keyed only on
-            // the agent, so it survives the snapshot churn that drives the request
+            // server and agent, so it survives the snapshot churn that drives the request
             // above and cancels itself when the screen leaves composition.
-            LaunchedEffect(agent.id) {
+            LaunchedEffect(workspace.serverId, agent.id) {
               while (true) {
                 delay(TRANSCRIPT_KEEPALIVE_MS)
-                repository.requestTranscript(agent.id)
+                repository.requestTranscript(workspace.serverId, agent.id)
               }
             }
             AgentScreen(
@@ -193,8 +201,8 @@ fun PaseoWatchApp(
               transcript = transcripts["${workspace.serverId}\u0000${agent.id}"],
               // No reply screen: Reply opens the recognizer in place and the words
               // come back here.
-              onSubmit = { text -> scope.launch { repository.sendPrompt(agent.id, text) } },
-              onStop = { scope.launch { repository.stopAgent(agent.id) } },
+              onSubmit = { text -> scope.launch { repository.sendPrompt(workspace.serverId, agent.id, text) } },
+              onStop = { scope.launch { repository.stopAgent(workspace.serverId, agent.id) } },
               icon = icons[workspace.projectKey],
             )
           }
@@ -202,10 +210,14 @@ fun PaseoWatchApp(
 
         composable(
           Routes.PERMISSION,
-          arguments = listOf(navArgument("agentId") { type = NavType.StringType }),
+          arguments = listOf(
+            navArgument("serverId") { type = NavType.StringType },
+            navArgument("agentId") { type = NavType.StringType },
+          ),
         ) { entry ->
-          val agentId = entry.arguments?.getString("agentId")
-          val workspace = workspaces.workspaceOfAgent(agentId)
+          val serverId = entry.arguments?.getString("serverId")?.let(Uri::decode)
+          val agentId = entry.arguments?.getString("agentId")?.let(Uri::decode)
+          val workspace = workspaces.workspaceOfAgent(serverId, agentId)
           val agent = workspace?.agents?.firstOrNull { it.id == agentId }
           val request = agent?.pendingPermission
           if (workspace == null || agent == null || request == null) {
@@ -218,7 +230,7 @@ fun PaseoWatchApp(
               agent = agent,
               request = request,
               onRespond = { allow ->
-                scope.launch { repository.respondToPermission(request.id, allow) }
+                scope.launch { repository.respondToPermission(workspace.serverId, agent.id, request.id, allow) }
                 navController.popBackStack()
               },
               icon = icons[workspace.projectKey],
@@ -253,8 +265,10 @@ fun PaseoWatchApp(
   }
 }
 
-private fun List<Workspace>.workspaceOfAgent(agentId: String?): Workspace? =
-  firstOrNull { workspace -> workspace.agents.any { it.id == agentId } }
+private fun List<Workspace>.workspaceOfAgent(serverId: String?, agentId: String?): Workspace? =
+  firstOrNull { workspace ->
+    workspace.serverId == serverId && workspace.agents.any { it.id == agentId }
+  }
 
 @Composable
 private fun Missing(message: String) {

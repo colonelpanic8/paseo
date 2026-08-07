@@ -290,11 +290,11 @@ class DataLayerRepository(
 
   override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
 
-  override fun agent(id: String): AgentSession? =
-    state.value.flatMap { it.agents }.firstOrNull { it.id == id }
+  private fun agent(serverId: String, agentId: String): AgentSession? =
+    state.value.flatMap { it.agents }.firstOrNull { it.serverId == serverId && it.id == agentId }
 
-  override suspend fun sendPrompt(agentId: String, text: String) {
-    val agent = agent(agentId) ?: return
+  override suspend fun sendPrompt(serverId: String, agentId: String, text: String) {
+    val agent = agent(serverId, agentId) ?: return
     send(
       WireCommand(
         kind = WireCommand.SEND_PROMPT,
@@ -317,10 +317,13 @@ class DataLayerRepository(
     )
   }
 
-  override suspend fun respondToPermission(requestId: String, allow: Boolean) {
-    val agent =
-      state.value.flatMap { it.agents }.firstOrNull { it.pendingPermission?.id == requestId }
-        ?: return
+  override suspend fun respondToPermission(
+    serverId: String,
+    agentId: String,
+    requestId: String,
+    allow: Boolean,
+  ) {
+    val agent = agent(serverId, agentId)?.takeIf { it.pendingPermission?.id == requestId } ?: return
     send(
       WireCommand(
         kind = WireCommand.RESPOND_PERMISSION,
@@ -343,8 +346,8 @@ class DataLayerRepository(
       }
   }
 
-  override suspend fun requestTranscript(agentId: String) {
-    val agent = agent(agentId) ?: return
+  override suspend fun requestTranscript(serverId: String, agentId: String) {
+    val agent = agent(serverId, agentId) ?: return
     send(
       WireCommand(
         kind = WireCommand.REQUEST_TRANSCRIPT,
@@ -354,8 +357,8 @@ class DataLayerRepository(
     )
   }
 
-  override suspend fun stopAgent(agentId: String) {
-    val agent = agent(agentId) ?: return
+  override suspend fun stopAgent(serverId: String, agentId: String) {
+    val agent = agent(serverId, agentId) ?: return
     send(
       WireCommand(
         kind = WireCommand.STOP_AGENT,

@@ -226,6 +226,28 @@ describe("buildWearSnapshot", () => {
     });
   });
 
+  it("does not publish an approval whose full operation will not fit on the watch", () => {
+    const withLongPermission = agent({
+      pendingPermissions: [
+        {
+          id: "perm-long",
+          provider: "claude",
+          kind: "tool",
+          name: "Bash",
+          title: "Run command?",
+          input: { command: `rm -rf safe-prefix ${"x".repeat(240)}` },
+        },
+      ],
+    });
+
+    const snapshot = buildWearSnapshot(
+      [{ serverId: "srv-1", agents: [withLongPermission], workspaces: workspaceMap(workspace()) }],
+      NOW,
+    );
+
+    expect(snapshot.workspaces[0]?.agents[0]?.permission).toBeUndefined();
+  });
+
   it("sorts needs-attention workspaces ahead of running and idle ones", () => {
     const idle = workspace({ id: "ws-idle", name: "zeta" });
     const urgent = workspace({ id: "ws-urgent", name: "alpha" });

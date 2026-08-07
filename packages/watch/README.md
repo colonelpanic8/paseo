@@ -33,7 +33,7 @@ Phone-tethered. The watch never speaks the Paseo WebSocket protocol:
 Wear app  ──Wearable Data Layer──▶  Phone app  ──WebSocket──▶  Daemon
    │                                    │
    │  DataClient /paseo/snapshot          ◀────┤  phone publishes state
-   │  DataClient /paseo/transcript/<agentId> ◀─┤  phone answers a transcript request
+   │  DataClient /paseo/transcript/<serverId>/<agentId> ◀─┤  phone answers a transcript request
    │  DataClient /paseo/icon/<projectKey> ◀────┤  phone publishes project icon files
    └─ MessageClient /paseo/command  ──────────▶│  watch sends intents
       MessageClient /paseo/refresh  ──────────▶│  watch asks for a republish
@@ -118,7 +118,7 @@ The conversation is a **separate, on-demand fetch for the one agent you opened**
    An open screen also re-sends it every 60s regardless — see step 4; a continuously
    busy agent's row never moves, so the reactive trigger alone would go quiet exactly
    when there is the most to see.
-2. The phone answers with a DataItem at `/paseo/transcript/<agentId>` — a projected
+2. The phone answers with a DataItem at `/paseo/transcript/<serverId>/<agentId>` — a projected
    view: user prompts and assistant prose kept, tool calls collapsed to one line,
    each entry capped, at most 100 entries. Projection is the point; a raw Paseo
    timeline carries diffs, file reads, and terminal output, and a single `Bash`
