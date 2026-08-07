@@ -605,8 +605,8 @@ async function stampCascadeArchivedAgents(
 }
 
 export interface UnarchiveWorkspaceContentsDependencies {
-  agentManager: Pick<AgentManager, "unarchiveSnapshot">;
-  agentStorage: Pick<AgentStorage, "list" | "get">;
+  agentManager: Pick<AgentManager, "archiveSnapshot" | "unarchiveSnapshot">;
+  agentStorage: Pick<AgentStorage, "list" | "get" | "updateRecord">;
   sessionLogger?: Logger;
 }
 
@@ -639,36 +639,31 @@ export async function unarchiveWorkspaceContents(
     return [];
   }
 
-  const results = await Promise.allSettled(
-    candidates.map(async (candidate) => {
-      const unarchived = await dependencies.agentManager.unarchiveSnapshot(candidate.id);
-      return unarchived ? await dependencies.agentStorage.get(candidate.id) : null;
-    }),
-  );
-
   const restored: StoredAgentRecord[] = [];
-  const failures: unknown[] = [];
-  for (const result of results) {
-    if (result.status === "fulfilled") {
-      if (result.value) {
-        restored.push(result.value);
-      }
-    } else {
-      failures.push(result.reason);
-      dependencies.sessionLogger?.warn(
-        { err: result.reason, workspaceId },
-        "Failed to unarchive agent during workspace restore",
-      );
+  try {
+    for (const candidate of candidates) {
+      const unarchived = await dependencies.agentManager.unarchiveSnapshot(candidate.id);
+      if (!unarchived) continue;
+      const record = await dependencies.agentStorage.get(candidate.id);
+      if (record) restored.push(record);
     }
-  }
-
-  if (failures.length > 0) {
-    const cause = failures[0];
-    const detail = cause instanceof Error ? `: ${cause.message}` : "";
-    throw new Error(
-      `Failed to restore ${failures.length} agent(s) for workspace ${workspaceId}${detail}`,
-      { cause },
+  } catch (cause) {
+    dependencies.sessionLogger?.warn(
+      { err: cause, workspaceId },
+      "Failed to unarchive agent during workspace restore; rolling back restored agents",
     );
+    const archivedAt = new Date().toISOString();
+    await Promise.allSettled(
+      restored.map(async (record) => {
+        await dependencies.agentManager.archiveSnapshot(record.id, archivedAt);
+        await dependencies.agentStorage.updateRecord(record.id, (current) => ({
+          ...current,
+          archivedWithWorkspaceId: workspaceId,
+        }));
+      }),
+    );
+    const detail = cause instanceof Error ? `: ${cause.message}` : "";
+    throw new Error(`Failed to restore workspace ${workspaceId}${detail}`, { cause });
   }
 
   return restored;
