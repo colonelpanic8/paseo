@@ -14,6 +14,21 @@ export interface EnsureSherpaOnnxModelOptions {
   logger: pino.Logger;
 }
 
+export class SherpaOnnxModelPreparationError extends Error {
+  readonly modelId: SherpaOnnxModelId;
+  readonly modelsDir: string;
+
+  constructor(input: { modelId: SherpaOnnxModelId; modelsDir: string; cause: unknown }) {
+    const message = input.cause instanceof Error ? input.cause.message : String(input.cause);
+    super(`Failed to prepare model ${input.modelId} in ${input.modelsDir}: ${message}`, {
+      cause: input.cause,
+    });
+    this.name = "SherpaOnnxModelPreparationError";
+    this.modelId = input.modelId;
+    this.modelsDir = input.modelsDir;
+  }
+}
+
 export function getSherpaOnnxModelDir(modelsDir: string, modelId: SherpaOnnxModelId): string {
   const spec = getSherpaOnnxModelSpec(modelId);
   return path.join(modelsDir, spec.extractedDir);
@@ -162,14 +177,11 @@ export async function ensureSherpaOnnxModel(
     return modelDir;
   } catch (error) {
     logger.error({ err: error, modelsDir: options.modelsDir }, "Model download failed");
-    // The readiness banner only surfaces this message, so name the directory we
-    // actually used — a misconfigured models dir otherwise looks like a network
-    // failure.
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to prepare model ${options.modelId} in ${options.modelsDir}: ${message}`,
-      { cause: error },
-    );
+    throw new SherpaOnnxModelPreparationError({
+      modelId: options.modelId,
+      modelsDir: options.modelsDir,
+      cause: error,
+    });
   }
 }
 
