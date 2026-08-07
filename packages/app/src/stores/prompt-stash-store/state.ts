@@ -51,6 +51,22 @@ export function stashEntryInQueues(
   return { queues: { ...queues, [scopeKey]: nextQueue }, evicted };
 }
 
+export function mergeHydratedPromptStashQueues(
+  persisted: PromptStashQueues | undefined,
+  current: PromptStashQueues,
+): PromptStashQueues {
+  if (!persisted) return current;
+  const merged: PromptStashQueues = { ...persisted };
+  for (const [scopeKey, currentQueue] of Object.entries(current)) {
+    const seen = new Set(currentQueue.map((entry) => entry.id));
+    merged[scopeKey] = [
+      ...currentQueue,
+      ...readPromptStashQueue(persisted, scopeKey).filter((entry) => !seen.has(entry.id)),
+    ].slice(0, MAX_STASH_ENTRIES_PER_QUEUE);
+  }
+  return merged;
+}
+
 export function takeEntryFromQueues(
   queues: PromptStashQueues,
   scopeKey: string,

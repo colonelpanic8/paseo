@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   collectStashAttachmentIds,
+  mergeHydratedPromptStashQueues,
   PROMPT_STASH_STORE_VERSION,
   stashEntryInQueues,
   takeEntryFromQueues,
@@ -71,6 +72,13 @@ export const usePromptStashStore = create<PromptStashStore>()(
       version: PROMPT_STASH_STORE_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: ({ queuesByScopeKey }) => ({ queuesByScopeKey }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        queuesByScopeKey: mergeHydratedPromptStashQueues(
+          (persistedState as Partial<PromptStashState> | undefined)?.queuesByScopeKey,
+          currentState.queuesByScopeKey,
+        ),
+      }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) {
           console.warn("[PromptStash] Failed to rehydrate stash", error);

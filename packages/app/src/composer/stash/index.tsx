@@ -214,6 +214,9 @@ export function ComposerStash({
 
   const deleteEntry = useCallback(
     (entryId: string) => {
+      if (disabledRef.current) {
+        return;
+      }
       usePromptStashStore.getState().takeEntry(scopeKey, entryId);
       // Frees the deleted entry's image blobs once nothing else references them.
       scheduleAttachmentGc();
@@ -242,14 +245,14 @@ export function ComposerStash({
   );
 
   const stashOrToggleMenu = useCallback((): boolean => {
+    if (disabledRef.current) {
+      return false;
+    }
     const text = userInputRef.current.trim();
     const currentAttachments = attachmentsRef.current;
     if (text.length === 0 && currentAttachments.length === 0) {
       setMenuOpen((open) => !open);
       return true;
-    }
-    if (disabled) {
-      return false;
     }
     const entry: PromptStashEntry = {
       id: `stash_${generateMessageId()}`,
@@ -259,11 +262,14 @@ export function ComposerStash({
       provider,
     };
     const { evicted } = usePromptStashStore.getState().stashEntry(entry);
+    if (evicted) {
+      scheduleAttachmentGc();
+    }
     setUserInput("");
     setAttachments([]);
     showStashedToast(entry.id, evicted);
     return true;
-  }, [disabled, provider, setAttachments, setUserInput, showStashedToast]);
+  }, [provider, setAttachments, setUserInput, showStashedToast]);
 
   const handlerIdRef = useRef(`composer-stash:${Math.random().toString(36).slice(2)}`);
   const handleKeyboardAction = useCallback(
@@ -291,6 +297,12 @@ export function ComposerStash({
       setMenuOpen(false);
     }
   }, [userInput]);
+
+  useEffect(() => {
+    if (disabled) {
+      setMenuOpen(false);
+    }
+  }, [disabled]);
 
   const options = useMemo<ComboboxOption[]>(
     () => entries.map((entry) => ({ id: entry.id, label: stashEntrySnippet(entry, t) })),
@@ -365,6 +377,7 @@ export function ComposerStash({
             count: entries.length,
           })}
           onPress={toggleMenu}
+          disabled={disabled}
           style={badgeStyle}
           testID="composer-stash-badge"
         >
