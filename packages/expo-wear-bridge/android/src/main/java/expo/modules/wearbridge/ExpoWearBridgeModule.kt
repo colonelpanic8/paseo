@@ -102,8 +102,9 @@ class ExpoWearBridgeModule : Module() {
     /**
      * Publish one agent's transcript, on the watch's request.
      *
-     * Each agent gets its own path so opening a second agent doesn't overwrite the
-     * first, and so the watch can observe just the one it is showing.
+     * Each server-scoped agent gets its own path so agents from different daemons
+     * cannot overwrite one another, and so the watch can observe just the one it
+     * is showing.
      */
     AsyncFunction("publishTranscript").SuspendBody<Boolean, String, String, String> { serverId, agentId, payload ->
       val context = appContext.reactContext
