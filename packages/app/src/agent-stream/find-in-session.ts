@@ -18,6 +18,21 @@ export interface SessionFindState {
   activeItemOccurrenceCount: number;
 }
 
+function extractVisibleMarkdownText(markdown: string): string {
+  return markdown
+    .replace(/!\[([^\]]*)\]\((?:[^()\\]|\\.)*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\((?:[^()\\]|\\.)*\)/g, "$1")
+    .replace(/^\s*```[^\n]*$/gm, "")
+    .replace(/^\s*~~~[^\n]*$/gm, "")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s{0,3}>+\s?/gm, "")
+    .replace(/^\s{0,3}(?:[*+-]|\d+\.)\s+/gm, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/~~([^~]+)~~/g, "$1");
+}
+
 /**
  * Text that is visible in the stream by default. Collapsed content (reasoning,
  * tool call inputs/outputs) is intentionally excluded so every match can be
@@ -27,7 +42,7 @@ export function extractSearchableText(item: StreamItem): string {
   switch (item.kind) {
     case "user_message":
     case "assistant_message":
-      return item.text;
+      return extractVisibleMarkdownText(item.text);
     case "activity_log":
       return item.message;
     case "todo_list":

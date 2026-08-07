@@ -58,6 +58,16 @@ describe("extractSearchableText", () => {
     expect(extractSearchableText(assistantMessage("a1", "response text"))).toBe("response text");
   });
 
+  it("searches rendered Markdown text rather than its invisible source markers", () => {
+    const item = assistantMessage("a1", "Run `deploy` after **review**.");
+
+    expect(computeSessionFindMatches([item], "deploy")).toEqual([
+      { itemId: "a1", occurrenceIndex: 0 },
+    ]);
+    expect(computeSessionFindMatches([item], "`deploy`")).toEqual([]);
+    expect(computeSessionFindMatches([item], "**review**")).toEqual([]);
+  });
+
   it("returns activity log messages", () => {
     const item: StreamItem = {
       kind: "activity_log",
