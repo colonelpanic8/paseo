@@ -243,7 +243,12 @@ function SubagentsTrackRow({
             onDetachPress={onDetachSubagent ? handleDetachPress : undefined}
             onArchivePress={handleArchivePress}
           />
-        ) : null}
+        ) : (
+          <View
+            style={styles.actionClusterSpacer(onDetachSubagent ? 2 : 1)}
+            pointerEvents="none"
+          />
+        )}
       </>
     ),
     [
@@ -397,6 +402,9 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  actionClusterSpacer: (count: number) => ({
+    width: count * (ROW_ICON_SIZE + theme.spacing[1] * 2) + (count - 1) * theme.spacing[1],
+  }),
   tooltipText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
