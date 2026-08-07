@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildWorkspaceDesktopTabActions,
   buildWorkspaceTabMenuEntries,
+  type WorkspaceTabMenuEntry,
 } from "@/screens/workspace/workspace-tab-menu";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 
@@ -61,10 +62,8 @@ describe("buildWorkspaceTabMenuEntries", () => {
     const copyConversation = entries.find(
       (entry) => entry.kind === "item" && entry.key === "copy-conversation",
     );
-    if (!copyConversation || copyConversation.kind !== "item") {
-      throw new Error("Copy conversation entry missing");
-    }
-    copyConversation.onSelect();
+    expect(copyConversation).toMatchObject({ kind: "item", key: "copy-conversation" });
+    (copyConversation as Extract<WorkspaceTabMenuEntry, { kind: "item" }>).onSelect();
 
     expect(onCopyConversation).toHaveBeenCalledWith("agent-123");
   });
