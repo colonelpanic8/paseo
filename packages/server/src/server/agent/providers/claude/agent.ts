@@ -33,7 +33,6 @@ import {
 import {
   findClaudeModel,
   getClaudeModelsWithSettings,
-  normalizeClaudeRuntimeModelId,
   resolveConfiguredClaudeModel,
   resolveObservedClaudeModelId,
 } from "./models.js";
