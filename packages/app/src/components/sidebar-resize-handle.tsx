@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { GestureDetector, type GestureType } from "react-native-gesture-handler";
 import { StyleSheet } from "react-native-unistyles";
@@ -88,18 +88,15 @@ function TouchResizeHandle({ edge, gesture, testID }: SidebarResizeHandleProps) 
   const geometry = resolveSidebarResizeHandleGeometry(false);
   // `box-none` keeps the full-height column out of hit-testing so only the
   // centered grab target steals taps from the rows behind it.
-  const layerStyle = useMemo(
-    () => [
-      styles.touchLayer,
-      { width: geometry.width },
-      edgeOffsetStyle(edge, geometry.edgeOffset),
-    ],
-    [edge, geometry.edgeOffset, geometry.width],
-  );
-  const targetStyle = useMemo(
-    () => [styles.touchTarget, { width: geometry.width, height: geometry.height ?? undefined }],
-    [geometry.height, geometry.width],
-  );
+  const layerStyle = [
+    styles.touchLayer,
+    { width: geometry.width },
+    edgeOffsetStyle(edge, geometry.edgeOffset),
+  ];
+  const targetStyle = [
+    styles.touchTarget,
+    { width: geometry.width, height: geometry.height ?? undefined },
+  ];
 
   return (
     <View pointerEvents="box-none" style={layerStyle}>
