@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { clampPct, formatPct, formatResetLabel, resolvePercentages } from "./format";
-import { deriveTone } from "./tone";
+import { resolveWindowBarTone } from "./tone";
 import type {
   ProviderUsagePercentageDisplay,
   ProviderUsageTone,
@@ -31,9 +31,9 @@ export function ProviderUsageWindowBar({
 }) {
   const percentages = resolvePercentages(window, percentageDisplay);
   const usedPct = percentages.used;
-  const tone = window.tone ?? deriveTone(usedPct);
+  const tone = resolveWindowBarTone(percentageDisplay, usedPct, window.tone);
 
-  const fillWidth = clampPct(usedPct ?? 0);
+  const fillWidth = clampPct(percentages.fillPct ?? 0);
   const fillStyle = useMemo<StyleProp<ViewStyle>>(
     () => [styles.fill, fillToneStyle(tone), { width: `${fillWidth}%` }],
     [fillWidth, tone],

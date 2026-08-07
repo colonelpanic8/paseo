@@ -7,6 +7,7 @@ import type {
 
 export interface ProviderUsagePercentages {
   displayed: number | null;
+  fillPct: number | null;
   used: number | null;
 }
 
@@ -16,7 +17,8 @@ export function resolvePercentages(
 ): ProviderUsagePercentages {
   const used = window.usedPct ?? (window.remainingPct != null ? 100 - window.remainingPct : null);
   const remaining = window.remainingPct ?? (window.usedPct != null ? 100 - window.usedPct : null);
-  return { displayed: display === "used" ? used : remaining, used };
+  const displayed = display === "used" ? used : remaining;
+  return { displayed, fillPct: displayed, used };
 }
 
 export function clampPct(value: number): number {
