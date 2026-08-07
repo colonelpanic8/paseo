@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { useInputFocus } from "@/hooks/use-input-focus";
 import { useHardwareKeyboardStore } from "@/stores/hardware-keyboard-store";
 import { BottomSheetScrollView, type BottomSheetBackgroundProps } from "@gorhom/bottom-sheet";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -203,19 +204,9 @@ export function SearchInput({
   const { theme } = useUnistyles();
   const inputRef = useRef<EditingTextInputHandle>(null);
 
-  // Web honors the explicit autoFocus contract. On native, focus whenever a
-  // hardware keyboard is attached so typing filters immediately — without one,
-  // focusing would pop the soft keyboard on every picker open.
   const hardwareKeyboardConnected = useHardwareKeyboardStore((s) => s.connected);
-  useEffect(() => {
-    const shouldFocus = IS_WEB ? autoFocus : hardwareKeyboardConnected;
-    if (shouldFocus && inputRef.current) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [autoFocus, hardwareKeyboardConnected]);
+  const canFocus = IS_WEB || hardwareKeyboardConnected;
+  useInputFocus(inputRef, autoFocus && canFocus);
 
   return (
     <View style={styles.searchInputContainer}>
@@ -958,6 +949,7 @@ function resolveInitialActiveIndex(
 type BottomSheetVisibility = ReturnType<typeof useIsolatedBottomSheetVisibility>;
 
 interface MobileBodyProps {
+  isOpen: boolean;
   bottomSheetRef: BottomSheetVisibility["sheetRef"];
   snapPoints: string[];
   handleSheetChange: BottomSheetVisibility["handleSheetChange"];
@@ -1042,7 +1034,7 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
       <SheetVisibleFrame footer={footerView}>
         <View style={frameStyle}>
           {props.header ? (
-            <SheetHeaderView header={props.header} onClose={props.onClose} />
+            <SheetHeaderView header={props.header} onClose={props.onClose} active={props.isOpen} />
           ) : (
             <>
               <View style={styles.bottomSheetHeader}>
@@ -1056,7 +1048,7 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
                   placeholder={props.searchPlaceholder}
                   onChangeText={props.setSearchQueryWithCallback}
                   onSubmitEditing={props.handleSubmitSearch}
-                  autoFocus={false}
+                  autoFocus={props.isOpen}
                   useBottomSheetInput
                   resetKey={props.searchResetKey}
                 />
@@ -1637,6 +1629,7 @@ export function Combobox({
   if (isMobile) {
     return (
       <MobileComboboxBody
+        isOpen={isOpen}
         bottomSheetRef={bottomSheetRef}
         snapPoints={snapPoints}
         handleSheetChange={handleSheetChange}
