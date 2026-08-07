@@ -2566,20 +2566,30 @@ function WorkspaceScreenContent({
       }
 
       toast.show(t("workspace.tabs.toasts.copyingConversation"), { durationMs: null });
+      let timeline;
       try {
-        const timeline = await client.fetchAgentTimeline(agentId, {
+        timeline = await client.fetchAgentTimeline(agentId, {
           direction: "tail",
           limit: 0,
           projection: "projected",
         });
-        const conversation = formatAgentConversation(timeline.entries.map((entry) => entry.item));
-        if (!conversation) {
-          toast.error(t("workspace.tabs.toasts.conversationEmpty"));
-          return;
-        }
+      } catch (error) {
+        console.warn("Failed to fetch conversation for copying", { agentId, error });
+        toast.error(t("workspace.tabs.toasts.copyFailed"));
+        return;
+      }
+
+      const conversation = formatAgentConversation(timeline.entries.map((entry) => entry.item));
+      if (!conversation) {
+        toast.error(t("workspace.tabs.toasts.conversationEmpty"));
+        return;
+      }
+
+      try {
         await Clipboard.setStringAsync(conversation);
         toast.copied(t("workspace.tabs.toasts.conversationCopiedLabel"));
-      } catch {
+      } catch (error) {
+        console.warn("Failed to copy conversation to clipboard", { agentId, error });
         toast.error(t("workspace.tabs.toasts.copyFailed"));
       }
     },
