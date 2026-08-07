@@ -5,6 +5,7 @@ import {
   collectStashAttachmentIds,
   countOtherScopeEntries,
   MAX_STASH_ENTRIES_PER_QUEUE,
+  mergeHydratedPromptStashQueues,
   mergeStashRestoreAttachments,
   mergeStashRestoreText,
   PROMPT_STASH_UNSCOPED_KEY,
@@ -83,6 +84,17 @@ describe("stashEntryInQueues", () => {
     expect(evicted?.id).toBe("entry-0");
     expect(next["provider:claude"]).toHaveLength(MAX_STASH_ENTRIES_PER_QUEUE);
     expect(next["provider:claude"]?.[0]?.id).toBe("overflow");
+  });
+});
+
+describe("mergeHydratedPromptStashQueues", () => {
+  it("retains a stash made before hydration alongside persisted entries", () => {
+    const persisted = stashEntryInQueues({}, makeEntry({ id: "persisted" })).queues;
+    const current = stashEntryInQueues({}, makeEntry({ id: "new" })).queues;
+
+    expect(
+      mergeHydratedPromptStashQueues(persisted, current)["provider:claude"]?.map(({ id }) => id),
+    ).toEqual(["new", "persisted"]);
   });
 });
 
