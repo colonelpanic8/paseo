@@ -21,7 +21,8 @@ interface WatchRepository {
   val workspaces: StateFlow<List<Workspace>>
 
   /**
-   * Transcripts by agent id, for agents whose transcript has actually arrived.
+   * Transcripts by server-scoped agent id, for agents whose transcript has actually
+   * arrived.
    *
    * A missing key is the normal case, not an error: transcripts are fetched on
    * demand, and a phone too old to know [WireCommand.REQUEST_TRANSCRIPT] drops the
@@ -42,23 +43,21 @@ interface WatchRepository {
 
   fun workspace(id: String): Workspace?
 
-  fun agent(id: String): AgentSession?
-
   /**
    * Ask the phone to publish this agent's transcript. Fire and forget — the answer
    * arrives later through [transcripts], or never.
    */
-  suspend fun requestTranscript(agentId: String)
+  suspend fun requestTranscript(serverId: String, agentId: String)
 
   /** Send a prompt to an existing agent session. */
-  suspend fun sendPrompt(agentId: String, text: String)
+  suspend fun sendPrompt(serverId: String, agentId: String, text: String)
 
   /** Create a new agent session in a workspace with an initial prompt. */
   suspend fun createAgent(workspaceId: String, prompt: String)
 
-  suspend fun respondToPermission(requestId: String, allow: Boolean)
+  suspend fun respondToPermission(serverId: String, agentId: String, requestId: String, allow: Boolean)
 
-  suspend fun stopAgent(agentId: String)
+  suspend fun stopAgent(serverId: String, agentId: String)
 }
 
 /**
@@ -85,18 +84,15 @@ class MockWatchRepository : WatchRepository {
 
   override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
 
-  override fun agent(id: String): AgentSession? =
-    state.value.flatMap { it.agents }.firstOrNull { it.id == id }
-
   /**
    * The seeded transcripts are already present, so this is a no-op. `agent-main-copilot`
    * is deliberately left without one so the summary-card fallback — what an old phone
    * or a transcript-less agent looks like — is reachable on an emulator too.
    */
-  override suspend fun requestTranscript(agentId: String) = Unit
+  override suspend fun requestTranscript(serverId: String, agentId: String) = Unit
 
-  override suspend fun sendPrompt(agentId: String, text: String) {
-    mutateAgent(agentId) {
+  override suspend fun sendPrompt(serverId: String, agentId: String, text: String) {
+    mutateAgent(serverId, agentId) {
       it.copy(state = ActivityState.Running, age = "now", summary = null, pendingPermission = null)
     }
   }
@@ -124,13 +120,13 @@ class MockWatchRepository : WatchRepository {
       }
   }
 
-  override suspend fun respondToPermission(requestId: String, allow: Boolean) {
+  override suspend fun respondToPermission(serverId: String, agentId: String, requestId: String, allow: Boolean) {
     state.value =
       state.value.map { workspace ->
         workspace.copy(
           agents =
             workspace.agents.map { agent ->
-              if (agent.pendingPermission?.id != requestId) {
+              if (workspace.serverId != serverId || agent.id != agentId || agent.pendingPermission?.id != requestId) {
                 agent
               } else {
                 agent.copy(
@@ -144,15 +140,22 @@ class MockWatchRepository : WatchRepository {
       }
   }
 
-  override suspend fun stopAgent(agentId: String) {
-    mutateAgent(agentId) { it.copy(state = ActivityState.Idle, age = "now") }
+  override suspend fun stopAgent(serverId: String, agentId: String) {
+    mutateAgent(serverId, agentId) { it.copy(state = ActivityState.Idle, age = "now") }
   }
 
-  private fun mutateAgent(agentId: String, transform: (AgentSession) -> AgentSession) {
+  private fun mutateAgent(
+    serverId: String,
+    agentId: String,
+    transform: (AgentSession) -> AgentSession,
+  ) {
     state.value =
       state.value.map { workspace ->
         workspace.copy(
-          agents = workspace.agents.map { if (it.id == agentId) transform(it) else it },
+          agents =
+            workspace.agents.map {
+              if (workspace.serverId == serverId && it.id == agentId) transform(it) else it
+            },
         )
       }
   }

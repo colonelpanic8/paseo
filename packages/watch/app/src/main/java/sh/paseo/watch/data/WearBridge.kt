@@ -39,7 +39,8 @@ object WearBridge {
   const val SNAPSHOT_PATH = "/paseo/snapshot"
 
   /**
-   * DataClient path prefix for per-agent transcripts: `/paseo/transcript/<agentId>`.
+   * DataClient path prefix for per-agent transcripts:
+   * `/paseo/transcript/<serverId>/<agentId>`.
    *
    * One item per agent rather than one blob, because a transcript is fetched on
    * demand for the agent you opened. Folding them into the snapshot would mean the
