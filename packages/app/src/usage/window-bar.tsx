@@ -8,7 +8,7 @@ import { formatDisplayPct, formatResetLabel } from "./format";
 import { UsageMeter } from "./meter";
 import { displayPercent, usageWindowRowLabel } from "./model";
 import type { UsageDisplayAs } from "./preferences";
-import { windowTone } from "./tone";
+import { windowBarTone } from "./tone";
 import type { UsageTone, UsageWindow } from "./types";
 
 // Pinned rows carry the pinned surface; hovering an unpinned row previews it at half strength,
@@ -35,7 +35,7 @@ export function UsageWindowBar({
   pinTestID: string;
 }) {
   const shownPct = displayPercent(window, displayAs);
-  const tone = windowTone(window);
+  const tone = windowBarTone(window, displayAs);
 
   const isAtRisk = window.runsOutAt != null && window.shortfallPct != null;
   const trailing = isAtRisk
