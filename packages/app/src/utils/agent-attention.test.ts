@@ -46,7 +46,6 @@ describe("shouldClearAgentAttention", () => {
         isConnected: true,
         requiresAttention: true,
         attentionReason: "finished",
-        trigger: "prompt-send",
       }),
     ).toBe(true);
   });
@@ -58,7 +57,6 @@ describe("shouldClearAgentAttention", () => {
         isConnected: false,
         requiresAttention: true,
         attentionReason: "finished",
-        trigger: "prompt-send",
       }),
     ).toBe(false);
   });
@@ -70,7 +68,6 @@ describe("shouldClearAgentAttention", () => {
         isConnected: true,
         requiresAttention: false,
         attentionReason: null,
-        trigger: "prompt-send",
       }),
     ).toBe(false);
   });
@@ -82,7 +79,6 @@ describe("shouldClearAgentAttention", () => {
         isConnected: true,
         requiresAttention: true,
         attentionReason: "finished",
-        trigger: "prompt-send",
       }),
     ).toBe(false);
   });
@@ -94,23 +90,56 @@ describe("shouldClearAgentAttention", () => {
         isConnected: true,
         requiresAttention: true,
         attentionReason: "permission",
-        trigger: "prompt-send",
       }),
     ).toBe(false);
   });
 
-  it("keeps attention while the agent is opened, focused, or blurred", () => {
-    for (const trigger of ["focus-entry", "input-focus", "agent-blur"] as const) {
-      expect(
-        shouldClearAgentAttention({
-          agentId: "agent-1",
-          isConnected: true,
-          requiresAttention: true,
-          attentionReason: "finished",
-          trigger,
-        }),
-      ).toBe(false);
-    }
+  it("returns false for focus entry when clear was deferred while already focused", () => {
+    expect(
+      shouldClearAgentAttention({
+        agentId: "agent-1",
+        isConnected: true,
+        requiresAttention: true,
+        attentionReason: "finished",
+        trigger: "focus-entry",
+        hasDeferredFocusEntryClear: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true for explicit follow-up entrypoints after deferred focus clear", () => {
+    expect(
+      shouldClearAgentAttention({
+        agentId: "agent-1",
+        isConnected: true,
+        requiresAttention: true,
+        attentionReason: "finished",
+        trigger: "input-focus",
+        hasDeferredFocusEntryClear: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldClearAgentAttention({
+        agentId: "agent-1",
+        isConnected: true,
+        requiresAttention: true,
+        attentionReason: "finished",
+        trigger: "prompt-send",
+        hasDeferredFocusEntryClear: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldClearAgentAttention({
+        agentId: "agent-1",
+        isConnected: true,
+        requiresAttention: true,
+        attentionReason: "finished",
+        trigger: "agent-blur",
+        hasDeferredFocusEntryClear: true,
+      }),
+    ).toBe(true);
   });
 });
 
