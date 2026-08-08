@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type CollapsedProjectsState,
+  isStatusGroupCollapsed,
   mergePersistedCollapsedProjects,
   serializeCollapsedProjects,
   setProjectCollapsed,
@@ -70,5 +71,37 @@ describe("sidebar collapsed projects transitions", () => {
     expect(mergePersistedCollapsedProjects({ collapsedProjectKeys: [] }, currentState)).toBe(
       currentState,
     );
+  });
+});
+
+describe("isStatusGroupCollapsed", () => {
+  it("treats key presence as collapsed for normal status groups", () => {
+    expect(isStatusGroupCollapsed(new Set(), "running")).toBe(false);
+    expect(isStatusGroupCollapsed(new Set(["running"]), "running")).toBe(true);
+  });
+
+  it("collapses the snoozed group by default and inverts the stored key to mean expanded", () => {
+    expect(isStatusGroupCollapsed(new Set(), "snoozed")).toBe(true);
+    expect(isStatusGroupCollapsed(new Set(["snoozed"]), "snoozed")).toBe(false);
+  });
+
+  it("toggling the snoozed group expands it and toggling again re-collapses it", () => {
+    let state = emptyState();
+
+    state = toggleStatusGroupCollapsed(state, "snoozed");
+    expect(isStatusGroupCollapsed(state.collapsedStatusGroupKeys, "snoozed")).toBe(false);
+
+    state = toggleStatusGroupCollapsed(state, "snoozed");
+    expect(isStatusGroupCollapsed(state.collapsedStatusGroupKeys, "snoozed")).toBe(true);
+  });
+
+  it("keeps snoozed collapsed by default for persisted state that predates the bucket", () => {
+    const restored = mergePersistedCollapsedProjects(
+      { collapsedStatusGroupKeys: ["running"] },
+      emptyState(),
+    );
+
+    expect(isStatusGroupCollapsed(restored.collapsedStatusGroupKeys, "running")).toBe(true);
+    expect(isStatusGroupCollapsed(restored.collapsedStatusGroupKeys, "snoozed")).toBe(true);
   });
 });

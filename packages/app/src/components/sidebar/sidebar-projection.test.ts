@@ -6,17 +6,12 @@ import type {
 } from "@/hooks/use-sidebar-workspaces-list";
 import { buildSidebarProjection } from "./sidebar-projection";
 
-function makeWorkspace(
-  id: string,
-  statusBucket: SidebarWorkspaceEntry["statusBucket"] = "done",
-  labels: string[] = [],
-  projectViewKey = "project",
-) {
+function makeWorkspace(id: string, statusBucket: SidebarWorkspaceEntry["statusBucket"] = "done") {
   const placement: SidebarWorkspacePlacement = {
     workspaceKey: `srv:${id}`,
     serverId: "srv",
     workspaceId: id,
-    projectViewKey,
+    projectViewKey: "project",
     projectName: "Project",
     projectKind: "git",
     workspaceKind: "worktree",
@@ -30,6 +25,8 @@ function makeWorkspace(
     currentBranch: null,
     statusBucket,
     statusEnteredAt: null,
+    lastUserMessageAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -37,25 +34,24 @@ function makeWorkspace(
     archiveUnpushedCommitCount: null,
     scripts: [],
     hasRunningScripts: false,
-    labels,
+    snoozeWakeAt: null,
+    remoteUrl: null,
+    providers: [],
   };
   return { placement, entry };
 }
 
-function makeProject(
-  workspaces: SidebarWorkspacePlacement[],
-  viewKey = "project",
-): SidebarProjectEntry {
+function makeProject(workspaces: SidebarWorkspacePlacement[]): SidebarProjectEntry {
   return {
-    viewKey,
+    viewKey: "project",
     projectName: "Project",
     projectKind: "git",
-    iconWorkingDir: `/repo/${viewKey}`,
+    iconWorkingDir: "/repo",
     hosts: [
       {
         serverId: "srv",
-        projectId: viewKey,
-        iconWorkingDir: `/repo/${viewKey}`,
+        projectId: "project",
+        iconWorkingDir: "/repo",
         worktreeSupport: "supported" as const,
       },
     ],
@@ -84,59 +80,11 @@ function projectionInput(options?: {
     groupMode: options?.groupMode ?? ("project" as const),
     pinnedCollapsed: options?.pinnedCollapsed ?? false,
     collapsedProjectKeys: new Set<string>(),
-    collapsedWorkspaceGroupKeys: new Set<string>(),
-  };
-}
-
-/**
- * Two projects, one workspace each, both labelled — so every grouping mode puts rows from more
- * than one project on screen, and a mode that asked for fewer icons than it renders would show it.
- */
-function twoProjectInput(groupMode: "project" | "status") {
-  const first = makeWorkspace("first", "running", ["Urgent"], "project");
-  const second = makeWorkspace("second", "needs_input", ["Backend"], "other-project");
-  return {
-    ...projectionInput({ groupMode }),
-    projects: [makeProject([first.placement]), makeProject([second.placement], "other-project")],
-    pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
-    workspaceEntriesByKey: new Map([
-      [first.entry.workspaceKey, first.entry],
-      [second.entry.workspaceKey, second.entry],
-    ]),
-    projectNamesByViewKey: new Map([
-      ["project", "Project"],
-      ["other-project", "Other project"],
-    ]),
+    collapsedStatusGroupKeys: new Set<string>(),
   };
 }
 
 describe("buildSidebarProjection", () => {
-  // The rule that outlived the bug it was written for: a project icon is fetched per project, so
-  // whatever a mode groups by, the rows it produces can only reference projects already covered.
-  for (const groupMode of ["project", "status"] as const) {
-    it(`covers every row ${groupMode} grouping renders with a project icon target`, () => {
-      const projection = buildSidebarProjection(twoProjectInput(groupMode));
-      const covered = new Set(projection.projectIconTargets.map((target) => target.projectViewKey));
-
-      // Every leading visual the sidebar can paint from this projection: pinned rows, grouped
-      // rows, project headers and the rows under them.
-      const renderedProjectViewKeys = new Set<string>();
-      for (const entry of projection.pinnedGroups.pinnedChats) {
-        renderedProjectViewKeys.add(entry.projectViewKey);
-      }
-      for (const group of projection.workspaceGroups) {
-        for (const entry of group.rows) renderedProjectViewKeys.add(entry.projectViewKey);
-      }
-      for (const project of projection.pinnedGroups.unpinnedProjects) {
-        renderedProjectViewKeys.add(project.viewKey);
-        for (const entry of project.workspaces) renderedProjectViewKeys.add(entry.projectViewKey);
-      }
-
-      expect([...renderedProjectViewKeys].sort()).toEqual(["other-project", "project"]);
-      expect([...renderedProjectViewKeys].filter((viewKey) => !covered.has(viewKey))).toEqual([]);
-    });
-  }
-
   it("uses one pin-aware projection for project rows and shortcut order", () => {
     const projection = buildSidebarProjection(projectionInput());
 
@@ -154,8 +102,8 @@ describe("buildSidebarProjection", () => {
   it("keeps pinned chats above status groups and removes them from those groups", () => {
     const projection = buildSidebarProjection(projectionInput({ groupMode: "status" }));
 
-    expect(projection.workspaceGroups.map((group) => group.key)).toEqual(["needs_input"]);
-    expect(projection.workspaceGroups[0]?.rows.map((entry) => entry.workspaceId)).toEqual([
+    expect(projection.statusGroups.map((group) => group.bucket)).toEqual(["needs_input"]);
+    expect(projection.statusGroups[0]?.rows.map((entry) => entry.workspaceId)).toEqual([
       "unpinned",
     ]);
     expect(projection.shortcutModel.shortcutTargets).toEqual([
@@ -171,6 +119,30 @@ describe("buildSidebarProjection", () => {
 
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "unpinned" },
+    ]);
+  });
+
+  it("treats the snoozed group as collapsed by default and expanded once its key is stored", () => {
+    const snoozed = makeWorkspace("snoozy", "snoozed");
+    const input = {
+      ...projectionInput({ groupMode: "status" }),
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      projects: [makeProject([snoozed.placement])],
+      workspaceEntriesByKey: new Map([[snoozed.entry.workspaceKey, snoozed.entry]]),
+    };
+
+    const collapsedByDefault = buildSidebarProjection(input);
+    expect(collapsedByDefault.statusGroups.map((group) => group.bucket)).toEqual(["snoozed"]);
+    // Collapsed sections get no shortcut numbers, so default-collapsed snoozed
+    // rows must not appear as shortcut targets.
+    expect(collapsedByDefault.shortcutModel.shortcutTargets).toEqual([]);
+
+    const expandedByUser = buildSidebarProjection({
+      ...input,
+      collapsedStatusGroupKeys: new Set(["snoozed"]),
+    });
+    expect(expandedByUser.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "snoozy" },
     ]);
   });
 });

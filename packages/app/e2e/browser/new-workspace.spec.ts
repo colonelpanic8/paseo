@@ -102,33 +102,34 @@ async function startTrackingSidebarStatusGroups(page: import("@playwright/test")
     const capture = () => {
       const events = win.__workspaceStatusGroupEvents;
       if (!events) return;
-      const groups = document.querySelectorAll<HTMLElement>(
-        '[data-testid^="sidebar-status-group-"]',
+      // Status groups render their header and rows as flat siblings, so a row's
+      // bucket comes from the container testID stamped on the row itself rather
+      // than from DOM nesting under the header.
+      const containers = document.querySelectorAll<HTMLElement>(
+        '[data-testid^="sidebar-status-row-"]',
       );
-      for (const group of groups) {
-        const groupTestId = group.getAttribute("data-testid") ?? "";
-        const bucket = groupTestId.replace("sidebar-status-group-", "");
-        const label = group.textContent ?? "";
-        const block = group.parentElement?.parentElement;
-        if (!block) continue;
-        const rows = block.querySelectorAll<HTMLElement>('[data-testid^="sidebar-workspace-row-"]');
-        for (const row of rows) {
-          const rowTestId = row.getAttribute("data-testid");
-          if (!rowTestId) continue;
-          const indicatorTestId =
-            row
-              .querySelector<HTMLElement>('[data-testid^="workspace-status-indicator-"]')
-              ?.getAttribute("data-testid") ?? null;
-          const last = events.at(-1);
-          if (
-            last?.rowTestId === rowTestId &&
-            last.bucket === bucket &&
-            last.indicatorTestId === indicatorTestId
-          ) {
-            continue;
-          }
-          events.push({ rowTestId, bucket, indicatorTestId, label, at: performance.now() });
+      for (const container of containers) {
+        const containerTestId = container.getAttribute("data-testid") ?? "";
+        const bucket = containerTestId.replace("sidebar-status-row-", "");
+        const row = container.querySelector<HTMLElement>('[data-testid^="sidebar-workspace-row-"]');
+        const rowTestId = row?.getAttribute("data-testid");
+        if (!row || !rowTestId) continue;
+        const label =
+          document.querySelector<HTMLElement>(`[data-testid="sidebar-status-group-${bucket}"]`)
+            ?.textContent ?? "";
+        const indicatorTestId =
+          row
+            .querySelector<HTMLElement>('[data-testid^="workspace-status-indicator-"]')
+            ?.getAttribute("data-testid") ?? null;
+        const last = events.at(-1);
+        if (
+          last?.rowTestId === rowTestId &&
+          last.bucket === bucket &&
+          last.indicatorTestId === indicatorTestId
+        ) {
+          continue;
         }
+        events.push({ rowTestId, bucket, indicatorTestId, label, at: performance.now() });
       }
     };
 

@@ -33,6 +33,7 @@ function workspace(id: string, projectId: string, root: string): WorkspaceDescri
     name: "main",
     status: "done",
     statusEnteredAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     scripts: [],

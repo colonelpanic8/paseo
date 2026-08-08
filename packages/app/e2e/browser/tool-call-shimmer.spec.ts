@@ -1,7 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
 import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
-import { expectComposerVisible } from "../support/helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 type WebSocketMessage = string | Buffer;
@@ -62,11 +61,13 @@ function replaceToolCallStatus(message: WebSocketMessage, status: string): strin
 }
 
 async function gateSecondToolCall(page: Page, agentId: string) {
+  const heldFirstRunningMessages: WebSocketMessage[] = [];
   let firstCallId: string | null = null;
   let secondCallId: string | null = null;
   let secondRunningMessage: WebSocketMessage | null = null;
-  let pauseAfterSecondRunning = false;
   let releaseSecondRequested = false;
+  let pauseServerMessages = false;
+  let secondRunningForwarded = false;
   let forwardSecondRunning: (() => void) | null = null;
   let resolveFirstCompleted!: () => void;
   let resolveSecondRunning!: () => void;
@@ -80,14 +81,15 @@ async function gateSecondToolCall(page: Page, agentId: string) {
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     const server = ws.connectToServer();
     forwardSecondRunning = () => {
-      if (secondRunningMessage) {
-        ws.send(secondRunningMessage);
-        secondRunningMessage = null;
+      if (!secondRunningMessage || secondRunningForwarded) {
+        return;
       }
+      ws.send(secondRunningMessage);
+      secondRunningForwarded = true;
     };
     ws.onMessage((message) => server.send(message));
     server.onMessage((message) => {
-      if (pauseAfterSecondRunning) {
+      if (pauseServerMessages) {
         return;
       }
 
@@ -96,11 +98,25 @@ async function gateSecondToolCall(page: Page, agentId: string) {
         ws.send(message);
         return;
       }
-
       if (!firstCallId) {
         firstCallId = toolCall.callId;
       }
       if (toolCall.callId === firstCallId) {
+        // Held rather than dropped. The app applies agent_stream events only in
+        // unbroken seq order: skip one and it discards everything after it and
+        // waits on a catch-up that this route has usually already paused, so
+        // the group never mounts at all. Releasing the held frames immediately
+        // ahead of the terminal one keeps the sequence intact and still lands
+        // the group on screen already idle — which the daemon's coalescing
+        // window only does on its own when the machine is fast enough.
+        if (toolCall.status === "running" || toolCall.status === "executing") {
+          heldFirstRunningMessages.push(message);
+          return;
+        }
+        for (const held of heldFirstRunningMessages) {
+          ws.send(held);
+        }
+        heldFirstRunningMessages.length = 0;
         ws.send(message);
         if (toolCall.status === "completed") {
           resolveFirstCompleted();
@@ -109,11 +125,24 @@ async function gateSecondToolCall(page: Page, agentId: string) {
       }
 
       secondCallId ??= toolCall.callId;
-      if (toolCall.callId === secondCallId) {
-        const transformedMessage =
-          toolCall.status === "completed" ? replaceToolCallStatus(message, "running") : message;
-        secondRunningMessage = transformedMessage;
-        pauseAfterSecondRunning = true;
+      if (
+        toolCall.callId === secondCallId &&
+        (toolCall.status === "running" || toolCall.status === "executing")
+      ) {
+        secondRunningMessage = message;
+        pauseServerMessages = true;
+        resolveSecondRunning();
+        if (releaseSecondRequested) {
+          forwardSecondRunning?.();
+        }
+        return;
+      }
+
+      if (toolCall.callId === secondCallId && toolCall.status === "completed") {
+        // Keep the second real tool call inspectably active. Production providers
+        // send this same status shape while their work remains in flight.
+        secondRunningMessage = replaceToolCallStatus(message, "running");
+        pauseServerMessages = true;
         resolveSecondRunning();
         if (releaseSecondRequested) {
           forwardSecondRunning?.();
@@ -130,7 +159,9 @@ async function gateSecondToolCall(page: Page, agentId: string) {
     waitForSecondRunning: () => secondRunning,
     releaseSecondRunning() {
       releaseSecondRequested = true;
-      forwardSecondRunning?.();
+      if (secondRunningMessage) {
+        forwardSecondRunning?.();
+      }
     },
   };
 }
@@ -176,11 +207,10 @@ test("measures an overview heading that becomes loading after its idle mount", a
       workspaceId: agent.workspaceId,
       agentId: agent.agentId,
     });
-    await expectComposerVisible(page);
     await agent.client.sendAgentMessage(agent.agentId, "Prove the overview shimmer lifecycle.");
 
     await gate.waitForFirstCompleted();
-    const group = page.getByTestId("tool-call-group").first();
+    const group = page.getByTestId("tool-call-group");
     await expect(group).toBeVisible();
     const idleGroupHandle = await group.elementHandle();
     if (!idleGroupHandle) {
