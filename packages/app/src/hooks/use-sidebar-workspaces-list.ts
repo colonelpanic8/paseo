@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
-import { useWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks";
+import {
+  useHydratedWorkspaceServerIds,
+  useWorkspaceDirectoryServerIds,
+} from "@/stores/session-store-hooks";
 import { workspaceEqualityFns } from "@/stores/session-store-hooks/selectors";
 import { useHostProjects } from "@/projects/host-projects";
 import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
@@ -14,6 +17,7 @@ import {
   createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   type ProjectStatusSession,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
@@ -31,6 +35,7 @@ export {
   computeSidebarOrderUpdates,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   shouldShowSidebarHostLabels,
   type SidebarLoadingState,
   type SidebarOrderUpdates,
@@ -108,24 +113,10 @@ export function useSidebarWorkspacesList(options?: {
   const reconcileHostFilters = useSidebarViewStore((state) => state.reconcileHostFilters);
   const isActive = options?.enabled !== false;
 
-  const serverIds = useMemo(() => {
-    if (hostFilters.length === 0) {
-      return allServerIds;
-    }
-    const selected = new Set(hostFilters);
-    const matched = allServerIds.filter((id) => selected.has(id));
-    // Registry has settled but none of the pinned hosts still exist — fall back to every
-    // host rather than leaving the sidebar empty.
-    if (hostRegistryLoaded && matched.length === 0) {
-      return allServerIds;
-    }
-    return matched;
-  }, [allServerIds, hostFilters, hostRegistryLoaded]);
-  useEffect(() => {
-    if (!isActive) return;
-    const releases = serverIds.map((serverId) => runtime.acquireDirectoryDemand(serverId));
-    return () => releases.forEach((release) => release());
-  }, [isActive, runtime, serverIds]);
+  const serverIds = useMemo(
+    () => resolveSidebarServerIds({ allServerIds, hostFilters, hostRegistryLoaded }),
+    [allServerIds, hostFilters, hostRegistryLoaded],
+  );
 
   useEffect(() => {
     if (!hostRegistryLoaded) {
@@ -136,6 +127,7 @@ export function useSidebarWorkspacesList(options?: {
 
   const persistedProjectOrder = useSidebarOrderStore((state) => state.projectOrder ?? EMPTY_ORDER);
 
+  const hydratedServerIds = useHydratedWorkspaceServerIds(serverIds);
   const directoryServerIds = useWorkspaceDirectoryServerIds(serverIds);
 
   const hostProjects = useHostProjects(directoryServerIds);
@@ -176,6 +168,8 @@ export function useSidebarWorkspacesList(options?: {
   const refreshAll = useCallback(() => {
     if (!isActive) return;
     for (const serverId of serverIds) {
+      const snapshot = runtime.getSnapshot(serverId);
+      if (snapshot?.connectionStatus !== "online") continue;
       void runtime.refreshDirectories(serverId).catch((error) => {
         console.error("[WorkspaceFetch][sidebar-refresh] failed", {
           serverId,
@@ -188,7 +182,7 @@ export function useSidebarWorkspacesList(options?: {
   const loadingState = deriveSidebarLoadingState({
     isActive,
     serverIds,
-    hydratedServerIds: directoryServerIds,
+    hydratedServerIds,
     hasProjects: projects.length > 0,
   });
 
