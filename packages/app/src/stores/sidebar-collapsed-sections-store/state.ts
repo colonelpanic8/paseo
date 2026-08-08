@@ -2,13 +2,12 @@ import { z } from "zod";
 
 export interface CollapsedProjectsState {
   collapsedProjectKeys: Set<string>;
-  collapsedWorkspaceGroupKeys: Set<string>;
+  collapsedStatusGroupKeys: Set<string>;
   collapsedPinned: boolean;
 }
 
 export interface PersistedCollapsedProjects {
   collapsedProjectKeys?: string[];
-  collapsedWorkspaceGroupKeys?: string[];
   collapsedStatusGroupKeys?: string[];
   collapsedPinned?: boolean;
 }
@@ -16,8 +15,6 @@ export interface PersistedCollapsedProjects {
 export const PersistedCollapsedProjectsSchema: z.ZodType<PersistedCollapsedProjects> =
   z.strictObject({
     collapsedProjectKeys: z.array(z.string()).optional(),
-    collapsedWorkspaceGroupKeys: z.array(z.string()).optional(),
-    // COMPAT(sidebarWorkspaceGroupCollapse): added in v0.4.0, remove after 2027-02-14.
     collapsedStatusGroupKeys: z.array(z.string()).optional(),
     collapsedPinned: z.boolean().optional(),
   });
@@ -39,17 +36,33 @@ export function toggleProjectCollapsed(
   return { ...state, collapsedProjectKeys: next };
 }
 
-export function toggleWorkspaceGroupCollapsed(
+// Status groups that start collapsed for everyone, including users whose
+// persisted state predates the bucket's existence.
+const DEFAULT_COLLAPSED_STATUS_GROUP_KEYS: ReadonlySet<string> = new Set(["snoozed"]);
+
+// The persisted set stores "the user toggled this group away from its default".
+// For normal groups presence = collapsed. For default-collapsed groups the
+// semantics INVERT: presence = the user expanded it. Keeping the persisted shape
+// and toggle functions unchanged preserves back-compat with stored state.
+export function isStatusGroupCollapsed(
+  collapsedStatusGroupKeys: ReadonlySet<string>,
+  statusGroupKey: string,
+): boolean {
+  const toggledByUser = collapsedStatusGroupKeys.has(statusGroupKey);
+  return DEFAULT_COLLAPSED_STATUS_GROUP_KEYS.has(statusGroupKey) ? !toggledByUser : toggledByUser;
+}
+
+export function toggleStatusGroupCollapsed(
   state: CollapsedProjectsState,
-  workspaceGroupKey: string,
+  statusGroupKey: string,
 ): CollapsedProjectsState {
-  const next = new Set(state.collapsedWorkspaceGroupKeys);
-  if (next.has(workspaceGroupKey)) {
-    next.delete(workspaceGroupKey);
+  const next = new Set(state.collapsedStatusGroupKeys);
+  if (next.has(statusGroupKey)) {
+    next.delete(statusGroupKey);
   } else {
-    next.add(workspaceGroupKey);
+    next.add(statusGroupKey);
   }
-  return { ...state, collapsedWorkspaceGroupKeys: next };
+  return { ...state, collapsedStatusGroupKeys: next };
 }
 
 export function setProjectCollapsed(
@@ -68,12 +81,12 @@ export function setProjectCollapsed(
 
 export function serializeCollapsedProjects(state: CollapsedProjectsState): {
   collapsedProjectKeys: string[];
-  collapsedWorkspaceGroupKeys: string[];
+  collapsedStatusGroupKeys: string[];
   collapsedPinned: boolean;
 } {
   return {
     collapsedProjectKeys: Array.from(state.collapsedProjectKeys),
-    collapsedWorkspaceGroupKeys: Array.from(state.collapsedWorkspaceGroupKeys),
+    collapsedStatusGroupKeys: Array.from(state.collapsedStatusGroupKeys),
     collapsedPinned: state.collapsedPinned,
   };
 }
@@ -90,15 +103,13 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   const restoredProjects = deserializeCollapsedKeys(
     persisted.collapsedProjectKeys ?? Array.from(current.collapsedProjectKeys),
   );
-  const restoredWorkspaceGroups = deserializeCollapsedKeys(
-    persisted.collapsedWorkspaceGroupKeys ??
-      persisted.collapsedStatusGroupKeys ??
-      Array.from(current.collapsedWorkspaceGroupKeys),
+  const restoredStatusGroups = deserializeCollapsedKeys(
+    persisted.collapsedStatusGroupKeys ?? Array.from(current.collapsedStatusGroupKeys),
   );
   const restoredPinned = persisted.collapsedPinned ?? current.collapsedPinned;
   if (
     areSetsEqual(current.collapsedProjectKeys, restoredProjects) &&
-    areSetsEqual(current.collapsedWorkspaceGroupKeys, restoredWorkspaceGroups) &&
+    areSetsEqual(current.collapsedStatusGroupKeys, restoredStatusGroups) &&
     current.collapsedPinned === restoredPinned
   ) {
     return current;
@@ -106,7 +117,7 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   return {
     ...current,
     collapsedProjectKeys: restoredProjects,
-    collapsedWorkspaceGroupKeys: restoredWorkspaceGroups,
+    collapsedStatusGroupKeys: restoredStatusGroups,
     collapsedPinned: restoredPinned,
   };
 }

@@ -28,7 +28,12 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { StatusRing } from "@/components/status-ring";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
-import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
+import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
+
+// The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
+// SCRIM_SOLID_OFFSET rightward, which keeps the kebab itself off the gradient entirely.
+const SCRIM_WIDTH = 48;
+const SCRIM_SOLID_OFFSET = "55%";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const needsInputColorMapping = (theme: Theme) => ({
@@ -100,6 +105,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   shortcutNumber = null,
   showShortcutBadge = false,
   reserveIdleStatusIndicatorSpace = true,
+  onSubmitRename,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -117,15 +123,13 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge?: boolean;
   /** Keep the empty leading slot when the workspace has no active status. */
   reserveIdleStatusIndicatorSpace?: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
   children?: ReactNode;
 }) {
   const {
     settings: { workspaceTitleSource },
   } = useAppSettings();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
-  // The workspace carries label names; their colors live in its host's catalog, so the row is
-  // where the two meet — the meta line is handed finished definitions.
-  const labels = useWorkspaceLabelDefinitions(workspace.serverId, workspace.labels);
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
@@ -158,9 +162,14 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
         )}
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
-            <Text style={workspaceBranchTextStyle} numberOfLines={1}>
-              {workspaceLabel}
-            </Text>
+            <SidebarWorkspaceInlineTitle
+              displayValue={workspaceLabel}
+              renameValue={workspace.title ?? workspace.name}
+              editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+              onSubmit={onSubmitRename}
+              style={workspaceBranchTextStyle}
+              testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+            />
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
           </View>
           <WorkspaceMetaRow
@@ -169,7 +178,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             hostBadge={hostBadge ?? null}
             prHint={workspace.prHint}
             serviceSummary={serviceSummary}
-            labels={labels}
           />
         </View>
       </View>
@@ -229,15 +237,10 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "done") {
-    // An idle row still gets a dot rather than an empty slot. Nested rows are marked as
-    // workspaces by indentation alone, and with nothing in the leading slot the rail has no
-    // edge to read against — a workspace carrying its own glyph starts looking like a project
-    // header. The dot is muted to half opacity so it holds the rail without reporting status.
+  // Snoozed rows carry no status indicator, same as done.
+  if (bucket === "done" || bucket === "snoozed") {
     return reserveIdleSpace ? (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done">
-        <View style={styles.idleStatusDot} />
-      </View>
+      <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`} />
     ) : null;
   }
 
@@ -270,6 +273,7 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
     case "attention":
       return styles.statusDotAttention;
     case "done":
+    case "snoozed":
       return null;
   }
 }
