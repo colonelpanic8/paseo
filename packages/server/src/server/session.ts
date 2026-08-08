@@ -23,7 +23,9 @@ import {
   type ProjectPlacementPayload,
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
+  type WorkspaceSnoozeStatus,
 } from "./messages.js";
+import { resolveWorkspaceSnooze } from "./workspace-snooze.js";
 import type {
   TerminalManager,
   TerminalWorkspaceContributionChangedEvent,
@@ -3446,6 +3448,61 @@ export class Session {
         },
       });
       emitResponse(false, null, getErrorMessageOr(error, "Failed to pin workspace"));
+    }
+  }
+
+  private async handleWorkspaceSnoozeSetRequest(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId: string,
+  ): Promise<void> {
+    const logContext = { workspaceId, snoozedUntil, requestId };
+    this.sessionLogger.info(logContext, "session: workspace.snooze.set.request");
+    const emitResponse = (
+      accepted: boolean,
+      snoozeStatus: WorkspaceSnoozeStatus | null,
+      error: string | null,
+    ) => {
+      this.emit({
+        type: "workspace.snooze.set.response",
+        payload: { requestId, workspaceId, accepted, snoozeStatus, error },
+      });
+    };
+
+    try {
+      const now = new Date();
+      const resolved = resolveWorkspaceSnooze({ snoozedUntil, now });
+      if (!resolved.ok) {
+        emitResponse(false, null, resolved.error);
+        return;
+      }
+      const updatedAt = now.toISOString();
+      const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
+        ...existing,
+        snoozeStatus: resolved.snoozeStatus,
+        updatedAt,
+      }));
+      if (!updated) {
+        emitResponse(false, null, "Workspace not found");
+        return;
+      }
+      emitResponse(true, resolved.snoozeStatus, null);
+      await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
+    } catch (error) {
+      this.sessionLogger.error(
+        { ...logContext, err: error },
+        "session: workspace.snooze.set.request error",
+      );
+      this.emit({
+        type: "activity_log",
+        payload: {
+          id: uuidv4(),
+          timestamp: new Date(),
+          type: "error",
+          content: `Failed to snooze workspace: ${getErrorMessage(error)}`,
+        },
+      });
+      emitResponse(false, null, getErrorMessageOr(error, "Failed to snooze workspace"));
     }
   }
 
