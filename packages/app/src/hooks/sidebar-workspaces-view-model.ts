@@ -10,7 +10,10 @@ import type {
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 import { aggregateSidebarStateBuckets } from "@/utils/sidebar-agent-state";
 import { shortenPath } from "@/utils/shorten-path";
-import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
+import {
+  EMPTY_WORKSPACE_PROVIDERS,
+  type WorkspaceAgentActivity,
+} from "@/utils/workspace-agent-activity";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
@@ -36,6 +39,8 @@ export interface SidebarWorkspacePlacement {
 export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlacement {
   statusBucket: SidebarStateBucket;
   statusEnteredAt: Date | null;
+  lastUserMessageAt: Date | null;
+  activityAt: Date | null;
 }
 
 export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
@@ -47,6 +52,10 @@ export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
   pinnedAt?: string | null;
   // Checkout branch (null when not a git checkout or detached HEAD).
   currentBranch: string | null;
+  // Git remote of the workspace's checkout (null when there is none).
+  remoteUrl: string | null;
+  // Distinct providers with a live root agent, most recently active first.
+  providers: readonly string[];
   archivingAt: string | null;
   diffStat: { additions: number; deletions: number } | null;
   prHint: PrHint | null;
@@ -83,6 +92,28 @@ export interface SidebarWorkspaceSession {
 interface SidebarWorkspaceSessionSource {
   workspaces: Map<string, WorkspaceDescriptor>;
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+}
+
+/**
+ * The hosts the sidebar is currently showing. Every sidebar surface must agree on
+ * this set, or a filtered-out host leaks rows into one section but not another.
+ * Once the registry has settled and no pinned host still exists, fall back to
+ * every host rather than rendering an empty sidebar.
+ */
+export function resolveSidebarServerIds(input: {
+  allServerIds: readonly string[];
+  hostFilters: readonly string[];
+  hostRegistryLoaded: boolean;
+}): string[] {
+  if (input.hostFilters.length === 0) {
+    return [...input.allServerIds];
+  }
+  const selected = new Set(input.hostFilters);
+  const matched = input.allServerIds.filter((id) => selected.has(id));
+  if (input.hostRegistryLoaded && matched.length === 0) {
+    return [...input.allServerIds];
+  }
+  return matched;
 }
 
 export function selectSidebarWorkspaceSessions(
@@ -178,9 +209,16 @@ export function createSidebarWorkspaceEntry(input: {
     title: input.workspace.title ?? null,
     pinnedAt: input.workspace.pinnedAt,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
+    remoteUrl:
+      input.workspace.gitRuntime?.remoteUrl ?? input.workspace.project?.checkout.remoteUrl ?? null,
+    providers:
+      input.workspaceAgentActivity?.get(input.workspace.id)?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
     snoozeWakeAt: effectiveStatus.snoozeWakeAt,
+    lastUserMessageAt:
+      input.workspaceAgentActivity?.get(input.workspace.id)?.lastUserMessageAt ?? null,
+    activityAt: input.workspace.activityAt,
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
     prHint: selectPrHintFromStatus(
