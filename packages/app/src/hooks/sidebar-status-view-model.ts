@@ -2,6 +2,11 @@ import type { SidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-mode
 
 export type StatusBucket = SidebarWorkspaceEntry["statusBucket"];
 
+// The archived group is not a status bucket: archived workspaces have no live
+// status, and they must never enter STATUS_BUCKET_ORDER or the shortcut index.
+// It renders after every real group as a greyed-out tail.
+export const ARCHIVED_GROUP_KEY = "archived";
+
 export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
   "needs_input",
   "failed",
@@ -51,7 +56,7 @@ export function buildStatusGroups(
     rows.sort((a, b) =>
       bucket === "snoozed"
         ? compareSnoozedRows(a, b, projectNamesByViewKey)
-        : compareStatusRows(a, b, projectNamesByViewKey),
+        : compareStatusRows(a, b, bucket, projectNamesByViewKey),
     );
     groups.push({ bucket, label: STATUS_BUCKET_LABELS[bucket], rows });
   }
@@ -77,16 +82,17 @@ function compareSnoozedRows(
     return 1;
   }
 
-  return compareStatusRows(a, b, projectNamesByViewKey);
+  return compareStatusRows(a, b, "snoozed", projectNamesByViewKey);
 }
 
 function compareStatusRows(
   a: SidebarWorkspaceEntry,
   b: SidebarWorkspaceEntry,
+  bucket: StatusBucket,
   projectNamesByViewKey: Map<string, string>,
 ): number {
-  const aTime = a.statusEnteredAt?.getTime() ?? null;
-  const bTime = b.statusEnteredAt?.getTime() ?? null;
+  const aTime = resolveStatusSortTime(a, bucket);
+  const bTime = resolveStatusSortTime(b, bucket);
 
   if (aTime !== null && bTime !== null) {
     if (aTime !== bTime) return bTime - aTime;
@@ -105,6 +111,17 @@ function compareStatusRows(
   if (nameCmp !== 0) return nameCmp;
 
   return a.workspaceKey.localeCompare(b.workspaceKey);
+}
+
+function resolveStatusSortTime(
+  workspace: SidebarWorkspaceEntry,
+  bucket: StatusBucket,
+): number | null {
+  const timestamp =
+    bucket === "running"
+      ? (workspace.lastUserMessageAt ?? workspace.activityAt)
+      : workspace.activityAt;
+  return timestamp?.getTime() ?? null;
 }
 
 export function buildStatusShortcutIndex(groups: StatusGroup[]): Map<string, number> {

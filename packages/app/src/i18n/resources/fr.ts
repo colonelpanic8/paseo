@@ -934,6 +934,7 @@ export const fr: TranslationResources = {
         label: "Titre",
         title: "Titre",
         branch: "Nom de branche",
+        worktree: "Suffixe du worktree",
       },
       show: {
         label: "Afficher",
@@ -1047,6 +1048,12 @@ export const fr: TranslationResources = {
         hideFromSidebar: "Masquer de la barre latérale",
         archiving: "Archivage...",
         hiding: "Dissimulation...",
+      },
+      archived: {
+        groupTitle: "Archivés récemment",
+        unarchive: "Désarchiver",
+        unarchiving: "Désarchivage...",
+        unarchiveFailed: "Échec du désarchivage de l'espace de travail",
       },
       confirmations: {
         hideTitle: "Masquer l'espace de travail?",
@@ -2200,6 +2207,26 @@ export const fr: TranslationResources = {
           title: "Renommer l'hôte",
           placeholder: "MonHost",
           submit: "Renommer",
+        },
+        color: {
+          section: "Apparence",
+          title: "Couleur",
+          hint: "Colore l'étiquette de cet hôte dans la barre latérale",
+          options: {
+            none: "Aucune",
+            blue: "Bleu",
+            green: "Vert",
+            amber: "Ambre",
+            orange: "Orange",
+            red: "Rouge",
+            purple: "Violet",
+          },
+          custom: {
+            label: "Personnalisé",
+            title: "Couleur personnalisée",
+            submit: "Appliquer",
+            invalid: "Saisissez une couleur hexadécimale comme #4f46e5",
+          },
         },
         restart: {
           title: "Redémarrer le démon",

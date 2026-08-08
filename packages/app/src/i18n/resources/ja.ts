@@ -915,6 +915,7 @@ export const ja: TranslationResources = {
         label: "タイトル",
         title: "タイトル",
         branch: "ブランチ名",
+        worktree: "ワークツリーのサフィックス",
       },
       show: {
         label: "表示項目",
@@ -1028,6 +1029,12 @@ export const ja: TranslationResources = {
         hideFromSidebar: "サイドバーから非表示",
         archiving: "アーカイブ中...",
         hiding: "非表示にしています...",
+      },
+      archived: {
+        groupTitle: "最近アーカイブしたもの",
+        unarchive: "アーカイブ解除",
+        unarchiving: "アーカイブを解除しています...",
+        unarchiveFailed: "ワークスペースのアーカイブ解除に失敗しました",
       },
       confirmations: {
         hideTitle: "ワークスペースを非表示にしますか？",
@@ -2166,6 +2173,26 @@ export const ja: TranslationResources = {
           title: "ホストの名前を変更",
           placeholder: "マイホスト",
           submit: "名前を変更",
+        },
+        color: {
+          section: "外観",
+          title: "色",
+          hint: "サイドバーでこのホストのラベルに色を付けます",
+          options: {
+            none: "なし",
+            blue: "青",
+            green: "緑",
+            amber: "アンバー",
+            orange: "オレンジ",
+            red: "赤",
+            purple: "紫",
+          },
+          custom: {
+            label: "カスタム",
+            title: "カスタムカラー",
+            submit: "適用",
+            invalid: "#4f46e5 のような16進数の色を入力してください",
+          },
         },
         restart: {
           title: "デーモンを再起動",

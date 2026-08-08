@@ -911,6 +911,7 @@ export const ko: TranslationResources = {
         label: "제목",
         title: "제목",
         branch: "브랜치 이름",
+        worktree: "워크트리 접미사",
       },
       show: {
         label: "표시 항목",
@@ -1024,6 +1025,12 @@ export const ko: TranslationResources = {
         hideFromSidebar: "사이드바에서 숨기기",
         archiving: "보관하는 중...",
         hiding: "숨기는 중...",
+      },
+      archived: {
+        groupTitle: "최근 보관됨",
+        unarchive: "보관 해제",
+        unarchiving: "보관 해제하는 중...",
+        unarchiveFailed: "워크스페이스를 보관 해제하지 못했습니다",
       },
       confirmations: {
         hideTitle: "워크스페이스를 숨길까요?",
@@ -2158,6 +2165,26 @@ export const ko: TranslationResources = {
           title: "호스트 이름 변경",
           placeholder: "내 호스트",
           submit: "이름 변경",
+        },
+        color: {
+          section: "모양",
+          title: "색상",
+          hint: "사이드바에서 이 호스트의 레이블에 색을 입힙니다",
+          options: {
+            none: "없음",
+            blue: "파랑",
+            green: "초록",
+            amber: "황색",
+            orange: "주황",
+            red: "빨강",
+            purple: "보라",
+          },
+          custom: {
+            label: "사용자 지정",
+            title: "사용자 지정 색상",
+            submit: "적용",
+            invalid: "#4f46e5 형식의 16진수 색상을 입력하세요",
+          },
         },
         restart: {
           title: "데몬 재시작",

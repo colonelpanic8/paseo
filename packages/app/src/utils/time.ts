@@ -3,6 +3,9 @@
  * their thresholds can't drift apart; they differ only in how much room they have to say it.
  *
  * `elapsed` takes an "ago" in prose, `now` and `date` read as absolutes and never do.
+ *
+ * Finest granularity is deliberately one minute: callers refresh at most once a minute
+ * (see useMinuteNow), and a seconds readout would visibly freeze between renders.
  */
 type Elapsed =
   | { kind: "now" }
@@ -16,8 +19,7 @@ function describeElapsed(date: Date, now: Date): Elapsed {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 10) return { kind: "now" };
-  if (diffMin < 1) return { kind: "elapsed", value: `${diffSec}s` };
+  if (diffMin < 1) return { kind: "now" };
   if (diffHour < 1) return { kind: "elapsed", value: `${diffMin}m` };
   if (diffDay < 1) return { kind: "elapsed", value: `${diffHour}h` };
   if (diffDay < 7) return { kind: "elapsed", value: `${diffDay}d` };
@@ -117,6 +119,10 @@ function getTimeFormatter(): Intl.DateTimeFormat {
   return cachedTimeFormatter;
 }
 
+export function formatClockTime(date: Date): string {
+  return getTimeFormatter().format(date);
+}
+
 /**
  * Format a chat-message timestamp for hover-revealed UI.
  * - Same day: "10:11 PM" or "22:11" depending on user preference
@@ -124,7 +130,7 @@ function getTimeFormatter(): Intl.DateTimeFormat {
  * - Older: "14 May 2026, 10:11 PM"
  */
 export function formatMessageTimestamp(date: Date, now: Date = new Date()): string {
-  const time = getTimeFormatter().format(date);
+  const time = formatClockTime(date);
 
   if (isSameLocalDay(date, now)) {
     return time;
