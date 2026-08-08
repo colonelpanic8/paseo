@@ -1,10 +1,21 @@
 import type { TFunction } from "i18next";
-import { STATUS_BUCKET_ORDER } from "@/utils/sidebar-agent-state";
 import type { SidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-model";
 
 export type StatusBucket = SidebarWorkspaceEntry["statusBucket"];
 
-export { STATUS_BUCKET_ORDER };
+// The archived group is not a status bucket: archived workspaces have no live
+// status, and they must never enter STATUS_BUCKET_ORDER or the shortcut index.
+// It renders after every real group as a greyed-out tail.
+export const ARCHIVED_GROUP_KEY = "archived";
+
+export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
+  "needs_input",
+  "failed",
+  "attention",
+  "running",
+  "done",
+  "snoozed",
+] as const;
 
 const STATUS_BUCKET_LABEL_KEYS = {
   needs_input: "sidebar.statusBucket.needsInput",
@@ -12,6 +23,7 @@ const STATUS_BUCKET_LABEL_KEYS = {
   attention: "sidebar.statusBucket.readyToReview",
   running: "sidebar.statusBucket.working",
   done: "sidebar.statusBucket.done",
+  snoozed: "sidebar.statusBucket.snoozed",
 } as const satisfies Record<StatusBucket, string>;
 
 export function getStatusBucketLabel(bucket: StatusBucket, t: TFunction): string {
@@ -47,20 +59,46 @@ export function buildStatusGroups(
     const rows = bucketRows.get(bucket);
     if (!rows || rows.length === 0) continue;
 
-    rows.sort((a, b) => compareStatusRows(a, b, projectNamesByViewKey));
+    rows.sort((a, b) =>
+      bucket === "snoozed"
+        ? compareSnoozedRows(a, b, projectNamesByViewKey)
+        : compareStatusRows(a, b, bucket, projectNamesByViewKey),
+    );
     groups.push({ bucket, label: getStatusBucketLabel(bucket, t), rows });
   }
 
   return groups;
 }
 
-function compareStatusRows(
+// The Snoozed group orders by wake time ascending — the workspace that wakes
+// soonest sits on top. Rows without a wake time (shouldn't happen) sort last.
+function compareSnoozedRows(
   a: SidebarWorkspaceEntry,
   b: SidebarWorkspaceEntry,
   projectNamesByViewKey: Map<string, string>,
 ): number {
-  const aTime = a.statusEnteredAt?.getTime() ?? null;
-  const bTime = b.statusEnteredAt?.getTime() ?? null;
+  const aWake = a.snoozeWakeAt?.getTime() ?? null;
+  const bWake = b.snoozeWakeAt?.getTime() ?? null;
+
+  if (aWake !== null && bWake !== null) {
+    if (aWake !== bWake) return aWake - bWake;
+  } else if (aWake !== null) {
+    return -1;
+  } else if (bWake !== null) {
+    return 1;
+  }
+
+  return compareStatusRows(a, b, "snoozed", projectNamesByViewKey);
+}
+
+function compareStatusRows(
+  a: SidebarWorkspaceEntry,
+  b: SidebarWorkspaceEntry,
+  bucket: StatusBucket,
+  projectNamesByViewKey: Map<string, string>,
+): number {
+  const aTime = resolveStatusSortTime(a, bucket);
+  const bTime = resolveStatusSortTime(b, bucket);
 
   if (aTime !== null && bTime !== null) {
     if (aTime !== bTime) return bTime - aTime;
@@ -79,6 +117,17 @@ function compareStatusRows(
   if (nameCmp !== 0) return nameCmp;
 
   return a.workspaceKey.localeCompare(b.workspaceKey);
+}
+
+function resolveStatusSortTime(
+  workspace: SidebarWorkspaceEntry,
+  bucket: StatusBucket,
+): number | null {
+  const timestamp =
+    bucket === "running"
+      ? (workspace.lastUserMessageAt ?? workspace.activityAt)
+      : workspace.activityAt;
+  return timestamp?.getTime() ?? null;
 }
 
 export function buildStatusShortcutIndex(groups: StatusGroup[]): Map<string, number> {

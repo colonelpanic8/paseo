@@ -1168,6 +1168,7 @@ export const ru: TranslationResources = {
       readyToReview: "На проверку",
       working: "В работе",
       done: "Готово",
+      snoozed: "Отложено",
     },
     display: {
       showBackground: "Показать фоновые пространства",

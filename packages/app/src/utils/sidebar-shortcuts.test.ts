@@ -20,7 +20,7 @@ function workspace(input: {
   name: string;
   projectKey?: string;
   statusBucket?: SidebarWorkspaceEntry["statusBucket"];
-  statusEnteredAt?: Date | null;
+  activityAt?: Date | null;
 }): SidebarWorkspaceEntry {
   return {
     workspaceKey: `${input.serverId}:${input.workspaceId}`,
@@ -35,15 +35,20 @@ function workspace(input: {
     name: input.name,
     title: null,
     currentBranch: null,
+    remoteUrl: null,
+    providers: [],
     statusBucket: input.statusBucket ?? "done",
     archivingAt: null,
-    statusEnteredAt: input.statusEnteredAt ?? null,
+    statusEnteredAt: null,
+    lastUserMessageAt: null,
+    activityAt: input.activityAt ?? null,
     diffStat: null,
     prHint: null,
     archiveHasUncommittedChanges: null,
     archiveUnpushedCommitCount: null,
     scripts: [],
     hasRunningScripts: false,
+    snoozeWakeAt: null,
   };
 }
 
@@ -217,7 +222,7 @@ describe("buildStatusSidebarShortcutModel", () => {
         name: "done old",
         projectKey: "p1",
         statusBucket: "done",
-        statusEnteredAt: new Date("2026-01-01T00:00:00.000Z"),
+        activityAt: new Date("2026-01-01T00:00:00.000Z"),
       }),
       workspace({
         serverId: "s1",
@@ -226,7 +231,7 @@ describe("buildStatusSidebarShortcutModel", () => {
         name: "running new",
         projectKey: "p2",
         statusBucket: "running",
-        statusEnteredAt: new Date("2026-03-01T00:00:00.000Z"),
+        activityAt: new Date("2026-03-01T00:00:00.000Z"),
       }),
       workspace({
         serverId: "s1",
@@ -235,7 +240,7 @@ describe("buildStatusSidebarShortcutModel", () => {
         name: "needs input",
         projectKey: "p1",
         statusBucket: "needs_input",
-        statusEnteredAt: new Date("2026-02-01T00:00:00.000Z"),
+        activityAt: new Date("2026-02-01T00:00:00.000Z"),
       }),
       workspace({
         serverId: "s1",
@@ -244,7 +249,7 @@ describe("buildStatusSidebarShortcutModel", () => {
         name: "running old",
         projectKey: "p2",
         statusBucket: "running",
-        statusEnteredAt: new Date("2026-01-15T00:00:00.000Z"),
+        activityAt: new Date("2026-01-15T00:00:00.000Z"),
       }),
     ];
 
