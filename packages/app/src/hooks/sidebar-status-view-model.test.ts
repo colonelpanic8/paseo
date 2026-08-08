@@ -6,6 +6,7 @@ import {
   buildStatusShortcutIndex,
   getStatusBucketLabel,
   STATUS_BUCKET_ORDER,
+  type StatusBucket,
   type StatusGroup,
 } from "./sidebar-status-view-model";
 
@@ -30,6 +31,7 @@ function ws(
     snoozeWakeAt: input.snoozeWakeAt ?? null,
     lastUserMessageAt: input.lastUserMessageAt ?? null,
     activityAt: input.activityAt ?? null,
+    readyToReview: input.readyToReview ?? false,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -273,7 +275,8 @@ describe("buildStatusGroups", () => {
       }),
       ws({
         workspaceKey: "srv:att",
-        statusBucket: "attention",
+        statusBucket: "done",
+        readyToReview: true,
         statusEnteredAt: d("2026-01-01T00:00:00Z"),
       }),
       ws({
@@ -295,11 +298,18 @@ describe("buildStatusGroups", () => {
     expect(groups.map((g) => g.label)).toEqual(
       STATUS_BUCKET_ORDER.map((b) => getStatusBucketLabel(b, i18n.t)),
     );
-    // Each group has exactly one row with the matching bucket
+    const expectedCounts: Record<StatusBucket, number> = {
+      needs_input: 1,
+      failed: 1,
+      running: 1,
+      done: 2,
+      snoozed: 1,
+    };
     for (const group of groups) {
-      expect(group.rows).toHaveLength(1);
-      expect(group.rows[0]?.statusBucket).toBe(group.bucket);
+      expect(group.rows).toHaveLength(expectedCounts[group.bucket]);
+      expect(group.rows.every((row) => row.statusBucket === group.bucket)).toBe(true);
     }
+    expect(groups.some((group) => group.label === "Ready to review")).toBe(false);
   });
 });
 
@@ -347,7 +357,6 @@ describe("getStatusBucketLabel", () => {
       expect(STATUS_BUCKET_ORDER.map((bucket) => getStatusBucketLabel(bucket, i18n.t))).toEqual([
         "Attend une réponse",
         "Échec",
-        "À relire",
         "En cours",
         "Terminé",
         "Reporté",

@@ -11,7 +11,6 @@ export const ARCHIVED_GROUP_KEY = "archived";
 export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
   "needs_input",
   "failed",
-  "attention",
   "running",
   "done",
   "snoozed",
@@ -20,7 +19,6 @@ export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
 const STATUS_BUCKET_LABEL_KEYS = {
   needs_input: "sidebar.statusBucket.needsInput",
   failed: "sidebar.statusBucket.failed",
-  attention: "sidebar.statusBucket.readyToReview",
   running: "sidebar.statusBucket.working",
   done: "sidebar.statusBucket.done",
   snoozed: "sidebar.statusBucket.snoozed",
