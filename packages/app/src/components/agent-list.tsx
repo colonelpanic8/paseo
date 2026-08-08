@@ -23,7 +23,9 @@ import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { HighlightedText } from "@/components/ui/highlighted-text";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
-import { findHighlightRanges } from "@/components/ui/highlighted-text-segments";
+import type { AgentSearchMatch } from "@getpaseo/protocol/messages";
+import type { MatchRange } from "@getpaseo/protocol/search/text-match";
+import { useMinuteNow } from "@/hooks/use-minute-tick";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -35,7 +37,18 @@ interface AgentListProps {
   listFooterComponent?: ReactElement | null;
   showAttentionIndicator?: boolean;
   showHostColumn?: boolean;
-  search?: string;
+  /**
+   * Where a search matched each row, keyed by `serverId:agentId`. Rows mark the
+   * spans so the list can explain why a result is in it — the subsequence and
+   * typo tiers match characters the eye would not find on its own.
+   */
+  searchMatchesByAgentKey?: Record<string, AgentSearchMatch[]>;
+  /**
+   * Renders one flat list in the given order instead of grouping by day. Day
+   * headings claim the list is chronological, which is a lie once the caller
+   * has ordered it by something else — relevance, for instance.
+   */
+  flat?: boolean;
 }
 
 type DateSectionKey = "today" | "yesterday" | "thisWeek" | "thisMonth" | "older";
@@ -110,6 +123,39 @@ function SessionBadge({
   return <StatusBadge label={label} variant={variant} leading={icon} />;
 }
 
+function WorkspaceTitlePrefix({
+  visible,
+  workspaceName,
+  ranges,
+  testID,
+  iconSize,
+  color,
+}: {
+  visible: boolean;
+  workspaceName: string;
+  ranges?: readonly MatchRange[];
+  testID: string;
+  iconSize: number;
+  color: string;
+}) {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <>
+      <HighlightedText
+        text={workspaceName}
+        ranges={ranges}
+        style={styles.workspaceTitleText}
+        numberOfLines={1}
+        testID={testID}
+      />
+      <ChevronRight size={iconSize} color={color} />
+    </>
+  );
+}
+
 function SessionRowBadges({
   agent,
   archivedIcon,
@@ -162,7 +208,7 @@ function SessionRowTrailingAttention({
 
 function SessionRow({
   agent,
-  search,
+  searchMatches,
   isMobile,
   selectedAgentId,
   showAttentionIndicator,
@@ -171,7 +217,7 @@ function SessionRow({
   onLongPress,
 }: {
   agent: AggregatedAgent;
-  search?: string;
+  searchMatches?: readonly AgentSearchMatch[];
   isMobile: boolean;
   selectedAgentId?: string;
   showAttentionIndicator: boolean;
@@ -181,7 +227,9 @@ function SessionRow({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const timeAgo = formatTimeAgo(agent.lastActivityAt);
+  // Idle agents get no prop churn, so tick to keep "Xm ago" from freezing.
+  const now = useMinuteNow();
+  const timeAgo = formatTimeAgo(agent.lastActivityAt, now);
   const agentKey = `${agent.serverId}:${agent.id}`;
   const isSelected = selectedAgentId === agentKey;
   const projectName = agent.projectPlacement?.projectName ?? "";
@@ -189,14 +237,10 @@ function SessionRow({
   const workspaceName = agent.projectPlacement?.workspaceName ?? "";
   const ProviderIcon = getProviderIcon(agent.provider, agent.serverId);
   const pendingPermissionCount = agent.pendingPermissionCount ?? 0;
-  const ranges = useMemo(
-    () => ({
-      workspace: findHighlightRanges(search ?? "", workspaceName),
-      title: findHighlightRanges(search ?? "", agent.title ?? ""),
-      branch: findHighlightRanges(search ?? "", branch),
-      project: findHighlightRanges(search ?? "", projectName),
-    }),
-    [search, workspaceName, agent.title, branch, projectName],
+  const rangesFor = useCallback(
+    (field: AgentSearchMatch["field"]) =>
+      searchMatches?.find((match) => match.field === field)?.ranges,
+    [searchMatches],
   );
 
   const pressableStyle = useCallback(
@@ -212,6 +256,11 @@ function SessionRow({
   const handlePress = useCallback(() => onPress(agent), [onPress, agent]);
   const handleLongPress = useCallback(() => onLongPress(agent), [onLongPress, agent]);
 
+  const sessionTitleStyle = useMemo(
+    () => [styles.sessionTitle, isSelected && styles.sessionTitleHighlighted],
+    [isSelected],
+  );
+
   const archivedIcon = useMemo(
     () => <Archive size={theme.fontSize.sm} color={theme.colors.foregroundMuted} />,
     [theme.fontSize.sm, theme.colors.foregroundMuted],
@@ -219,44 +268,32 @@ function SessionRow({
   const showDesktopAttention =
     !isMobile && showAttentionIndicator && Boolean(agent.requiresAttention);
 
-  const agentTitle = (
-    <View style={styles.agentTitleRow}>
-      <View style={styles.providerIconWrap}>
-        <ProviderIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </View>
-      <HighlightedText
-        text={agent.title || t("agentList.fallbackTitle")}
-        ranges={ranges.title}
-        style={styles.sessionTitle}
-        numberOfLines={1}
-        testID={`agent-row-title-${agent.serverId}-${agent.id}`}
-      />
-    </View>
-  );
-
   return (
     <Pressable
       style={pressableStyle}
       onPress={handlePress}
       onLongPress={handleLongPress}
-      accessibilityRole="button"
       testID={`agent-row-${agent.serverId}-${agent.id}`}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowTitleRow}>
-          <HighlightedText
-            text={workspaceName || projectName}
-            ranges={workspaceName ? ranges.workspace : ranges.project}
-            style={styles.workspaceTitleText}
-            numberOfLines={1}
+          <WorkspaceTitlePrefix
+            visible={!isMobile && Boolean(workspaceName)}
+            workspaceName={workspaceName}
+            ranges={rangesFor("workspace")}
             testID={`agent-row-workspace-${agent.serverId}-${agent.id}`}
+            iconSize={theme.iconSize.xs}
+            color={theme.colors.foregroundMuted}
           />
-          {!isMobile ? (
-            <>
-              <ChevronRight size={theme.iconSize.xs} color={theme.colors.foregroundMuted} />
-              {agentTitle}
-            </>
-          ) : null}
+          <View style={styles.providerIconWrap}>
+            <ProviderIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          </View>
+          <HighlightedText
+            text={agent.title || t("agentList.fallbackTitle")}
+            ranges={agent.title ? rangesFor("title") : undefined}
+            style={sessionTitleStyle}
+            numberOfLines={1}
+          />
           <SessionRowBadges
             agent={agent}
             archivedIcon={archivedIcon}
@@ -264,12 +301,11 @@ function SessionRow({
             showDesktopAttention={showDesktopAttention}
           />
         </View>
-        {isMobile ? agentTitle : null}
         {isMobile ? (
           <View style={styles.rowMetaRow}>
             <HighlightedText
               text={projectName}
-              ranges={ranges.project}
+              ranges={rangesFor("project")}
               style={styles.sessionMetaText}
               numberOfLines={1}
               testID={`agent-row-project-${agent.serverId}-${agent.id}`}
@@ -277,10 +313,18 @@ function SessionRow({
             <Text style={styles.sessionMetaSeparator}>·</Text>
             <HighlightedText
               text={branch}
-              ranges={ranges.branch}
+              ranges={rangesFor("branch")}
               style={styles.sessionMetaText}
               numberOfLines={1}
               testID={`agent-row-branch-${agent.serverId}-${agent.id}`}
+            />
+            <Text style={styles.sessionMetaSeparator}>·</Text>
+            <HighlightedText
+              text={workspaceName}
+              ranges={rangesFor("workspace")}
+              style={styles.sessionMetaText}
+              numberOfLines={1}
+              testID={`agent-row-workspace-${agent.serverId}-${agent.id}`}
             />
             <Text style={styles.sessionMetaSeparator}>·</Text>
             <Text style={styles.sessionMetaText}>{timeAgo}</Text>
@@ -299,7 +343,7 @@ function SessionRow({
         <View style={styles.rowColumns}>
           <HighlightedText
             text={projectName}
-            ranges={ranges.project}
+            ranges={rangesFor("project")}
             style={styles.columnMeta}
             numberOfLines={1}
             testID={`agent-row-project-${agent.serverId}-${agent.id}`}
@@ -311,7 +355,7 @@ function SessionRow({
           ) : null}
           <HighlightedText
             text={branch}
-            ranges={ranges.branch}
+            ranges={rangesFor("branch")}
             style={styles.columnMeta}
             numberOfLines={1}
             testID={`agent-row-branch-${agent.serverId}-${agent.id}`}
@@ -339,7 +383,8 @@ export function AgentList({
   listFooterComponent,
   showAttentionIndicator = true,
   showHostColumn = false,
-  search,
+  searchMatchesByAgentKey,
+  flat = false,
 }: AgentListProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -407,6 +452,14 @@ export function AgentList({
   }, [actionAgent, actionClient, archiveAgent]);
 
   const flatItems = useMemo((): FlatListItem[] => {
+    if (flat) {
+      return agents.map((agent) => ({
+        type: "agent" as const,
+        key: `${agent.serverId}:${agent.id}`,
+        agent,
+      }));
+    }
+
     const buckets = new Map<DateSectionKey, AggregatedAgent[]>();
     for (const agent of agents) {
       const section = deriveDateSectionKey(agent.lastActivityAt);
@@ -427,7 +480,7 @@ export function AgentList({
       }
     }
     return result;
-  }, [agents]);
+  }, [agents, flat]);
 
   const renderItem: ListRenderItem<FlatListItem> = useCallback(
     ({ item }) => {
@@ -441,7 +494,7 @@ export function AgentList({
       return (
         <SessionRow
           agent={item.agent}
-          search={search}
+          searchMatches={searchMatchesByAgentKey?.[item.key]}
           isMobile={isMobile}
           selectedAgentId={selectedAgentId}
           showAttentionIndicator={showAttentionIndicator}
@@ -455,7 +508,7 @@ export function AgentList({
       handleAgentLongPress,
       handleAgentPress,
       isMobile,
-      search,
+      searchMatchesByAgentKey,
       selectedAgentId,
       showAttentionIndicator,
       showHostColumn,
@@ -597,21 +650,16 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     overflow: "hidden",
   },
-  agentTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    flexShrink: 1,
-    minWidth: 0,
-  },
   providerIconWrap: {
-    flexShrink: 0,
+    width: theme.iconSize.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
   workspaceTitleText: {
-    flexShrink: { xs: 1, md: 0 },
-    maxWidth: { xs: "100%", md: 320 },
+    flexShrink: 0,
+    maxWidth: 220,
     fontSize: theme.fontSize.base,
-    color: theme.colors.foreground,
+    color: theme.colors.foregroundMuted,
   },
   rowMetaRow: {
     flexDirection: "row",
@@ -637,7 +685,11 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     fontSize: theme.fontSize.base,
     fontWeight: "400",
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.foreground,
+    opacity: 0.86,
+  },
+  sessionTitleHighlighted: {
+    opacity: 1,
   },
   sessionMetaText: {
     maxWidth: "100%",

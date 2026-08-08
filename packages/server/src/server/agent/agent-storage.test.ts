@@ -109,6 +109,7 @@ function createManagedAgent(overrides: ManagedAgentOverrides = {}): ManagedAgent
     lifecycle: core.lifecycle,
     createdAt: overrides.createdAt ?? core.now,
     updatedAt: overrides.updatedAt ?? core.now,
+    lastMessageAt: overrides.lastMessageAt ?? core.now,
     availableModes: overrides.availableModes ?? [],
     currentModeId: overrides.currentModeId ?? core.config.modeId ?? null,
     pendingPermissions: overrides.pendingPermissions ?? new Map<string, AgentPermissionRequest>(),
@@ -176,6 +177,7 @@ describe("AgentStorage", () => {
     expect(records).toHaveLength(1);
     const [record] = records;
     expect(record.provider).toBe("claude");
+    expect(record.lastMessageAt).toBe("2025-01-01T00:00:00.000Z");
     expect(record.config?.modeId).toBe("coding");
     expect(record.config?.model).toBe("gpt-5.1");
     expect(record.config?.systemPrompt).toBe("Be terse and explicit.");
