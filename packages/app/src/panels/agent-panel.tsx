@@ -879,6 +879,7 @@ function ChatAgentContent({
     isConnected,
     requiresAttention: agentState.requiresAttention,
     attentionReason: agentState.attentionReason,
+    isScreenFocused: isPaneFocused,
   });
   useEffect(() => {
     clearOnAgentBlurRef.current = attentionController.clearOnAgentBlur;
