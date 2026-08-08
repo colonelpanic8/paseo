@@ -26,6 +26,9 @@ function ws(
     currentBranch: input.currentBranch ?? null,
     statusBucket: input.statusBucket ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
+    snoozeWakeAt: input.snoozeWakeAt ?? null,
+    lastUserMessageAt: input.lastUserMessageAt ?? null,
+    activityAt: input.activityAt ?? null,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -33,6 +36,8 @@ function ws(
     archiveUnpushedCommitCount: null,
     scripts: [],
     hasRunningScripts: false,
+    remoteUrl: null,
+    providers: [],
     workspaceKey: input.workspaceKey,
   };
 }
@@ -74,22 +79,22 @@ describe("buildStatusGroups", () => {
     expect(groups.map((g) => g.bucket)).toEqual(["running", "done"]);
   });
 
-  it("sorts by statusEnteredAt desc within a bucket", () => {
+  it("sorts by activityAt desc within a bucket", () => {
     const workspaces = [
       ws({
         workspaceKey: "srv:old",
         statusBucket: "done",
-        statusEnteredAt: d("2026-01-01T00:00:00Z"),
+        activityAt: d("2026-01-01T00:00:00Z"),
       }),
       ws({
         workspaceKey: "srv:new",
         statusBucket: "done",
-        statusEnteredAt: d("2026-06-01T00:00:00Z"),
+        activityAt: d("2026-06-01T00:00:00Z"),
       }),
       ws({
         workspaceKey: "srv:mid",
         statusBucket: "done",
-        statusEnteredAt: d("2026-03-01T00:00:00Z"),
+        activityAt: d("2026-03-01T00:00:00Z"),
       }),
     ];
 
@@ -98,15 +103,63 @@ describe("buildStatusGroups", () => {
     expect(groups[0]?.rows.map((r) => r.workspaceKey)).toEqual(["srv:new", "srv:mid", "srv:old"]);
   });
 
+  it("keeps working rows ordered by their last user message as agent activity advances", () => {
+    const workspaces = [
+      ws({
+        workspaceKey: "srv:first-prompt",
+        statusBucket: "running",
+        lastUserMessageAt: d("2026-06-01T10:00:00Z"),
+        activityAt: d("2026-06-01T10:05:00Z"),
+      }),
+      ws({
+        workspaceKey: "srv:latest-prompt",
+        statusBucket: "running",
+        lastUserMessageAt: d("2026-06-01T10:02:00Z"),
+        activityAt: d("2026-06-01T10:03:00Z"),
+      }),
+    ];
+
+    const groups = buildStatusGroups(workspaces, emptyProjectNames);
+
+    expect(groups[0]?.rows.map((row) => row.workspaceKey)).toEqual([
+      "srv:latest-prompt",
+      "srv:first-prompt",
+    ]);
+  });
+
+  it("keeps non-working rows ordered by activity instead of the last user message", () => {
+    const workspaces = [
+      ws({
+        workspaceKey: "srv:latest-prompt",
+        statusBucket: "done",
+        lastUserMessageAt: d("2026-06-01T10:02:00Z"),
+        activityAt: d("2026-06-01T10:03:00Z"),
+      }),
+      ws({
+        workspaceKey: "srv:latest-activity",
+        statusBucket: "done",
+        lastUserMessageAt: d("2026-06-01T10:00:00Z"),
+        activityAt: d("2026-06-01T10:05:00Z"),
+      }),
+    ];
+
+    const groups = buildStatusGroups(workspaces, emptyProjectNames);
+
+    expect(groups[0]?.rows.map((row) => row.workspaceKey)).toEqual([
+      "srv:latest-activity",
+      "srv:latest-prompt",
+    ]);
+  });
+
   it("sorts null timestamps last within a bucket", () => {
     const workspaces = [
-      ws({ workspaceKey: "srv:null-a", statusBucket: "done", statusEnteredAt: null }),
+      ws({ workspaceKey: "srv:null-a", statusBucket: "done", activityAt: null }),
       ws({
         workspaceKey: "srv:ts",
         statusBucket: "done",
-        statusEnteredAt: d("2026-01-01T00:00:00Z"),
+        activityAt: d("2026-01-01T00:00:00Z"),
       }),
-      ws({ workspaceKey: "srv:null-b", statusBucket: "done", statusEnteredAt: null }),
+      ws({ workspaceKey: "srv:null-b", statusBucket: "done", activityAt: null }),
     ];
 
     const groups = buildStatusGroups(workspaces, emptyProjectNames);
@@ -155,6 +208,56 @@ describe("buildStatusGroups", () => {
     expect(groups).toEqual([]);
   });
 
+  it("renders the snoozed group last, labeled Snoozed", () => {
+    const workspaces = [
+      ws({
+        workspaceKey: "srv:snoozed",
+        statusBucket: "snoozed",
+        snoozeWakeAt: d("2026-01-02T00:00:00Z"),
+      }),
+      ws({ workspaceKey: "srv:done", statusBucket: "done" }),
+      ws({ workspaceKey: "srv:run", statusBucket: "running" }),
+    ];
+
+    const groups = buildStatusGroups(workspaces, emptyProjectNames);
+
+    expect(groups.map((g) => g.bucket)).toEqual(["running", "done", "snoozed"]);
+    expect(groups[2]?.label).toBe("Snoozed");
+  });
+
+  it("sorts the snoozed group by wake time ascending, soonest first", () => {
+    const workspaces = [
+      ws({
+        workspaceKey: "srv:late",
+        statusBucket: "snoozed",
+        statusEnteredAt: d("2026-01-01T03:00:00Z"),
+        snoozeWakeAt: d("2026-01-02T18:00:00Z"),
+      }),
+      ws({
+        workspaceKey: "srv:soon",
+        statusBucket: "snoozed",
+        statusEnteredAt: d("2026-01-01T01:00:00Z"),
+        snoozeWakeAt: d("2026-01-02T09:00:00Z"),
+      }),
+      ws({
+        workspaceKey: "srv:mid",
+        statusBucket: "snoozed",
+        statusEnteredAt: d("2026-01-01T02:00:00Z"),
+        snoozeWakeAt: d("2026-01-02T12:00:00Z"),
+      }),
+      ws({ workspaceKey: "srv:no-wake", statusBucket: "snoozed", snoozeWakeAt: null }),
+    ];
+
+    const groups = buildStatusGroups(workspaces, emptyProjectNames);
+
+    expect(groups[0]?.rows.map((r) => r.workspaceKey)).toEqual([
+      "srv:soon",
+      "srv:mid",
+      "srv:late",
+      "srv:no-wake",
+    ]);
+  });
+
   it("uses hydrated workspace entries with real status, not structural placeholders", () => {
     const workspaces = [
       ws({
@@ -178,6 +281,11 @@ describe("buildStatusGroups", () => {
         statusEnteredAt: d("2026-01-01T00:00:00Z"),
       }),
       ws({ workspaceKey: "srv:dn", statusBucket: "done", statusEnteredAt: null }),
+      ws({
+        workspaceKey: "srv:snz",
+        statusBucket: "snoozed",
+        snoozeWakeAt: d("2026-01-02T00:00:00Z"),
+      }),
     ];
 
     const groups = buildStatusGroups(workspaces, emptyProjectNames);

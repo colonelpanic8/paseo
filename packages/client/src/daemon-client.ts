@@ -32,6 +32,7 @@ import { validateWSOutboundMessage } from "@getpaseo/protocol/validation/ws-outb
 import type {
   AgentStreamEventPayload,
   AgentSnapshotPayload,
+  ArchivedWorkspacePayload,
   ProjectPlacementPayload,
   AgentPermissionResolvedMessage,
   CreateAgentRequestMessage,
@@ -3093,6 +3094,35 @@ export class DaemonClient {
       throw new Error(payload.error ?? "setWorkspacePinned rejected");
     }
     return { pinnedAt: payload.pinnedAt };
+  }
+
+  async setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId?: string,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.snooze.set.request",
+        workspaceId,
+        snoozedUntil,
+      },
+      responseType: "workspace.snooze.set.response",
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "setWorkspaceSnooze rejected");
+    }
+    return { snoozeStatus: payload.snoozeStatus };
+  }
+
+  async listArchivedWorkspaces(requestId?: string): Promise<ArchivedWorkspacePayload[]> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.archived.list.response">({
+        requestId,
+        message: { type: "workspace.archived.list.request" },
+      });
+    return payload.entries;
   }
 
   async inspectWorkspaceRecovery(
