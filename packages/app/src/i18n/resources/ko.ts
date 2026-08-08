@@ -1219,6 +1219,11 @@ export const ko: TranslationResources = {
         hideConfirm: "숨기기",
         cancel: "취소",
       },
+      agentTree: {
+        show: "에이전트 표시",
+        hide: "에이전트 숨기기",
+        swipeAction: "에이전트",
+      },
       rename: {
         title: "워크스페이스 이름 변경",
         submit: "이름 변경",
