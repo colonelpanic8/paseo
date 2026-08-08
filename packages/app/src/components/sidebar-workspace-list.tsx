@@ -67,8 +67,9 @@ import {
 import {
   shouldShowSidebarHostLabels,
   resolveSidebarServerIds,
-  useSidebarProjectStatusBucket,
+  useSidebarProjectStatus,
   type SidebarProjectEntry,
+  type SidebarStateBucket,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
@@ -95,7 +96,6 @@ import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
 import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
 import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
@@ -264,6 +264,7 @@ interface ProjectHeaderRowProps {
   displayName: string;
   iconDataUri: string | null;
   statusBucket: SidebarStateBucket | null;
+  readyToReview?: boolean;
   selected?: boolean;
   chevron: "expand" | "collapse" | null;
   onPress: () => void;
@@ -875,6 +876,7 @@ function ProjectHeaderRow({
   displayName,
   iconDataUri,
   statusBucket,
+  readyToReview = false,
   selected = false,
   chevron,
   onPress,
@@ -970,6 +972,7 @@ function ProjectHeaderRow({
           displayName={displayName}
           iconDataUri={iconDataUri}
           statusBucket={statusBucket}
+          readyToReview={readyToReview}
           projectViewKey={project.viewKey}
           backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
           chevron={chevron}
@@ -1359,9 +1362,11 @@ function WorkspaceRowWithMenu({
   });
   const handleMarkAsRead = useCallback(() => {
     void clearAttention().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.actions.markAsReadError"),
+      );
     });
-  }, [clearAttention, toast]);
+  }, [clearAttention, t, toast]);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
@@ -1664,7 +1669,7 @@ function ProjectBlock({
 
   // Collapsed rows hide their workspace rows, so the project row carries the most urgent
   // status among them; expanded rows leave the signal to the child rows themselves.
-  const aggregateStatusBucket = useSidebarProjectStatusBucket({
+  const aggregateStatus = useSidebarProjectStatus({
     workspaces: project.workspaces,
     enabled: collapsed,
   });
@@ -1852,7 +1857,8 @@ function ProjectBlock({
         project={project}
         displayName={displayName}
         iconDataUri={iconDataUri}
-        statusBucket={aggregateStatusBucket}
+        statusBucket={aggregateStatus?.statusBucket ?? null}
+        readyToReview={aggregateStatus?.readyToReview ?? false}
         selected={false}
         chevron={rowModel.chevron}
         onPress={handleToggleCollapsed}

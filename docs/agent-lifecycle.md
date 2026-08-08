@@ -172,6 +172,12 @@ Workspace status is an aggregate activity signal computed **per `workspaceId`**.
 
 Running provider-native subagents contribute `running` to the workspace owned by their parent agent. Their completed, failed, and canceled states stay in the parent's subagents track.
 
+### Ready to review
+
+The daemon sets finished attention when an agent goes from running to idle. The sidebar treats that flag as an annotation rather than a workspace state: the workspace stays in its normal status group and carries a pulsing blue badge until you act on it. A workspace can be Working and ready to review at the same time. Collapsed project rows carry the badge when any hidden workspace is ready.
+
+Opening or reading the agent does not clear the flag. Sending a prompt clears it automatically. **Mark as read** clears it explicitly from the workspace header menu or the sidebar row menu.
+
 ## The subagents track
 
 The track is a pill at the foot of an agent's pane (`packages/app/src/subagents/track.tsx`): a count you can read at a glance, and a panel behind it — a popover on wide screens, a sheet on compact ones — holding the rows. It floats over the transcript rather than sitting in a band above the composer, so the timeline scrolls underneath it; `packages/app/src/panels/agent-tracks.tsx` owns that placement, and the pill frame is shared with the task list in `packages/app/src/composer/tracks.tsx`.

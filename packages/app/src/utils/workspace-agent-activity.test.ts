@@ -103,6 +103,7 @@ describe("workspace agent activity index", () => {
             enteredAt: new Date("2026-06-01T10:01:00.000Z"),
             lastUserMessageAt: null,
             providers: ["codex"],
+            readyToReview: false,
           },
         ],
         [
@@ -113,6 +114,7 @@ describe("workspace agent activity index", () => {
             enteredAt: new Date("2026-06-01T10:02:00.000Z"),
             lastUserMessageAt: null,
             providers: ["codex"],
+            readyToReview: true,
           },
         ],
       ]),
@@ -191,6 +193,7 @@ describe("workspace agent activity index", () => {
       enteredAt: new Date("2026-06-01T10:00:00.000Z"),
       lastUserMessageAt: null,
       providers: ["codex"],
+      readyToReview: false,
     });
   });
 
@@ -228,6 +231,7 @@ describe("workspace agent activity index", () => {
             enteredAt: new Date("2026-06-01T10:00:00.000Z"),
             lastUserMessageAt: null,
             providers: ["codex"],
+            readyToReview: false,
           },
         ],
         [
@@ -238,6 +242,7 @@ describe("workspace agent activity index", () => {
             enteredAt: new Date("2026-06-01T10:03:00.000Z"),
             lastUserMessageAt: null,
             providers: ["codex"],
+            readyToReview: false,
           },
         ],
       ]),
@@ -316,6 +321,42 @@ describe("workspace agent activity index", () => {
       enteredAt: new Date("2026-06-01T10:05:00.000Z"),
       lastUserMessageAt: null,
       providers: ["codex"],
+      readyToReview: false,
+    });
+  });
+
+  it("keeps finished attention alongside newer running activity", () => {
+    const index = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "finished",
+          agent({
+            id: "finished",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            requiresAttention: true,
+            attentionReason: "finished",
+          }),
+        ],
+        [
+          "running",
+          agent({
+            id: "running",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:01:00.000Z",
+          }),
+        ],
+      ]),
+    );
+
+    expect(index.get("workspace-a")).toEqual({
+      agentId: "running",
+      status: "running",
+      enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+      lastUserMessageAt: null,
+      providers: ["codex"],
+      readyToReview: true,
     });
   });
 

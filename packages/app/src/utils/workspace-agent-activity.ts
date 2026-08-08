@@ -15,6 +15,20 @@ export interface WorkspaceAgentActivity {
    * of the agent that won the recency contest for `agentId`.
    */
   providers: readonly string[];
+  readyToReview: boolean;
+}
+
+function collectReadyToReviewWorkspaceIds(agents: ReadonlyMap<string, Agent>): Set<string> {
+  const workspaceIds = new Set<string>();
+  for (const agent of agents.values()) {
+    const parentAgent = agent.parentAgentId ? agents.get(agent.parentAgentId) : undefined;
+    const isRoot = isWorkspaceRootAgent(agent, parentAgent);
+    const isReady = agent.requiresAttention === true && agent.attentionReason === "finished";
+    if (!agent.archivedAt && agent.workspaceId && isRoot && isReady) {
+      workspaceIds.add(agent.workspaceId);
+    }
+  }
+  return workspaceIds;
 }
 
 export function buildWorkspaceAgentActivityIndex(
@@ -27,6 +41,7 @@ export function buildWorkspaceAgentActivityIndex(
   // Providers are collected for every live root agent, not just the recency
   // winner, so the row can show one icon per provider working in the workspace.
   const providerActivityByWorkspaceId = new Map<string, Map<string, number>>();
+  const readyToReviewWorkspaceIds = collectReadyToReviewWorkspaceIds(agents);
 
   for (const agent of agents.values()) {
     const parentAgent = agent.parentAgentId ? agents.get(agent.parentAgentId) : undefined;
@@ -67,6 +82,7 @@ export function buildWorkspaceAgentActivityIndex(
       enteredAt,
       lastUserMessageAt: null,
       providers: EMPTY_WORKSPACE_PROVIDERS,
+      readyToReview: readyToReviewWorkspaceIds.has(agent.workspaceId),
     });
   }
 
@@ -120,7 +136,8 @@ function areWorkspaceAgentActivitiesEqual(
     left.agentId === right.agentId &&
     left.status === right.status &&
     left.lastUserMessageAt?.getTime() === right.lastUserMessageAt?.getTime() &&
-    left.providers === right.providers
+    left.providers === right.providers &&
+    left.readyToReview === right.readyToReview
   );
 }
 

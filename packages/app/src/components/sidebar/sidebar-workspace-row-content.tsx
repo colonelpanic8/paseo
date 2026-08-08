@@ -29,6 +29,7 @@ import { StatusRing } from "@/components/status-ring";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
+import { ReadyToReviewBadge } from "@/components/sidebar/ready-to-review-badge";
 
 // The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
 // SCRIM_SOLID_OFFSET rightward, which keeps the kebab itself off the gradient entirely.
@@ -148,17 +149,29 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             displayName={leadingProjectName}
             projectViewKey={workspace.projectViewKey}
             statusBucket={workspace.statusBucket}
+            readyToReview={workspace.readyToReview}
             backdrop={backdrop}
             loading={isLoading}
             testID={`sidebar-row-project-icon-${workspace.workspaceKey}`}
           />
         ) : (
-          <WorkspaceStatusIndicator
-            bucket={workspace.statusBucket}
-            workspaceKind={workspace.workspaceKind}
-            loading={isLoading}
-            reserveIdleSpace={reserveIdleStatusIndicatorSpace}
-          />
+          <View style={styles.workspaceStatusWithReviewIndicator}>
+            {workspace.readyToReview && workspace.statusBucket === "done" && !isLoading ? (
+              <ReadyToReviewBadge />
+            ) : (
+              <WorkspaceStatusIndicator
+                bucket={workspace.statusBucket}
+                workspaceKind={workspace.workspaceKind}
+                loading={isLoading}
+                reserveIdleSpace={reserveIdleStatusIndicatorSpace}
+              />
+            )}
+            {workspace.readyToReview && workspace.statusBucket !== "done" && !isLoading ? (
+              <View style={styles.readyToReviewBadge}>
+                <ReadyToReviewBadge />
+              </View>
+            ) : null}
+          </View>
         )}
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
@@ -229,16 +242,11 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "attention") {
-    return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-attention">
-        <View style={styles.standaloneStatusDot} />
-      </View>
-    );
-  }
-
-  // Snoozed rows carry no status indicator, same as done.
   if (bucket === "done" || bucket === "snoozed") {
+    // An idle row still gets a dot rather than an empty slot. Nested rows are marked as
+    // workspaces by indentation alone, and with nothing in the leading slot the rail has no
+    // edge to read against — a workspace carrying its own glyph starts looking like a project
+    // header. The dot is muted to half opacity so it holds the rail without reporting status.
     return reserveIdleSpace ? (
       <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`} />
     ) : null;
@@ -270,8 +278,6 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
       return styles.statusDotFailed;
     case "running":
       return styles.statusDotRunning;
-    case "attention":
-      return styles.statusDotAttention;
     case "done":
     case "snoozed":
       return null;
@@ -483,6 +489,19 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  workspaceStatusWithReviewIndicator: {
+    position: "relative",
+    width: theme.iconSize.md,
+    height: 20,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readyToReviewBadge: {
+    position: "absolute",
+    right: -3,
+    bottom: -2,
+  },
   statusDotOverlay: {
     position: "absolute",
     right: 0,
@@ -532,10 +551,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusDotRunning: {
     backgroundColor: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
-    borderColor: theme.colors.surface0,
-  },
-  statusDotAttention: {
-    backgroundColor: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
     borderColor: theme.colors.surface0,
   },
 }));

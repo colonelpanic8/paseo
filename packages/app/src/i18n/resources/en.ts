@@ -1186,6 +1186,8 @@ export const en = {
         showMore: "Show more",
         showLess: "Show less",
         createWorkspaceFor: "Create a new workspace for {{projectName}}",
+        markAsRead: "Mark as read",
+        markAsReadError: "Couldn't mark the workspace as read.",
         copyPath: "Copy path",
         copyBranchName: "Copy branch name",
         rename: "Rename workspace",

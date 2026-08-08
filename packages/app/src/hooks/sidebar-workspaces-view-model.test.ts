@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
-import { buildWorkspaceAgentActivityIndex } from "@/utils/workspace-agent-activity";
+import {
+  buildWorkspaceAgentActivityIndex,
+  type WorkspaceAgentActivity,
+} from "@/utils/workspace-agent-activity";
 import {
   appendMissingOrderKeys,
   applyStoredOrdering,
@@ -10,6 +13,7 @@ import {
   buildSidebarProjectsFromStructure,
   computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
+  deriveProjectStatus,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
   resolveSidebarServerIds,
@@ -88,6 +92,18 @@ describe("createSidebarWorkspaceEntry workspace directory label", () => {
     const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
 
     expect(entry.workspaceDirectoryLabel).toBe("~/external/feature");
+  });
+});
+
+describe("createSidebarWorkspaceEntry ready to review", () => {
+  it("keeps attention in Done and exposes it as an annotation", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.status = "attention";
+
+    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
+
+    expect(entry.statusBucket).toBe("done");
+    expect(entry.readyToReview).toBe(true);
   });
 });
 
@@ -498,10 +514,7 @@ describe("snoozed workspace status", () => {
     statusEnteredAt?: Date | null;
     activityAt?: Date | null;
     snoozeStatus?: WorkspaceDescriptor["snoozeStatus"];
-    activity?: Map<
-      string,
-      { agentId: string; status: WorkspaceDescriptor["status"]; enteredAt: Date | null }
-    >;
+    activity?: Map<string, WorkspaceAgentActivity>;
     nowMs?: number;
   }) {
     return createSidebarWorkspaceEntry({
@@ -536,6 +549,7 @@ describe("snoozed workspace status", () => {
       });
       expect(entry.statusBucket).toBe("snoozed");
       expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+      expect(entry.readyToReview).toBe(false);
     }
   });
 
@@ -547,6 +561,7 @@ describe("snoozed workspace status", () => {
       });
       expect(entry.statusBucket).toBe("snoozed");
       expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+      expect(entry.readyToReview).toBe(false);
     }
   });
 
@@ -557,7 +572,8 @@ describe("snoozed workspace status", () => {
         statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
         activityAt: new Date("2026-06-01T09:30:00.000Z"),
       });
-      expect(entry.statusBucket).toBe(status);
+      expect(entry.statusBucket).toBe(status === "attention" ? "done" : status);
+      expect(entry.readyToReview).toBe(status === "attention");
       expect(entry.snoozeWakeAt).toBeNull();
     }
   });
@@ -575,6 +591,7 @@ describe("snoozed workspace status", () => {
       });
       expect(entry.statusBucket).toBe("snoozed");
       expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+      expect(entry.readyToReview).toBe(false);
     }
   });
 
@@ -597,11 +614,15 @@ describe("snoozed workspace status", () => {
             agentId: "agent-1",
             status: "attention" as const,
             enteredAt: new Date("2026-06-01T09:45:00.000Z"),
+            lastUserMessageAt: null,
+            providers: [],
+            readyToReview: true,
           },
         ],
       ]),
     });
-    expect(entry.statusBucket).toBe("attention");
+    expect(entry.statusBucket).toBe("done");
+    expect(entry.readyToReview).toBe(true);
     expect(entry.snoozeWakeAt).toBeNull();
   });
 
@@ -614,11 +635,15 @@ describe("snoozed workspace status", () => {
             agentId: "agent-1",
             status: "attention" as const,
             enteredAt: new Date("2026-06-01T08:45:00.000Z"),
+            lastUserMessageAt: null,
+            providers: [],
+            readyToReview: true,
           },
         ],
       ]),
     });
     expect(entry.statusBucket).toBe("snoozed");
+    expect(entry.readyToReview).toBe(false);
   });
 
   it("falls back to the underlying status once the snooze expires", () => {
@@ -994,7 +1019,7 @@ describe("deriveProjectStatusBucket", () => {
     ).toBe("failed");
   });
 
-  it("keeps a project on attention when only one workspace awaits review", () => {
+  it("keeps a project in done when only one workspace awaits review", () => {
     expect(
       deriveProjectStatusBucket({
         workspaces: [
@@ -1007,7 +1032,26 @@ describe("deriveProjectStatusBucket", () => {
           }),
         },
       }),
-    ).toBe("attention");
+    ).toBe("done");
+  });
+
+  it("carries ready to review independently from a running project status", () => {
+    expect(
+      deriveProjectStatus({
+        workspaces: [
+          workspacePlacement({ workspaceId: "ws-1" }),
+          workspacePlacement({ workspaceId: "ws-2" }),
+        ],
+        sessions: {
+          srv: sessionWith({
+            workspaces: [
+              projectWorkspace("ws-1", "running"),
+              projectWorkspace("ws-2", "attention"),
+            ],
+          }),
+        },
+      }),
+    ).toEqual({ statusBucket: "running", readyToReview: true });
   });
 
   it("aggregates across the hosts a project spans", () => {

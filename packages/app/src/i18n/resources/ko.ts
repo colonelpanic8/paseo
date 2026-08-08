@@ -1184,6 +1184,8 @@ export const ko: TranslationResources = {
         showMore: "더 보기",
         showLess: "간략히 보기",
         createWorkspaceFor: "{{projectName}}을(를) 위한 새 워크스페이스 생성",
+        markAsRead: "읽음으로 표시",
+        markAsReadError: "워크스페이스를 읽음으로 표시하지 못했습니다.",
         copyPath: "경로 복사",
         copyBranchName: "브랜치 이름 복사",
         rename: "워크스페이스 이름 변경",

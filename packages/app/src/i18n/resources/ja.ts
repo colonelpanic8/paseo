@@ -1189,6 +1189,8 @@ export const ja: TranslationResources = {
         showMore: "さらに表示",
         showLess: "表示を減らす",
         createWorkspaceFor: "{{projectName}}の新しいワークスペースを作成",
+        markAsRead: "既読にする",
+        markAsReadError: "ワークスペースを既読にできませんでした。",
         copyPath: "パスをコピー",
         copyBranchName: "ブランチ名をコピー",
         rename: "ワークスペースの名前を変更",

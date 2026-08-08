@@ -31,6 +31,7 @@ function makeWorkspace(id: string): SidebarWorkspaceEntry {
     hasRunningScripts: false,
     remoteUrl: null,
     providers: [],
+    readyToReview: false,
   };
 }
 

@@ -10,7 +10,6 @@ export const ARCHIVED_GROUP_KEY = "archived";
 export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
   "needs_input",
   "failed",
-  "attention",
   "running",
   "done",
   "snoozed",
@@ -19,7 +18,6 @@ export const STATUS_BUCKET_ORDER: readonly StatusBucket[] = [
 export const STATUS_BUCKET_LABELS: Record<StatusBucket, string> = {
   needs_input: "Needs input",
   failed: "Failed",
-  attention: "Ready to review",
   running: "Working",
   done: "Done",
   snoozed: "Snoozed",
