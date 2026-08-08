@@ -1174,6 +1174,8 @@ export const ar: TranslationResources = {
         showMore: "عرض المزيد",
         showLess: "عرض أقل",
         createWorkspaceFor: "قم بإنشاء مساحة عمل جديدة لـ{{projectName}}",
+        markAsRead: "تحديد كمقروء",
+        markAsReadError: "تعذّر تحديد مساحة العمل كمقروءة.",
         copyPath: "نسخ المسار",
         copyBranchName: "انسخ اسم الفرع",
         rename: "إعادة تسمية مساحة العمل",

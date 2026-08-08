@@ -1189,6 +1189,8 @@ export const ru: TranslationResources = {
         showMore: "Показать ещё",
         showLess: "Показать меньше",
         createWorkspaceFor: "Создать новое рабочее пространство для {{projectName}}",
+        markAsRead: "Отметить как прочитанное",
+        markAsReadError: "Не удалось отметить рабочее пространство как прочитанное.",
         copyPath: "Копировать путь",
         copyBranchName: "Скопировать имя ветки",
         rename: "Переименовать рабочее пространство",

@@ -46,7 +46,12 @@ function resolveWorktreeSuffix(
 export function resolveSidebarWorkspaceAccessibilityLabel(input: {
   workspace: Pick<
     SidebarWorkspaceEntry,
-    "name" | "currentBranch" | "workspaceDirectory" | "workspaceKind" | "statusBucket"
+    | "name"
+    | "currentBranch"
+    | "workspaceDirectory"
+    | "workspaceKind"
+    | "statusBucket"
+    | "readyToReview"
   >;
   workspaceTitleSource: WorkspaceTitleSource;
   leadingProjectName?: string | null;
@@ -63,6 +68,7 @@ export function resolveSidebarWorkspaceAccessibilityLabel(input: {
     input.workspace.statusBucket === "done"
       ? null
       : STATUS_BUCKET_LABELS[input.workspace.statusBucket],
+    input.workspace.readyToReview ? "Ready to review" : null,
   ]
     .filter((label): label is string => Boolean(label))
     .join(", ");
