@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import { Keyboard, Platform, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
@@ -26,6 +26,7 @@ import {
   resolveDraftWorkingDirectory,
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
+  waitForDraftComposerMountsToSettle,
 } from "@/composer/draft/workspace-tab-core";
 import { DRAFT_CAPABILITIES } from "@/composer/draft/timeline";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
@@ -458,10 +459,14 @@ export function WorkspaceDraftComposer({
           selectModelMessage: t("workspaceSetup.errors.selectModel"),
         });
       },
-      onCreateSuccess: ({ result }) => {
+      onCreateSuccess: async ({ result }) => {
         clearDraftInput("sent");
         clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
         useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
+        if (Platform.OS === "android") {
+          // Let Fabric apply the composer's final native updates before replacing its tab.
+          await waitForDraftComposerMountsToSettle();
+        }
         onCreated(result);
       },
     });
