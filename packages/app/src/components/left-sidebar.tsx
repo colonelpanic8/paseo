@@ -783,6 +783,7 @@ function DesktopSidebar({
   const resizeGesture = useMemo(
     () =>
       Gesture.Pan()
+        .enabled(active)
         .hitSlop({ left: 8, right: 8, top: 0, bottom: 0 })
         // Horizontal intent only, so a finger dragging down the touch grip scrolls
         // the workspace list instead of resizing. Anchoring the start width to the
@@ -804,7 +805,7 @@ function DesktopSidebar({
         .onEnd(() => {
           runOnJS(setSidebarWidth)(resizeWidth.value);
         }),
-    [resizeWidth, setSidebarWidth, viewportWidth, visibleSidebarWidth],
+    [active, resizeWidth, setSidebarWidth, viewportWidth, visibleSidebarWidth],
   );
 
   const resizeAnimatedStyle = useAnimatedStyle(() => ({
