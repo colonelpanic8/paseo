@@ -1318,6 +1318,11 @@ export const ru: TranslationResources = {
         hideConfirm: "Скрыть",
         cancel: "Отмена",
       },
+      agentTree: {
+        show: "Показать агентов",
+        hide: "Скрыть агентов",
+        swipeAction: "Агенты",
+      },
       rename: {
         title: "Переименовать рабочее пространство",
         submit: "Переименовать",
