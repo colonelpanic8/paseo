@@ -187,7 +187,6 @@ import type { PushNotifications } from "./push/index.js";
 import {
   archivePersistedWorkspaceRecord,
   archiveWorkspaceContents,
-  requireActiveWorkspaceForArchive,
   unarchiveWorkspaceContents,
 } from "./workspace-archive-service.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
