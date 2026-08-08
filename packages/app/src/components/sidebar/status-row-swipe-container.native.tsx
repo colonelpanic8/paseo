@@ -1,29 +1,48 @@
-import { useCallback, useEffect, useRef } from "react";
-import { Pressable, StyleSheet as RNStyleSheet, Text } from "react-native";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import {
+  Pressable,
+  StyleSheet as RNStyleSheet,
+  Text,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Archive } from "lucide-react-native";
+import { Archive, ListTree } from "lucide-react-native";
 import { BORDER_RADIUS, type Theme } from "@/styles/theme";
 import type { StatusRowSwipeContainerProps } from "./status-row-swipe-container.types";
 
 export type { StatusRowSwipeContainerProps };
 
-const ARCHIVE_ACTION_WIDTH = 92;
-const ARCHIVE_ICON_SIZE = 18;
-// Past this much drag the row snaps open instead of springing back.
-const ARCHIVE_OPEN_THRESHOLD = ARCHIVE_ACTION_WIDTH / 2;
+const ACTION_WIDTH = 92;
+const ACTION_ICON_SIZE = 18;
+// Past this much drag the row snaps open instead of springing back. Deliberately
+// half of ONE action rather than half the underlay: a row that also offers
+// Agents reveals 184pt, and scaling the threshold with the underlay would make
+// the everyday archive swipe twice as long a drag for no reason.
+const SWIPE_OPEN_THRESHOLD = ACTION_WIDTH / 2;
 
 const destructiveForegroundMapping = (theme: Theme) => ({
   color: theme.colors.destructiveForeground,
 });
+const secondaryForegroundMapping = (theme: Theme) => ({
+  color: theme.colors.secondaryForeground,
+});
 
 const ThemedArchive = withUnistyles(Archive);
+const ThemedListTree = withUnistyles(ListTree);
 
 /**
- * Native rows swipe left to reveal Archive. The action calls the row's existing
- * archive handler, so the dirty-worktree confirm still runs after the swipe.
+ * Native rows swipe left to reveal Archive, preceded by Agents when the
+ * workspace has a tree to open. Archive stays at the trailing edge — the
+ * destructive action keeps the position muscle memory already knows, and the
+ * neutral one is what the widened underlay adds on the near side.
+ *
+ * Both actions call the row's existing handlers, so the dirty-worktree confirm
+ * still runs after an archive swipe.
  *
  * Gesture composition: the swipeable's pan declares `blocksExternalGesture` on
  * the compact sidebar's drawer-close pan, so a horizontal drag that starts on a
@@ -37,6 +56,8 @@ export function StatusRowSwipeContainer({
   archiveLabel,
   onArchive,
   isArchiving,
+  agentsLabel,
+  onToggleAgents,
   parentGestureRef,
   children,
 }: StatusRowSwipeContainerProps) {
@@ -55,9 +76,37 @@ export function StatusRowSwipeContainer({
     onArchive?.();
   }, [onArchive]);
 
+  const handleAgentsPress = useCallback(() => {
+    swipeableRef.current?.close();
+    onToggleAgents?.();
+  }, [onToggleAgents]);
+
   const renderRightActions = useCallback(
-    () => <StatusRowArchiveAction label={archiveLabel} onPress={handleArchivePress} />,
-    [archiveLabel, handleArchivePress],
+    () => (
+      <>
+        {onToggleAgents ? (
+          <StatusRowSwipeAction
+            label={agentsLabel}
+            onPress={handleAgentsPress}
+            style={styles.agentsAction}
+            labelStyle={styles.agentsActionLabel}
+            testID="sidebar-status-row-swipe-agents"
+          >
+            <ThemedListTree size={ACTION_ICON_SIZE} uniProps={secondaryForegroundMapping} />
+          </StatusRowSwipeAction>
+        ) : null}
+        <StatusRowSwipeAction
+          label={archiveLabel}
+          onPress={handleArchivePress}
+          style={styles.archiveAction}
+          labelStyle={styles.archiveActionLabel}
+          testID="sidebar-status-row-swipe-archive"
+        >
+          <ThemedArchive size={ACTION_ICON_SIZE} uniProps={destructiveForegroundMapping} />
+        </StatusRowSwipeAction>
+      </>
+    ),
+    [agentsLabel, archiveLabel, handleAgentsPress, handleArchivePress, onToggleAgents],
   );
 
   if (!onArchive) {
@@ -69,7 +118,7 @@ export function StatusRowSwipeContainer({
       ref={swipeableRef}
       enabled={!isArchiving}
       friction={2}
-      rightThreshold={ARCHIVE_OPEN_THRESHOLD}
+      rightThreshold={SWIPE_OPEN_THRESHOLD}
       overshootRight={false}
       containerStyle={reanimatedNodeStyles.container}
       renderRightActions={renderRightActions}
@@ -81,17 +130,32 @@ export function StatusRowSwipeContainer({
   );
 }
 
-function StatusRowArchiveAction({ label, onPress }: { label: string; onPress: () => void }) {
+function StatusRowSwipeAction({
+  label,
+  onPress,
+  style,
+  labelStyle,
+  testID,
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  style: StyleProp<ViewStyle>;
+  labelStyle: StyleProp<TextStyle>;
+  testID: string;
+  /** The action's icon. */
+  children: ReactNode;
+}) {
   return (
     <Pressable
-      style={styles.action}
+      style={style}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      testID="sidebar-status-row-swipe-archive"
+      testID={testID}
     >
-      <ThemedArchive size={ARCHIVE_ICON_SIZE} uniProps={destructiveForegroundMapping} />
-      <Text style={styles.actionLabel} numberOfLines={1}>
+      {children}
+      <Text style={labelStyle} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -109,17 +173,24 @@ const reanimatedNodeStyles = RNStyleSheet.create({
   },
 });
 
-const styles = StyleSheet.create((theme) => ({
-  action: {
-    width: ARCHIVE_ACTION_WIDTH,
+const styles = StyleSheet.create((theme) => {
+  const action = {
+    width: ACTION_WIDTH,
     alignItems: "center",
     justifyContent: "center",
     gap: theme.spacing[1],
-    backgroundColor: theme.colors.destructive,
-  },
-  actionLabel: {
-    color: theme.colors.destructiveForeground,
+  } as const;
+  const actionLabel = {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-  },
-}));
+  } as const;
+
+  return {
+    archiveAction: { ...action, backgroundColor: theme.colors.destructive },
+    archiveActionLabel: { ...actionLabel, color: theme.colors.destructiveForeground },
+    // Neutral, not destructive: opening a tree is reversible and shares the row
+    // with an action that genuinely is destructive, so red is reserved for that.
+    agentsAction: { ...action, backgroundColor: theme.colors.secondary },
+    agentsActionLabel: { ...actionLabel, color: theme.colors.secondaryForeground },
+  };
+});
