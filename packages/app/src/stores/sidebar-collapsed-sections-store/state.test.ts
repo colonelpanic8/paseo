@@ -5,6 +5,7 @@ import {
   mergePersistedCollapsedProjects,
   serializeCollapsedProjects,
   setProjectCollapsed,
+  toggleAgentTreeExpanded,
   togglePinnedCollapsed,
   toggleProjectCollapsed,
   toggleWorkspaceGroupCollapsed,
@@ -15,6 +16,7 @@ function emptyState(): CollapsedProjectsState {
     collapsedProjectKeys: new Set(),
     collapsedWorkspaceGroupKeys: new Set(),
     collapsedPinned: false,
+    expandedAgentTreeWorkspaceKeys: new Set(),
   };
 }
 
@@ -36,12 +38,14 @@ describe("sidebar collapsed projects transitions", () => {
       collapsedProjectKeys: new Set(["project-a", "project-b"]),
       collapsedWorkspaceGroupKeys: new Set(["running"]),
       collapsedPinned: true,
+      expandedAgentTreeWorkspaceKeys: new Set(["srv:ws-a"]),
     };
 
     expect(serializeCollapsedProjects(state)).toEqual({
       collapsedProjectKeys: ["project-a", "project-b"],
       collapsedWorkspaceGroupKeys: ["running"],
       collapsedPinned: true,
+      expandedAgentTreeWorkspaceKeys: ["srv:ws-a"],
     });
   });
 
@@ -71,6 +75,39 @@ describe("sidebar collapsed projects transitions", () => {
     expect(mergePersistedCollapsedProjects({ collapsedProjectKeys: [] }, currentState)).toBe(
       currentState,
     );
+  });
+});
+
+describe("workspace agent tree expansion", () => {
+  it("defaults to collapsed and toggles a workspace key on and off", () => {
+    let state = emptyState();
+    expect(state.expandedAgentTreeWorkspaceKeys.has("srv:ws-a")).toBe(false);
+
+    state = toggleAgentTreeExpanded(state, "srv:ws-a");
+    expect(state.expandedAgentTreeWorkspaceKeys.has("srv:ws-a")).toBe(true);
+
+    state = toggleAgentTreeExpanded(state, "srv:ws-b");
+    state = toggleAgentTreeExpanded(state, "srv:ws-a");
+    expect(Array.from(state.expandedAgentTreeWorkspaceKeys)).toEqual(["srv:ws-b"]);
+  });
+
+  it("round-trips expanded workspace keys through serialize and merge", () => {
+    const expanded = toggleAgentTreeExpanded(emptyState(), "srv:ws-a");
+    const restored = mergePersistedCollapsedProjects(
+      serializeCollapsedProjects(expanded),
+      emptyState(),
+    );
+
+    expect(Array.from(restored.expandedAgentTreeWorkspaceKeys)).toEqual(["srv:ws-a"]);
+  });
+
+  it("drops non-string persisted workspace keys", () => {
+    const restored = mergePersistedCollapsedProjects(
+      { expandedAgentTreeWorkspaceKeys: ["srv:ws-a", 7] },
+      emptyState(),
+    );
+
+    expect(Array.from(restored.expandedAgentTreeWorkspaceKeys)).toEqual(["srv:ws-a"]);
   });
 });
 
