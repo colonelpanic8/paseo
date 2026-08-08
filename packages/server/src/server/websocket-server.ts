@@ -33,6 +33,7 @@ import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
+import { WorkspaceStatusHistory } from "./workspace-status-history.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import type { HubExecutionAgents } from "./hub/daemon-executions.js";
@@ -510,6 +511,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
+  // Shared across sessions so statusEnteredAt survives client reconnects.
+  private readonly workspaceStatusHistory = new WorkspaceStatusHistory();
   private readonly chatService: FileBackedChatService;
   private readonly loopService: LoopService;
   private readonly scheduleService: ScheduleService;
@@ -1308,6 +1311,7 @@ export class VoiceAssistantWebSocketServer {
     return new Session({
       clientId: options.clientId,
       appVersion: options.appVersion,
+      workspaceStatusHistory: this.workspaceStatusHistory,
       clientCapabilities: options.clientCapabilities,
       scopes: options.scopes,
       onMessage: options.onMessage,
@@ -1559,6 +1563,8 @@ export class VoiceAssistantWebSocketServer {
         worktreeRestore: true,
         // COMPAT(workspaceRecovery): added in v0.1.105, remove after 2027-01-11 once daemon floor >= v0.1.105.
         workspaceRecovery: true,
+        // COMPAT(archivedWorkspacesList): added in v0.2.0, remove gate after 2027-01-28.
+        archivedWorkspacesList: true,
         // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
         workspaceFileEditing: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
@@ -1579,6 +1585,8 @@ export class VoiceAssistantWebSocketServer {
         providerSubagents: true,
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: true,
+        // COMPAT(workspaceSnooze): added in v0.2.4, drop the gate when floor >= v0.2.4.
+        workspaceSnooze: true,
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: true,
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
