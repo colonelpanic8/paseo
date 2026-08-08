@@ -13,6 +13,7 @@ import {
   Circle,
   CircleCheck,
   Copy,
+  ListTree,
   Moon,
   MoreVertical,
   Pencil,
@@ -46,6 +47,7 @@ import {
   workspaceServiceLabelKey,
   type WorkspaceServiceSummary,
 } from "@/components/sidebar/workspace-meta-row";
+import type { SidebarWorkspaceRowDisclosure } from "@/components/sidebar/sidebar-workspace-row-content";
 import type { SidebarWorkspaceSnoozeActions } from "@/workspace-snooze/use-workspace-snooze-menu";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -63,6 +65,7 @@ const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
 const ThemedMoon = withUnistyles(Moon);
 const ThemedSun = withUnistyles(Sun);
+const ThemedListTree = withUnistyles(ListTree);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
@@ -75,6 +78,7 @@ const pinLeadingIcon = <ThemedPin size={14} uniProps={foregroundMutedColorMappin
 const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={foregroundMutedColorMapping} />;
 const snoozeLeadingIcon = <ThemedMoon size={14} uniProps={foregroundMutedColorMapping} />;
 const wakeLeadingIcon = <ThemedSun size={14} uniProps={foregroundMutedColorMapping} />;
+const agentTreeLeadingIcon = <ThemedListTree size={14} uniProps={foregroundMutedColorMapping} />;
 
 function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
@@ -102,6 +106,12 @@ export interface SidebarWorkspaceMenuProps {
   // Present only when the host supports workspaceSnooze; the capability gate
   // lives in the caller (like pin's onTogglePin).
   snooze?: SidebarWorkspaceSnoozeActions;
+  /**
+   * Expand/collapse the row's agent tree. Omitted when the workspace has no
+   * agents. This is the only way to reach the tree on native project rows,
+   * where nothing is hover-revealed.
+   */
+  agentTree?: SidebarWorkspaceRowDisclosure;
   openInFileManagerPath?: string | null;
   /**
    * Lifted so the row that reveals the kebab can keep it mounted while its menu is up. See
@@ -149,6 +159,7 @@ function SidebarWorkspaceMenuItems({
   isPinned,
   onTogglePin,
   snooze,
+  agentTree,
   openInFileManagerPath,
 }: SidebarWorkspaceMenuItemsProps & { surface: MenuSurface }): ReactNode {
   const { t } = useTranslation();
@@ -219,6 +230,18 @@ function SidebarWorkspaceMenuItems({
           {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
         </WorkspaceMenuItem>
       ) : null}
+      {agentTree ? (
+        <WorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-agent-tree-${workspaceKey}`}
+          leading={agentTreeLeadingIcon}
+          onSelect={agentTree.onToggle}
+        >
+          {agentTree.expanded
+            ? t("sidebar.workspace.agentTree.hide")
+            : t("sidebar.workspace.agentTree.show")}
+        </WorkspaceMenuItem>
+      ) : null}
       {snooze ? (
         <SidebarWorkspaceSnoozeItems
           surface={surface}
@@ -263,6 +286,7 @@ export function SidebarWorkspaceMenu({
   isPinned,
   onTogglePin,
   snooze,
+  agentTree,
   openInFileManagerPath,
   open,
   onOpenChange,
@@ -296,6 +320,7 @@ export function SidebarWorkspaceMenu({
           isPinned={isPinned}
           onTogglePin={onTogglePin}
           snooze={snooze}
+          agentTree={agentTree}
           openInFileManagerPath={openInFileManagerPath}
         />
       </DropdownMenuContent>
@@ -407,6 +432,7 @@ export function SidebarWorkspaceContextMenu({
   isPinned,
   onTogglePin,
   snooze,
+  agentTree,
   openInFileManagerPath,
   accessibilityLabel,
   highlightStyle,
@@ -475,6 +501,7 @@ export function SidebarWorkspaceContextMenu({
           isPinned={isPinned}
           onTogglePin={onTogglePin}
           snooze={snooze}
+          agentTree={agentTree}
           openInFileManagerPath={openInFileManagerPath}
         />
       </ContextMenuContent>

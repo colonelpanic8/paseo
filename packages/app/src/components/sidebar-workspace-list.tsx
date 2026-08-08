@@ -116,6 +116,9 @@ import {
   SidebarWorkspaceTrailingActionBase,
   SidebarWorkspaceTrailingActionOverlay,
   SidebarWorkspaceTrailingActionSlot,
+  SidebarWorkspaceAgentTreeToggle,
+  SidebarWorkspaceAgentTreeToggleSlot,
+  type SidebarWorkspaceRowDisclosure,
 } from "@/components/sidebar/sidebar-workspace-row-content";
 import { useOpenKebabMenuVisibility } from "@/components/sidebar/use-open-kebab-menu-visibility";
 import { selectWorkspaceServiceSummary } from "@/components/sidebar/workspace-meta-row";
@@ -123,6 +126,10 @@ import {
   SidebarWorkspaceTrailingContent,
   useSidebarWorkspaceTrailing,
 } from "@/components/sidebar/workspace-trailing";
+import {
+  useWorkspaceHasAgents,
+  WorkspaceAgentTree,
+} from "@/components/sidebar/sidebar-workspace-agent-tree";
 import { Button } from "@/components/ui/button";
 import { PressHighlight } from "@/components/ui/press-highlight";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -641,6 +648,7 @@ function WorkspaceRowRightGroup({
   onRename,
   isPinned,
   onTogglePin,
+  agentTree,
 }: {
   workspace: SidebarWorkspaceEntry;
   backdrop: SidebarSurfaceBackdrop;
@@ -660,6 +668,7 @@ function WorkspaceRowRightGroup({
   onRename?: () => void;
   isPinned?: boolean;
   onTogglePin?: () => void;
+  agentTree: SidebarWorkspaceRowDisclosure | null;
 }) {
   const workspacePath = workspace.workspaceDirectory ?? workspace.projectRootPath;
   const { t } = useTranslation();
@@ -717,11 +726,23 @@ function WorkspaceRowRightGroup({
                 isPinned={isPinned}
                 onTogglePin={onTogglePin}
                 snooze={snooze}
+                agentTree={agentTree ?? undefined}
                 openInFileManagerPath={workspacePath}
               />
             ) : null}
           </SidebarWorkspaceTrailingActionOverlay>
         </SidebarWorkspaceTrailingActionSlot>
+      ) : null}
+      {agentTree ? (
+        <SidebarWorkspaceAgentTreeToggleSlot>
+          {platformIsWeb && (isHovered || agentTree.expanded) ? (
+            <SidebarWorkspaceAgentTreeToggle
+              expanded={agentTree.expanded}
+              onToggle={agentTree.onToggle}
+              testID={`sidebar-workspace-agent-tree-toggle-${workspace.workspaceKey}`}
+            />
+          ) : null}
+        </SidebarWorkspaceAgentTreeToggleSlot>
       ) : null}
     </>
   );
@@ -1105,6 +1126,24 @@ function WorkspaceRowInner({
   const [isPressed, setIsPressed] = useState(false);
   const isTouchPlatform = platformIsNative;
   const archiveCollapse = useArchiveCollapse(isArchiving);
+  const workspaceKey = workspace.workspaceKey;
+  const agentTreeExpanded = useSidebarCollapsedSectionsStore((state) =>
+    state.expandedAgentTreeWorkspaceKeys.has(workspaceKey),
+  );
+  const toggleAgentTreeExpanded = useSidebarCollapsedSectionsStore(
+    (state) => state.toggleAgentTreeExpanded,
+  );
+  const hasAgents = useWorkspaceHasAgents({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+  });
+  const handleToggleAgentTree = useCallback(() => {
+    toggleAgentTreeExpanded(workspaceKey);
+  }, [toggleAgentTreeExpanded, workspaceKey]);
+  const disclosure = useMemo(
+    () => (hasAgents ? { expanded: agentTreeExpanded, onToggle: handleToggleAgentTree } : null),
+    [agentTreeExpanded, handleToggleAgentTree, hasAgents],
+  );
   const interaction = useLongPressDragInteraction({
     drag,
     menuController,
@@ -1220,6 +1259,7 @@ function WorkspaceRowInner({
                     onRename={onRename}
                     isPinned={isPinned}
                     onTogglePin={onTogglePin}
+                    agentTree={disclosure}
                   />
                 </SidebarWorkspaceRowContent>
               </SidebarWorkspaceContextMenu>
@@ -1227,6 +1267,9 @@ function WorkspaceRowInner({
           );
         }}
       </SidebarWorkspaceRowFrame>
+      {disclosure?.expanded ? (
+        <WorkspaceAgentTree serverId={workspace.serverId} workspaceId={workspace.workspaceId} />
+      ) : null}
     </Animated.View>
   );
 }
