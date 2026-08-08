@@ -41,6 +41,7 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
     snoozeWakeAt: null,
     remoteUrl: null,
     providers: [],
+    readyToReview: false,
   };
 }
 

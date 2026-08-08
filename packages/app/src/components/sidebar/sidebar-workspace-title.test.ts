@@ -99,6 +99,7 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
         workspaceDirectory: "/tmp/search",
         workspaceKind: "checkout" as const,
         statusBucket: "done",
+        readyToReview: false,
       },
       workspaceTitleSource: "title",
       hostBadgeLabel: "Build host",
@@ -116,6 +117,7 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
         workspaceDirectory: "/tmp/search",
         workspaceKind: "checkout" as const,
         statusBucket: "running",
+        readyToReview: false,
       },
       workspaceTitleSource: "branch",
       leadingProjectName: "Search project",
@@ -138,6 +140,7 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
         workspaceDirectory: "/tmp/search",
         workspaceKind: "checkout" as const,
         statusBucket: "done",
+        readyToReview: false,
       },
       workspaceTitleSource: "title",
       leadingProjectName: "Search project",
@@ -146,5 +149,22 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
     });
 
     expect(label).toBe("Search project, Investigate search, Build host");
+  });
+
+  it("announces ready to review independently from the workspace status", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
+        statusBucket: "running",
+        readyToReview: true,
+      },
+      workspaceTitleSource: "title",
+      t: i18n.t,
+    });
+
+    expect(label).toBe("Investigate search, Working, Ready to review");
   });
 });

@@ -82,11 +82,8 @@ const needsInputGroupIconProps = densityIconProps("sm", (theme) => ({
 }));
 const failedGroupIconProps = densityIconProps("sm", (theme) => ({
   color: getStatusDotColor({ theme, bucket: "failed" }) ?? undefined,
-}));
-const attentionGroupIconProps = densityIconProps("sm", (theme) => ({
-  color: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
-}));
-const runningGroupIconProps = densityIconProps("sm", (theme) => ({
+});
+const runningColorMapping = (theme: Theme) => ({
   color: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
 });
 // Snoozed is not a status-dot bucket -- it is a sidebar state, not an agent one -- so it
@@ -459,9 +456,7 @@ function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
     case "needs_input":
       return <ThemedCircleAlert uniProps={needsInputGroupIconProps} />;
     case "failed":
-      return <ThemedCircleX uniProps={failedGroupIconProps} />;
-    case "attention":
-      return <ThemedCircleCheck uniProps={attentionGroupIconProps} />;
+      return <ThemedCircleX size={14} uniProps={failedColorMapping} />;
     case "running":
       return <ThemedCircleDot uniProps={runningGroupIconProps} />;
     case "done":
@@ -634,9 +629,11 @@ function StatusWorkspaceRowWithMenu({
   });
   const handleMarkAsRead = useCallback(() => {
     void clearAttention().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.actions.markAsReadError"),
+      );
     });
-  }, [clearAttention, toast]);
+  }, [clearAttention, t, toast]);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,

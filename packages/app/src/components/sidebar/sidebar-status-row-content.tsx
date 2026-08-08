@@ -16,13 +16,13 @@ import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sideba
 import { useAppSettings } from "@/hooks/use-settings";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { Theme } from "@/styles/theme";
-import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
 import { formatClockTime, formatCompactTimeAgo } from "@/utils/time";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isNative, isWeb } from "@/constants/platform";
 import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
+import { ReadyToReviewBadge } from "@/components/sidebar/ready-to-review-badge";
 
 const PROJECT_ICON_SIZE = 40;
 const STATUS_DOT_SIZE = 12;
@@ -350,6 +350,11 @@ function StatusRowLeadingVisual({
         </View>
       ) : null}
       {dotColorStyle ? <View style={[styles.statusDotOverlay, dotColorStyle]} /> : null}
+      {workspace.readyToReview ? (
+        <View style={styles.readyToReviewBadge}>
+          <ReadyToReviewBadge />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -404,7 +409,7 @@ export function SidebarStatusRowArchiveAction({
 }
 
 // Same buckets and colors as the project-mode status dot; "done" carries no dot.
-function getStatusDotColorStyle(bucket: SidebarStateBucket) {
+function getStatusDotColorStyle(bucket: SidebarWorkspaceEntry["statusBucket"]) {
   switch (bucket) {
     case "needs_input":
       return styles.statusDotNeedsInput;
@@ -412,9 +417,8 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
       return styles.statusDotFailed;
     case "running":
       return null;
-    case "attention":
-      return styles.statusDotAttention;
     case "done":
+    case "snoozed":
       return null;
   }
 }
@@ -459,14 +463,16 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.surfaceSidebar,
   },
+  readyToReviewBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+  },
   statusDotNeedsInput: {
     backgroundColor: theme.colors.palette.amber[500],
   },
   statusDotFailed: {
     backgroundColor: theme.colors.palette.red[500],
-  },
-  statusDotAttention: {
-    backgroundColor: theme.colors.palette.green[500],
   },
   headerColumn: {
     flex: 1,

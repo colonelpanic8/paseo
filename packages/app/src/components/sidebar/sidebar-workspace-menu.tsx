@@ -196,7 +196,7 @@ function SidebarWorkspaceMenuItems({
           leading={markAsReadLeadingIcon}
           onSelect={onMarkAsRead}
         >
-          Mark as read
+          {t("sidebar.workspace.actions.markAsRead")}
         </WorkspaceMenuItem>
       ) : null}
       {onMarkAsUnread ? (
