@@ -61,6 +61,7 @@ function replaceToolCallStatus(message: WebSocketMessage, status: string): strin
 }
 
 async function gateSecondToolCall(page: Page, agentId: string) {
+  const heldFirstRunningMessages: WebSocketMessage[] = [];
   let firstCallId: string | null = null;
   let secondCallId: string | null = null;
   let secondRunningMessage: WebSocketMessage | null = null;
@@ -101,16 +102,26 @@ async function gateSecondToolCall(page: Page, agentId: string) {
         firstCallId = toolCall.callId;
       }
       if (toolCall.callId === firstCallId) {
+        // Held rather than dropped. The app applies agent_stream events only in
+        // unbroken seq order: skip one and it discards everything after it and
+        // waits on a catch-up that this route has usually already paused, so
+        // the group never mounts at all. Releasing the held frames immediately
+        // ahead of the terminal one keeps the sequence intact and still lands
+        // the group on screen already idle — which the daemon's coalescing
+        // window only does on its own when the machine is fast enough.
         if (toolCall.status === "running" || toolCall.status === "executing") {
+          heldFirstRunningMessages.push(message);
           return;
         }
+        for (const held of heldFirstRunningMessages) {
+          ws.send(held);
+        }
+        heldFirstRunningMessages.length = 0;
+        ws.send(message);
         if (toolCall.status === "completed") {
-          // The mock tool completes inside the daemon's coalescing window, so the
-          // browser naturally receives its authoritative completed state first.
-          ws.send(message);
           resolveFirstCompleted();
-          return;
         }
+        return;
       }
 
       secondCallId ??= toolCall.callId;

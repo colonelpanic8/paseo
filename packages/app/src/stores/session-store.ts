@@ -158,8 +158,10 @@ export interface WorkspaceDescriptor {
   name: string;
   title?: string | null;
   pinnedAt?: string | null;
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
   status: WorkspaceDescriptorPayload["status"];
   statusEnteredAt: Date | null;
+  activityAt: Date | null;
   archivingAt: string | null;
   diffStat: { additions: number; deletions: number } | null;
   scripts: WorkspaceDescriptorPayload["scripts"];
@@ -176,6 +178,11 @@ export function normalizeWorkspaceDescriptor(
   const statusEnteredAt: Date | null =
     typeof statusEnteredAtRaw === "string" && statusEnteredAtRaw.length > 0
       ? new Date(statusEnteredAtRaw)
+      : null;
+  const activityAtCandidate = payload.activityAt ? new Date(payload.activityAt) : null;
+  const activityAt =
+    activityAtCandidate && !Number.isNaN(activityAtCandidate.getTime())
+      ? activityAtCandidate
       : null;
   return {
     id: normalizeWorkspaceOpaqueId(payload.id) ?? payload.id,
@@ -194,8 +201,10 @@ export function normalizeWorkspaceDescriptor(
     name: payload.name,
     title: payload.title ?? null,
     pinnedAt: payload.pinnedAt ?? null,
+    snoozeStatus: payload.snoozeStatus ?? null,
     status: payload.status,
     statusEnteredAt,
+    activityAt,
     archivingAt: payload.archivingAt ?? null,
     diffStat: payload.diffStat ?? null,
     scripts: (payload.scripts ?? []).map((s) => Object.assign({}, s)),

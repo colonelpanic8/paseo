@@ -21,6 +21,7 @@ import { Archive, ChevronRight } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
+import { useMinuteNow } from "@/hooks/use-minute-tick";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -220,7 +221,9 @@ function SessionRow({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const timeAgo = formatTimeAgo(agent.lastActivityAt);
+  // Idle agents get no prop churn, so tick to keep "Xm ago" from freezing.
+  const now = useMinuteNow();
+  const timeAgo = formatTimeAgo(agent.lastActivityAt, now);
   const agentKey = `${agent.serverId}:${agent.id}`;
   const isSelected = selectedAgentId === agentKey;
   const projectName = agent.projectPlacement?.projectName ?? "";
