@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import {
+  Keyboard,
+  Platform,
+  ScrollView,
+  StyleSheet as RNStyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
@@ -31,6 +38,7 @@ import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/works
 import {
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
+  waitForDraftComposerMountsToSettle,
 } from "@/composer/draft/workspace-tab-core";
 import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
@@ -525,10 +533,14 @@ export function WorkspaceDraftAgentTab({
         hostDisconnectedMessage: t("workspace.terminal.hostDisconnected"),
         selectModelMessage: t("workspaceSetup.errors.selectModel"),
       }),
-    onCreateSuccess: ({ result }) => {
+    onCreateSuccess: async ({ result }) => {
       clearDraftInput("sent");
       clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
       useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
+      if (Platform.OS === "android") {
+        // Let Fabric apply the composer's final native updates before replacing its tab.
+        await waitForDraftComposerMountsToSettle();
+      }
       onCreated(result);
     },
   });

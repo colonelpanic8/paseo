@@ -12,6 +12,13 @@ export function shouldAllowEmptyDraftText(input: {
   return input.allowsEmptyAutoSubmit || input.attachments.length > 0;
 }
 
+export async function waitForDraftComposerMountsToSettle(
+  requestFrame: (callback: () => void) => void = (callback) => requestAnimationFrame(callback),
+): Promise<void> {
+  await new Promise<void>((resolve) => requestFrame(resolve));
+  await new Promise<void>((resolve) => requestFrame(resolve));
+}
+
 export function validateDraftSubmission(input: {
   text: string;
   allowsEmptyAutoSubmit: boolean;
