@@ -47,6 +47,7 @@ function workspace(input: {
     scripts: [],
     hasRunningScripts: false,
     snoozeWakeAt: null,
+    readyToReview: false,
   };
 }
 

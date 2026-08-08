@@ -21,7 +21,7 @@ const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
 // "snoozed" is a client-side-only bucket: it never appears on the wire
 // (WorkspaceStateBucket in the protocol is unchanged) and is derived from the
 // workspace's snoozeStatus metadata plus the clock.
-export type SidebarStateBucket = WorkspaceDescriptor["status"] | "snoozed";
+export type SidebarStateBucket = Exclude<WorkspaceDescriptor["status"], "attention"> | "snoozed";
 
 export interface SidebarWorkspacePlacement {
   workspaceKey: string;
@@ -41,6 +41,7 @@ export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlaceme
   statusEnteredAt: Date | null;
   lastUserMessageAt: Date | null;
   activityAt: Date | null;
+  readyToReview: boolean;
 }
 
 export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
@@ -163,6 +164,13 @@ interface EffectiveWorkspaceStatus {
   status: SidebarStateBucket;
   enteredAt: Date | null;
   snoozeWakeAt: Date | null;
+  readyToReview: boolean;
+}
+
+function toSidebarStatusBucket(
+  status: WorkspaceDescriptor["status"] | "snoozed",
+): SidebarStateBucket {
+  return status === "attention" ? "done" : status;
 }
 
 function projectNameForWorkspace(workspace: WorkspaceDescriptor): string {
@@ -220,6 +228,7 @@ export function createSidebarWorkspaceEntry(input: {
     snoozeWakeAt: effectiveStatus.snoozeWakeAt,
     lastUserMessageAt: agentActivity?.lastUserMessageAt ?? null,
     activityAt: input.workspace.activityAt,
+    readyToReview: effectiveStatus.readyToReview,
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
     prHint: selectPrHintFromStatus(
@@ -264,7 +273,7 @@ function deriveEffectiveWorkspaceStatus(input: {
   // activityAt comes from persisted message timestamps, which restarts leave
   // alone, so it distinguishes real activity from a restamped anchor.
   const isAttentionish =
-    base.status === "needs_input" || base.status === "failed" || base.status === "attention";
+    base.status === "needs_input" || base.status === "failed" || base.readyToReview;
   const activityAtMs = input.workspace.activityAt?.getTime() ?? null;
   const breaksThrough =
     isAttentionish &&
@@ -280,6 +289,7 @@ function deriveEffectiveWorkspaceStatus(input: {
     status: "snoozed",
     enteredAt: Number.isFinite(snoozedAtMs) ? new Date(snoozedAtMs) : null,
     snoozeWakeAt: new Date(snoozedUntilMs),
+    readyToReview: false,
   };
 }
 
@@ -288,9 +298,16 @@ function deriveBaseWorkspaceStatus(input: {
   workspace: WorkspaceDescriptor;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
-}): { status: WorkspaceDescriptor["status"]; enteredAt: Date | null } {
+}): { status: SidebarStateBucket; enteredAt: Date | null; readyToReview: boolean } {
+  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
+  const readyToReview =
+    input.workspace.status === "attention" || rootAgentActivity?.readyToReview === true;
   if (input.workspace.status !== "done") {
-    return { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt };
+    return {
+      status: toSidebarStatusBucket(input.workspace.status),
+      enteredAt: input.workspace.statusEnteredAt,
+      readyToReview,
+    };
   }
 
   const pendingStartedAt = getPendingInitialAgentCreateStartedAt({
@@ -299,15 +316,22 @@ function deriveBaseWorkspaceStatus(input: {
     pendingCreateAttempts: input.pendingCreateAttempts,
   });
   if (pendingStartedAt) {
-    return { status: "running", enteredAt: pendingStartedAt };
+    return { status: "running", enteredAt: pendingStartedAt, readyToReview };
   }
 
-  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
   if (rootAgentActivity && rootAgentActivity.status !== "done") {
-    return { status: rootAgentActivity.status, enteredAt: rootAgentActivity.enteredAt };
+    return {
+      status: toSidebarStatusBucket(rootAgentActivity.status),
+      enteredAt: rootAgentActivity.enteredAt,
+      readyToReview,
+    };
   }
 
-  return { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt };
+  return {
+    status: "done",
+    enteredAt: input.workspace.statusEnteredAt,
+    readyToReview,
+  };
 }
 
 function getPendingInitialAgentCreateStartedAt(input: {
@@ -333,6 +357,11 @@ export interface ProjectStatusSession {
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
 }
 
+export interface SidebarProjectStatus {
+  statusBucket: SidebarStateBucket;
+  readyToReview: boolean;
+}
+
 /**
  * Most urgent status among a project's workspaces. Backs the status dot on a collapsed
  * project row, which otherwise hides every workspace-level signal it contains.
@@ -342,11 +371,11 @@ export interface ProjectStatusSession {
  * activity-index + effective-status pipeline as per-workspace rows (one pass over the
  * session's agents per server, not per workspace) rather than re-deriving it.
  */
-export function deriveProjectStatusBucket(input: {
+export function deriveProjectStatus(input: {
   workspaces: readonly SidebarWorkspacePlacement[];
   sessions: Record<string, ProjectStatusSession | undefined>;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
-}): SidebarStateBucket {
+}): SidebarProjectStatus {
   const workspaceIdsByServer = new Map<string, string[]>();
   for (const placement of input.workspaces) {
     const existing = workspaceIdsByServer.get(placement.serverId);
@@ -358,6 +387,7 @@ export function deriveProjectStatusBucket(input: {
   }
 
   const buckets: SidebarStateBucket[] = [];
+  let readyToReview = false;
   for (const [serverId, workspaceIds] of workspaceIdsByServer) {
     const session = input.sessions[serverId];
     if (!session) continue;
@@ -368,19 +398,28 @@ export function deriveProjectStatusBucket(input: {
       });
       const workspace = workspaceKey ? session.workspaces.get(workspaceKey) : undefined;
       if (!workspace) continue;
-      buckets.push(
-        deriveEffectiveWorkspaceStatus({
-          serverId,
-          workspace,
-          pendingCreateAttempts: input.pendingCreateAttempts,
-          workspaceAgentActivity: session.workspaceAgentActivity,
-          nowMs: Date.now(),
-        }).status,
-      );
+      const status = deriveEffectiveWorkspaceStatus({
+        serverId,
+        workspace,
+        pendingCreateAttempts: input.pendingCreateAttempts,
+        workspaceAgentActivity: session.workspaceAgentActivity,
+        nowMs: Date.now(),
+      });
+      buckets.push(status.status);
+      readyToReview ||= status.readyToReview;
     }
   }
 
-  return aggregateSidebarStateBuckets(buckets);
+  return {
+    statusBucket: toSidebarStatusBucket(aggregateSidebarStateBuckets(buckets)),
+    readyToReview,
+  };
+}
+
+export function deriveProjectStatusBucket(
+  input: Parameters<typeof deriveProjectStatus>[0],
+): SidebarStateBucket {
+  return deriveProjectStatus(input).statusBucket;
 }
 
 export function buildSidebarWorkspacePlacementModel(input: {
