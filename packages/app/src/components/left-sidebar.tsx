@@ -742,7 +742,7 @@ function DesktopSidebar({
   const resizeGesture = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(divisionLayout === null)
+        .enabled(active && divisionLayout === null)
         .hitSlop({ left: 8, right: 8, top: 0, bottom: 0 })
         .onBegin(() => {
           scheduleOnRN(showResizeGrip);
@@ -771,6 +771,7 @@ function DesktopSidebar({
           scheduleOnRN(hideResizeGrip);
         }),
     [
+      active,
       divisionLayout,
       hideResizeGrip,
       resizeWidth,
