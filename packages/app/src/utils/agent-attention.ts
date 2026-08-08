@@ -5,7 +5,8 @@ interface ShouldClearAgentAttentionInput {
   isConnected: boolean;
   requiresAttention: boolean | null | undefined;
   attentionReason?: "finished" | "error" | "permission" | null | undefined;
-  trigger: AgentAttentionClearTrigger;
+  trigger?: AgentAttentionClearTrigger;
+  hasDeferredFocusEntryClear?: boolean;
 }
 
 export type AgentAttentionClearTrigger =
@@ -73,5 +74,8 @@ export function shouldClearAgentAttention(input: ShouldClearAgentAttentionInput)
   if (input.attentionReason === "permission") {
     return false;
   }
-  return input.trigger === "prompt-send";
+  if (input.trigger === "focus-entry" && input.hasDeferredFocusEntryClear === true) {
+    return false;
+  }
+  return true;
 }
