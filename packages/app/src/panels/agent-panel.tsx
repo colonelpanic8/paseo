@@ -96,6 +96,7 @@ import { SubagentsTrack } from "@/subagents/track";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem } from "@/types/stream";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
+import { resolveAgentScreenFocus } from "@/utils/agent-attention";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
@@ -850,6 +851,13 @@ function ChatAgentContent({
 
   const hasHydratedHistoryBefore =
     hasAppliedAuthoritativeHistory || replicaTimelineStatus === "painted";
+  const isCompact = useIsCompactFormFactor();
+  const mobilePanelTarget = usePanelStore((state) => state.mobilePanel.target);
+  const isAgentScreenFocused = resolveAgentScreenFocus({
+    isCompact,
+    isPaneFocused,
+    mobilePanelTarget,
+  });
 
   const attentionController = useAgentAttentionClear({
     agentId,
@@ -857,7 +865,7 @@ function ChatAgentContent({
     isConnected,
     requiresAttention: agentState.requiresAttention,
     attentionReason: agentState.attentionReason,
-    isScreenFocused: isPaneFocused,
+    isScreenFocused: isAgentScreenFocused,
   });
   useEffect(() => {
     clearOnAgentBlurRef.current = attentionController.clearOnAgentBlur;
