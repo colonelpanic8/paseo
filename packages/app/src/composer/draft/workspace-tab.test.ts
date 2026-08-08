@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 
-import { shouldAllowEmptyDraftText, validateDraftSubmission } from "./workspace-tab-core";
+import {
+  shouldAllowEmptyDraftText,
+  validateDraftSubmission,
+  waitForDraftComposerMountsToSettle,
+} from "./workspace-tab-core";
 
 const baseComposerState = {
   providerDefinitions: [{ id: "codewhale" }],
@@ -67,5 +71,22 @@ describe("workspace draft empty text readiness", () => {
         attachments: [],
       }),
     ).toBe(false);
+  });
+});
+
+describe("workspace draft creation handoff", () => {
+  test("waits for two rendered frames before replacing the draft composer", async () => {
+    const pendingFrames: Array<() => void> = [];
+    const settled = waitForDraftComposerMountsToSettle((callback) => {
+      pendingFrames.push(callback);
+    });
+
+    expect(pendingFrames).toHaveLength(1);
+    pendingFrames.shift()?.();
+    await Promise.resolve();
+    expect(pendingFrames).toHaveLength(1);
+
+    pendingFrames.shift()?.();
+    await expect(settled).resolves.toBeUndefined();
   });
 });
