@@ -19,6 +19,21 @@ export async function waitForDraftComposerMountsToSettle(
   await new Promise<void>((resolve) => requestFrame(resolve));
 }
 
+export async function completeWorkspaceDraftCreation<T>(input: {
+  platform: string;
+  result: T;
+  clearDraftState: () => void;
+  onCreated: (result: T) => void;
+  requestFrame?: (callback: () => void) => void;
+}): Promise<void> {
+  input.clearDraftState();
+  if (input.platform === "android") {
+    // Let Fabric apply the composer's final native updates before replacing its tab.
+    await waitForDraftComposerMountsToSettle(input.requestFrame);
+  }
+  input.onCreated(input.result);
+}
+
 export function validateDraftSubmission(input: {
   text: string;
   allowsEmptyAutoSubmit: boolean;
