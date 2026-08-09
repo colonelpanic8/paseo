@@ -23,10 +23,10 @@ import { useAgentControlCommandCenterActions } from "@/command-center/agent-cont
 import { encodeImages } from "@/utils/encode-images";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 import {
+  completeWorkspaceDraftCreation,
   resolveDraftWorkingDirectory,
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
-  waitForDraftComposerMountsToSettle,
 } from "@/composer/draft/workspace-tab-core";
 import { DRAFT_CAPABILITIES } from "@/composer/draft/timeline";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
@@ -460,14 +460,16 @@ export function WorkspaceDraftComposer({
         });
       },
       onCreateSuccess: async ({ result }) => {
-        clearDraftInput("sent");
-        clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
-        useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
-        if (Platform.OS === "android") {
-          // Let Fabric apply the composer's final native updates before replacing its tab.
-          await waitForDraftComposerMountsToSettle();
-        }
-        onCreated(result);
+        await completeWorkspaceDraftCreation({
+          platform: Platform.OS,
+          result,
+          clearDraftState: () => {
+            clearDraftInput("sent");
+            clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
+            useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
+          },
+          onCreated,
+        });
       },
     });
   useAgentControlCommandCenterActions({
