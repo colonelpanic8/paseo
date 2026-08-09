@@ -163,6 +163,9 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
   workspaces: [
     "new-agent",
     "new-workspace",
+    "toggle-workspace-isolation",
+    "select-starting-ref",
+    "select-host",
     "workspace-jump-index",
     "workspace-prev",
     "workspace-next",
@@ -196,6 +199,11 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
   "agent-input": [
     "focus-message-input",
     "cycle-agent-mode",
+    "select-model",
+    "select-thinking",
+    "select-agent-mode",
+    "toggle-fast-mode",
+    "toggle-plan-mode",
     "voice-toggle",
     "dictation-toggle",
     "agent-interrupt",
@@ -355,9 +363,8 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     when: { commandCenter: false, terminal: false },
     help: {
       id: "toggle-workspace-isolation",
-      section: "projects",
+      section: "workspaces",
       label: "Toggle workspace isolation",
-      keys: ["alt", "I"],
     },
   },
   {
@@ -367,9 +374,8 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     when: { commandCenter: false, terminal: false },
     help: {
       id: "select-starting-ref",
-      section: "projects",
+      section: "workspaces",
       label: "Select starting ref",
-      keys: ["alt", "B"],
     },
   },
   {
@@ -379,9 +385,8 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     when: { commandCenter: false, terminal: false },
     help: {
       id: "select-host",
-      section: "projects",
+      section: "workspaces",
       label: "Select host",
-      keys: ["alt", "H"],
     },
   },
 
@@ -395,7 +400,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-model",
       section: "agent-input",
       label: "Select model",
-      keys: ["alt", "M"],
     },
   },
   {
@@ -407,7 +411,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-thinking",
       section: "agent-input",
       label: "Select thinking effort",
-      keys: ["alt", "E"],
     },
   },
   {
@@ -419,7 +422,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-agent-mode",
       section: "agent-input",
       label: "Select agent mode",
-      keys: ["alt", "A"],
     },
   },
   {
@@ -432,7 +434,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "toggle-fast-mode",
       section: "agent-input",
       label: "Toggle fast mode",
-      keys: ["alt", "F"],
     },
   },
   {
@@ -445,7 +446,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "toggle-plan-mode",
       section: "agent-input",
       label: "Toggle plan mode",
-      keys: ["alt", "P"],
     },
   },
 
@@ -1782,7 +1782,7 @@ export function getWorkspaceIndexJumpModifierKey(
 
 export function isShortcutModifierDown(
   event: Pick<KeyboardShortcutInput, "altKey" | "ctrlKey" | "metaKey">,
-  modifierKey: "Alt" | "Meta" | "Control",
+  modifierKey: "Alt" | "Meta" | "Control" | null,
 ): boolean {
   switch (modifierKey) {
     case "Alt":
@@ -1791,6 +1791,8 @@ export function isShortcutModifierDown(
       return event.metaKey;
     case "Control":
       return event.ctrlKey;
+    case null:
+      return false;
   }
 }
 
