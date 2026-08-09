@@ -1340,4 +1340,8 @@ describe("isShortcutModifierDown", () => {
     expect(isShortcutModifierDown(shiftRelease, "Meta")).toBe(false);
     expect(isShortcutModifierDown(shiftRelease, "Control")).toBe(false);
   });
+
+  it("does not restore badges when the workspace jump shortcut has no modifier", () => {
+    expect(isShortcutModifierDown(keyboardInput({ altKey: true }), null)).toBe(false);
+  });
 });
