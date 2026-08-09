@@ -11,7 +11,7 @@ export interface CommandShortcutSettingsRow {
   bindingId: string;
   group: CommandShortcutSettingsGroup;
   label: string;
-  combo: string | undefined;
+  combo: string | null | undefined;
   available: boolean;
 }
 
@@ -46,7 +46,7 @@ function shortcutTargetId(shortcutId: string, group: CommandShortcutSettingsGrou
 // contributions is unmounted, so the live set is always empty there.
 export function buildCommandShortcutSettingsRows(
   catalog: readonly CommandCenterContribution[],
-  overrides: Readonly<Record<string, string>>,
+  overrides: Readonly<Record<string, string | null>>,
 ): CommandShortcutSettingsRow[] {
   const contributionsByShortcutId = new Map<string, CommandCenterContribution[]>();
   for (const contribution of catalog) {
