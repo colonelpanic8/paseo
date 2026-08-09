@@ -36,9 +36,9 @@ import { encodeImages } from "@/utils/encode-images";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 import {
+  completeWorkspaceDraftCreation,
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
-  waitForDraftComposerMountsToSettle,
 } from "@/composer/draft/workspace-tab-core";
 import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
@@ -534,14 +534,16 @@ export function WorkspaceDraftAgentTab({
         selectModelMessage: t("workspaceSetup.errors.selectModel"),
       }),
     onCreateSuccess: async ({ result }) => {
-      clearDraftInput("sent");
-      clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
-      useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
-      if (Platform.OS === "android") {
-        // Let Fabric apply the composer's final native updates before replacing its tab.
-        await waitForDraftComposerMountsToSettle();
-      }
-      onCreated(result);
+      await completeWorkspaceDraftCreation({
+        platform: Platform.OS,
+        result,
+        clearDraftState: () => {
+          clearDraftInput("sent");
+          clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
+          useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
+        },
+        onCreated,
+      });
     },
   });
   const turnPresentation = useMemo(
