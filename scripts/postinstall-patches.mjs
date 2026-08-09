@@ -54,20 +54,6 @@ if (patchFilesByCwd.size === 0) {
   process.exit(0);
 }
 
-// patch-package is a devDependency, so it is legitimately absent from production installs
-// (`--omit=dev`, or an ambient `NODE_ENV=production`, which npm silently turns into `--omit=dev`).
-// Skipping is correct there; failing is not, because the hard exit takes the whole install down.
-function devDependenciesOmitted() {
-  const toList = (value) => (value ?? "").split(/[\s,]+/).filter(Boolean);
-  if (toList(process.env.npm_config_omit).includes("dev")) {
-    return true;
-  }
-  // npm does not export the NODE_ENV-derived omit as npm_config_omit, so derive it the same way.
-  return (
-    process.env.NODE_ENV === "production" && !toList(process.env.npm_config_include).includes("dev")
-  );
-}
-
 // Resolve the real entrypoint instead of spawning `patch-package` off PATH: npm only puts
 // node_modules/.bin on PATH for its own lifecycle scripts, and the .cmd/.ps1 shims make the
 // bare-name spawn platform-dependent.
@@ -87,16 +73,11 @@ function resolvePatchPackageEntry() {
 const patchPackageEntry = resolvePatchPackageEntry();
 
 if (patchPackageEntry === undefined) {
-  if (devDependenciesOmitted()) {
-    console.warn(
-      "postinstall-patches: skipping patches, dev dependencies were omitted from this install.",
-    );
-    process.exit(0);
-  }
   console.error(
-    "postinstall-patches: patch-package is not installed, so dependency patches were not applied.\n" +
-      "  Reinstall with dev dependencies (`npm ci --include=dev`). Note that npm treats an ambient\n" +
-      "  NODE_ENV=production as --omit=dev, which drops patch-package from the install.",
+    "postinstall-patches: installed dependencies require patches, but patch-package is not installed.\n" +
+      "  Refusing to continue with unpatched dependencies. Reinstall with dev dependencies\n" +
+      "  (`npm ci --include=dev`). Note that npm treats an ambient NODE_ENV=production as\n" +
+      "  --omit=dev, which drops patch-package from the install.",
   );
   process.exit(1);
 }
