@@ -187,7 +187,7 @@ import type { PushNotifications } from "./push/index.js";
 import {
   archivePersistedWorkspaceRecord,
   archiveWorkspaceContents,
-  unarchiveWorkspaceContents,
+  unarchiveWorkspaceContentsAndActivate,
 } from "./workspace-archive-service.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import { renameCurrentBranch as renameCurrentBranchDefault } from "../utils/checkout-git.js";
@@ -870,18 +870,17 @@ export class Session {
       unarchiveWorkspace: async (workspace) => {
         // Bring back the agents this workspace's archive gesture took down.
         // Agents archived individually beforehand carry no stamp and stay put.
-        await unarchiveWorkspaceContents(
+        await unarchiveWorkspaceContentsAndActivate(
           {
             agentManager: this.agentManager,
             agentStorage: this.agentStorage,
             sessionLogger: this.sessionLogger,
           },
           workspace.workspaceId,
+          async () => {
+            await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
+          },
         );
-        // Keep the workspace archived until every stamped agent has restored
-        // successfully. A failed provider hook must leave the recovery action
-        // available so the user can retry the remaining agents.
-        await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
       },
     });
     this.checkoutSession = new CheckoutSession({
