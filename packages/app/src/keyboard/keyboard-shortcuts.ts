@@ -42,6 +42,7 @@ export interface KeyboardShortcutHelpRow {
   label: string;
   labelKey: string;
   keys: ShortcutKey[];
+  chord?: ShortcutKey[][] | null;
   note?: string;
   noteKey?: string;
 }
@@ -1246,8 +1247,15 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
 // --- Parse bindings at module load ---
 
+/** The stored value meaning the user deliberately unassigned a shortcut. */
+export const UNASSIGNED_COMBO = null;
+
+export function parseBindingChord(combo: string): KeyCombo[] {
+  return combo === "" ? [] : parseChordString(combo);
+}
+
 function parseBinding(binding: ShortcutBinding): ParsedShortcutBinding {
-  const parsedChord = parseChordString(binding.combo);
+  const parsedChord = parseBindingChord(binding.combo);
   const lastCombo = parsedChord.at(-1);
   if (binding.repeat === false && lastCombo) {
     lastCombo.repeat = false;
@@ -1272,7 +1280,7 @@ export function getCommandShortcutIdFromBindingId(bindingId: string): string | n
 
 function buildCommandShortcutBindingsUnchecked(
   shortcutIds: readonly string[],
-  overrides: Readonly<Record<string, string>>,
+  overrides: ShortcutOverrides,
 ): ParsedShortcutBinding[] {
   const bindings: ParsedShortcutBinding[] = [];
   for (const shortcutId of new Set(shortcutIds)) {
@@ -1302,7 +1310,7 @@ function buildCommandShortcutBindingsUnchecked(
 
 export function buildCommandShortcutBindings(
   shortcutIds: readonly string[],
-  overrides: Readonly<Record<string, string>>,
+  overrides: ShortcutOverrides,
   reservedBindings: readonly ParsedShortcutBinding[] = [],
   platform?: KeyboardShortcutPlatformContext,
 ): ParsedShortcutBinding[] {
@@ -1342,7 +1350,7 @@ function shortcutChordsConflict(left: readonly KeyCombo[], right: readonly KeyCo
 export function findKeyboardShortcutConflict(
   bindingId: string,
   combo: string,
-  overrides: Readonly<Record<string, string>>,
+  overrides: ShortcutOverrides,
   commandShortcutIds: readonly string[],
   platform: KeyboardShortcutPlatformContext,
 ): string | null {
@@ -1367,15 +1375,20 @@ export function findKeyboardShortcutConflict(
   );
 }
 
-export function buildEffectiveBindings(overrides: Record<string, string>): ParsedShortcutBinding[] {
+export type ShortcutOverrides = Record<string, string | null>;
+
+export function buildEffectiveBindings(overrides: ShortcutOverrides): ParsedShortcutBinding[] {
   return DEFAULT_BINDINGS.map(function (binding) {
     const override = overrides[binding.id];
-    if (override === undefined) {
+    if (override === UNASSIGNED_COMBO) {
+      return { ...binding, combo: "", parsedChord: [] };
+    }
+    if (typeof override !== "string") {
       return binding;
     }
     let parsedChord: KeyCombo[];
     try {
-      parsedChord = parseChordString(override);
+      parsedChord = parseBindingChord(override);
     } catch {
       return binding;
     }
@@ -1693,28 +1706,37 @@ export function getBindingIdForAction(
 export function getDefaultKeysForAction(
   actionId: string,
   platform: { isMac: boolean; isDesktop: boolean },
+  bindings: readonly ParsedShortcutBinding[] = DEFAULT_BINDINGS,
 ): ShortcutKey[] | null {
-  for (const binding of DEFAULT_BINDINGS) {
+  for (const binding of bindings) {
     if (binding.help?.id !== actionId) {
       continue;
     }
     if (!helpMatchesPlatform(binding.when, platform)) {
       continue;
     }
-    return binding.help.keys;
+    return binding.parsedChord.length === 0 ? null : binding.help.keys;
   }
   return null;
 }
 
 export function resolveShortcutKeysForAction(
   actionId: string,
-  overrides: Readonly<Record<string, string>>,
+  overrides: ShortcutOverrides,
   platform: { isMac: boolean; isDesktop: boolean },
 ): ShortcutKey[][] | null {
   const bindingId = getBindingIdForAction(actionId, platform);
-  if (!bindingId) return null;
+  if (bindingId === null) return null;
   const override = overrides[bindingId];
-  if (override) return chordStringToShortcutKeys(override);
+  if (override === UNASSIGNED_COMBO || override === "") return null;
+  if (typeof override === "string") {
+    try {
+      parseBindingChord(override);
+      return chordStringToShortcutKeys(override);
+    } catch {
+      // Fall through to the default for malformed persisted values.
+    }
+  }
   const defaultKeys = getDefaultKeysForAction(actionId, platform);
   return defaultKeys ? [defaultKeys] : null;
 }
@@ -1726,12 +1748,22 @@ export function resolveShortcutKeysForAction(
  * does not actually jump: Alt on web, Cmd (Meta) on desktop Mac, Ctrl on
  * desktop non-Mac.
  */
-export function getWorkspaceIndexJumpModifierKey(platform: {
-  isMac: boolean;
-  isDesktop: boolean;
-}): "Alt" | "Meta" | "Control" {
-  if (!platform.isDesktop) return "Alt";
-  return platform.isMac ? "Meta" : "Control";
+export function getWorkspaceIndexJumpModifierKey(
+  platform: { isMac: boolean; isDesktop: boolean },
+  bindings: readonly ParsedShortcutBinding[] = DEFAULT_BINDINGS,
+): "Alt" | "Meta" | "Control" | null {
+  const binding = bindings.find(
+    (candidate) =>
+      candidate.action === "workspace.navigate.index" &&
+      helpMatchesPlatform(candidate.when, platform),
+  );
+  const combo = binding?.parsedChord[0];
+  if (!combo || binding?.parsedChord.length !== 1 || combo.code !== "Digit") return null;
+  if (combo.mod) return platform.isMac ? "Meta" : "Control";
+  if (combo.meta) return "Meta";
+  if (combo.ctrl) return "Control";
+  if (combo.alt) return "Alt";
+  return null;
 }
 
 export function buildKeyboardShortcutHelpSections(
@@ -1765,7 +1797,8 @@ export function buildKeyboardShortcutHelpSections(
       id: help.id,
       label: help.label,
       labelKey: SHORTCUT_HELP_LABEL_KEYS[help.id] ?? help.label,
-      keys: help.keys,
+      keys: binding.parsedChord.length === 0 ? [] : help.keys,
+      chord: binding.parsedChord.length === 0 ? null : [help.keys],
       ...(help.note ? { note: help.note } : {}),
       ...(SHORTCUT_HELP_NOTE_KEYS[help.id] ? { noteKey: SHORTCUT_HELP_NOTE_KEYS[help.id] } : {}),
     });
