@@ -1194,7 +1194,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "live-voice-mute-toggle",
       section: "agent-input",
       label: "Mute/unmute live voice",
-      keys: ["mod", "shift", "M"],
     },
   },
   {
@@ -1207,7 +1206,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "live-voice-mute-toggle",
       section: "agent-input",
       label: "Mute/unmute live voice",
-      keys: ["mod", "shift", "M"],
     },
   },
 
@@ -1225,7 +1223,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "live-voice-mute-hold-invert",
       section: "agent-input",
       label: "Hold to invert live voice mute",
-      keys: ["mod", "shift", "Space"],
       note: "Push-to-talk while muted, push-to-mute while live.",
     },
   },
@@ -1239,7 +1236,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "live-voice-mute-hold-invert",
       section: "agent-input",
       label: "Hold to invert live voice mute",
-      keys: ["mod", "shift", "Space"],
       note: "Push-to-talk while muted, push-to-mute while live.",
     },
   },
