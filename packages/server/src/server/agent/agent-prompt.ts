@@ -6,7 +6,7 @@ import type {
   AgentPromptInput,
   AgentRunOptions,
 } from "./agent-sdk-types.js";
-import type { AgentManager, ManagedAgent } from "./agent-manager.js";
+import type { AgentManager, AgentManagerEvent, ManagedAgent } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
 import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
@@ -506,30 +506,73 @@ export function watchAgentFinish(params: WatchAgentFinishParams): () => void {
     onFinish(reason, details);
   }
 
-  function observeState(agent: ManagedAgent): void {
+  function handleAgentState(event: Extract<AgentManagerEvent, { type: "agent_state" }>): void {
     for (const requestId of reportedPermissionIds) {
-      if (!agent.pendingPermissions.has(requestId)) {
+      if (!event.agent.pendingPermissions?.has(requestId)) {
         reportedPermissionIds.delete(requestId);
       }
     }
-    if (agent.lifecycle === "running") {
+    if (event.agent.lifecycle === "running") {
       if (waitForTurnStart && !hasSeenTurn) return;
       hasSeenTurn = true;
-      if (agent.pendingPermissions.size === 0) {
+      if ((event.agent.pendingPermissions?.size ?? 0) === 0) {
         hasSeenRunning = true;
       }
       return;
     }
     // Prior terminal state is not this task's outcome. A failure before turn start
     // is reported by the dispatch acknowledgement instead of a finish callback.
-    if (agent.lifecycle === "error" && hasSeenTurn) {
+    if (event.agent.lifecycle === "error" && hasSeenTurn) {
       fire("errored", { terminal: true });
       return;
     }
     // Idle is published before the terminal stream event for both completion
     // and cancellation. Let that event identify the outcome instead.
-    if (agent.lifecycle === "closed") {
+    if (event.agent.lifecycle === "closed") {
       fire("was closed", { terminal: true });
+    }
+  }
+
+  function handleAgentStream(event: Extract<AgentManagerEvent, { type: "agent_stream" }>): void {
+    if (event.event.type === "turn_started") {
+      hasSeenTurn = true;
+      hasSeenRunning = true;
+      return;
+    }
+
+    if (event.event.type === "turn_completed" || event.event.type === "turn_canceled") {
+      // Replacing a turn keeps the agent running through the displaced turn's
+      // cancellation. The task settles only when the agent becomes idle.
+      if (agentManager.getAgent(agentId)?.lifecycle !== "idle") return;
+      if (event.event.type === "turn_completed" && hasSeenRunning) {
+        fire("finished", { terminal: true });
+      } else if (event.event.type === "turn_canceled" && hasSeenTurn) {
+        fire("was canceled", { terminal: true });
+      }
+      return;
+    }
+
+    if (event.event.type === "permission_requested") {
+      // A permission pause is an intermediate checkpoint. Forget the run
+      // observed before it so an idle state during follow-up startup cannot
+      // masquerade as the final completion.
+      hasSeenRunning = false;
+      if (reportedPermissionIds.has(event.event.request.id)) return;
+      reportedPermissionIds.add(event.event.request.id);
+      fire("needs permission", {
+        terminal: false,
+        ...(event.event.turnId ? { turnId: event.event.turnId } : {}),
+        permissionRequest: event.event.request,
+      });
+      return;
+    }
+
+    if (event.event.type === "permission_resolved") {
+      reportedPermissionIds.delete(event.event.requestId);
+      const agent = agentManager.getAgent(agentId);
+      if (agent && (agent.pendingPermissions?.size ?? 0) === 0) {
+        hasSeenRunning = agent.lifecycle === "running";
+      }
     }
   }
 
@@ -538,53 +581,11 @@ export function watchAgentFinish(params: WatchAgentFinishParams): () => void {
       if (stopped) return;
 
       if (event.type === "agent_state") {
-        observeState(event.agent);
+        handleAgentState(event);
         return;
       }
-
-      if (event.type === "timeline_replacement") {
-        return;
-      }
-
-      if (event.event.type === "turn_started") {
-        hasSeenTurn = true;
-        hasSeenRunning = true;
-        return;
-      }
-
-      if (event.event.type === "turn_completed" || event.event.type === "turn_canceled") {
-        // Replacing a turn keeps the agent running through the displaced turn's
-        // cancellation. The task settles only when the agent becomes idle.
-        if (agentManager.getAgent(agentId)?.lifecycle !== "idle") return;
-        if (event.event.type === "turn_completed" && hasSeenRunning) {
-          fire("finished", { terminal: true });
-        } else if (event.event.type === "turn_canceled" && hasSeenTurn) {
-          fire("was canceled", { terminal: true });
-        }
-        return;
-      }
-
-      if (event.event.type === "permission_requested") {
-        // A permission pause is an intermediate checkpoint. Forget the run
-        // observed before it so an idle state during follow-up startup cannot
-        // masquerade as the final completion.
-        hasSeenRunning = false;
-        if (reportedPermissionIds.has(event.event.request.id)) return;
-        reportedPermissionIds.add(event.event.request.id);
-        fire("needs permission", {
-          terminal: false,
-          ...(event.event.turnId ? { turnId: event.event.turnId } : {}),
-          permissionRequest: event.event.request,
-        });
-        return;
-      }
-
-      if (event.event.type === "permission_resolved") {
-        reportedPermissionIds.delete(event.event.requestId);
-        const agent = agentManager.getAgent(agentId);
-        if (agent?.pendingPermissions.size === 0) {
-          hasSeenRunning = agent.lifecycle === "running";
-        }
+      if (event.type === "agent_stream") {
+        handleAgentStream(event);
       }
     },
     { agentId, replayState: false },
