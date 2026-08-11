@@ -2361,6 +2361,7 @@ export const fr: TranslationResources = {
       },
       dialogTitle: "Raccourcis",
       searchPlaceholder: "Rechercher des raccourcis",
+      unavailableOnMobile: "Les raccourcis clavier ne sont disponibles que sur l’app de bureau",
       capturePrompt: "Appuyez sur le raccourci…",
       unassigned: "Non attribué",
       actions: {
