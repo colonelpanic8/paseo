@@ -88,6 +88,7 @@ interface ShortcutHelp {
   section: ShortcutSectionId;
   label: string;
   keys: ShortcutKey[];
+  defaultDisplayKeys?: ShortcutKey[];
   note?: string;
 }
 
@@ -550,6 +551,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "workspaces",
       label: "Jump to workspace",
       keys: ["mod", "1-9"],
+      defaultDisplayKeys: ["mod", "1-9"],
     },
   },
   {
@@ -563,6 +565,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "workspaces",
       label: "Jump to workspace",
       keys: ["mod", "1-9"],
+      defaultDisplayKeys: ["mod", "1-9"],
     },
   },
   {
@@ -576,6 +579,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "workspaces",
       label: "Jump to workspace",
       keys: ["alt", "1-9"],
+      defaultDisplayKeys: ["alt", "1-9"],
     },
   },
 
@@ -591,6 +595,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "tabs-panes",
       label: "Jump to tab",
       keys: ["mod", "alt", "1-9"],
+      defaultDisplayKeys: ["mod", "alt", "1-9"],
     },
   },
   {
@@ -604,6 +609,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "tabs-panes",
       label: "Jump to tab",
       keys: ["alt", "1-9"],
+      defaultDisplayKeys: ["alt", "1-9"],
     },
   },
   {
@@ -617,6 +623,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "tabs-panes",
       label: "Jump to tab",
       keys: ["alt", "shift", "1-9"],
+      defaultDisplayKeys: ["alt", "shift", "1-9"],
     },
   },
 
@@ -948,6 +955,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "general",
       label: "Show keyboard shortcuts",
       keys: ["?"],
+      defaultDisplayKeys: ["?"],
       note: "Available when focus is not in a text field or terminal.",
     },
   },
@@ -1703,11 +1711,20 @@ export function getBindingIdForAction(
   return null;
 }
 
+function getBindingDisplayChord(binding: ParsedShortcutBinding): ShortcutKey[][] | null {
+  if (binding.parsedChord.length === 0) return null;
+  const defaultBinding = DEFAULT_BINDINGS.find((candidate) => candidate.id === binding.id);
+  if (binding.combo === defaultBinding?.combo && binding.help?.defaultDisplayKeys) {
+    return [binding.help.defaultDisplayKeys];
+  }
+  return chordStringToShortcutKeys(binding.combo);
+}
+
 export function getDefaultKeysForAction(
   actionId: string,
   platform: { isMac: boolean; isDesktop: boolean },
   bindings: readonly ParsedShortcutBinding[] = DEFAULT_BINDINGS,
-): ShortcutKey[] | null {
+): ShortcutKey[][] | null {
   for (const binding of bindings) {
     if (binding.help?.id !== actionId) {
       continue;
@@ -1715,7 +1732,7 @@ export function getDefaultKeysForAction(
     if (!helpMatchesPlatform(binding.when, platform)) {
       continue;
     }
-    return binding.parsedChord.length === 0 ? null : binding.help.keys;
+    return getBindingDisplayChord(binding);
   }
   return null;
 }
@@ -1738,7 +1755,7 @@ export function resolveShortcutKeysForAction(
     }
   }
   const defaultKeys = getDefaultKeysForAction(actionId, platform);
-  return defaultKeys ? [defaultKeys] : null;
+  return defaultKeys;
 }
 
 /**
@@ -1759,6 +1776,7 @@ export function getWorkspaceIndexJumpModifierKey(
   );
   const combo = binding?.parsedChord[0];
   if (!combo || binding?.parsedChord.length !== 1 || combo.code !== "Digit") return null;
+  if (combo.shift) return null;
   if (combo.mod) return platform.isMac ? "Meta" : "Control";
   if (combo.meta) return "Meta";
   if (combo.ctrl) return "Control";
@@ -1793,12 +1811,13 @@ export function buildKeyboardShortcutHelpSections(
     if (!rows) {
       continue;
     }
+    const chord = getBindingDisplayChord(binding);
     rows.push({
       id: help.id,
       label: help.label,
       labelKey: SHORTCUT_HELP_LABEL_KEYS[help.id] ?? help.label,
-      keys: binding.parsedChord.length === 0 ? [] : help.keys,
-      chord: binding.parsedChord.length === 0 ? null : [help.keys],
+      keys: chord?.[0] ?? [],
+      chord,
       ...(help.note ? { note: help.note } : {}),
       ...(SHORTCUT_HELP_NOTE_KEYS[help.id] ? { noteKey: SHORTCUT_HELP_NOTE_KEYS[help.id] } : {}),
     });
