@@ -1,7 +1,6 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { dirname, join, relative } from "node:path";
+import { join, relative } from "node:path";
 
 // In CI we often install a single workspace (e.g. server/relay/website). Only apply patches
 // when the patched dependency is actually present.
@@ -58,31 +57,8 @@ if (patchFilesByCwd.size === 0) {
   process.exit(0);
 }
 
-// Resolve the real entrypoint instead of relying on npm adding node_modules/.bin to PATH. This
-// also avoids platform-specific .cmd/.ps1 shims when the script runs from a workspace cwd.
-function resolvePatchPackageEntry() {
-  const require = createRequire(import.meta.url);
-  let manifestPath;
-  try {
-    manifestPath = require.resolve("patch-package/package.json");
-  } catch {
-    return undefined;
-  }
-  const { bin } = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const binPath = typeof bin === "string" ? bin : bin?.["patch-package"];
-  return binPath === undefined ? undefined : join(dirname(manifestPath), binPath);
-}
-
-const patchPackageEntry = resolvePatchPackageEntry();
-
-if (patchPackageEntry === undefined) {
-  console.error(
-    "postinstall-patches: required dependency patches could not be applied because patch-package " +
-      "is not installed.\n  Reinstall with dev dependencies (`npm ci --include=dev`); do not " +
-      "omit dev dependencies when this install includes patched packages.",
-  );
-  process.exit(1);
-}
+const isWindows = process.platform === "win32";
+const cmd = isWindows ? "patch-package.cmd" : "patch-package";
 
 let groupIndex = 0;
 for (const [cwd, files] of patchFilesByCwd) {
@@ -96,15 +72,12 @@ for (const [cwd, files] of patchFilesByCwd) {
 
   let result;
   try {
-    result = spawnSync(
-      process.execPath,
-      [patchPackageEntry, "--patch-dir", relative(cwd, tempPatchDir)],
-      {
-        cwd,
-        stdio: "inherit",
-        windowsHide: true,
-      },
-    );
+    result = spawnSync(cmd, ["--patch-dir", relative(cwd, tempPatchDir)], {
+      cwd,
+      shell: isWindows,
+      stdio: "inherit",
+      windowsHide: true,
+    });
   } finally {
     rmSync(tempPatchDir, { recursive: true, force: true });
   }
