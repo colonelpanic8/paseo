@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { useAppVisible } from "@/hooks/use-app-visible";
 
 const MINUTE_MS = 60_000;
 
@@ -46,9 +47,18 @@ function getSnapshot(): number {
 }
 
 export function useMinuteNow(): Date {
-  const minute = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const isAppVisible = useAppVisible();
+  const minute = useSyncExternalStore(
+    isAppVisible ? subscribe : subscribeWhileHidden,
+    getSnapshot,
+    getSnapshot,
+  );
   // The returned value must flow into relative-time formatting. An ignored
   // subscription can re-render while React Compiler safely reuses a formatted
   // label whose visible inputs otherwise appear unchanged.
   return new Date(minute * MINUTE_MS);
+}
+
+function subscribeWhileHidden(): () => void {
+  return () => {};
 }
