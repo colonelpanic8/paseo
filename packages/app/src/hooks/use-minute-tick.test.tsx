@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import React, { act } from "react";
+import React, { act, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatCompactTimeAgo } from "@/utils/time";
@@ -9,6 +9,25 @@ import { formatCompactTimeAgo } from "@/utils/time";
 vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 
 const MINUTE = 60_000;
+let appVisible = true;
+const visibilityListeners = new Set<() => void>();
+
+vi.mock("@/hooks/use-app-visible", () => ({
+  useAppVisible: () =>
+    useSyncExternalStore(
+      (listener) => {
+        visibilityListeners.add(listener);
+        return () => visibilityListeners.delete(listener);
+      },
+      () => appVisible,
+      () => appVisible,
+    ),
+}));
+
+function setAppVisible(visible: boolean): void {
+  appVisible = visible;
+  for (const listener of visibilityListeners) listener();
+}
 
 // Every case re-imports the module so the shared interval and cached minute
 // start clean; the tick state is module-level by design.
@@ -68,6 +87,7 @@ describe("useMinuteNow", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-16T12:00:00.000Z"));
+    appVisible = true;
   });
 
   afterEach(() => {
@@ -118,6 +138,25 @@ describe("useMinuteNow", () => {
 
     second.unmount();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("stops ticking while hidden and catches up when visible again", async () => {
+    const useMinuteNow = await loadHook();
+    const activityAt = new Date("2026-07-16T11:59:00.000Z");
+    const probe = createProbe(useMinuteNow, activityAt);
+    probe.mount();
+    expect(probe.relativeLabel).toBe("1m");
+
+    act(() => setAppVisible(false));
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => void vi.advanceTimersByTime(5 * MINUTE));
+    expect(probe.relativeLabel).toBe("1m");
+
+    act(() => setAppVisible(true));
+    expect(probe.relativeLabel).toBe("6m");
+
+    probe.unmount();
   });
 
   it("serves a fresh minute to a subscriber that arrives after the ticker stopped", async () => {
