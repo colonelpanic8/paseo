@@ -2,6 +2,7 @@ import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import type { Logger } from "pino";
+import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 
 import { writeJsonFileAtomic } from "../atomic-file.js";
 import { AgentFeatureSchema, AgentStatusSchema } from "../messages.js";
@@ -147,6 +148,40 @@ export class AgentStorage {
   async listByWorkspace(workspaceId: string): Promise<StoredAgentRecord[]> {
     await this.load();
     return Array.from(this.cache.values()).filter((record) => record.workspaceId === workspaceId);
+  }
+
+  async listDescendants(rootAgentIds: readonly string[]): Promise<StoredAgentRecord[]> {
+    await this.load();
+    const childrenByParent = new Map<string, StoredAgentRecord[]>();
+    for (const record of this.cache.values()) {
+      const parentId = record.labels?.[PARENT_AGENT_ID_LABEL];
+      if (!parentId) continue;
+      const children = childrenByParent.get(parentId) ?? [];
+      children.push(record);
+      childrenByParent.set(parentId, children);
+    }
+
+    const descendants: StoredAgentRecord[] = [];
+    const visited = new Set(rootAgentIds);
+    const pending = [...rootAgentIds];
+    while (pending.length > 0) {
+      const parentId = pending.pop();
+      if (!parentId) continue;
+      for (const child of childrenByParent.get(parentId) ?? []) {
+        if (visited.has(child.id)) continue;
+        visited.add(child.id);
+        descendants.push(child);
+        pending.push(child.id);
+      }
+    }
+    return descendants;
+  }
+
+  async listByArchivedWorkspace(workspaceId: string): Promise<StoredAgentRecord[]> {
+    await this.load();
+    return Array.from(this.cache.values()).filter(
+      (record) => record.archivedWithWorkspaceId === workspaceId,
+    );
   }
 
   async findByDaemonExecution(owner: DaemonAgentOwner): Promise<StoredAgentRecord | null> {
