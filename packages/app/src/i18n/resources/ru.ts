@@ -2216,6 +2216,7 @@ export const ru: TranslationResources = {
       },
       dialogTitle: "Сочетания клавиш",
       searchPlaceholder: "Поиск сочетаний клавиш",
+      unavailableOnMobile: "Настройка сочетаний клавиш доступна только на компьютере",
       capturePrompt: "Нажмите сочетание клавиш...",
       unassigned: "Не задано",
       actions: {
