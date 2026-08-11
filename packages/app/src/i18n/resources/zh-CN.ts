@@ -2375,6 +2375,7 @@ export const zhCN: TranslationResources = {
       },
       dialogTitle: "快捷键",
       searchPlaceholder: "搜索快捷键",
+      unavailableOnMobile: "键盘快捷键仅在桌面端可用",
       capturePrompt: "按下快捷键...",
       captureIndexPrompt: "请以 1 到 9 的数字结尾。",
       unassigned: "未设置",
