@@ -156,9 +156,10 @@ function createArchiveDeps(input: ArchiveDepsInput): ArchiveTestDependencies {
     },
     agentStorage: {
       listByWorkspace: async (): Promise<StoredAgentRecord[]> => [],
+      listDescendants: async (): Promise<StoredAgentRecord[]> => [],
       get: async () => null,
       updateRecord: async () => null,
-    } as Pick<AgentStorage, "listByWorkspace" | "get" | "updateRecord">,
+    } as Pick<AgentStorage, "listByWorkspace" | "listDescendants" | "get" | "updateRecord">,
     findWorkspaceIdForCwd: input.findWorkspaceIdForCwd ?? vi.fn(async () => null),
     listActiveWorkspaces: async () =>
       active.filter((workspace) => !archivedWorkspaceIds.has(workspace.workspaceId)),
@@ -765,9 +766,10 @@ describe("archiveByScope", () => {
           : ([
               { id: otherStoredAgentId, workspaceId: otherWorkspaceId, archivedAt: null },
             ] as StoredAgentRecord[]),
+      listDescendants: async () => [],
       get: async () => null,
       updateRecord: async () => null,
-    } as Pick<AgentStorage, "listByWorkspace" | "get" | "updateRecord">;
+    } as Pick<AgentStorage, "listByWorkspace" | "listDescendants" | "get" | "updateRecord">;
 
     const result = await archiveByScope(deps, {
       scope: { kind: "workspace", workspaceId: targetWorkspaceId },
@@ -804,8 +806,12 @@ describe("archiveByScope", () => {
       }),
     };
     deps.agentStorage = {
-      list: async () => [{ id: agentId, workspaceId, archivedAt: null }] as StoredAgentRecord[],
-    } as Pick<AgentStorage, "list">;
+      listByWorkspace: async () =>
+        [{ id: agentId, workspaceId, archivedAt: null }] as StoredAgentRecord[],
+      listDescendants: async () => [],
+      get: async () => null,
+      updateRecord: async () => null,
+    } as Pick<AgentStorage, "listByWorkspace" | "listDescendants" | "get" | "updateRecord">;
 
     const result = await archiveByScope(deps, {
       scope: { kind: "workspace", workspaceId },
@@ -923,7 +929,10 @@ describe("workspace unarchive consistency", () => {
         },
       },
       agentStorage: {
-        list: async () => [...records.values()],
+        listByArchivedWorkspace: async (archivedWorkspaceId: string) =>
+          [...records.values()].filter(
+            (record) => record.archivedWithWorkspaceId === archivedWorkspaceId,
+          ),
         get: async (agentId: string) => records.get(agentId) ?? null,
         updateRecord: async (
           agentId: string,
