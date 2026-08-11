@@ -980,6 +980,11 @@ interface MobileBodyProps {
   safeAreaBottom: number;
 }
 
+function useDismissTouchKeyboardOnOpen(isOpen: boolean, isMobile: boolean): void {
+  const hardwareKeyboardConnected = useHardwareKeyboardStore((state) => state.connected);
+  useDismissKeyboardOnOpen(isOpen, isMobile && !hardwareKeyboardConnected);
+}
+
 function MobileComboboxBody(props: MobileBodyProps): ReactElement {
   const comboboxTitleStyle = useMemo(
     () => [styles.comboboxTitle, { color: props.titleColor }],
@@ -1576,8 +1581,7 @@ export function Combobox({
   // With a hardware keyboard attached, SearchInput focuses on open — the
   // dismiss-on-open pass would blur it again (Keyboard.dismiss blurs the
   // focused input), so it only runs for touch use.
-  const hardwareKeyboardConnected = useHardwareKeyboardStore((s) => s.connected);
-  useDismissKeyboardOnOpen(isOpen, isMobile && !hardwareKeyboardConnected);
+  useDismissTouchKeyboardOnOpen(isOpen, isMobile);
 
   const handleIndicatorStyle = useMemo(
     () => ({ backgroundColor: theme.colors.palette.zinc[600] }),

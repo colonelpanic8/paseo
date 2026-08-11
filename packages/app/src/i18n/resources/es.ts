@@ -2305,6 +2305,7 @@ export const es: TranslationResources = {
       },
       dialogTitle: "Atajos",
       searchPlaceholder: "Buscar atajos",
+      unavailableOnMobile: "Los atajos de teclado solo están disponibles en el escritorio",
       capturePrompt: "Presione el acceso directo...",
       unassigned: "Sin asignar",
       actions: {
