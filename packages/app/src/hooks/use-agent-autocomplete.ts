@@ -93,6 +93,7 @@ function resolveAgentAutocompleteSnapshot(input: {
   input?: AgentAutocompleteInputSnapshot;
   userInput: string;
   cursorIndex: number;
+  sigils: ComposerSigils;
   activeSlashCommand: SlashCommandRange | null;
   activeFileMention: FileMentionRange | null;
 }): AgentAutocompleteSnapshot {
@@ -108,7 +109,7 @@ function resolveAgentAutocompleteSnapshot(input: {
   const cursorIndex = input.input.selection.start;
   return {
     text,
-    slashCommand: findActiveSlashCommand({ text, cursorIndex }),
+    slashCommand: findActiveSlashCommand({ text, cursorIndex, sigils: input.sigils }),
     fileMention: findActiveFileMention({ text, cursorIndex }),
   };
 }
@@ -559,6 +560,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         input: snapshot,
         userInput,
         cursorIndex,
+        sigils,
         activeSlashCommand,
         activeFileMention,
       });
