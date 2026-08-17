@@ -16,6 +16,7 @@ import {
 import { agentCommandsQueryRoot } from "@/hooks/agent-commands-query";
 import {
   isProvidersSnapshotHomeScope,
+  mergeFetchedProvidersSnapshot,
   normalizeProvidersSnapshotCwd,
   providersSnapshotQueryKey,
   providersSnapshotQueryRoot,
@@ -61,6 +62,24 @@ export async function fetchProvidersSnapshot(input: {
   return snapshot;
 }
 
+// A providers_snapshot_update push can land while the fetch response is still
+// resolving (cold snapshots warm up right after answering, and the async cache
+// write above widens the window). Yield the fresher of the two so the response
+// cannot clobber a push that already settled the entries.
+export async function fetchProvidersSnapshotForQuery(input: {
+  client: ProvidersSnapshotClient;
+  queryClient: QueryClient;
+  serverId: string;
+  cwd: string | null;
+  cache?: ProviderSnapshotCache;
+}): Promise<GetProvidersSnapshotResult> {
+  const snapshot = await fetchProvidersSnapshot(input);
+  const current = input.queryClient.getQueryData<GetProvidersSnapshotResult>(
+    providersSnapshotQueryKey(input.serverId, input.cwd),
+  );
+  return mergeFetchedProvidersSnapshot(current, snapshot);
+}
+
 export async function refreshAndApplyProvidersSnapshot(input: {
   client: ProvidersSnapshotClient;
   queryClient: QueryClient;
@@ -78,7 +97,10 @@ export async function refreshAndApplyProvidersSnapshot(input: {
     cwd: input.cwd,
     cache: input.cache,
   });
-  input.queryClient.setQueryData(providersSnapshotQueryKey(input.serverId, input.cwd), snapshot);
+  input.queryClient.setQueryData<GetProvidersSnapshotResult>(
+    providersSnapshotQueryKey(input.serverId, input.cwd),
+    (current) => mergeFetchedProvidersSnapshot(current, snapshot),
+  );
   void input.queryClient.invalidateQueries({
     queryKey: agentCommandsQueryRoot(input.serverId),
     exact: false,
@@ -149,7 +171,7 @@ export function useProvidersSnapshot(
       if (!client || !serverId) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
-      return fetchProvidersSnapshot({ client, serverId, cwd });
+      return fetchProvidersSnapshotForQuery({ client, queryClient, serverId, cwd });
     },
   });
 
@@ -213,6 +235,7 @@ export function prefetchProvidersSnapshot(
   void singletonQueryClient.prefetchQuery({
     queryKey,
     staleTime: Infinity,
-    queryFn: () => fetchProvidersSnapshot({ client, serverId, cwd }),
+    queryFn: () =>
+      fetchProvidersSnapshotForQuery({ client, queryClient: singletonQueryClient, serverId, cwd }),
   });
 }
