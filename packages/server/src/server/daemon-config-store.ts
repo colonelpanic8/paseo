@@ -20,6 +20,8 @@ interface SupportedMutableConfigPatch {
   mcp?: { injectIntoAgents?: boolean };
   browserTools?: { enabled?: boolean };
   providers?: MutableDaemonConfig["providers"];
+  replaceProviders?: MutableDaemonConfig["providers"];
+  renameProviders?: Record<string, string>;
   removeProviders?: string[];
   metadataGeneration?: MutableDaemonConfig["metadataGeneration"];
   autoArchiveAfterMerge?: boolean;
@@ -262,6 +264,8 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
       ? { browserTools: { enabled: patch.browserTools.enabled } }
       : {}),
     ...(patch.providers !== undefined ? { providers: patch.providers } : {}),
+    ...(patch.replaceProviders !== undefined ? { replaceProviders: patch.replaceProviders } : {}),
+    ...(patch.renameProviders !== undefined ? { renameProviders: patch.renameProviders } : {}),
     ...(patch.removeProviders !== undefined ? { removeProviders: patch.removeProviders } : {}),
     ...(patch.metadataGeneration?.providers !== undefined
       ? { metadataGeneration: { providers: patch.metadataGeneration.providers } }
@@ -395,11 +399,8 @@ export class DaemonConfigStore {
         ...Object.keys(configPatch.providers ?? {}),
       ]),
     });
-    const renamedProviders: ProviderRename[] = Object.entries(renameProviders).map(
-      ([from, to]) => ({
-        from,
-        to,
-      }),
+    const renamedProviders: ProviderRename[] = Object.entries(renameProviders).flatMap(
+      ([from, to]) => (typeof to === "string" ? [{ from, to }] : []),
     );
     const mergePatch =
       replacedProviders.length > 0
@@ -630,7 +631,7 @@ function mergeMutablePatchIntoPersistedConfig(params: {
   persisted: PersistedConfig;
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">;
   removeProviders: readonly string[];
-  replaceProviders: readonly string[];
+  replaceProviders?: readonly string[];
   persistRelayEnabled: boolean;
 }): PersistedConfig {
   const { persisted, patch, removeProviders, persistRelayEnabled } = params;
