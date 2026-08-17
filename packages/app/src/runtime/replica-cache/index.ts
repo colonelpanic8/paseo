@@ -3,6 +3,7 @@ import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
+  WorkspaceSnoozeStatusSchema,
 } from "@getpaseo/protocol/messages";
 import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
 import type { PluginTimelineData } from "@getpaseo/plugin";
@@ -314,6 +315,7 @@ const StoredWorkspaceSchema = z.strictObject({
   // dropped them painted its row without its chips and stayed that way: the directory cursor is
   // current on reconnect, so the daemon has nothing newer to send back.
   labels: z.array(z.string()).optional(),
+  snoozeStatus: WorkspaceSnoozeStatusSchema.nullable(),
   status: z.enum(["needs_input", "failed", "running", "attention", "done"]),
   statusEnteredAt: IsoDateSchema.nullable(),
   activityAt: z.null(),

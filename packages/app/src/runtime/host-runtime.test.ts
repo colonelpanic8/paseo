@@ -3378,6 +3378,7 @@ describe("HostRuntimeStore", () => {
       },
       storage: {
         getItem: memoryStorage.getItem,
+        removeItem: memoryStorage.removeItem,
         setItem: async (key, value) => {
           if (rejectWrites) {
             throw new Error("host registry unavailable");
@@ -3413,6 +3414,7 @@ describe("HostRuntimeStore", () => {
     let blockWrites = false;
     const storage: HostRuntimeStorage = {
       getItem: memoryStorage.getItem,
+      removeItem: memoryStorage.removeItem,
       setItem: async (key, value) => {
         if (blockWrites) {
           blockedWriteStarted.resolve();
@@ -3472,6 +3474,7 @@ describe("HostRuntimeStore", () => {
     let blockNextWrite = false;
     const storage: HostRuntimeStorage = {
       getItem: memoryStorage.getItem,
+      removeItem: memoryStorage.removeItem,
       setItem: async (key, value) => {
         if (blockNextWrite) {
           // Only the color snapshot blocks, so the removal lands on disk first and the
@@ -3530,6 +3533,7 @@ describe("HostRuntimeStore", () => {
     let blockWrites = false;
     const storage: HostRuntimeStorage = {
       getItem: memoryStorage.getItem,
+      removeItem: memoryStorage.removeItem,
       setItem: async (key, value) => {
         if (blockWrites) {
           blockedWriteStarted.resolve();
