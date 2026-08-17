@@ -265,7 +265,13 @@ function StatusRowDetailLine({
         ) : null}
       </View>
       <View style={styles.detailRight}>
-        <WorkspaceMetaRow hostBadge={hostBadge} prHint={prHint} serviceSummary={serviceSummary} />
+        <WorkspaceMetaRow
+          currentBranch={null}
+          projectName={null}
+          hostBadge={hostBadge}
+          prHint={prHint}
+          serviceSummary={serviceSummary}
+        />
         <StatusRowProviderIcons providers={providers} />
       </View>
     </View>

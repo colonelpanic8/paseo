@@ -4,6 +4,7 @@ import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
+  WorkspaceSnoozeStatusSchema,
 } from "@getpaseo/protocol/messages";
 import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
 import {
@@ -235,6 +236,7 @@ const StoredWorkspaceSchema = z.strictObject({
   name: z.string(),
   title: z.string().nullable(),
   pinnedAt: z.string().nullable(),
+  snoozeStatus: WorkspaceSnoozeStatusSchema.nullable(),
   status: z.enum(["needs_input", "failed", "running", "attention", "done"]),
   statusEnteredAt: IsoDateSchema.nullable(),
   activityAt: z.null(),
