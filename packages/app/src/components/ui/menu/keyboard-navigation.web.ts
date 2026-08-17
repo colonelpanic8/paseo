@@ -1,4 +1,6 @@
 import type { KeyboardInputEvent } from "@/keyboard";
+import { getNextActiveIndex } from "@/components/ui/combobox-keyboard";
+import { resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 export function navigateMenuKeyboard(event: KeyboardInputEvent): boolean {
   const target = document.activeElement;
   const surface = target?.closest<HTMLElement>('[data-menu-surface="true"]');
@@ -10,14 +12,14 @@ export function navigateMenuKeyboard(event: KeyboardInputEvent): boolean {
   );
   if (items.length === 0) return false;
   const currentIndex = items.findIndex((item) => item === document.activeElement);
+  const action = resolveListSearchKeyAction(event);
   let nextIndex: number | null = null;
-  if (event.key === "ArrowDown") {
-    if (currentIndex < 0) nextIndex = 0;
-    else nextIndex = (currentIndex + 1) % items.length;
-  }
-  if (event.key === "ArrowUp") {
-    if (currentIndex < 0) nextIndex = items.length - 1;
-    else nextIndex = (currentIndex - 1 + items.length) % items.length;
+  if (action === "next" || action === "previous") {
+    nextIndex = getNextActiveIndex({
+      currentIndex,
+      itemCount: items.length,
+      key: action === "next" ? "ArrowDown" : "ArrowUp",
+    });
   }
   if (event.key === "Home") nextIndex = 0;
   if (event.key === "End") nextIndex = items.length - 1;
@@ -27,10 +29,10 @@ export function navigateMenuKeyboard(event: KeyboardInputEvent): boolean {
     items[nextIndex]?.focus();
     return true;
   }
-  if ((event.key === "Enter" || event.key === " ") && currentIndex >= 0) {
+  if (action === "submit" || event.key === " ") {
     event.preventDefault();
     event.stopPropagation();
-    items[currentIndex]?.click();
+    items[currentIndex < 0 ? 0 : currentIndex]?.click();
     return true;
   }
   return false;

@@ -80,6 +80,8 @@ import { useIosHardwareKeyboardSubmit } from "@/hooks/use-ios-hardware-keyboard-
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
+import { listNavigationDataSet } from "@/keyboard/list-search-keys";
+import type { ListSearchKeyEvent } from "@/keyboard/list-search-keys";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -141,8 +143,7 @@ export interface ComposerInputSnapshot {
   selection: { start: number; end: number };
 }
 
-export interface ComposerKeyPressEvent {
-  key: string;
+export interface ComposerKeyPressEvent extends ListSearchKeyEvent {
   /** Shift, Alt, Ctrl, or Meta was held. */
   hasModifier: boolean;
   preventDefault: () => void;
@@ -204,6 +205,7 @@ export interface MessageInputProps {
   onSubmitLoadingPress?: () => void;
   /** Intercept key press events before default handling. Return true to prevent default. */
   onKeyPress?: (event: ComposerKeyPressEvent) => boolean;
+  ownsListNavigation?: boolean;
   /** Reports cursor selection updates from the underlying input. */
   onSelectionChange?: (selection: { start: number; end: number }) => void;
   onFocusChange?: (focused: boolean) => void;
@@ -480,6 +482,10 @@ function handleDesktopKeyPressImpl(
     const handled = ctx.onKeyPressCallback({
       key: event.nativeEvent.key,
       hasModifier: Boolean(shiftKey || metaKey || ctrlKey || altKey),
+      ctrlKey,
+      metaKey,
+      altKey,
+      shiftKey,
       preventDefault: () => event.preventDefault(),
       input: ctx.input,
     });
@@ -1190,6 +1196,7 @@ interface ResolvedMessageInputProps {
   onQueue: ((payload: MessagePayload) => void) | undefined;
   onSubmitLoadingPress: (() => void) | undefined;
   onKeyPressCallback: ((event: ComposerKeyPressEvent) => boolean) | undefined;
+  ownsListNavigation: boolean;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
   onFocusChange: ((focused: boolean) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
@@ -1238,6 +1245,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onQueue: props.onQueue,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
+    ownsListNavigation: props.ownsListNavigation ?? false,
     onSelectionChangeCallback: props.onSelectionChange,
     onFocusChange: props.onFocusChange,
     onHeightChange: props.onHeightChange,
@@ -1320,6 +1328,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onQueue,
       onSubmitLoadingPress,
       onKeyPressCallback,
+      ownsListNavigation,
       onSelectionChangeCallback,
       onFocusChange,
       onHeightChange,
@@ -2315,6 +2324,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         }
         testID="message-input-root"
         onLayout={handleComposerLayout}
+        dataSet={listNavigationDataSet(ownsListNavigation)}
       >
         <MessageInputAutoFocus
           enabled={autoFocus}

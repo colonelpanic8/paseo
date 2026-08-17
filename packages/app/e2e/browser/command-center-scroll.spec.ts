@@ -116,3 +116,24 @@ test("live search updates render only the changed row and keep agents virtualize
     await seeded.cleanup();
   }
 });
+
+test("Ctrl+N and Ctrl+P move the command center highlight", async ({ page }) => {
+  await gotoAppShell(page);
+  const panel = await openCommandCenterWithKeyboard(page);
+  const newWorkspace = panel.getByRole("button").filter({ hasText: "New workspace" });
+  const history = panel.getByRole("button").filter({ hasText: "History" });
+  const background = (locator: typeof newWorkspace) =>
+    locator.evaluate((element) => getComputedStyle(element).backgroundColor);
+
+  const activeBackground = await background(newWorkspace);
+  const inactiveBackground = await background(history);
+  expect(activeBackground).not.toBe(inactiveBackground);
+
+  await page.keyboard.press("Control+n");
+  await expect.poll(() => background(history)).toBe(activeBackground);
+  await expect(panel).toBeVisible();
+
+  await page.keyboard.press("Control+p");
+  await expect.poll(() => background(newWorkspace)).toBe(activeBackground);
+  await expect(panel).toBeVisible();
+});
