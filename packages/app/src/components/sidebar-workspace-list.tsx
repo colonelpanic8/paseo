@@ -2069,7 +2069,6 @@ export function SidebarWorkspaceList({
         onPinnedWorkspaceReorder={handlePinnedWorkspaceReorder}
         parentGestureRef={parentGestureRef}
         listHeaderComponent={listHeaderComponent}
-        parentGestureRef={parentGestureRef}
         dragGestureHostPresented={dragGestureHostPresented}
       />
     ) : (
@@ -2112,7 +2111,6 @@ function SidebarStatusModeWrapper({
   onPinnedWorkspaceReorder,
   parentGestureRef,
   listHeaderComponent,
-  parentGestureRef,
   dragGestureHostPresented,
 }: {
   statusGroups: StatusGroup[];
@@ -2128,7 +2126,6 @@ function SidebarStatusModeWrapper({
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   listHeaderComponent?: ReactElement | null;
-  parentGestureRef?: MutableRefObject<GestureType | undefined>;
   dragGestureHostPresented?: boolean;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
@@ -2162,11 +2159,8 @@ function SidebarStatusModeWrapper({
       hostBadgeByServerId={hostBadgeByServerId}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
-      onPinnedWorkspaceReorder={onPinnedWorkspaceReorder}
       parentGestureRef={parentGestureRef}
       listHeaderComponent={listHeaderComponent}
-      parentGestureRef={parentGestureRef}
-      dragGestureHostPresented={dragGestureHostPresented}
     />
   );
 }
