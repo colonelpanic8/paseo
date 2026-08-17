@@ -136,6 +136,8 @@ function attachmentIdentityKey(attachment: UserComposerAttachment): string {
       return `file:${attachment.attachment.id}`;
     case "workspace_file":
       return `workspace_file:${getWorkspaceFileAttachmentKey(attachment)}`;
+    case "plugin_resource":
+      return `plugin_resource:${attachment.pluginId}:${attachment.sourceId}:${attachment.item.id}`;
     default:
       return `${attachment.kind}:${attachment.item.kind}:${attachment.item.number}`;
   }
