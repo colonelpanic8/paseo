@@ -9,8 +9,7 @@ function paseo(id: string, status: PaseoSubagentRow["status"] = "idle"): PaseoSu
     id,
     provider: "codex",
     title: id,
-    description: null,
-    subtitle: null,
+    summary: null,
     status,
     turn:
       status === "running"
@@ -18,6 +17,10 @@ function paseo(id: string, status: PaseoSubagentRow["status"] = "idle"): PaseoSu
         : { phase: "idle", cancellationRequestId: null },
     requiresAttention: false,
     createdAt: new Date(),
+    model: null,
+    runtimeModelId: null,
+    thinkingOptionId: null,
+    effectiveThinkingOptionId: undefined,
   };
 }
 
@@ -36,6 +39,10 @@ function provider(
     status,
     requiresAttention: false,
     createdAt: new Date(),
+    model: null,
+    runtimeModelId: null,
+    thinkingOptionId: null,
+    effectiveThinkingOptionId: undefined,
   };
 }
 
