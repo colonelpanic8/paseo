@@ -13,7 +13,8 @@ import {
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
 } from "@/keyboard/keyboard-shortcuts";
-import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
+import { ownsListNavigationKeys, resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
+import { resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 import {
   buildBrowserKeyboardPolicy,
   parseBrowserShortcutInput,
@@ -324,6 +325,10 @@ export function useKeyboardShortcuts({
     // During IME composition, Enter confirms the candidate selection and must
     // not route through global shortcuts like message send.
     if (isImeComposingKeyboardEvent(event)) {
+      return;
+    }
+
+    if (resolveListSearchKeyAction(event) !== null && ownsListNavigationKeys(event.target)) {
       return;
     }
 
