@@ -89,6 +89,7 @@ describe("extractSearchableText", () => {
         { text: "first task", completed: true },
         { text: "second task", completed: false },
       ],
+      activity: { type: "created", count: 2 },
     };
     expect(extractSearchableText(item)).toBe("first task\nsecond task");
   });
