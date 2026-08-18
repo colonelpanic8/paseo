@@ -374,6 +374,20 @@ describe("parseWearCommand", () => {
     expect(parseWearCommand(JSON.stringify({ v: 1, kind: "setLiveVoiceAudioRoute" }))).toBeNull();
   });
 
+  it("parses dispatch without agent or server ids", () => {
+    expect(
+      parseWearCommand(
+        JSON.stringify({
+          v: 1,
+          kind: "dispatchPrompt",
+          requestId: "request-1",
+          text: "Plan tomorrow",
+        }),
+      ),
+    ).toEqual({ kind: "dispatchPrompt", requestId: "request-1", text: "Plan tomorrow" });
+    expect(parseWearCommand(JSON.stringify({ v: 1, kind: "dispatchPrompt" }))).toBeNull();
+  });
+
   it("rejects a startLiveVoice with no host to call", () => {
     expect(parseWearCommand(JSON.stringify({ v: 1, kind: "startLiveVoice" }))).toBeNull();
   });
@@ -1902,6 +1916,152 @@ describe("WearBridge live voice", () => {
 
     // An absent item is how the watch reads "this phone build has no Live Voice".
     expect(transport.liveVoice).toHaveLength(0);
+    bridge.stop();
+  });
+});
+
+describe("WearBridge dispatch", () => {
+  const availability: LiveVoiceAvailability = {
+    kind: "available",
+    hosts: [
+      {
+        serverId: "srv-1",
+        label: "workstation",
+        connectionStatus: "online",
+        version: "0.2.5",
+        supportsLiveVoice: true,
+        supportsVoiceCatalog: true,
+        paseoToolsEnabled: true,
+      },
+    ],
+  };
+  const snapshot: LiveVoiceSnapshot = {
+    phase: "idle",
+    serverId: null,
+    liveSessionId: null,
+    isMuted: false,
+    isAudioBlocked: false,
+    transcripts: [],
+    error: null,
+    closedCause: null,
+  };
+
+  function makeDispatchBridge(options?: {
+    target?: { serverId: string; agentId: string; label?: string } | null;
+    sendAgentMessage?: ReturnType<typeof vi.fn>;
+    queued?: string[];
+  }) {
+    const transport = makeTransport();
+    transport.drainPendingCommands = async () => options?.queued ?? [];
+    const sendAgentMessage = options?.sendAgentMessage ?? vi.fn().mockResolvedValue(undefined);
+    const target =
+      options && "target" in options
+        ? (options.target ?? null)
+        : {
+            serverId: "srv-1",
+            agentId: "agent-chief",
+            label: "Chief of staff",
+          };
+    const liveVoice: WearLiveVoiceController = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => snapshot,
+      readAvailability: () => availability,
+      start: async () => undefined,
+      stop: async () => undefined,
+      toggleMute: () => undefined,
+    };
+    const bridge = new WearBridge({
+      transport,
+      readState: () => [
+        { serverId: "srv-1", agents: [agent()], workspaces: workspaceMap(workspace()) },
+      ],
+      getClient: (serverId) => (serverId === "srv-1" ? ({ sendAgentMessage } as never) : null),
+      resolveNewAgentConfig: () => null,
+      readDispatchTarget: () => target,
+      liveVoice,
+      now: () => NOW,
+      logger: { warn: vi.fn() },
+    });
+    const last = () => JSON.parse(transport.liveVoice.at(-1) ?? "null");
+    return { bridge, transport, sendAgentMessage, last };
+  }
+
+  it("publishes configuration and label without exposing target ids", async () => {
+    const { bridge, last } = makeDispatchBridge();
+    await bridge.start();
+
+    expect(last().dispatch).toEqual({ configured: true, label: "Chief of staff" });
+    expect(JSON.stringify(last().dispatch)).not.toContain("srv-1");
+    expect(JSON.stringify(last().dispatch)).not.toContain("agent-chief");
+    bridge.stop();
+  });
+
+  it("routes a prompt to the configured target and publishes success", async () => {
+    const { bridge, sendAgentMessage, last } = makeDispatchBridge();
+    await bridge.start();
+
+    await bridge.execute({
+      kind: "dispatchPrompt",
+      requestId: "request-1",
+      text: "Plan tomorrow",
+    });
+
+    expect(sendAgentMessage).toHaveBeenCalledWith("agent-chief", "Plan tomorrow");
+    expect(last().dispatch.result).toEqual({
+      requestId: "request-1",
+      status: "success",
+      message: "Sent to Chief of staff",
+    });
+    bridge.stop();
+  });
+
+  it("publishes the explicit unconfigured failure", async () => {
+    const { bridge, sendAgentMessage, last } = makeDispatchBridge({ target: null });
+    await bridge.start();
+
+    await bridge.execute({ kind: "dispatchPrompt", requestId: "request-2", text: "Anything" });
+
+    expect(sendAgentMessage).not.toHaveBeenCalled();
+    expect(last().dispatch).toEqual({
+      configured: false,
+      result: {
+        requestId: "request-2",
+        status: "failure",
+        message: "No dispatch agent set on your phone",
+      },
+    });
+    bridge.stop();
+  });
+
+  it("publishes a retryable failure when the daemon rejects", async () => {
+    const sendAgentMessage = vi.fn().mockRejectedValue(new Error("offline"));
+    const { bridge, last } = makeDispatchBridge({ sendAgentMessage });
+    await bridge.start();
+
+    await bridge.execute({ kind: "dispatchPrompt", requestId: "request-3", text: "Anything" });
+
+    expect(last().dispatch.result).toEqual({
+      requestId: "request-3",
+      status: "failure",
+      message: "Couldn't reach your dispatch agent",
+    });
+    bridge.stop();
+  });
+
+  it("drains a queued dispatch without expiring it", async () => {
+    const queued = [
+      JSON.stringify({
+        v: 1,
+        kind: "dispatchPrompt",
+        requestId: "request-old",
+        text: "Still do this",
+      }),
+    ];
+    const { bridge, sendAgentMessage } = makeDispatchBridge({ queued });
+
+    await bridge.start();
+
+    expect(sendAgentMessage).toHaveBeenCalledWith("agent-chief", "Still do this");
     bridge.stop();
   });
 });
