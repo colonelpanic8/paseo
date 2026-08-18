@@ -163,6 +163,20 @@ const FeatureWebUiSchema = z
   })
   .strict();
 
+const LiveVoiceContextFilePathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => path.isAbsolute(value) || value === "~" || value.startsWith("~/"), {
+    message: "Expected an absolute or ~-rooted path",
+  });
+
+const LiveVoiceConfigSchema = z
+  .object({
+    contextFiles: z.array(LiveVoiceContextFilePathSchema).optional(),
+  })
+  .strict();
+
 const StructuredGenerationProviderConfigSchema = z
   .object({
     provider: z.string().min(1),
@@ -310,6 +324,7 @@ export const PersistedConfigSchema = z
       .optional(),
 
     providers: ProvidersSchema.optional(),
+    liveVoice: LiveVoiceConfigSchema.optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
     worktrees: WorktreesConfigSchema.optional(),

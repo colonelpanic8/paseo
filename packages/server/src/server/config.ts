@@ -410,6 +410,16 @@ function resolveVoiceLlmConfig(
   };
 }
 
+function resolveLiveVoiceContextFiles(
+  paseoHome: string,
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): string[] | undefined {
+  const contextFiles = persisted.liveVoice?.contextFiles?.map((configuredPath) =>
+    resolveConfiguredPath(paseoHome, configuredPath),
+  );
+  return contextFiles?.length ? contextFiles : undefined;
+}
+
 function resolveCorsAllowedOrigins(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
@@ -634,6 +644,7 @@ export function resolveConfigFromPersisted(
     voiceLlmProvider: voiceLlm.provider,
     voiceLlmProviderExplicit: voiceLlm.providerExplicit,
     voiceLlmModel: voiceLlm.model,
+    liveVoiceContextFiles: resolveLiveVoiceContextFiles(paseoHome, persisted),
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
     metadataGeneration: persisted.agents?.metadataGeneration,

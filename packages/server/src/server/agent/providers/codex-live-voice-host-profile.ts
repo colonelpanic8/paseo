@@ -73,8 +73,9 @@ export const CODEX_LIVE_VOICE_PROVIDER_OPTIONS = {
  *
  * Context limits: codex enforces 128 items and 8,192 estimated tokens per item
  * and in total on `thread/realtime/start`, counting 4 bytes per token. The
- * budget stays well under: the snapshot competes with the user's actual
- * conversation for attention, and a rejected start costs the whole call.
+ * daemon snapshot stays well under that ceiling; configured user context may
+ * use the remaining capacity, with the combined accounting preventing a
+ * rejected start.
  *
  * Caveat: a user's `experimental_realtime_ws_backend_prompt` in their codex
  * config takes precedence over the prompt this profile's host sends. That
@@ -87,6 +88,7 @@ export const CODEX_LIVE_VOICE_HOST_PROFILE: LiveVoiceHostProfile = {
   providerOptions: CODEX_LIVE_VOICE_PROVIDER_OPTIONS,
   contextLimits: {
     contextTokenBudget: 3_000,
+    initialItemsTokenBudget: 8_192,
     bytesPerToken: 4,
   },
 };
