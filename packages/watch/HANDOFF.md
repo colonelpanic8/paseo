@@ -183,6 +183,18 @@ produces both signed APKs).
   undecodable one falls back to the colored initial, so the pre-existing look is the
   failure mode. A third DataItem prefix means a third listener object — see the
   README; that gotcha now applies three times.
+- **Pocket Live Voice start.** The watch stages a nonce over `MessageClient`, then
+  opens `WearLiveVoicePocketStartActivity` on the phone through
+  `RemoteActivityHelper`. The transparent activity wakes above the lock screen,
+  stays resumed until the microphone foreground service reports startup, and then
+  exits. Companion Device Manager was investigated and not added: its API 31
+  permission clears the general background service-start gate but does not grant
+  microphone while-in-use access.
+- **Watch-visible audio routes.** The phone publishes its active/expected Android
+  communication device and API 31+ candidates. Connected Wear node display names
+  distinguish the watch without `BLUETOOTH_CONNECT`; other Bluetooth devices rank
+  ahead of the watch. The activity cycles candidates and the tile displays the
+  selected route without mutating it.
 - 27 phone-side tests, 46 watch unit tests, 1 on-device instrumented test.
 
 ## Open work
@@ -211,6 +223,31 @@ All of the user's UI asks are built. What remains is verification on hardware:
    project has no icon"), that assets actually sync over Bluetooth rather than
    waiting on WiFi, that a 32 KB PNG scaled into a 26dp square is still legible, and
    that a project whose icon is an SVG falls back cleanly rather than drawing blank.
+5. **Pocket start needs Android 14 and 15 hardware passes.** Background Paseo, lock
+   the Pixel phone with its screen off, and start from `LiveVoiceActivity`. Confirm
+   the display wakes briefly, the activity never exposes app content over the lock
+   screen, the microphone foreground service starts, the call reaches `active`, and
+   the activity exits. Repeat with microphone permission revoked and with the app
+   process killed; neither case may look like a successful call. A live runtime
+   failure must publish `background_unavailable` and its watch copy.
+6. **Route arbitration needs the watch and earbuds connected together.** With Pixel
+   Buds and Pixel Watch both available, earbuds must be selected first. Disconnect
+   and reconnect each device during a call, then cycle every candidate from the
+   watch screen. Confirm the route label follows the audible device and the call
+   keeps running. Check `AudioDeviceInfo.productName` against the connected Wear
+   node name; a generic product label can make the watch look like ordinary
+   Bluetooth audio and is the known heuristic boundary.
+7. **The route tile has not rendered in a physical carousel.** Confirm every kind's
+   glyph and label fit beside call status on a round display. Change routes while
+   the tile is visible and measure the Data Layer push-to-refresh cadence; it must
+   update from `LiveVoiceTileUpdateService` without polling. Tile taps must keep
+   opening the activity and must never change the route directly.
+8. **There is no CDM pairing flow to exercise.** The association permission is not
+   a microphone while-in-use exemption on Android 11–15, so adding the one-time
+   chooser would not make a pocket call work. If a future feature needs CDM, put
+   the association action in phone Settings → Voice inside
+   `LiveVoiceSettingsCard`, and surface its state in `LiveVoiceDiagnosticsCard`;
+   verify association creation, revocation and re-association on hardware there.
 
 ### Transcript shape as built
 

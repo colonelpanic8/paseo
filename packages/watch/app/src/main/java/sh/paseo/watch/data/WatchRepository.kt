@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.StateFlow
 import sh.paseo.watch.model.ActivityState
 import sh.paseo.watch.model.AgentSession
 import sh.paseo.watch.model.LiveVoiceHost
+import sh.paseo.watch.model.LiveVoiceAudioRoute
+import sh.paseo.watch.model.LiveVoiceAudioRouteKind
 import sh.paseo.watch.model.LiveVoicePhase
 import sh.paseo.watch.model.LiveVoiceState
 import sh.paseo.watch.model.LiveVoiceTranscriptEntry
@@ -81,6 +83,9 @@ interface WatchRepository {
 
   /** Toggle the phone's microphone for the running call. */
   suspend fun toggleLiveVoiceMute()
+
+  /** Select one of the phone-advertised communication devices. */
+  suspend fun setLiveVoiceAudioRoute(routeId: String)
 }
 
 /**
@@ -109,6 +114,14 @@ class MockWatchRepository : WatchRepository {
     MutableStateFlow(
       LiveVoiceState.Unknown.copy(
         hosts = listOf(LiveVoiceHost(serverId = MOCK_SERVER, label = "workstation")),
+        activeAudioRoute =
+          LiveVoiceAudioRoute("android:watch", "Pixel Watch", LiveVoiceAudioRouteKind.Watch),
+        audioRouteCandidates =
+          listOf(
+            LiveVoiceAudioRoute("android:buds", "Pixel Buds", LiveVoiceAudioRouteKind.Earbuds),
+            LiveVoiceAudioRoute("android:watch", "Pixel Watch", LiveVoiceAudioRouteKind.Watch),
+          ),
+        pocketStartSupported = true,
       ),
     )
 
@@ -192,6 +205,9 @@ class MockWatchRepository : WatchRepository {
         errorCode = null,
         errorMessage = null,
         closedCause = null,
+        activeAudioRoute = liveVoiceState.value.activeAudioRoute,
+        audioRouteCandidates = liveVoiceState.value.audioRouteCandidates,
+        pocketStartSupported = liveVoiceState.value.pocketStartSupported,
       )
   }
 
@@ -202,6 +218,11 @@ class MockWatchRepository : WatchRepository {
 
   override suspend fun toggleLiveVoiceMute() {
     liveVoiceState.value = liveVoiceState.value.copy(isMuted = !liveVoiceState.value.isMuted)
+  }
+
+  override suspend fun setLiveVoiceAudioRoute(routeId: String) {
+    val target = liveVoiceState.value.audioRouteCandidates.firstOrNull { it.id == routeId } ?: return
+    liveVoiceState.value = liveVoiceState.value.copy(activeAudioRoute = target)
   }
 
   private fun mutateAgent(

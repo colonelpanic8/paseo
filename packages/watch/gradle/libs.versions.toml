@@ -14,6 +14,7 @@ wearCompose = "1.6.2"
 # (keyboard, handwriting, voice, canned replies) that Wear expects a text field to
 # open. Separate version line from wear-compose; 1.1.0 is the current stable.
 wearInput = "1.1.0"
+wearRemoteInteractions = "1.2.0"
 # androidx.wear.tiles + androidx.wear.protolayout, for the Live Voice tile.
 # A tile is not Compose: it renders out of process in the system's tile carousel,
 # so its layout is a ProtoLayout tree built on a background thread and handed to
@@ -40,6 +41,7 @@ wear-compose-material = { group = "androidx.wear.compose", name = "compose-mater
 wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
 wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
 wear-input = { group = "androidx.wear", name = "wear-input", version.ref = "wearInput" }
+wear-remote-interactions = { group = "androidx.wear", name = "wear-remote-interactions", version.ref = "wearRemoteInteractions" }
 
 wear-tiles = { group = "androidx.wear.tiles", name = "tiles", version.ref = "wearTiles" }
 wear-protolayout = { group = "androidx.wear.protolayout", name = "protolayout", version.ref = "wearProtolayout" }
