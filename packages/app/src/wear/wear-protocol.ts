@@ -121,6 +121,15 @@ export interface WearLiveVoiceTranscriptEntry {
   text: string;
 }
 
+export type WearLiveVoiceAudioRouteKind = "watch" | "earbuds" | "wired" | "speaker" | "other";
+
+export interface WearLiveVoiceAudioRoute {
+  /** Stable while this Android audio device remains connected. */
+  id: string;
+  label: string;
+  kind: WearLiveVoiceAudioRouteKind;
+}
+
 export interface WearLiveVoiceState {
   v: number;
   updatedAt: number;
@@ -147,6 +156,12 @@ export interface WearLiveVoiceState {
   errorMessage: string | null;
   /** `cause` of the last close, so the watch can explain a call that ended. */
   closedCause: string | null;
+  /** Missing on phone builds that predate watch-visible audio routing. */
+  activeAudioRoute?: WearLiveVoiceAudioRoute | null;
+  /** Missing means the watch hides route controls rather than guessing. */
+  audioRouteCandidates?: WearLiveVoiceAudioRoute[];
+  /** Missing means the watch uses the legacy MessageClient-only start path. */
+  pocketStartSupported?: boolean;
 }
 
 export type WearCommand =
@@ -164,6 +179,7 @@ export type WearCommand =
   | { kind: "startLiveVoice"; serverId: string }
   | { kind: "stopLiveVoice" }
   | { kind: "toggleLiveVoiceMute" }
+  | { kind: "setLiveVoiceAudioRoute"; routeId: string }
   | { kind: "refresh" };
 
 function str(record: Record<string, unknown>, key: string): string | null {
@@ -228,6 +244,10 @@ export function parseWearCommand(raw: string): WearCommand | null {
   // watch holding a stale state item address a call that has since moved.
   if (kind === "stopLiveVoice") return { kind: "stopLiveVoice" };
   if (kind === "toggleLiveVoiceMute") return { kind: "toggleLiveVoiceMute" };
+  if (kind === "setLiveVoiceAudioRoute") {
+    const routeId = str(record, "routeId");
+    return routeId ? { kind: "setLiveVoiceAudioRoute", routeId } : null;
+  }
 
   const serverId = str(record, "serverId");
   if (!serverId) return null;
