@@ -12,7 +12,11 @@ export interface LiveVoiceHostAvailability {
   paseoToolsEnabled: boolean | null;
   /** Durable assistants; older daemons only place legacy ephemeral calls. */
   supportsAssistants?: boolean;
-  contextProfiles: LiveVoiceContextProfileHostInfo;
+  /**
+   * Absent when the host predates context profiles, and on callers that build
+   * availability without reading server capabilities.
+   */
+  contextProfiles?: LiveVoiceContextProfileHostInfo;
 }
 
 export type LiveVoiceUnavailableReason =
