@@ -67,6 +67,7 @@ import { VoiceProvider } from "@/contexts/voice-context";
 import { LiveVoiceProvider } from "@/contexts/live-voice-context";
 import { LiveVoiceStrip } from "@/live-voice/live-voice-strip";
 import { LiveVoiceMuteShortcut } from "@/live-voice/live-voice-mute-shortcut";
+import { LiveVoiceLinkListener } from "@/live-voice/live-voice-link-listener";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -675,6 +676,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
         <LiveVoiceProvider>
           <DesktopWindowControlsSync />
           <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
+          <LiveVoiceLinkListener />
           <HostSessionManager />
           <FaviconStatusSync />
           <AppearanceStyleBoundary>{children}</AppearanceStyleBoundary>
