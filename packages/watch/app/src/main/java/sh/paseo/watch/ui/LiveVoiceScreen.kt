@@ -41,8 +41,10 @@ import sh.paseo.watch.model.LiveVoiceHost
 import sh.paseo.watch.model.LiveVoicePhase
 import sh.paseo.watch.model.LiveVoiceState
 import sh.paseo.watch.model.LiveVoiceTranscriptEntry
+import sh.paseo.watch.model.audioRouteIcon
 import sh.paseo.watch.model.liveVoiceErrorMessage
 import sh.paseo.watch.model.liveVoiceUnavailableMessage
+import sh.paseo.watch.model.nextAudioRoute
 import sh.paseo.watch.theme.PaseoColors
 
 /**
@@ -54,6 +56,8 @@ private sealed interface LiveVoiceRow {
   data object Header : LiveVoiceRow
 
   data object Status : LiveVoiceRow
+
+  data object AudioRoute : LiveVoiceRow
 
   /** Why no call can be placed — shown instead of any control. */
   data object Unavailable : LiveVoiceRow
@@ -91,6 +95,7 @@ fun LiveVoiceScreen(
   onStart: (String) -> Unit,
   onStop: () -> Unit,
   onToggleMute: () -> Unit,
+  onSetAudioRoute: (String) -> Unit,
   listState: ScalingLazyListState = rememberScalingLazyListState(),
 ) {
   val soleHost = state.soleHost
@@ -98,6 +103,7 @@ fun LiveVoiceScreen(
     buildList {
       add(LiveVoiceRow.Header)
       add(LiveVoiceRow.Status)
+      if (state.activeAudioRoute != null) add(LiveVoiceRow.AudioRoute)
       if (state.isLive) {
         state.transcripts.forEach { add(LiveVoiceRow.Turn(it)) }
       } else {
@@ -128,6 +134,8 @@ fun LiveVoiceScreen(
         LiveVoiceRow.Header -> LiveVoiceHeader()
 
         LiveVoiceRow.Status -> LiveVoiceStatus(state)
+
+        LiveVoiceRow.AudioRoute -> LiveVoiceAudioRoute(state, onSetAudioRoute)
 
         LiveVoiceRow.Unavailable -> UnavailableCard(state.unavailableReason)
 
@@ -168,6 +176,47 @@ fun LiveVoiceScreen(
   LaunchedEffect(rows.size, state.phase) {
     if (followTail) listState.scrollToItem(rows.lastIndex)
   }
+}
+
+/** The phone's current route; tapping selects the next advertised candidate. */
+@Composable
+private fun LiveVoiceAudioRoute(
+  state: LiveVoiceState,
+  onSetAudioRoute: (String) -> Unit,
+) {
+  val active = state.activeAudioRoute ?: return
+  val next = state.nextAudioRoute()
+  Chip(
+    onClick = { next?.let { onSetAudioRoute(it.id) } },
+    enabled = next != null,
+    colors = ChipDefaults.chipColors(backgroundColor = PaseoColors.surface1),
+    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+    label = {
+      Text(
+        text = active.label,
+        color = PaseoColors.foreground,
+        fontSize = 12.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    },
+    secondaryLabel = {
+      Text(
+        text = if (next == null) "Audio route" else "Tap for ${next.label}",
+        color = PaseoColors.foregroundMuted,
+        fontSize = 10.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    },
+    icon = {
+      Text(
+        text = audioRouteIcon(active.kind),
+        color = PaseoColors.foreground,
+        fontSize = 17.sp,
+      )
+    },
+  )
 }
 
 @Composable
