@@ -111,6 +111,24 @@ Paseo uses these paths under the configured OpenAI base URL:
 - voice mode STT: `/v1/audio/transcriptions`
 - voice mode TTS: `/v1/audio/speech`
 
+## Live Voice context files
+
+Live Voice can load standing notes and instructions into every new call. Configure absolute or
+`~`-rooted paths in `config.json`:
+
+```json
+{
+  "liveVoice": {
+    "contextFiles": ["~/.paseo/voice-context.md", "/work/notes/current-projects.md"]
+  }
+}
+```
+
+Paseo reads each file when the call starts, so edits apply to the next call without another daemon
+restart. Missing or unreadable files are skipped. Each file is limited to 12 KiB and the combined
+file context is limited to 32 KiB; content over either limit is cut at a line boundary and marked
+as truncated.
+
 ## Environment Variables
 
 - `PASEO_VOICE_LLM_PROVIDER`, voice agent provider override
