@@ -8,7 +8,6 @@ function paseo(id: string, status: PaseoSubagentRow["status"] = "idle"): PaseoSu
     id,
     provider: "codex",
     title: id,
-    summary: null,
     status,
     requiresAttention: false,
     createdAt: new Date(),
