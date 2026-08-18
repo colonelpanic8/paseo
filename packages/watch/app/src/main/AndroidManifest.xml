@@ -53,6 +53,14 @@
       </intent-filter>
     </activity>
 
+    <!-- Opened by the Dispatch tile target. It launches the system recognizer
+         immediately and returns after the phone acknowledges the prompt. -->
+    <activity
+      android:name=".DispatchActivity"
+      android:exported="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.DeviceDefault" />
+
     <!-- BIND_TILE_PROVIDER is held by the system, not requested by us: the
          android:permission attribute is what keeps any other app from binding
          this service. PREVIEW is what the carousel shows while the user is
