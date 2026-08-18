@@ -1749,6 +1749,17 @@ export const ar: TranslationResources = {
         description: "يُستخدم للمكالمات الجديدة. تحتفظ المكالمة النشطة بصوتها الحالي.",
         default: "الافتراضي",
       },
+      dispatch: {
+        hostLabel: "مضيف الإرسال",
+        description: "اختر المضيف للمطالبات الصوتية لمرة واحدة من ساعتك.",
+        chooseHost: "اختر مضيفًا",
+        noHosts: "لا توجد مضيفات متاحة",
+        agentLabel: "وكيل الإرسال",
+        agentHint: "تُرسل مطالبات الساعة المنطوقة إلى هذا الوكيل.",
+        notSet: "غير معيّن",
+        clear: "غير معيّن",
+        noAgents: "لا توجد وكلاء على هذا المضيف",
+      },
       backendModel: {
         label: "نموذج الإجراءات",
         description:

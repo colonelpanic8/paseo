@@ -1800,6 +1800,17 @@ export const fr: TranslationResources = {
         description: "Utilisée pour les nouveaux appels. Un appel actif conserve sa voix actuelle.",
         default: "Par défaut",
       },
+      dispatch: {
+        hostLabel: "Hôte Dispatch",
+        description: "Choisissez l’hôte des requêtes ponctuelles depuis votre montre.",
+        chooseHost: "Choisir un hôte",
+        noHosts: "Aucun hôte disponible",
+        agentLabel: "Agent Dispatch",
+        agentHint: "Les requêtes dictées sur la montre sont envoyées à cet agent.",
+        notSet: "Non défini",
+        clear: "Non défini",
+        noAgents: "Aucun agent sur cet hôte",
+      },
       backendModel: {
         label: "Modèle d’actions",
         description:

@@ -1796,6 +1796,17 @@ export const es: TranslationResources = {
         description: "Se usa en llamadas nuevas. Una llamada activa conserva su voz actual.",
         default: "Predeterminada",
       },
+      dispatch: {
+        hostLabel: "Host de Dispatch",
+        description: "Elige el host para indicaciones únicas desde el reloj.",
+        chooseHost: "Elegir host",
+        noHosts: "No hay hosts disponibles",
+        agentLabel: "Agente de Dispatch",
+        agentHint: "Las indicaciones habladas del reloj se envían a este agente.",
+        notSet: "Sin configurar",
+        clear: "Sin configurar",
+        noAgents: "No hay agentes en este host",
+      },
       backendModel: {
         label: "Modelo de acciones",
         description:

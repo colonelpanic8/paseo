@@ -1759,6 +1759,17 @@ export const en = {
         description: "Used for new calls. An active call keeps its current voice.",
         default: "Default",
       },
+      dispatch: {
+        hostLabel: "Dispatch host",
+        description: "Choose the host for one-shot prompts from your watch.",
+        chooseHost: "Choose host",
+        noHosts: "No hosts available",
+        agentLabel: "Dispatch agent",
+        agentHint: "Spoken watch prompts are sent to this agent.",
+        notSet: "Not set",
+        clear: "Not set",
+        noAgents: "No agents on this host",
+      },
       backendModel: {
         label: "Action model",
         description:
