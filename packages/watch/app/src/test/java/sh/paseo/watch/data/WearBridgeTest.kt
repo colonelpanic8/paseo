@@ -283,7 +283,8 @@ class WearBridgeTest {
     // by name with a type check — a null is simply "absent" to it.
     assertEquals(
       """{"v":1,"kind":"requestTranscript","serverId":"srv-1","agentId":"agent-1",""" +
-        """"workspaceId":null,"requestId":null,"text":null,"allow":null}""",
+        """"workspaceId":null,"requestId":null,"text":null,"allow":null,""" +
+        """"pocketStartRequestId":null,"routeId":null}""",
       WearBridge.json.encodeToString(WireCommand.serializer(), command),
     )
   }
