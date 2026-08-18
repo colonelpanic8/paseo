@@ -130,6 +130,21 @@ export interface WearLiveVoiceAudioRoute {
   kind: WearLiveVoiceAudioRouteKind;
 }
 
+export interface WearDispatchResult {
+  /** Correlates the phone's acknowledgement with the recognizer submission. */
+  requestId?: string;
+  status: "success" | "failure";
+  message?: string;
+}
+
+export interface WearDispatchState {
+  configured: boolean;
+  /** Agent title resolved by the phone; no agent or server ids cross to the watch. */
+  label?: string;
+  /** Latest command acknowledgement. The request id prevents stale confirmations. */
+  result?: WearDispatchResult;
+}
+
 export interface WearLiveVoiceState {
   v: number;
   updatedAt: number;
@@ -162,6 +177,8 @@ export interface WearLiveVoiceState {
   audioRouteCandidates?: WearLiveVoiceAudioRoute[];
   /** Missing means the watch uses the legacy MessageClient-only start path. */
   pocketStartSupported?: boolean;
+  /** Missing on phone builds that predate one-shot watch Dispatch. */
+  dispatch?: WearDispatchState;
 }
 
 export type WearCommand =
@@ -180,6 +197,7 @@ export type WearCommand =
   | { kind: "stopLiveVoice" }
   | { kind: "toggleLiveVoiceMute" }
   | { kind: "setLiveVoiceAudioRoute"; routeId: string }
+  | { kind: "dispatchPrompt"; text: string; requestId?: string }
   | { kind: "refresh" };
 
 function str(record: Record<string, unknown>, key: string): string | null {
@@ -247,6 +265,11 @@ export function parseWearCommand(raw: string): WearCommand | null {
   if (kind === "setLiveVoiceAudioRoute") {
     const routeId = str(record, "routeId");
     return routeId ? { kind: "setLiveVoiceAudioRoute", routeId } : null;
+  }
+  if (kind === "dispatchPrompt") {
+    const text = str(record, "text");
+    const requestId = str(record, "requestId") ?? undefined;
+    return text ? { kind: "dispatchPrompt", text, ...(requestId ? { requestId } : {}) } : null;
   }
 
   const serverId = str(record, "serverId");
