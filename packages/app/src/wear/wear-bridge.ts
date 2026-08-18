@@ -6,9 +6,11 @@ import type { LiveVoiceAudioRouteState } from "@/live-voice/background-call-life
 import {
   parseWearCommand,
   type WearCommand,
+  type WearDispatchResult,
   type WearLiveVoiceState,
   type WearSnapshot,
 } from "./wear-protocol";
+import { buildWearDispatchState, type WearDispatchTarget } from "./wear-dispatch";
 import { buildWearLiveVoiceState, stableLiveVoiceKey } from "./wear-live-voice";
 import { buildWearSnapshot, type WearSnapshotInput } from "./wear-snapshot";
 import { buildWearTranscript, isTranscriptEntry, MAX_TRANSCRIPT_ENTRIES } from "./wear-transcript";
@@ -129,6 +131,11 @@ export interface WearBridgeDeps {
    */
   liveVoice?: WearLiveVoiceController;
   audioRoutes?: WearAudioRouteController;
+  /**
+   * Phone-owned Dispatch target. Its presence also advertises Dispatch support;
+   * returning null publishes the configured=false state instead of hiding it.
+   */
+  readDispatchTarget?: () => WearDispatchTarget | null;
   now?: () => number;
   logger?: {
     warn(message: string, error?: unknown): void;
@@ -178,6 +185,7 @@ export class WearBridge {
   private liveVoiceTimer: ReturnType<typeof setTimeout> | null = null;
   private liveVoiceSubscription: (() => void) | null = null;
   private audioRouteSubscription: (() => void) | null = null;
+  private lastDispatchResult: WearDispatchResult | undefined;
   private disposed = false;
 
   constructor(deps: WearBridgeDeps) {
@@ -269,6 +277,14 @@ export class WearBridge {
         snapshot: liveVoice.getSnapshot(),
         availability: liveVoice.readAvailability(),
         audioRoutes: this.deps.audioRoutes?.getSnapshot(),
+        ...(this.deps.readDispatchTarget
+          ? {
+              dispatch: buildWearDispatchState(
+                this.deps.readDispatchTarget(),
+                this.lastDispatchResult,
+              ),
+            }
+          : {}),
       },
       this.deps.now?.() ?? Date.now(),
     );
@@ -620,6 +636,11 @@ export class WearBridge {
       return;
     }
 
+    if (command.kind === "dispatchPrompt") {
+      await this.executeDispatch(command);
+      return;
+    }
+
     if (
       command.kind === "startLiveVoice" ||
       command.kind === "stopLiveVoice" ||
@@ -630,6 +651,15 @@ export class WearBridge {
       return;
     }
 
+    await this.executeAgentCommand(command);
+  }
+
+  private async executeAgentCommand(
+    command: Extract<
+      WearCommand,
+      { kind: "sendPrompt" | "createAgent" | "respondPermission" | "stopAgent" }
+    >,
+  ): Promise<void> {
     const client = this.deps.getClient(command.serverId);
     if (!client) {
       // The watch already reported the send as delivered; there is nothing useful to
@@ -678,6 +708,52 @@ export class WearBridge {
     // Push the resulting state promptly rather than waiting for the next store tick,
     // so the wrist reflects the action it just took.
     await this.publish({ force: true });
+  }
+
+  /** Route a one-shot dictated prompt through the same daemon call as watch Reply. */
+  private async executeDispatch(
+    command: Extract<WearCommand, { kind: "dispatchPrompt" }>,
+  ): Promise<void> {
+    const target = this.deps.readDispatchTarget?.() ?? null;
+    if (!target) {
+      this.lastDispatchResult = {
+        ...(command.requestId ? { requestId: command.requestId } : {}),
+        status: "failure",
+        message: "No dispatch agent set on your phone",
+      };
+      await this.publishLiveVoice();
+      return;
+    }
+
+    const client = this.deps.getClient(target.serverId);
+    if (!client) {
+      this.deps.logger?.warn(`No client for dispatch server ${target.serverId}`);
+      this.lastDispatchResult = {
+        ...(command.requestId ? { requestId: command.requestId } : {}),
+        status: "failure",
+        message: "The dispatch agent's host is offline",
+      };
+      await this.publishLiveVoice();
+      return;
+    }
+
+    try {
+      await client.sendAgentMessage(target.agentId, command.text);
+      this.lastDispatchResult = {
+        ...(command.requestId ? { requestId: command.requestId } : {}),
+        status: "success",
+        message: target.label ? `Sent to ${target.label}` : "Sent to your dispatch agent",
+      };
+    } catch (error) {
+      this.deps.logger?.warn("Wear command dispatchPrompt failed", error);
+      this.lastDispatchResult = {
+        ...(command.requestId ? { requestId: command.requestId } : {}),
+        status: "failure",
+        message: "Couldn't reach your dispatch agent",
+      };
+    }
+
+    await this.publishLiveVoice();
   }
 
   /**
