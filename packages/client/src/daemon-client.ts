@@ -3510,6 +3510,8 @@ export class DaemonClient {
     disabledPromptComponents?: string[];
     /** The user's standing instructions for the whole call, verbatim. */
     customVoiceInstructions?: string;
+    /** Named daemon context profile for this call. */
+    contextProfileId?: string;
     /** Directory for a new workspace when the request names no workspace of its own. */
     defaultWorkspaceDirectory?: string;
     /** Backend-executor model override; the daemon defaults to its fast model. */
@@ -3530,6 +3532,7 @@ export class DaemonClient {
         ...(input.customVoiceInstructions
           ? { customVoiceInstructions: input.customVoiceInstructions }
           : {}),
+        ...(input.contextProfileId ? { contextProfileId: input.contextProfileId } : {}),
         ...(input.defaultWorkspaceDirectory
           ? { defaultWorkspaceDirectory: input.defaultWorkspaceDirectory }
           : {}),

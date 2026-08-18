@@ -435,7 +435,15 @@ export interface PaseoDaemonConfig {
   voiceLlmProvider?: AgentProvider | null;
   voiceLlmProviderExplicit?: boolean;
   voiceLlmModel?: string | null;
-  liveVoiceContextFiles?: string[];
+  liveVoiceContextProfiles?: {
+    profiles: Array<{
+      id: string;
+      label: string;
+      files: string[];
+      instructions?: string | undefined;
+    }>;
+    defaultProfileId?: string | undefined;
+  };
   dictationFinalTimeoutMs?: number;
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
@@ -1656,8 +1664,8 @@ export async function createPaseoDaemon(
                 daemonStatusRpc: dependencies.serverFeatureOverrides?.daemonStatusRpc,
                 relayConfig: dependencies.serverFeatureOverrides?.relayConfig,
                 startPaused: true,
-                ...(config.liveVoiceContextFiles
-                  ? { liveVoiceContextFiles: config.liveVoiceContextFiles }
+                ...(config.liveVoiceContextProfiles
+                  ? { liveVoiceContextProfiles: config.liveVoiceContextProfiles }
                   : {}),
               },
               workspaceAutoName,

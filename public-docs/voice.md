@@ -111,23 +111,45 @@ Paseo uses these paths under the configured OpenAI base URL:
 - voice mode STT: `/v1/audio/transcriptions`
 - voice mode TTS: `/v1/audio/speech`
 
-## Live Voice context files
+## Live Voice context profiles
 
-Live Voice can load standing notes and instructions into every new call. Configure absolute or
-`~`-rooted paths in `config.json`:
+Live Voice can load a named set of standing notes and instructions when a call starts. Configure
+profiles in `config.json`; file paths must be absolute or `~`-rooted:
 
 ```json
 {
   "liveVoice": {
-    "contextFiles": ["~/.paseo/voice-context.md", "/work/notes/current-projects.md"]
+    "contextProfiles": [
+      {
+        "id": "full-org",
+        "label": "Full org",
+        "files": ["~/notes/identity.md", "~/notes/current-projects.md"],
+        "instructions": "Use all supplied context and surface relevant commitments proactively."
+      },
+      {
+        "id": "lean",
+        "label": "Lean",
+        "files": [],
+        "instructions": "Keep this call focused on the work being discussed."
+      }
+    ],
+    "defaultContextProfile": "lean"
   }
 }
 ```
 
-Paseo reads each file when the call starts, so edits apply to the next call without another daemon
-restart. Missing or unreadable files are skipped. Each file is limited to 12 KiB and the combined
-file context is limited to 32 KiB; content over either limit is cut at a line boundary and marked
-as truncated.
+Profile ids are lowercase URL-safe slugs and must be unique. Instructions are limited to 1,000
+characters. The call launcher remembers the last profile you chose for each host.
+
+Paseo reads the selected profile's files when the call starts, so edits apply to the next call
+without another daemon restart. Missing or unreadable files are skipped. Each file is limited to
+12 KiB and the combined file context is limited to 32 KiB; content over either limit is cut at a
+line boundary and marked as truncated.
+
+The older `liveVoice.contextFiles` setting still works. Paseo treats it as an implicit profile with
+id `default`, selected when a call names no profile unless `defaultContextProfile` selects another
+one. You can use `contextFiles` alongside named profiles, but a named profile cannot also use id
+`default`; that config is rejected instead of merged.
 
 ## Environment Variables
 
