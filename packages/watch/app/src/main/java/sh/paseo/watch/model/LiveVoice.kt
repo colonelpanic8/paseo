@@ -7,11 +7,8 @@ package sh.paseo.watch.model
  * socket, and this screen starts it, hangs it up, mutes it, and reads the
  * transcript.
  *
- * Where the audio comes out is a separate question this app has no part in. The
- * phone picks a communication device when a call backgrounds and prefers a
- * Bluetooth headset — which is what a watch with a speaker and mic is — so the
- * call can be on your wrist whether or not this app is installed. See the
- * package README.
+ * The phone owns the communication route. The watch only displays the phone's
+ * candidates and sends a route id back when the user changes it.
  */
 enum class LiveVoicePhase {
   Idle,
@@ -23,6 +20,20 @@ enum class LiveVoicePhase {
 
 /** A daemon the watch may place a call on. */
 data class LiveVoiceHost(val serverId: String, val label: String)
+
+enum class LiveVoiceAudioRouteKind {
+  Watch,
+  Earbuds,
+  Wired,
+  Speaker,
+  Other,
+}
+
+data class LiveVoiceAudioRoute(
+  val id: String,
+  val label: String,
+  val kind: LiveVoiceAudioRouteKind,
+)
 
 data class LiveVoiceTranscriptEntry(
   val id: String,
@@ -44,6 +55,9 @@ data class LiveVoiceState(
   val errorCode: String?,
   val errorMessage: String?,
   val closedCause: String?,
+  val activeAudioRoute: LiveVoiceAudioRoute?,
+  val audioRouteCandidates: List<LiveVoiceAudioRoute>,
+  val pocketStartSupported: Boolean,
 ) {
   /** A call is up or coming up: the controls should offer hang-up and mute. */
   val isLive: Boolean
@@ -70,9 +84,30 @@ data class LiveVoiceState(
         errorCode = null,
         errorMessage = null,
         closedCause = null,
+        activeAudioRoute = null,
+        audioRouteCandidates = emptyList(),
+        pocketStartSupported = false,
       )
   }
 }
+
+fun LiveVoiceState.nextAudioRoute(): LiveVoiceAudioRoute? {
+  if (audioRouteCandidates.size < 2) return null
+  val currentIndex = audioRouteCandidates.indexOfFirst { it.id == activeAudioRoute?.id }
+  return audioRouteCandidates[(currentIndex + 1).mod(audioRouteCandidates.size)]
+}
+
+fun audioRouteIcon(kind: LiveVoiceAudioRouteKind): String =
+  when (kind) {
+    LiveVoiceAudioRouteKind.Watch -> "⌚"
+    LiveVoiceAudioRouteKind.Earbuds -> "🎧"
+    LiveVoiceAudioRouteKind.Wired -> "⌁"
+    LiveVoiceAudioRouteKind.Speaker -> "🔊"
+    LiveVoiceAudioRouteKind.Other -> "•"
+  }
+
+fun LiveVoiceState.audioRouteGlance(): String? =
+  activeAudioRoute?.let { "${audioRouteIcon(it.kind)} ${it.label}" }
 
 /**
  * One line explaining why no call can be placed.
