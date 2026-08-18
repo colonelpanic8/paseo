@@ -4,8 +4,8 @@ Native Wear OS app: Kotlin + Compose for Wear. Triage and unblock agents from yo
 wrist, by voice or by typing, and drive a Live Voice call on the phone.
 
 **Status:** UI and the Wearable Data Layer bridge are both built. The watch renders
-real wire JSON delivered through `DataClient`, and sends prompts, permission
-responses, stops, new-agent requests, and Live Voice controls back over
+real wire JSON delivered through `DataClient`, and sends prompts, one-shot Dispatch
+requests, permission responses, stops, new-agent requests, and Live Voice controls back over
 `MessageClient`.
 
 What is verified, and what is not, is spelled out in [Verification](#verification) —
@@ -36,7 +36,7 @@ Wear app  ──Wearable Data Layer──▶  Phone app  ──WebSocket──�
    │  DataClient /paseo/snapshot          ◀────┤  phone publishes state
    │  DataClient /paseo/transcript/<serverId>/<agentId> ◀─┤  phone answers a transcript request
    │  DataClient /paseo/icon/<projectKey> ◀────┤  phone publishes project icon files
-   │  DataClient /paseo/livevoice        ◀─────┤  phone publishes Live Voice call state
+   │  DataClient /paseo/livevoice        ◀─────┤  phone publishes Live Voice + Dispatch state
    └─ MessageClient /paseo/command  ──────────▶│  watch sends intents
       MessageClient /paseo/refresh  ──────────▶│  watch asks for a republish
 ```
@@ -105,7 +105,7 @@ persisted to a small on-disk queue and drained the next time the app starts. Mos
 commands stay there until they drain. `startLiveVoice` expires after 60 seconds;
 legacy start entries with no timestamp are discarded because their age is unknown.
 
-So: **a prompt or approval sent while the phone app is killed takes effect when the
+So: **a prompt, Dispatch request, or approval sent while the phone app is killed takes effect when the
 app is next opened, not immediately.** The watch reports send failures rather than
 pretending success, and `WearBridge.start()` drains the queue before its first
 publish so a queued approval isn't immediately overwritten by a snapshot that still
@@ -307,7 +307,7 @@ Three more properties worth preserving:
   `liveVoiceUnavailableMessage` in `model/LiveVoice.kt` fall back to the phone's own
   message rather than showing a raw code.
 
-### Its own launcher entry and its own tile
+### Its own launcher entry and the Call/Dispatch tile
 
 `LiveVoiceActivity` is a second `LAUNCHER` activity, not a destination inside
 `MainActivity`'s nav graph. Triage is a list you walk down — workspace, agent,
@@ -318,10 +318,17 @@ wrist, and would leave the tile with nothing to open. Both activities set
 under it.
 
 The tile (`tile/LiveVoiceTileService.kt`) is glance-and-tap: it shows whether a call
-is up, on which host, and the active/expected audio route. Every tap opens the
-activity. It deliberately offers no
-hang-up or mute — tile taps are cheap and unconfirmed, and a stray thumb swiping past
-the carousel should not end a call.
+is up, on which host, and the active/expected audio route. Its compact action row has
+Call and Dispatch targets. Call opens the Live Voice activity; Dispatch opens a
+one-shot activity that launches the system recognizer immediately. It deliberately
+offers no hang-up or mute — tile taps are cheap and unconfirmed, and a stray thumb
+swiping past the carousel should not end a call.
+
+Dispatch is an optional field inside the Live Voice DataItem. Missing means the phone
+predates the feature, so the watch hides the target. A new phone with no configured
+target shows a muted, non-clickable setup hint. The paired compact targets stay in
+`PrimaryLayout`'s responsive round-screen inset instead of placing controls in the
+tile body.
 
 A tile is not Compose and does not run in the app's process, which shapes three
 things. Its layout is a ProtoLayout tree. Its state comes from
@@ -345,6 +352,13 @@ keystrokes ever touch our code, and there is no `RECORD_AUDIO` permission.
 `rememberComposerLaunchers(prompt, onText)` owns the intent configuration for both and
 is the only place it exists. It has two callers: the agent screen's action row, and
 `ui/NewAgentScreen.kt`.
+
+**Dispatch is the same recognizer with a phone-owned destination.** The tile opens
+`DispatchActivity`, which launches voice recognition without a setup screen and sends
+`dispatchPrompt { text, requestId }`. The phone resolves the configured server and
+agent, then republishes a correlated success or failure. The watch never carries
+agent ids. Success haptics once and closes after a brief acknowledgement; failure
+stays visible with retry and system text-input affordances.
 
 **Reply is the recognizer.** Tapping Reply on the agent screen launches speech
 recognition immediately and sends what you said — there is no composer screen in
@@ -377,7 +391,7 @@ on-device recognizer. If the watch ever goes standalone, revisit this.
 | `ui/`                     | One file per screen, plus `Components.kt` and `Glyphs.kt`            |
 | `PaseoWatchApp.kt`        | Nav host; the only place navigation decisions are made               |
 | `LiveVoiceActivity.kt`    | Second launcher entry; deliberately outside the triage nav graph     |
-| `tile/`                   | The Live Voice tile and the listener service that keeps it fresh     |
+| `tile/`                   | The Call/Dispatch tile and the listener service that keeps it fresh  |
 
 Two invariants worth not breaking:
 
@@ -441,14 +455,14 @@ of that surface; migrating is a deliberate later step, not a v1 risk.
 
 Verified:
 
-- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — 59 tests pinning the wire
-  format for snapshots, transcripts and Live Voice, version rejection, unknown-state,
+- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — pinned tests covering the wire
+  format for snapshots, transcripts, Live Voice and Dispatch, version rejection, unknown-state,
   unknown-transcript-kind and unknown-phase degradation, the exact serialized command
   JSON, the navigation rule, the transcript cache's staleness and pruning rules, and
   the icon cache's path parsing, format screening and pruning.
-- **Phone unit tests** (`vitest run src/wear/`) — 108 tests covering snapshot
+- **Phone unit tests** (`vitest run src/wear/`) — focused tests covering snapshot
   building, transcript projection, command parsing, permission routing, the
-  killed-app drain, failure handling, and the Live Voice projection plus its
+  killed-app drain, Dispatch routing and acknowledgement, failure handling, and the Live Voice projection plus its
   publish-now/coalesce split.
 - **On-device Data Layer read path** (`gradle :app:connectedDebugAndroidTest`) — puts a
   real DataItem and asserts the repository picks it up, decodes it, and maps it.
