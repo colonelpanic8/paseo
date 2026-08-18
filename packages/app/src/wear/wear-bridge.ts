@@ -2,6 +2,7 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 
 import type { LiveVoiceAvailability } from "@/live-voice/live-voice-availability-policy";
 import type { LiveVoiceSnapshot } from "@/live-voice/live-voice-runtime";
+import type { LiveVoiceAudioRouteState } from "@/live-voice/background-call-lifetime";
 import {
   parseWearCommand,
   type WearCommand,
@@ -43,6 +44,12 @@ export interface WearLiveVoiceController {
   start(serverId: string): Promise<void>;
   stop(): Promise<void>;
   toggleMute(): void;
+}
+
+export interface WearAudioRouteController {
+  subscribe(listener: () => void): () => void;
+  getSnapshot(): LiveVoiceAudioRouteState | null;
+  select(routeId: string): Promise<boolean>;
 }
 
 /**
@@ -121,6 +128,7 @@ export interface WearBridgeDeps {
    * state item and the watch shows its "not available" screen.
    */
   liveVoice?: WearLiveVoiceController;
+  audioRoutes?: WearAudioRouteController;
   now?: () => number;
   logger?: {
     warn(message: string, error?: unknown): void;
@@ -169,6 +177,7 @@ export class WearBridge {
   /** Set while a transcript-only change is waiting out LIVE_VOICE_COALESCE_MS. */
   private liveVoiceTimer: ReturnType<typeof setTimeout> | null = null;
   private liveVoiceSubscription: (() => void) | null = null;
+  private audioRouteSubscription: (() => void) | null = null;
   private disposed = false;
 
   constructor(deps: WearBridgeDeps) {
@@ -188,6 +197,10 @@ export class WearBridge {
       this.deps.liveVoice?.subscribe(() => {
         void this.syncLiveVoice();
       }) ?? null;
+    this.audioRouteSubscription =
+      this.deps.audioRoutes?.subscribe(() => {
+        void this.syncLiveVoice();
+      }) ?? null;
 
     // Commands can arrive while the app process is dead — Play Services starts only
     // the native listener service, which persists them. Drain before the first
@@ -203,6 +216,8 @@ export class WearBridge {
     this.subscription = null;
     this.liveVoiceSubscription?.();
     this.liveVoiceSubscription = null;
+    this.audioRouteSubscription?.();
+    this.audioRouteSubscription = null;
     if (this.liveVoiceTimer !== null) {
       clearTimeout(this.liveVoiceTimer);
       this.liveVoiceTimer = null;
@@ -250,7 +265,11 @@ export class WearBridge {
     const liveVoice = this.deps.liveVoice;
     if (!liveVoice) return null;
     return buildWearLiveVoiceState(
-      { snapshot: liveVoice.getSnapshot(), availability: liveVoice.readAvailability() },
+      {
+        snapshot: liveVoice.getSnapshot(),
+        availability: liveVoice.readAvailability(),
+        audioRoutes: this.deps.audioRoutes?.getSnapshot(),
+      },
       this.deps.now?.() ?? Date.now(),
     );
   }
@@ -604,7 +623,8 @@ export class WearBridge {
     if (
       command.kind === "startLiveVoice" ||
       command.kind === "stopLiveVoice" ||
-      command.kind === "toggleLiveVoiceMute"
+      command.kind === "toggleLiveVoiceMute" ||
+      command.kind === "setLiveVoiceAudioRoute"
     ) {
       await this.executeLiveVoice(command);
       return;
@@ -670,7 +690,9 @@ export class WearBridge {
   private async executeLiveVoice(
     command: Extract<
       WearCommand,
-      { kind: "startLiveVoice" | "stopLiveVoice" | "toggleLiveVoiceMute" }
+      {
+        kind: "startLiveVoice" | "stopLiveVoice" | "toggleLiveVoiceMute" | "setLiveVoiceAudioRoute";
+      }
     >,
   ): Promise<void> {
     const liveVoice = this.deps.liveVoice;
@@ -689,6 +711,11 @@ export class WearBridge {
           break;
         case "toggleLiveVoiceMute":
           liveVoice.toggleMute();
+          break;
+        case "setLiveVoiceAudioRoute":
+          if (!(await this.deps.audioRoutes?.select(command.routeId))) {
+            this.deps.logger?.warn(`Wear audio route ${command.routeId} is unavailable`);
+          }
           break;
       }
     } catch (error) {
