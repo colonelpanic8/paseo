@@ -4,6 +4,7 @@
  */
 
 import type { LiveVoiceAvailability } from "@/live-voice/live-voice-availability-policy";
+import type { LiveVoiceAudioRouteState } from "@/live-voice/background-call-lifetime";
 import type { LiveVoiceSnapshot } from "@/live-voice/live-voice-runtime";
 import {
   WEAR_PROTOCOL_VERSION,
@@ -33,6 +34,7 @@ export const MAX_LIVE_VOICE_TRANSCRIPT_CHARS = 240;
 export interface WearLiveVoiceInput {
   snapshot: LiveVoiceSnapshot;
   availability: LiveVoiceAvailability;
+  audioRoutes?: LiveVoiceAudioRouteState | null;
 }
 
 /**
@@ -82,7 +84,7 @@ export function buildWearLiveVoiceState(
   input: WearLiveVoiceInput,
   now: number,
 ): WearLiveVoiceState {
-  const { snapshot, availability } = input;
+  const { snapshot, availability, audioRoutes } = input;
   return {
     v: WEAR_PROTOCOL_VERSION,
     updatedAt: now,
@@ -96,6 +98,13 @@ export function buildWearLiveVoiceState(
     errorCode: snapshot.error?.code ?? null,
     errorMessage: snapshot.error?.message ?? null,
     closedCause: snapshot.closedCause,
+    ...(audioRoutes
+      ? {
+          activeAudioRoute: audioRoutes.active,
+          audioRouteCandidates: audioRoutes.candidates,
+        }
+      : {}),
+    pocketStartSupported: true,
   };
 }
 

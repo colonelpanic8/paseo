@@ -27,6 +27,12 @@ internal object BackgroundCallLifetime {
         isActive = true
     }
 
+    fun serviceStarted(context: Context) {
+        context.sendBroadcast(
+            Intent(ACTION_BACKGROUND_CALL_STARTED).setPackage(context.packageName),
+        )
+    }
+
     /**
      * Re-posts the notification with current call state. No-op when no call is up,
      * so a late update from JS cannot resurrect a service that just stopped.
@@ -67,4 +73,6 @@ internal object BackgroundCallLifetime {
             context.startService(intent)
         }
     }
+
+    const val ACTION_BACKGROUND_CALL_STARTED = "sh.paseo.backgroundcall.STARTED"
 }
