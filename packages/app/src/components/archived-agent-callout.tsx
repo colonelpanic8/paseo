@@ -3,10 +3,10 @@ import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import Animated from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -18,7 +18,7 @@ interface ArchivedAgentCalloutProps {
 
 export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCalloutProps) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
+  const screenBottomInset = useScreenBottomInset();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
@@ -27,8 +27,8 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
   const { style: keyboardAnimatedStyle } = useKeyboardShiftStyle({ mode: "translate" });
 
   const containerStyle = useMemo(
-    () => [styles.container, { paddingBottom: insets.bottom }, keyboardAnimatedStyle],
-    [insets.bottom, keyboardAnimatedStyle],
+    () => [styles.container, { paddingBottom: screenBottomInset }, keyboardAnimatedStyle],
+    [screenBottomInset, keyboardAnimatedStyle],
   );
 
   const handleUnarchive = useCallback(async () => {

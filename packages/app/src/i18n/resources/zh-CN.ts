@@ -1560,6 +1560,144 @@ export const zhCN: TranslationResources = {
       copied: "已复制",
     },
   },
+  audioSession: {
+    busy: {
+      voiceMode: "语音模式正在使用麦克风，请先停止。",
+      dictation: "语音输入正在使用麦克风，请先停止。",
+      liveVoice: "实时语音正在使用麦克风，请先停止。",
+      unknown: "麦克风正在使用中，请先停止其他音频功能。",
+    },
+  },
+  liveVoice: {
+    label: "实时语音",
+    menu: {
+      hosts: "主机",
+    },
+    actions: {
+      start: "开始实时语音",
+      unavailable: "实时语音不可用",
+      stop: "停止实时语音",
+      mute: "静音麦克风",
+      unmute: "取消静音",
+      enableAudio: "点按以启用音频",
+      showTranscript: "显示转录",
+      hideTranscript: "隐藏转录",
+      dismiss: "关闭",
+    },
+    unavailable: {
+      platform: "此设备不支持实时语音。",
+      noHosts: "请添加主机以使用实时语音。",
+      connecting: "正在连接主机。主机就绪后即可使用实时语音。",
+      offline: "没有在线主机。请连接主机以使用实时语音。",
+      upgrade: "已连接的主机未声明支持实时语音。请更新其守护进程。",
+      toolsDisabled: "请在此主机的设置中启用 Paseo 工具，以使用实时语音。",
+    },
+    settings: {
+      title: "实时语音",
+      voice: {
+        label: "语音",
+        description: "用于新通话。正在进行的通话会保留当前语音。",
+        default: "默认",
+      },
+      backendModel: {
+        label: "操作模型",
+        description:
+          "在后台执行通话的操作。默认模型快速且低成本；如果操作需要更强的判断力，请选择更强的模型。",
+        default: "默认（快速）",
+      },
+      backendThinking: {
+        label: "操作思考",
+        description: "操作模型的推理深度。",
+        default: "默认",
+      },
+      agentReports: {
+        label: "播报智能体动态",
+        description:
+          "通话期间，任何已连接主机上的智能体会话完成、出错或需要授权时都会告知你，包括在通话之外启动的会话。",
+      },
+      agentReportGuidance: {
+        label: "何时打断",
+        description: "原样转达给语音智能体。留空则由它自行判断。",
+        placeholder: "只有需要授权和出错时才打断我。",
+      },
+      promptComponents: {
+        "canonical-tools": {
+          label: "工具速查表",
+          description: "把准确的工具名交给助手，省去逐轮探索。",
+        },
+        "delegation-brevity": {
+          label: "简短的委派提示",
+          description: "给智能体会话的提示保持简短——不口述代码或步骤清单。",
+        },
+        "cross-host-reach": {
+          label: "跨机器感知",
+          description: "告诉助手哪些读取操作一次调用即可覆盖所有机器。",
+        },
+        recipes: {
+          label: "常用捷径",
+          description: "常见请求的最短已知路径，例如按名称归档。",
+        },
+        "speech-style": {
+          label: "说话风格",
+          description: "口语化的句子、先执行后陈述，并使用 Paseo 术语。",
+        },
+      },
+      customInstructions: {
+        label: "常设指令",
+        description: "每次通话都原样转达给语音智能体。",
+        placeholder: "除非我要求更多，否则始终用一句话回答。",
+      },
+      defaultWorkspaceDirectory: {
+        label: "默认工作区目录",
+        description: "当请求没有明确的工作区时，新工作区的创建位置。留空则由语音助手询问。",
+        placeholder: "~/Projects",
+      },
+    },
+    diagnostics: {
+      title: "实时语音",
+      statusTitle: "状态",
+      noHosts: "未配置主机。",
+      hostSummary: "{{version}} · {{support}}",
+      unknownVersion: "版本未知",
+      supported: "支持实时语音",
+      unsupported: "不支持实时语音",
+      supportUnknown: "实时语音支持情况未知",
+      connection: {
+        idle: "空闲",
+        connecting: "正在连接",
+        online: "在线",
+        offline: "离线",
+        error: "错误",
+      },
+    },
+    status: {
+      connecting: "正在连接...",
+      live: "进行中",
+      audioBlocked: "音频被阻止",
+      stopping: "正在停止...",
+      ended: "通话已结束",
+      error: "失败",
+    },
+    transcript: {
+      empty: "还没有语音内容。",
+      user: "你：",
+      assistant: "Agent：",
+    },
+    errors: {
+      busy: "该主机上已有进行中的实时语音通话。",
+      unsupported: "该主机不支持实时语音。",
+      startFailed: "无法启动实时语音。",
+      micBusy: "麦克风正被其他功能占用。",
+      notConnected: "该主机未连接。",
+      alreadyActive: "实时语音通话已在进行中。",
+      stopping: "上一次实时语音通话仍在停止中。",
+      micDenied: "麦克风访问被拒绝。",
+      micUnavailable: "无法打开麦克风。",
+      backgroundUnavailable: "无法启动后台音频。",
+      iceTimeout: "未能及时协商连接。",
+      connectionLost: "实时语音连接已断开。",
+    },
+  },
   realtimeVoice: {
     actions: {
       mute: "静音 realtime voice",
@@ -1756,6 +1894,7 @@ export const zhCN: TranslationResources = {
     groupInfo: "关于 {{title}}",
     sections: {
       general: "通用",
+      voice: "实时语音",
       appearance: "外观",
       editor: "编辑器",
       shortcuts: "快捷键",
@@ -2047,9 +2186,12 @@ export const zhCN: TranslationResources = {
         sendMessage: "发送消息",
         queueMessage: "消息排队",
         muteUnmuteVoiceMode: "静音/取消静音语音模式",
+        muteUnmuteLiveVoice: "静音/取消静音实时语音",
+        holdInvertLiveVoiceMute: "按住以反转实时语音静音",
         switchProject: "切换项目",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute: "静音时按住说话，通话时按住静音。",
         showKeyboardShortcuts: "焦点不在文本输入框或终端内时可用。",
       },
     },

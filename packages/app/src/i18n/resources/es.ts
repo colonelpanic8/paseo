@@ -1623,6 +1623,150 @@ export const es: TranslationResources = {
       copied: "Copiado",
     },
   },
+  audioSession: {
+    busy: {
+      voiceMode: "El modo de voz está usando el micrófono. Detenlo primero.",
+      dictation: "El dictado está usando el micrófono. Detenlo primero.",
+      liveVoice: "La voz en directo está usando el micrófono. Detenla primero.",
+      unknown: "El micrófono está en uso. Detén primero la otra función de audio.",
+    },
+  },
+  liveVoice: {
+    label: "Voz en directo",
+    menu: {
+      hosts: "Host",
+    },
+    actions: {
+      start: "Iniciar voz en directo",
+      unavailable: "Voz en directo no disponible",
+      stop: "Detener voz en directo",
+      mute: "Silenciar micrófono",
+      unmute: "Activar micrófono",
+      enableAudio: "Toca para activar el audio",
+      showTranscript: "Mostrar transcripción",
+      hideTranscript: "Ocultar transcripción",
+      dismiss: "Descartar",
+    },
+    unavailable: {
+      platform: "La voz en directo no es compatible con este dispositivo.",
+      noHosts: "Añade un host para usar la voz en directo.",
+      connecting: "Conectando a los hosts. La voz en directo aparecerá cuando uno esté listo.",
+      offline: "No hay hosts conectados. Conecta uno para usar la voz en directo.",
+      upgrade: "Los hosts conectados no anuncian voz en directo. Actualiza sus daemons.",
+      toolsDisabled:
+        "Activa las herramientas de Paseo en la configuración de este host para usar la voz en directo.",
+    },
+    settings: {
+      title: "Voz en vivo",
+      voice: {
+        label: "Voz",
+        description: "Se usa en llamadas nuevas. Una llamada activa conserva su voz actual.",
+        default: "Predeterminada",
+      },
+      backendModel: {
+        label: "Modelo de acciones",
+        description:
+          "Ejecuta las acciones de la llamada en segundo plano. El predeterminado es rápido y barato; elige un modelo más potente si las acciones requieren más criterio.",
+        default: "Predeterminado (rápido)",
+      },
+      backendThinking: {
+        label: "Razonamiento de acciones",
+        description: "Profundidad de razonamiento del modelo de acciones.",
+        default: "Predeterminado",
+      },
+      agentReports: {
+        label: "Informar actividad de agentes",
+        description:
+          "Durante una llamada, entérate cuando cualquier sesión de agente termina, falla o necesita permiso, incluidas las que iniciaste fuera de la llamada, en cualquier host conectado.",
+      },
+      agentReportGuidance: {
+        label: "Cuándo interrumpir",
+        description: "Se transmite al agente de voz tal cual. Déjalo vacío para que decida.",
+        placeholder: "Interrúmpeme solo por solicitudes de permiso y fallos.",
+      },
+      promptComponents: {
+        "canonical-tools": {
+          label: "Chuleta de herramientas",
+          description:
+            "Da al asistente los nombres exactos de las herramientas para ahorrar turnos de búsqueda.",
+        },
+        "delegation-brevity": {
+          label: "Delegaciones breves",
+          description:
+            "Mantén cortos los prompts a las sesiones de agente: sin dictar código ni listas de pasos.",
+        },
+        "cross-host-reach": {
+          label: "Visión entre máquinas",
+          description:
+            "Enseña al asistente qué lecturas cubren todas las máquinas en una sola llamada.",
+        },
+        recipes: {
+          label: "Recetas",
+          description:
+            "Los caminos más cortos conocidos para peticiones comunes, como archivar por nombre.",
+        },
+        "speech-style": {
+          label: "Estilo al hablar",
+          description: "Frases habladas, actuar antes de narrar y vocabulario de Paseo.",
+        },
+      },
+      customInstructions: {
+        label: "Instrucciones permanentes",
+        description: "Se transmiten al agente de voz tal cual, en cada llamada.",
+        placeholder: "Responde siempre en una frase salvo que pida más.",
+      },
+      defaultWorkspaceDirectory: {
+        label: "Directorio de espacio de trabajo predeterminado",
+        description:
+          "Dónde se crean los espacios de trabajo nuevos cuando una solicitud no tiene uno obvio. Déjalo vacío y el agente de voz preguntará.",
+        placeholder: "~/Projects",
+      },
+    },
+    diagnostics: {
+      title: "Voz en directo",
+      statusTitle: "Estado",
+      noHosts: "No hay hosts configurados.",
+      hostSummary: "{{version}} · {{support}}",
+      unknownVersion: "Versión desconocida",
+      supported: "Voz en directo compatible",
+      unsupported: "Voz en directo no compatible",
+      supportUnknown: "Compatibilidad con voz en directo desconocida",
+      connection: {
+        idle: "Inactivo",
+        connecting: "Conectando",
+        online: "En línea",
+        offline: "Sin conexión",
+        error: "Error",
+      },
+    },
+    status: {
+      connecting: "Conectando...",
+      live: "En directo",
+      audioBlocked: "Audio bloqueado",
+      stopping: "Deteniendo...",
+      ended: "Llamada finalizada",
+      error: "Error",
+    },
+    transcript: {
+      empty: "Aún no se ha hablado.",
+      user: "Tú:",
+      assistant: "Agente:",
+    },
+    errors: {
+      busy: "Ya hay una llamada de voz en directo activa en este host.",
+      unsupported: "Este host no admite la voz en directo.",
+      startFailed: "No se pudo iniciar la voz en directo.",
+      micBusy: "Otra función está usando el micrófono.",
+      notConnected: "Este host no está conectado.",
+      alreadyActive: "Ya hay una llamada de voz en directo en curso.",
+      stopping: "La llamada de voz en directo anterior aún se está deteniendo.",
+      micDenied: "Se denegó el acceso al micrófono.",
+      micUnavailable: "No se pudo abrir el micrófono.",
+      backgroundUnavailable: "No se pudo iniciar el audio en segundo plano.",
+      iceTimeout: "No se pudo negociar la conexión a tiempo.",
+      connectionLost: "Se perdió la conexión de voz en directo.",
+    },
+  },
   realtimeVoice: {
     actions: {
       mute: "Silenciar voz en tiempo real",
@@ -1819,6 +1963,7 @@ export const es: TranslationResources = {
     groupInfo: "Acerca de{{title}}",
     sections: {
       general: "General",
+      voice: "Voz en vivo",
       appearance: "Apariencia",
       editor: "Editor",
       shortcuts: "Atajos",
@@ -2119,9 +2264,13 @@ export const es: TranslationResources = {
         sendMessage: "enviar mensaje",
         queueMessage: "mensaje de cola",
         muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",
+        muteUnmuteLiveVoice: "Silenciar/activar la voz en directo",
+        holdInvertLiveVoiceMute: "Mantener para invertir el silencio de la voz en directo",
         switchProject: "Cambiar proyecto",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute:
+          "Pulsar para hablar si está silenciado; pulsar para silenciar si está activo.",
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",
       },
     },

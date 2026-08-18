@@ -41,6 +41,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
@@ -59,6 +60,8 @@ import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspac
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { usePanelStore } from "@/stores/panel-store";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
+import { LiveVoiceFooterButton } from "@/live-voice/live-voice-footer-button";
+import { SidebarLiveVoiceSlot } from "@/live-voice/live-voice-sidebar-card";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { useIsMobilePanelPresented } from "@/mobile-panels/provider";
@@ -135,6 +138,9 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  // The compact panel stops at the content row's bottom edge, so whatever is
+  // docked below it — the Live Voice strip — pays the home-indicator inset.
+  const compactBottomInset = useScreenBottomInset();
   const isCompactLayout = useIsCompactFormFactor();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
 
@@ -264,7 +270,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
         <MobileSidebar
           {...sharedProps}
           insetsTop={insets.top}
-          insetsBottom={insets.bottom}
+          insetsBottom={compactBottomInset}
           closeSidebar={showMobileAgent}
           handleOpenProject={handleOpenProjectMobile}
           handleHome={handleHomeMobile}
@@ -572,6 +578,7 @@ function SidebarFooter({
           onAddHost={handleAddHost}
           onOpenHostSettings={handleOpenHostSettings}
         />
+        <LiveVoiceFooterButton />
         <FooterIconButton
           onPress={handleHome}
           testID="sidebar-home"
@@ -925,6 +932,8 @@ function DesktopSidebar({
         )}
 
         <SidebarCalloutSlot />
+
+        <SidebarLiveVoiceSlot active={active} />
 
         <SidebarFooter
           theme={theme}
