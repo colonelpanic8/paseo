@@ -380,7 +380,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowSubtitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   unarchiveSlot: {
     width: theme.iconSize.md,
