@@ -1765,6 +1765,7 @@ export const en = {
     label: "Live voice",
     menu: {
       hosts: "Host",
+      contextProfiles: "Context profile",
     },
     actions: {
       start: "Start live voice",
