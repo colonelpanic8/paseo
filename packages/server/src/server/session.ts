@@ -2787,6 +2787,7 @@ export class Session {
       ...(msg.customVoiceInstructions
         ? { customVoiceInstructions: msg.customVoiceInstructions }
         : {}),
+      ...(msg.contextProfileId !== undefined ? { contextProfileId: msg.contextProfileId } : {}),
       ...(msg.defaultWorkspaceDirectory
         ? { defaultWorkspaceDirectory: msg.defaultWorkspaceDirectory }
         : {}),

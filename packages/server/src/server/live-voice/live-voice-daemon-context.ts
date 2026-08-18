@@ -52,7 +52,27 @@ export interface LiveVoiceDaemonContextOptions {
   agents: LiveVoiceContextAgentSource;
   workspaces: LiveVoiceContextWorkspaceSource;
   logger: Logger;
-  contextFiles?: readonly string[] | undefined;
+  contextProfiles?: LiveVoiceContextProfilesConfig | undefined;
+}
+
+export interface LiveVoiceContextProfile {
+  id: string;
+  label: string;
+  files: readonly string[];
+  instructions?: string | undefined;
+}
+
+export interface LiveVoiceContextProfilesConfig {
+  profiles: readonly LiveVoiceContextProfile[];
+  defaultProfileId?: string | undefined;
+}
+
+export class LiveVoiceContextProfileNotFoundError extends Error {
+  readonly name = "LiveVoiceContextProfileNotFoundError";
+
+  constructor(readonly profileId: string) {
+    super(`Unknown Live Voice context profile '${profileId}'.`);
+  }
 }
 
 export const LIVE_VOICE_CONTEXT_FILE_MAX_BYTES = 12 * 1024;
@@ -166,16 +186,30 @@ export class LiveVoiceDaemonContextProvider implements LiveVoiceContextProvider 
   private readonly agents: LiveVoiceContextAgentSource;
   private readonly workspaces: LiveVoiceContextWorkspaceSource;
   private readonly logger: Logger;
-  private readonly contextFiles: readonly string[];
+  private readonly contextProfiles: readonly LiveVoiceContextProfile[];
+  private readonly defaultContextProfileId: string | undefined;
 
   constructor(options: LiveVoiceDaemonContextOptions) {
     this.agents = options.agents;
     this.workspaces = options.workspaces;
     this.logger = options.logger.child({ module: "live-voice-context" });
-    this.contextFiles = options.contextFiles ?? [];
+    this.contextProfiles = options.contextProfiles?.profiles ?? [];
+    this.defaultContextProfileId = options.contextProfiles?.defaultProfileId;
+  }
+
+  private resolveContextProfile(requestedId: string | undefined): LiveVoiceContextProfile | null {
+    const profileId = requestedId ?? this.defaultContextProfileId;
+    if (!profileId) return null;
+
+    const profile = this.contextProfiles.find((candidate) => candidate.id === profileId);
+    if (!profile) {
+      throw new LiveVoiceContextProfileNotFoundError(profileId);
+    }
+    return profile;
   }
 
   async build(options?: LiveVoiceContextBuildOptions): Promise<LiveVoiceStartContext | null> {
+    const buildOptions = options ?? { crossHostRoutingAvailable: true };
     // `listAgents` already omits internal sessions, so the call's own hidden host
     // session never shows up in the snapshot it is given.
     const agents: LiveVoiceContextAgent[] = this.agents
@@ -205,31 +239,28 @@ export class LiveVoiceDaemonContextProvider implements LiveVoiceContextProvider 
       workspaces,
       paseoToolsAvailable,
     };
-    const limits = options?.limits ?? DEFAULT_LIVE_VOICE_CONTEXT_LIMITS;
+    const limits = buildOptions.limits ?? DEFAULT_LIVE_VOICE_CONTEXT_LIMITS;
     const snapshotItems = buildLiveVoiceInitialItems(snapshot, limits);
+    const contextProfile = this.resolveContextProfile(buildOptions.contextProfileId);
     const userContextItems = await loadUserContextItems({
-      filePaths: this.contextFiles,
+      filePaths: contextProfile?.files ?? [],
       limits,
       snapshotItems,
       logger: this.logger,
     });
+    const profileInstructions = contextProfile?.instructions?.trim() || undefined;
+    const profileContributed = userContextItems.length > 0 || profileInstructions !== undefined;
     const context = buildLiveVoiceStartContext(snapshot, {
-      crossHostRoutingAvailable: options?.crossHostRoutingAvailable ?? true,
+      crossHostRoutingAvailable: buildOptions.crossHostRoutingAvailable,
       limits,
-      ...(options?.ambientAgentReports ? { ambientAgentReports: true } : {}),
-      ...(options?.ambientAgentGuidance
-        ? { ambientAgentGuidance: options.ambientAgentGuidance }
-        : {}),
-      ...(options?.disabledPromptComponents?.length
-        ? { disabledPromptComponents: options.disabledPromptComponents }
-        : {}),
-      ...(options?.customVoiceInstructions
-        ? { customVoiceInstructions: options.customVoiceInstructions }
-        : {}),
-      ...(options?.defaultWorkspaceDirectory
-        ? { defaultWorkspaceDirectory: options.defaultWorkspaceDirectory }
-        : {}),
-      ...(userContextItems.length ? { userContextItems } : {}),
+      ambientAgentReports: buildOptions.ambientAgentReports,
+      ambientAgentGuidance: buildOptions.ambientAgentGuidance,
+      disabledPromptComponents: buildOptions.disabledPromptComponents,
+      customVoiceInstructions: buildOptions.customVoiceInstructions,
+      profileInstructions,
+      defaultWorkspaceDirectory: buildOptions.defaultWorkspaceDirectory,
+      userContextItems,
+      userContextAvailable: profileContributed,
     });
     this.logger.debug(
       {
@@ -238,9 +269,10 @@ export class LiveVoiceDaemonContextProvider implements LiveVoiceContextProvider 
         itemCount: context.initialItems.length,
         promptChars: context.prompt.length,
         userContextItemCount: userContextItems.length,
+        contextProfileId: contextProfile?.id,
         paseoToolsAvailable,
-        crossHostRoutingAvailable: options?.crossHostRoutingAvailable ?? true,
-        ambientAgentReports: options?.ambientAgentReports === true,
+        crossHostRoutingAvailable: buildOptions.crossHostRoutingAvailable,
+        ambientAgentReports: buildOptions.ambientAgentReports === true,
       },
       "live_voice.context.built",
     );
