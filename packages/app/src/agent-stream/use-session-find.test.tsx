@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  */
 import { act, renderHook } from "@testing-library/react";
-import { createRef } from "react";
+import React, { createRef, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
+import { createKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
+import { KeyboardActionDispatcherProvider } from "@/keyboard/keyboard-action-dispatcher-context";
 import { resolveKeyboardShortcut } from "@/keyboard/keyboard-shortcuts";
 import { routeKeyboardShortcut } from "@/keyboard/route-shortcut";
 import type { StreamItem } from "@/types/stream";
@@ -25,7 +26,10 @@ const ITEMS: StreamItem[] = [
   assistantMessage("third", "deploy again, then deploy once more"),
 ];
 
+type KeyboardActionDispatcher = ReturnType<typeof createKeyboardActionDispatcher>;
+
 function setup(items: readonly StreamItem[] = ITEMS) {
+  const dispatcher = createKeyboardActionDispatcher();
   const scrollToItem = vi.fn();
   const viewportRef = createRef<StreamViewportHandle>() as {
     current: StreamViewportHandle | null;
@@ -44,14 +48,21 @@ function setup(items: readonly StreamItem[] = ITEMS) {
         isPaneFocused: true,
         isPanelActive: true,
       }),
-    { initialProps: { agentId: "agent-1" } },
+    {
+      initialProps: { agentId: "agent-1" },
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <KeyboardActionDispatcherProvider dispatcher={dispatcher}>
+          {children}
+        </KeyboardActionDispatcherProvider>
+      ),
+    },
   );
-  return { ...rendered, scrollToItem };
+  return { ...rendered, dispatcher, scrollToItem };
 }
 
-function openFind(): void {
+function openFind(dispatcher: KeyboardActionDispatcher): void {
   act(() => {
-    keyboardActionDispatcher.dispatch({ id: "agent.find", scope: "workspace" });
+    dispatcher.dispatch({ id: "agent.find", scope: "workspace" });
   });
 }
 
@@ -60,7 +71,13 @@ function openFind(): void {
  * resolution, real routing, real dispatcher — so the find shortcut is covered
  * from the keystroke through to the handler rather than from the action alone.
  */
-function pressFindShortcut({ isMac }: { isMac: boolean }): void {
+function pressFindShortcut({
+  dispatcher,
+  isMac,
+}: {
+  dispatcher: KeyboardActionDispatcher;
+  isMac: boolean;
+}): void {
   const resolved = resolveKeyboardShortcut({
     event: {
       key: "f",
@@ -94,24 +111,24 @@ function pressFindShortcut({ isMac }: { isMac: boolean }): void {
     throw new Error(`expected a dispatch action, got ${routed.kind}`);
   }
   act(() => {
-    keyboardActionDispatcher.dispatch(routed.action);
+    dispatcher.dispatch(routed.action);
   });
 }
 
-function pressEscape(): boolean {
+function pressEscape(dispatcher: KeyboardActionDispatcher): boolean {
   let handled = false;
   act(() => {
-    handled = keyboardActionDispatcher.dispatch({ id: "agent.interrupt", scope: "global" });
+    handled = dispatcher.dispatch({ id: "agent.interrupt", scope: "global" });
   });
   return handled;
 }
 
 describe("useSessionFind", () => {
   it("starts closed and ignores Escape so the agent-interrupt handler still receives it", () => {
-    const { result } = setup();
+    const { dispatcher, result } = setup();
 
     expect(result.current.isOpen).toBe(false);
-    expect(pressEscape()).toBe(false);
+    expect(pressEscape(dispatcher)).toBe(false);
     expect(result.current.isOpen).toBe(false);
   });
 
@@ -119,9 +136,9 @@ describe("useSessionFind", () => {
     { platform: "mac", isMac: true },
     { platform: "non-mac", isMac: false },
   ])("opens and scrolls to the first match from a $platform find keystroke", ({ isMac }) => {
-    const { result, scrollToItem } = setup();
+    const { dispatcher, result, scrollToItem } = setup();
 
-    pressFindShortcut({ isMac });
+    pressFindShortcut({ dispatcher, isMac });
     expect(result.current.isOpen).toBe(true);
 
     act(() => {
@@ -133,11 +150,11 @@ describe("useSessionFind", () => {
   });
 
   it("opens on the agent.find keyboard action and requests input focus", () => {
-    const { result } = setup();
+    const { dispatcher, result } = setup();
     const focusRequestBefore = result.current.focusRequestId;
 
     act(() => {
-      keyboardActionDispatcher.dispatch({ id: "agent.find", scope: "workspace" });
+      dispatcher.dispatch({ id: "agent.find", scope: "workspace" });
     });
 
     expect(result.current.isOpen).toBe(true);
@@ -145,8 +162,8 @@ describe("useSessionFind", () => {
   });
 
   it("scrolls to the first match and counts every occurrence as the query is typed", () => {
-    const { result, scrollToItem } = setup();
-    openFind();
+    const { dispatcher, result, scrollToItem } = setup();
+    openFind(dispatcher);
 
     act(() => {
       result.current.onQueryChange("deploy");
@@ -165,8 +182,8 @@ describe("useSessionFind", () => {
   });
 
   it("steps forward through occurrences within and across items, then wraps", () => {
-    const { result, scrollToItem } = setup();
-    openFind();
+    const { dispatcher, result, scrollToItem } = setup();
+    openFind(dispatcher);
     act(() => {
       result.current.onQueryChange("deploy");
     });
@@ -202,8 +219,8 @@ describe("useSessionFind", () => {
   });
 
   it("steps backward with wrap-around to the last occurrence", () => {
-    const { result, scrollToItem } = setup();
-    openFind();
+    const { dispatcher, result, scrollToItem } = setup();
+    openFind(dispatcher);
     act(() => {
       result.current.onQueryChange("deploy");
     });
@@ -222,8 +239,8 @@ describe("useSessionFind", () => {
   });
 
   it("reports no matches and no active occurrence for a query that is absent", () => {
-    const { result, scrollToItem } = setup();
-    openFind();
+    const { dispatcher, result, scrollToItem } = setup();
+    openFind(dispatcher);
     scrollToItem.mockClear();
 
     act(() => {
@@ -241,14 +258,14 @@ describe("useSessionFind", () => {
   });
 
   it("consumes Escape while open and stops publishing find state once closed", () => {
-    const { result } = setup();
-    openFind();
+    const { dispatcher, result } = setup();
+    openFind(dispatcher);
     act(() => {
       result.current.onQueryChange("deploy");
     });
     expect(result.current.sessionFind).not.toBeNull();
 
-    expect(pressEscape()).toBe(true);
+    expect(pressEscape(dispatcher)).toBe(true);
 
     expect(result.current.isOpen).toBe(false);
     expect(result.current.sessionFind).toBeNull();
@@ -256,8 +273,8 @@ describe("useSessionFind", () => {
   });
 
   it("closes and clears the query when the pane switches to another agent", () => {
-    const { result, rerender } = setup();
-    openFind();
+    const { dispatcher, result, rerender } = setup();
+    openFind(dispatcher);
     act(() => {
       result.current.onQueryChange("deploy");
     });
