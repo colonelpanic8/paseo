@@ -181,7 +181,7 @@ const styles = StyleSheet.create((theme) => {
     gap: theme.spacing[1],
   } as const;
   const actionLabel = {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
   } as const;
 
