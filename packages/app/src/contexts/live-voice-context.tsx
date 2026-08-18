@@ -30,10 +30,15 @@ import {
   getLiveVoiceAmbientSettings,
   getLiveVoiceCallSettings,
   getLiveVoiceVoice,
+  useLiveVoiceSettingsStore,
 } from "@/stores/live-voice-settings-store";
 import { handleClientObservedLiveVoiceAgentStopped } from "@/live-voice/live-voice-cross-host-router";
 import { getSelectedAssistantId } from "@/assistants/assistant-selection-store";
 import { hostSupportsAssistants } from "@/assistants/assistant-queries";
+import {
+  getLiveVoiceContextProfileHostInfo,
+  resolveLiveVoiceContextProfileId,
+} from "@/live-voice/live-voice-context-profile-selection";
 
 /**
  * Every host the app holds a connection to, read on demand. A call can outlive
@@ -93,6 +98,17 @@ function hostSupportsVoiceCatalog(serverId: string): boolean {
   );
 }
 
+function getSelectedContextProfileId(serverId: string): string | undefined {
+  const serverInfo = useSessionStore.getState().sessions[serverId]?.serverInfo;
+  const hostInfo = getLiveVoiceContextProfileHostInfo(serverInfo);
+  return resolveLiveVoiceContextProfileId({
+    profiles: hostInfo.profiles,
+    persistedProfileId:
+      useLiveVoiceSettingsStore.getState().contextProfileIdsByHost[serverId] ?? null,
+    defaultProfileId: hostInfo.defaultProfileId,
+  });
+}
+
 export function useLiveVoiceOptional(): LiveVoiceContextValue | null {
   const runtime = useContext(LiveVoiceRuntimeContext);
   const snapshot = useSyncExternalStore(
@@ -110,7 +126,10 @@ export function useLiveVoiceOptional(): LiveVoiceContextValue | null {
     }
     return {
       ...snapshot,
-      start: runtime.start,
+      start: (serverId) => {
+        const contextProfileId = getSelectedContextProfileId(serverId);
+        return runtime.start(serverId, contextProfileId ? { contextProfileId } : undefined);
+      },
       stop: runtime.stop,
       setMuted: runtime.setMuted,
       toggleMute: runtime.toggleMute,
