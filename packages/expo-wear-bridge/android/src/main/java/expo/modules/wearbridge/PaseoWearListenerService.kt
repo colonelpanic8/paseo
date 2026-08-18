@@ -5,8 +5,11 @@ import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import java.io.File
+import org.json.JSONObject
 
 private const val TAG = "ExpoWearBridge"
+private const val START_LIVE_VOICE_KIND = "startLiveVoice"
+private const val START_LIVE_VOICE_QUEUE_TTL_MS = 60_000L
 
 /**
  * Receives watch -> phone messages.
@@ -17,10 +20,8 @@ private const val TAG = "ExpoWearBridge"
  * message is slow and unreliable.
  *
  * So: if JS is listening, deliver immediately. If not, persist to [CommandQueue] and
- * let the app drain it on next start. That means a command sent while the phone app
- * is killed takes effect when the app is next opened rather than immediately —
- * a real limitation, documented in packages/watch/README.md, and the reason the
- * watch UI reports send failures rather than pretending success.
+ * let the app drain it on next start. Most commands remain queued indefinitely, but
+ * a Live Voice start expires before it can surprise-start the microphone later.
  */
 class PaseoWearListenerService : WearableListenerService() {
   override fun onMessageReceived(event: MessageEvent) {
@@ -94,7 +95,8 @@ object CommandQueue {
     runCatching {
       val target = file(context)
       val existing = if (target.exists()) target.readLines() else emptyList()
-      val next = (existing + payload.replace("\n", " ")).takeLast(MAX_ENTRIES)
+      val queued = encodeQueuedCommand(payload, System.currentTimeMillis())
+      val next = (existing + queued).takeLast(MAX_ENTRIES)
       target.writeText(next.joinToString("\n"))
     }.onFailure { Log.w(TAG, "Failed to queue wear command", it) }
   }
@@ -105,8 +107,55 @@ object CommandQueue {
     if (!target.exists()) return emptyList()
     return runCatching {
       val lines = target.readLines().filter { it.isNotBlank() }
+      val nowMs = System.currentTimeMillis()
       target.delete()
-      lines
+      drainQueuedCommands(lines, nowMs) { queuedAtMs ->
+        val detail =
+          queuedAtMs?.let { " after ${nowMs - it}ms" }
+            ?: " with no queue timestamp"
+        Log.i(TAG, "Discarding expired startLiveVoice command$detail")
+      }
     }.onFailure { Log.w(TAG, "Failed to drain wear commands", it) }.getOrDefault(emptyList())
   }
 }
+
+internal fun encodeQueuedCommand(payload: String, queuedAtMs: Long): String =
+  JSONObject()
+    .put("queuedAtMs", queuedAtMs)
+    .put("payload", payload.replace("\n", " "))
+    .toString()
+
+/** Decode the mixed legacy/enveloped queue and remove unsafe delayed call starts. */
+internal fun drainQueuedCommands(
+  lines: List<String>,
+  nowMs: Long,
+  onExpiredStart: (Long?) -> Unit = {},
+): List<String> =
+  lines.mapNotNull { line ->
+    val entry = decodeQueuedCommand(line)
+    if (!entry.payload.isStartLiveVoice()) return@mapNotNull entry.payload
+
+    val ageMs = entry.queuedAtMs?.let { nowMs - it }
+    if (ageMs != null && ageMs in 0..START_LIVE_VOICE_QUEUE_TTL_MS) {
+      entry.payload
+    } else {
+      onExpiredStart(entry.queuedAtMs)
+      null
+    }
+  }
+
+private data class QueuedCommand(val payload: String, val queuedAtMs: Long?)
+
+private fun decodeQueuedCommand(line: String): QueuedCommand {
+  val envelope = runCatching { JSONObject(line) }.getOrNull()
+  val payload = envelope?.opt("payload") as? String
+  val queuedAtMs = runCatching { envelope?.getLong("queuedAtMs") }.getOrNull()
+  return if (payload != null && queuedAtMs != null) {
+    QueuedCommand(payload, queuedAtMs)
+  } else {
+    QueuedCommand(line, null)
+  }
+}
+
+private fun String.isStartLiveVoice(): Boolean =
+  runCatching { JSONObject(this).optString("kind") == START_LIVE_VOICE_KIND }.getOrDefault(false)
