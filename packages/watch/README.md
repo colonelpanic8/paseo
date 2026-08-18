@@ -200,13 +200,64 @@ separate from triage.
 daemon socket; the watch never speaks the Paseo protocol. What varies is only where
 the audio comes out.
 
-**The audio can be on your wrist, and on Android it is — but the watch app is not
-what puts it there.** `packages/app/modules/paseo-background-call` selects the
-communication device when a call goes to the background, preferring a Bluetooth LE or
-SCO headset, which is what a Wear OS watch with a speaker and mic presents as.
-WebRTC's recorder follows because it captures from `VOICE_COMMUNICATION`. So this is
-an OS routing decision on the phone, not a transport the watch participates in — the
-watch app can be uninstalled and the routing still works.
+**The audio can be on your wrist, and on Android it is — but the watch app does not
+carry it.** `packages/app/modules/paseo-background-call` selects an Android
+communication device. It prefers non-watch Bluetooth audio over the watch, then the
+watch over wired, USB and speaker routes. WebRTC follows because it captures from
+`VOICE_COMMUNICATION`.
+
+The router identifies the watch without `BLUETOOTH_CONNECT`: it normalizes
+`AudioDeviceInfo.productName` and compares it with connected Wear node display names
+from the signed Data Layer. A matching Bluetooth device is the watch; another
+Bluetooth device is earbuds. Product names that do not match remain ordinary
+Bluetooth audio, which preserves the earbuds-first default. The phone publishes the
+active/expected route and all API 31+ communication-device candidates. The watch
+screen can cycle them; the tile only displays the current value.
+
+### Starting with the phone locked
+
+A watch start uses two authenticated steps:
+
+1. `MessageClient` stages a short-lived random request id and its start command in
+   the phone process.
+2. `RemoteActivityHelper` opens a transparent, `showWhenLocked` phone activity for
+   that request. The activity turns the screen on, waits until it is resumed,
+   delivers the staged command to JS, and finishes as soon as the microphone
+   foreground service reports that it started.
+
+The exported deep link cannot start a call by itself. The activity consumes only a
+request id staged through the Wearable Data Layer, whose package identity and signing
+certificate checks authenticate the watch app. Requests expire after 30 seconds and
+are single-use.
+
+Turning the screen on is required for an activity launched while the display is off
+to reach `RESUMED`; the display can therefore wake briefly inside a pocket. The phone
+app process and JS runtime must still be alive. If the process was killed, the native
+listener has no runtime to execute the call and the command follows the existing
+on-disk queue behavior instead of claiming that a call started.
+
+Companion Device Manager (CDM) association does not replace the activity:
+
+| Phone API | CDM result for a microphone call                                                                                                                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 29        | Watch-profile association and its API 31 foreground-service permission do not exist. The activity supplies foreground state.                                                                                                |
+| 30        | A background-started microphone foreground service cannot use the microphone. CDM has no permission that clears this.                                                                                                       |
+| 31–33     | `REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND` clears the general Android 12+ service-start restriction for an associated device, but not the microphone while-in-use restriction inherited from Android 11. |
+| 34–35     | Android checks microphone while-in-use permission when the service is created and throws immediately from the background. CDM is not a while-in-use exemption; the resumed activity is.                                     |
+
+The implemented activity path covers the phone app's API 29 minimum through API 35.
+API 29 allows the foreground-service start from the resumed activity; API 30–33
+grant microphone access because the activity is visible; API 34–35 also satisfy the
+foreground-service type preflight check. Physical
+Android 14/15 verification remains in [HANDOFF.md](HANDOFF.md).
+
+The Android rules are documented in [Restrictions on starting a foreground service
+from the background](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)
+and [Restrictions on starting foreground services that need while-in-use
+permissions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start#wiu-restrictions).
+If CDM association later serves another feature, its one-time user action belongs in
+phone **Settings → Voice**, inside `LiveVoiceSettingsCard` below the Live Voice audio
+controls, with association status repeated in `LiveVoiceDiagnosticsCard`.
 
 Two dead ends worth not rediscovering:
 
@@ -221,16 +272,17 @@ Two dead ends worth not rediscovering:
   normal Bluetooth headset works, but wrist audio on iOS needs CallKit and a real
   `CXProvider`. That is a deliberate not-yet, not an oversight.
 
-Two commands carry no `serverId`:
+Three commands carry no `serverId`:
 
 ```
 startLiveVoice        {"kind":"startLiveVoice","serverId":"srv-1"}
 stopLiveVoice         {"kind":"stopLiveVoice"}
 toggleLiveVoiceMute   {"kind":"toggleLiveVoiceMute"}
+setLiveVoiceAudioRoute {"kind":"setLiveVoiceAudioRoute","routeId":"android:7"}
 ```
 
 A call is app-global on the phone — one call, one owning socket — and the runtime
-already knows which host it is on. Naming a host on stop or mute would let a watch
+already knows which host it is on. Naming a host on stop, mute or route selection would let a watch
 holding a stale state item address a call that has since moved. Starting is the one
 that names a host, because choosing which daemon answers is exactly the decision the
 watch is making.
@@ -262,7 +314,8 @@ wrist, and would leave the tile with nothing to open. Both activities set
 under it.
 
 The tile (`tile/LiveVoiceTileService.kt`) is glance-and-tap: it shows whether a call
-is up and on which host, and every tap opens the activity. It deliberately offers no
+is up, on which host, and the active/expected audio route. Every tap opens the
+activity. It deliberately offers no
 hang-up or mute — tile taps are cheap and unconfirmed, and a stray thumb swiping past
 the carousel should not end a call.
 
