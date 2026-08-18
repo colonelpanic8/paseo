@@ -1792,6 +1792,19 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
   },
+  purposeSummaryHeader: {
+    flexShrink: 0,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    backgroundColor: theme.colors.surface1,
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
+  },
+  purposeSummaryText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+    textAlign: "center",
+  },
   historySyncOverlay: {
     position: "absolute",
     top: 0,
