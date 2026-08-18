@@ -80,7 +80,12 @@ import {
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
-import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
+import {
+  PASEO_MCP_SERVER_NAME,
+  stripInternalPaseoMcpServer,
+  stripInternalPaseoMcpServerFromPersistence,
+  withRuntimePaseoMcpServer,
+} from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
 import { isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
@@ -5136,6 +5141,9 @@ export class AgentManager {
   private validateToolPolicyServers(config: AgentSessionConfig): void {
     if (!config.toolPolicy) return;
     const serverNames = new Set(Object.keys(config.mcpServers ?? {}));
+    if (this.mcpBaseUrl) {
+      serverNames.add(PASEO_MCP_SERVER_NAME);
+    }
     for (const grant of config.toolPolicy.preapproved) {
       if (!serverNames.has(grant.server)) {
         throw new Error(
