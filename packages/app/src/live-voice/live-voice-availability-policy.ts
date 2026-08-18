@@ -10,7 +10,11 @@ export interface LiveVoiceHostAvailability {
   supportsVoiceCatalog: boolean;
   /** Missing on older compatible daemons, which the policy continues to admit. */
   paseoToolsEnabled: boolean | null;
-  contextProfiles: LiveVoiceContextProfileHostInfo;
+  /**
+   * Absent when the host predates context profiles, and on callers that build
+   * availability without reading server capabilities.
+   */
+  contextProfiles?: LiveVoiceContextProfileHostInfo;
 }
 
 export type LiveVoiceUnavailableReason =
