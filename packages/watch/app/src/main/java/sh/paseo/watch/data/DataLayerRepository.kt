@@ -1,14 +1,17 @@
 package sh.paseo.watch.data
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.wear.remote.interactions.RemoteActivityHelper
 import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataItem
 import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +21,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.util.UUID
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 import sh.paseo.watch.model.AgentSession
 import sh.paseo.watch.model.LiveVoiceState
 import sh.paseo.watch.model.Transcript
@@ -59,6 +65,7 @@ class DataLayerRepository(
   private val dataClient: DataClient = Wearable.getDataClient(appContext)
   private val messageClient = Wearable.getMessageClient(appContext)
   private val nodeClient = Wearable.getNodeClient(appContext)
+  private val remoteActivityHelper = RemoteActivityHelper(appContext, Executor { command -> command.run() })
 
   private val state = MutableStateFlow<List<Workspace>>(emptyList())
   override val workspaces: StateFlow<List<Workspace>> = state
@@ -411,7 +418,20 @@ class DataLayerRepository(
   }
 
   override suspend fun startLiveVoice(serverId: String) {
-    send(WireCommand(kind = WireCommand.START_LIVE_VOICE, serverId = serverId))
+    if (!liveVoiceState.value.pocketStartSupported) {
+      send(WireCommand(kind = WireCommand.START_LIVE_VOICE, serverId = serverId))
+      return
+    }
+
+    val requestId = UUID.randomUUID().toString()
+    val staged =
+      WireCommand(
+        kind = WireCommand.START_LIVE_VOICE,
+        serverId = serverId,
+        pocketStartRequestId = requestId,
+      )
+    val fallback = WireCommand(kind = WireCommand.START_LIVE_VOICE, serverId = serverId)
+    startLiveVoiceThroughPhoneActivity(staged, fallback, requestId)
   }
 
   /**
@@ -425,6 +445,40 @@ class DataLayerRepository(
 
   override suspend fun toggleLiveVoiceMute() {
     send(WireCommand(kind = WireCommand.TOGGLE_LIVE_VOICE_MUTE))
+  }
+
+  override suspend fun setLiveVoiceAudioRoute(routeId: String) {
+    send(WireCommand(kind = WireCommand.SET_LIVE_VOICE_AUDIO_ROUTE, routeId = routeId))
+  }
+
+  private suspend fun startLiveVoiceThroughPhoneActivity(
+    staged: WireCommand,
+    fallback: WireCommand,
+    requestId: String,
+  ) {
+    val stagedPayload = WearBridge.json.encodeToString(WireCommand.serializer(), staged).toByteArray()
+    val fallbackPayload = WearBridge.json.encodeToString(WireCommand.serializer(), fallback).toByteArray()
+    withContext(Dispatchers.IO) {
+      val nodes = connectedNodes() ?: return@withContext
+      var delivered = false
+      for (node in nodes) {
+        if (!sendToNode(node, WearBridge.COMMAND_PATH, stagedPayload)) continue
+
+        val remoteIntent =
+          Intent(Intent.ACTION_VIEW)
+            .setData(Uri.parse(WearBridge.pocketStartUri(requestId)))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        val launched = runCatching {
+          remoteActivityHelper
+            .startRemoteActivity(remoteIntent, node.id)
+            .get(REMOTE_ACTIVITY_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }.onFailure { Log.w(TAG, "Failed to open pocket-start activity on ${node.displayName}", it) }
+          .isSuccess
+
+        delivered = if (launched) true else sendToNode(node, WearBridge.COMMAND_PATH, fallbackPayload) || delivered
+      }
+      updateDeliveryState(delivered)
+    }
   }
 
   private suspend fun requestRefresh() {
@@ -444,35 +498,40 @@ class DataLayerRepository(
    */
   private suspend fun broadcast(path: String, payload: ByteArray) {
     withContext(Dispatchers.IO) {
-      val nodes =
-        runCatching { nodeClient.connectedNodes.await() }
-          .onFailure {
-            Log.w(TAG, "Failed to list nodes", it)
-            lastError.value = "Phone not reachable"
-          }
-          .getOrNull()
-          .orEmpty()
-
-      if (nodes.isEmpty()) {
-        link.value = if (state.value.isEmpty()) LinkState.Waiting else LinkState.Stale
-        lastError.value = "Phone not reachable"
-        return@withContext
-      }
-
+      val nodes = connectedNodes() ?: return@withContext
       var delivered = false
       for (node in nodes) {
-        val result =
-          runCatching { messageClient.sendMessage(node.id, path, payload).await() }
-            .onFailure { Log.w(TAG, "sendMessage to ${node.displayName} failed", it) }
-        if (result.isSuccess) delivered = true
+        if (sendToNode(node, path, payload)) delivered = true
       }
-      if (!delivered) {
-        lastError.value = "Phone not reachable"
-        link.value = if (state.value.isEmpty()) LinkState.Waiting else LinkState.Stale
-      } else {
-        lastError.value = null
-      }
+      updateDeliveryState(delivered)
     }
+  }
+
+  private suspend fun connectedNodes(): List<Node>? {
+    val nodes =
+      runCatching { nodeClient.connectedNodes.await() }
+        .onFailure { Log.w(TAG, "Failed to list nodes", it) }
+        .getOrNull()
+        .orEmpty()
+    if (nodes.isEmpty()) {
+      updateDeliveryState(false)
+      return null
+    }
+    return nodes
+  }
+
+  private suspend fun sendToNode(node: Node, path: String, payload: ByteArray): Boolean =
+    runCatching { messageClient.sendMessage(node.id, path, payload).await() }
+      .onFailure { Log.w(TAG, "sendMessage to ${node.displayName} failed", it) }
+      .isSuccess
+
+  private fun updateDeliveryState(delivered: Boolean) {
+    if (delivered) {
+      lastError.value = null
+      return
+    }
+    lastError.value = "Phone not reachable"
+    link.value = if (state.value.isEmpty()) LinkState.Waiting else LinkState.Stale
   }
 
   private companion object {
@@ -500,5 +559,6 @@ class DataLayerRepository(
 
     /** A single item, so a suffix match like the snapshot's. */
     const val LIVE_VOICE_PATH_SUFFIX = WearBridge.LIVE_VOICE_PATH
+    const val REMOTE_ACTIVITY_TIMEOUT_SECONDS = 10L
   }
 }
