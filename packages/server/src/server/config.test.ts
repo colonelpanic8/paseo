@@ -40,7 +40,7 @@ describe("server config", () => {
     expect(config.providerCatalogRefreshTimeoutMs).toBe(180_000);
   });
 
-  test("loads absolute Live Voice context files and expands ~", async () => {
+  test("loads legacy Live Voice context files as the implicit default profile", async () => {
     const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-context-"));
     roots.push(paseoHome);
     const absolutePath = path.join(paseoHome, "standing.md");
@@ -53,10 +53,121 @@ describe("server config", () => {
 
     const config = loadConfig(paseoHome, { env: {} });
 
-    expect(config.liveVoiceContextFiles).toEqual([
-      absolutePath,
-      path.resolve(process.env.HOME || os.homedir(), "chief-of-staff.md"),
+    expect(config.liveVoiceContextProfiles).toEqual({
+      profiles: [
+        {
+          id: "default",
+          label: "Default",
+          files: [
+            absolutePath,
+            path.resolve(process.env.HOME || os.homedir(), "chief-of-staff.md"),
+          ],
+        },
+      ],
+      defaultProfileId: "default",
+    });
+  });
+
+  test("loads named Live Voice context profiles and expands ~ in every profile", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-profiles-"));
+    roots.push(paseoHome);
+    const absolutePath = path.join(paseoHome, "work.md");
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({
+        liveVoice: {
+          contextProfiles: [
+            {
+              id: "full-org",
+              label: "Full org",
+              files: ["~/org.md", absolutePath],
+              instructions: "Use the GTD context proactively.",
+            },
+            { id: "lean", files: [] },
+          ],
+          defaultContextProfile: "lean",
+        },
+      }),
+    );
+
+    const config = loadConfig(paseoHome, { env: {} });
+
+    expect(config.liveVoiceContextProfiles).toEqual({
+      profiles: [
+        {
+          id: "full-org",
+          label: "Full org",
+          files: [path.resolve(process.env.HOME || os.homedir(), "org.md"), absolutePath],
+          instructions: "Use the GTD context proactively.",
+        },
+        { id: "lean", label: "lean", files: [] },
+      ],
+      defaultProfileId: "lean",
+    });
+  });
+
+  test("rejects duplicate Live Voice context profile ids", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-duplicate-"));
+    roots.push(paseoHome);
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({
+        liveVoice: {
+          contextProfiles: [
+            { id: "lean", files: [] },
+            { id: "lean", files: [] },
+          ],
+        },
+      }),
+    );
+
+    expect(() => loadConfig(paseoHome, { env: {} })).toThrow(
+      "Duplicate Live Voice context profile id 'lean'",
+    );
+  });
+
+  test("rejects a named default profile alongside legacy contextFiles", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-conflict-"));
+    roots.push(paseoHome);
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({
+        liveVoice: {
+          contextFiles: ["~/legacy.md"],
+          contextProfiles: [{ id: "default", files: [] }],
+        },
+      }),
+    );
+
+    expect(() => loadConfig(paseoHome, { env: {} })).toThrow(
+      "contextFiles defines the implicit 'default' profile",
+    );
+  });
+
+  test("rejects invalid and unknown Live Voice context profile ids", async () => {
+    const invalidHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-id-"));
+    const unknownHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-unknown-"));
+    roots.push(invalidHome, unknownHome);
+    await Promise.all([
+      writeFile(
+        path.join(invalidHome, "config.json"),
+        JSON.stringify({ liveVoice: { contextProfiles: [{ id: "Full Org", files: [] }] } }),
+      ),
+      writeFile(
+        path.join(unknownHome, "config.json"),
+        JSON.stringify({
+          liveVoice: {
+            contextProfiles: [{ id: "lean", files: [] }],
+            defaultContextProfile: "missing",
+          },
+        }),
+      ),
     ]);
+
+    expect(() => loadConfig(invalidHome, { env: {} })).toThrow("Expected a lowercase slug");
+    expect(() => loadConfig(unknownHome, { env: {} })).toThrow(
+      "Unknown Live Voice default context profile 'missing'",
+    );
   });
 
   test("rejects relative Live Voice context file paths", async () => {
