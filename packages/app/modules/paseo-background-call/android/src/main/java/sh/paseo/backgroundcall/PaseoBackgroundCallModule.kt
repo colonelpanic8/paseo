@@ -1,6 +1,7 @@
 package sh.paseo.backgroundcall
 
 import android.Manifest
+import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.lifecycle.Lifecycle
@@ -10,28 +11,32 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 private const val CALL_ACTION_EVENT_NAME = "onBackgroundCallAction"
+private const val AUDIO_ROUTE_EVENT_NAME = "onBackgroundCallAudioRouteChanged"
 
 class PaseoBackgroundCallModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("PaseoBackgroundCall")
 
-        Events(CALL_ACTION_EVENT_NAME)
+        Events(CALL_ACTION_EVENT_NAME, AUDIO_ROUTE_EVENT_NAME)
 
         OnCreate {
+            val context = applicationContext()
+            ForegroundActivityTracker.register(context as Application)
             BackgroundCallLifetime.actionListener = { action ->
                 sendEvent(CALL_ACTION_EVENT_NAME, mapOf("action" to action))
+            }
+            CallAudioRouter.stateListener = { state ->
+                sendEvent(AUDIO_ROUTE_EVENT_NAME, state.toMap())
             }
         }
 
         AsyncFunction("begin") {
-            val activity = requireNotNull(appContext.currentActivity) {
-                "A Live Voice background call must begin while Paseo is visible"
-            }
-            // An app-owned React Native Modal temporarily takes window focus while its
-            // selected action runs. The activity is still visible and Android permits
-            // the foreground-service start, so lifecycle state is the authority here.
-            val activityLifecycle = (activity as? LifecycleOwner)?.lifecycle
-            check(activityLifecycle?.currentState == Lifecycle.State.RESUMED) {
+            val reactActivityIsResumed =
+                (appContext.currentActivity as? LifecycleOwner)
+                    ?.lifecycle
+                    ?.currentState
+                    ?.isAtLeast(Lifecycle.State.RESUMED) == true
+            check(reactActivityIsResumed || ForegroundActivityTracker.hasResumedActivity()) {
                 "A Live Voice background call must begin while Paseo is visible"
             }
 
@@ -43,6 +48,18 @@ class PaseoBackgroundCallModule : Module() {
                 "Microphone permission is required before a Live Voice background call begins"
             }
             BackgroundCallLifetime.begin(context)
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("getAudioRoutes") {
+            CallAudioRouter.snapshot(applicationContext()).toMap()
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("setAudioRoute") { routeId: String ->
+            CallAudioRouter.select(applicationContext(), routeId)
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("setWearNodeNames") { names: List<String> ->
+            CallAudioRouter.updateWearNodeNames(names, applicationContext())
         }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("update") { isMuted: Boolean ->
@@ -57,6 +74,7 @@ class PaseoBackgroundCallModule : Module() {
 
         OnDestroy {
             BackgroundCallLifetime.actionListener = null
+            CallAudioRouter.stateListener = null
             appContext.reactContext?.applicationContext?.let(BackgroundCallLifetime::end)
         }
     }
@@ -67,3 +85,9 @@ class PaseoBackgroundCallModule : Module() {
         }
     }
 }
+
+private fun AudioRouteOption.toMap(): Map<String, String> =
+    mapOf("id" to id, "label" to label, "kind" to kind.wireValue)
+
+private fun AudioRouteState.toMap(): Map<String, Any?> =
+    mapOf("active" to active?.toMap(), "candidates" to candidates.map(AudioRouteOption::toMap))
