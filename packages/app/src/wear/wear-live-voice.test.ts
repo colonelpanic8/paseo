@@ -75,6 +75,34 @@ describe("buildWearLiveVoiceState", () => {
       { id: "t1", role: "user", text: "What's running?" },
       { id: "t2", role: "assistant", text: "Three sessions." },
     ]);
+    expect(state.pocketStartSupported).toBe(true);
+  });
+
+  it("projects native audio routes only when the native module has a snapshot", () => {
+    const withoutRoutes = buildWearLiveVoiceState({ snapshot: IDLE, availability: AVAILABLE }, NOW);
+    expect(withoutRoutes.activeAudioRoute).toBeUndefined();
+    expect(withoutRoutes.audioRouteCandidates).toBeUndefined();
+
+    const withRoutes = buildWearLiveVoiceState(
+      {
+        snapshot: { ...IDLE, phase: "active" },
+        availability: AVAILABLE,
+        audioRoutes: {
+          active: { id: "android:7", label: "Pixel Buds Pro", kind: "earbuds" },
+          candidates: [
+            { id: "android:7", label: "Pixel Buds Pro", kind: "earbuds" },
+            { id: "android:9", label: "Pixel Watch 3", kind: "watch" },
+          ],
+        },
+      },
+      NOW,
+    );
+    expect(withRoutes.activeAudioRoute).toEqual({
+      id: "android:7",
+      label: "Pixel Buds Pro",
+      kind: "earbuds",
+    });
+    expect(withRoutes.audioRouteCandidates).toHaveLength(2);
   });
 
   it("carries the unavailable reason and offers no hosts", () => {
