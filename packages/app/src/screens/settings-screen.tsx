@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   Switch as NativeSwitch,
@@ -63,7 +64,11 @@ import {
   type Settings as EffectiveSettings,
 } from "@/hooks/use-settings";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, type Agent } from "@/stores/session-store";
+import {
+  useDispatchSettingsStore,
+  type DispatchAgentTarget,
+} from "@/stores/dispatch-settings-store";
 import {
   orderHostsLocalFirst,
   resolveActiveHostServerId,
@@ -149,6 +154,7 @@ import {
 import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { isNative, isWeb } from "@/constants/platform";
+import { providerLabel } from "@/wear/wear-snapshot";
 
 // ---------------------------------------------------------------------------
 // View model
@@ -630,6 +636,7 @@ function LiveVoiceSettingsCard() {
           </DropdownMenuContent>
         </DropdownMenu>
       </View>
+      {Platform.OS === "android" ? <DispatchSettingsRows /> : null}
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("liveVoice.settings.agentReports.label")}</Text>
@@ -792,6 +799,170 @@ function LiveVoiceSettingsCard() {
       </View>
     </View>
   );
+}
+
+function DispatchSettingsRows() {
+  const { t } = useTranslation();
+  const hosts = useHosts();
+  const sessions = useSessionStore((state) => state.sessions);
+  const target = useDispatchSettingsStore((state) => state.target);
+  const setTarget = useDispatchSettingsStore((state) => state.setTarget);
+  const [selectedHostId, setSelectedHostId] = useState(
+    target?.serverId ?? hosts[0]?.serverId ?? "",
+  );
+
+  useEffect(() => {
+    if (target?.serverId && target.serverId !== selectedHostId) {
+      setSelectedHostId(target.serverId);
+    } else if (!selectedHostId && hosts[0]) {
+      setSelectedHostId(hosts[0].serverId);
+    }
+  }, [hosts, selectedHostId, target?.serverId]);
+
+  const selectedHost = hosts.find((host) => host.serverId === selectedHostId);
+  const agents = useMemo(
+    () =>
+      Array.from(sessions[selectedHostId]?.agents.values() ?? [])
+        .filter((agent) => !agent.archivedAt)
+        .sort((left, right) => dispatchAgentLabel(left).localeCompare(dispatchAgentLabel(right))),
+    [selectedHostId, sessions],
+  );
+  const selectedAgent = agents.find((agent) => agent.id === target?.agentId);
+  let selectedAgentLabel = t("liveVoice.settings.dispatch.notSet");
+  if (selectedAgent) {
+    selectedAgentLabel = dispatchAgentLabel(selectedAgent);
+  } else if (target?.serverId === selectedHostId) {
+    selectedAgentLabel = target.agentId;
+  }
+
+  const handleHostChange = useCallback(
+    (serverId: string) => {
+      setSelectedHostId(serverId);
+      setTarget(null);
+    },
+    [setTarget],
+  );
+  const clearTarget = useCallback(() => setTarget(null), [setTarget]);
+
+  return (
+    <>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("liveVoice.settings.dispatch.hostLabel")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("liveVoice.settings.dispatch.description")}</Text>
+        </View>
+        <DropdownMenu>
+          <DropdownTrigger
+            accessibilityRole="button"
+            accessibilityLabel={t("liveVoice.settings.dispatch.hostLabel")}
+            style={themeTriggerStyle}
+            testID="dispatch-host-picker"
+          >
+            <Text style={styles.themeTriggerText} numberOfLines={1}>
+              {selectedHost?.label ?? t("liveVoice.settings.dispatch.chooseHost")}
+            </Text>
+          </DropdownTrigger>
+          <DropdownMenuContent side="bottom" align="end" width={240}>
+            {hosts.length === 0 ? (
+              <DropdownMenuItem disabled>
+                {t("liveVoice.settings.dispatch.noHosts")}
+              </DropdownMenuItem>
+            ) : (
+              hosts.map((host) => (
+                <DispatchHostMenuItem
+                  key={host.serverId}
+                  host={host}
+                  selected={host.serverId === selectedHostId}
+                  onChange={handleHostChange}
+                />
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("liveVoice.settings.dispatch.agentLabel")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("liveVoice.settings.dispatch.agentHint")}</Text>
+        </View>
+        <DropdownMenu>
+          <DropdownTrigger
+            accessibilityRole="button"
+            accessibilityLabel={t("liveVoice.settings.dispatch.agentLabel")}
+            style={themeTriggerStyle}
+            testID="dispatch-agent-picker"
+          >
+            <Text style={styles.themeTriggerText} numberOfLines={1}>
+              {selectedAgentLabel}
+            </Text>
+          </DropdownTrigger>
+          <DropdownMenuContent side="bottom" align="end" width={280}>
+            <DropdownMenuItem selected={target === null} onSelect={clearTarget}>
+              {t("liveVoice.settings.dispatch.clear")}
+            </DropdownMenuItem>
+            {agents.length === 0 ? (
+              <DropdownMenuItem disabled>
+                {t("liveVoice.settings.dispatch.noAgents")}
+              </DropdownMenuItem>
+            ) : (
+              agents.map((agent) => (
+                <DispatchAgentMenuItem
+                  key={agent.id}
+                  agent={agent}
+                  serverId={selectedHostId}
+                  selected={target?.serverId === selectedHostId && target.agentId === agent.id}
+                  onChange={setTarget}
+                />
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </View>
+    </>
+  );
+}
+
+function DispatchHostMenuItem({
+  host,
+  selected,
+  onChange,
+}: {
+  host: HostProfile;
+  selected: boolean;
+  onChange: (serverId: string) => void;
+}) {
+  const handleSelect = useCallback(() => onChange(host.serverId), [host.serverId, onChange]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {host.label}
+    </DropdownMenuItem>
+  );
+}
+
+function DispatchAgentMenuItem({
+  agent,
+  serverId,
+  selected,
+  onChange,
+}: {
+  agent: Agent;
+  serverId: string;
+  selected: boolean;
+  onChange: (target: DispatchAgentTarget | null) => void;
+}) {
+  const handleSelect = useCallback(
+    () => onChange({ serverId, agentId: agent.id }),
+    [agent.id, onChange, serverId],
+  );
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {dispatchAgentLabel(agent)}
+    </DropdownMenuItem>
+  );
+}
+
+function dispatchAgentLabel(agent: { title: string | null; provider: string }): string {
+  return agent.title?.trim() || providerLabel(agent.provider);
 }
 
 function LiveVoiceBackendOptionMenuItem({

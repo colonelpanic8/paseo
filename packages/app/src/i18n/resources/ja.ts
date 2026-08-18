@@ -1767,6 +1767,17 @@ export const ja: TranslationResources = {
         description: "新しい通話に使用されます。通話中の音声は変更されません。",
         default: "デフォルト",
       },
+      dispatch: {
+        hostLabel: "Dispatch ホスト",
+        description: "ウォッチからの単発プロンプトを送るホストを選択します。",
+        chooseHost: "ホストを選択",
+        noHosts: "利用できるホストがありません",
+        agentLabel: "Dispatch エージェント",
+        agentHint: "ウォッチで話したプロンプトはこのエージェントに送信されます。",
+        notSet: "未設定",
+        clear: "未設定",
+        noAgents: "このホストにエージェントがありません",
+      },
       backendModel: {
         label: "アクションモデル",
         description:

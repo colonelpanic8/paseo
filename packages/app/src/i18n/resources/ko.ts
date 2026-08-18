@@ -1916,6 +1916,17 @@ export const ko: TranslationResources = {
         description: "새 통화에 사용됩니다. 진행 중인 통화는 현재 목소리를 유지합니다.",
         default: "기본값",
       },
+      dispatch: {
+        hostLabel: "Dispatch 호스트",
+        description: "시계에서 보낸 일회성 프롬프트를 받을 호스트를 선택합니다.",
+        chooseHost: "호스트 선택",
+        noHosts: "사용 가능한 호스트 없음",
+        agentLabel: "Dispatch 에이전트",
+        agentHint: "시계에서 말한 프롬프트가 이 에이전트로 전송됩니다.",
+        notSet: "설정 안 함",
+        clear: "설정 안 함",
+        noAgents: "이 호스트에 에이전트가 없습니다",
+      },
       backendModel: {
         label: "작업 모델",
         description:

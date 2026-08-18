@@ -1780,6 +1780,17 @@ export const ru: TranslationResources = {
         description: "Используется для новых звонков. Активный звонок сохраняет текущий голос.",
         default: "По умолчанию",
       },
+      dispatch: {
+        hostLabel: "Хост Dispatch",
+        description: "Выберите хост для разовых запросов с часов.",
+        chooseHost: "Выбрать хост",
+        noHosts: "Нет доступных хостов",
+        agentLabel: "Агент Dispatch",
+        agentHint: "Голосовые запросы с часов отправляются этому агенту.",
+        notSet: "Не задан",
+        clear: "Не задан",
+        noAgents: "На этом хосте нет агентов",
+      },
       backendModel: {
         label: "Модель действий",
         description:

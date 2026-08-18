@@ -1728,6 +1728,17 @@ export const zhCN: TranslationResources = {
         description: "用于新通话。正在进行的通话会保留当前语音。",
         default: "默认",
       },
+      dispatch: {
+        hostLabel: "Dispatch 主机",
+        description: "选择接收手表一次性提示的主机。",
+        chooseHost: "选择主机",
+        noHosts: "没有可用主机",
+        agentLabel: "Dispatch 智能体",
+        agentHint: "手表上的语音提示会发送给此智能体。",
+        notSet: "未设置",
+        clear: "未设置",
+        noAgents: "此主机上没有智能体",
+      },
       backendModel: {
         label: "操作模型",
         description:

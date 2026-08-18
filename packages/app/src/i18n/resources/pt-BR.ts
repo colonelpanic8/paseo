@@ -1782,6 +1782,17 @@ export const ptBR: TranslationResources = {
         description: "Usada em novas chamadas. Uma chamada ativa mantém a voz atual.",
         default: "Padrão",
       },
+      dispatch: {
+        hostLabel: "Host do Dispatch",
+        description: "Escolha o host para comandos pontuais enviados pelo relógio.",
+        chooseHost: "Escolher host",
+        noHosts: "Nenhum host disponível",
+        agentLabel: "Agente do Dispatch",
+        agentHint: "Os comandos falados no relógio são enviados a este agente.",
+        notSet: "Não definido",
+        clear: "Não definido",
+        noAgents: "Nenhum agente neste host",
+      },
       backendModel: {
         label: "Modelo de ações",
         description:
