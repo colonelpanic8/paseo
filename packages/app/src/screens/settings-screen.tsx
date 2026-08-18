@@ -2064,7 +2064,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   diagnosticsGroupTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginTop: theme.spacing[4],
     marginBottom: theme.spacing[2],
     marginLeft: theme.spacing[1],
