@@ -27,6 +27,10 @@ class PaseoWearListenerService : WearableListenerService() {
     when (event.path) {
       COMMAND_PATH -> {
         val payload = String(event.data)
+        if (PocketStartCommandStore.stage(applicationContext, payload)) {
+          Log.i(TAG, "Staged watch-initiated Live Voice pocket start")
+          return
+        }
         if (!WearCommandBus.deliver(payload)) {
           Log.i(TAG, "No JS listener; queueing wear command")
           CommandQueue.add(applicationContext, payload)
