@@ -11,6 +11,7 @@ import {
   type WearLiveVoiceHost,
   type WearLiveVoiceState,
   type WearLiveVoiceTranscriptEntry,
+  type WearDispatchState,
 } from "./wear-protocol";
 
 /**
@@ -35,6 +36,7 @@ export interface WearLiveVoiceInput {
   snapshot: LiveVoiceSnapshot;
   availability: LiveVoiceAvailability;
   audioRoutes?: LiveVoiceAudioRouteState | null;
+  dispatch?: WearDispatchState;
 }
 
 /**
@@ -84,7 +86,7 @@ export function buildWearLiveVoiceState(
   input: WearLiveVoiceInput,
   now: number,
 ): WearLiveVoiceState {
-  const { snapshot, availability, audioRoutes } = input;
+  const { snapshot, availability, audioRoutes, dispatch } = input;
   return {
     v: WEAR_PROTOCOL_VERSION,
     updatedAt: now,
@@ -105,6 +107,7 @@ export function buildWearLiveVoiceState(
         }
       : {}),
     pocketStartSupported: true,
+    ...(dispatch ? { dispatch } : {}),
   };
 }
 
