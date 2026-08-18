@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import pino from "pino";
 
 import {
@@ -9,7 +12,11 @@ import {
 } from "./live-voice-context.js";
 import { LIVE_VOICE_PROMPT_COMPONENTS } from "./live-voice-context.js";
 import { LIVE_VOICE_ALL_HOSTS_READ_TOOLS } from "./live-voice-fanout-tools.js";
-import { LiveVoiceDaemonContextProvider } from "./live-voice-daemon-context.js";
+import {
+  LIVE_VOICE_CONTEXT_FILE_MAX_BYTES,
+  LIVE_VOICE_CONTEXT_FILES_TOTAL_MAX_BYTES,
+  LiveVoiceDaemonContextProvider,
+} from "./live-voice-daemon-context.js";
 import { buildVoiceModeSystemPrompt } from "../voice-config.js";
 
 const AGENT_ID = "agent-1";
@@ -40,6 +47,26 @@ function snapshot(overrides: Partial<LiveVoiceContextSnapshot> = {}): LiveVoiceC
 }
 
 const logger = pino({ level: "silent" });
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+function emptyDaemonContextProvider(
+  contextFiles: readonly string[],
+): LiveVoiceDaemonContextProvider {
+  return new LiveVoiceDaemonContextProvider({
+    agents: { hasPaseoMcpInjection: () => true, listAgents: () => [] },
+    workspaces: { list: async () => [] },
+    logger,
+    contextFiles,
+  });
+}
+
+function itemContent(text: string): string {
+  return text.slice(text.indexOf("\n") + 1);
+}
 
 describe("live voice prompt", () => {
   it("tells the model it routes work to sessions and can reach Paseo's own controls", () => {
@@ -222,11 +249,15 @@ describe("live voice prompt", () => {
   });
 
   it("changes the prompt for every unlocked component and for no locked one", () => {
-    const full = buildLiveVoicePrompt({ paseoToolsAvailable: true });
+    const full = buildLiveVoicePrompt({
+      paseoToolsAvailable: true,
+      userContextAvailable: true,
+    });
 
     for (const component of LIVE_VOICE_PROMPT_COMPONENTS) {
       const prompt = buildLiveVoicePrompt({
         paseoToolsAvailable: true,
+        userContextAvailable: true,
         disabledComponents: [component.id],
       });
       if (component.locked) {
@@ -237,6 +268,24 @@ describe("live voice prompt", () => {
         expect(prompt, `${component.id} is a dead toggle`).not.toBe(full);
       }
     }
+  });
+
+  it("includes user-context guidance only when a file loaded and the component is enabled", () => {
+    const absent = buildLiveVoicePrompt({ paseoToolsAvailable: true });
+    const present = buildLiveVoicePrompt({
+      paseoToolsAvailable: true,
+      userContextAvailable: true,
+    });
+    const disabled = buildLiveVoicePrompt({
+      paseoToolsAvailable: true,
+      userContextAvailable: true,
+      disabledComponents: ["user-context"],
+    });
+
+    expect(absent).not.toContain('developer items labeled "User context file"');
+    expect(present).toContain('developer items labeled "User context file"');
+    expect(present).toMatch(/follow them when they conflict with your defaults/i);
+    expect(disabled).not.toContain('developer items labeled "User context file"');
   });
 
   it("quotes the user's standing instructions and bounds them", () => {
@@ -460,6 +509,114 @@ describe("live voice initial items", () => {
 });
 
 describe("daemon context provider", () => {
+  it("reads configured context files into separate items after the snapshots", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "paseo-live-voice-context-files-"));
+    roots.push(root);
+    const identityPath = path.join(root, "identity.md");
+    const projectsPath = path.join(root, "projects.md");
+    await Promise.all([
+      writeFile(identityPath, "My name is Dana.\n"),
+      writeFile(projectsPath, "Project Lantern is the priority.\n"),
+    ]);
+    const provider = new LiveVoiceDaemonContextProvider({
+      agents: {
+        hasPaseoMcpInjection: () => true,
+        listAgents: () => [
+          {
+            id: AGENT_ID,
+            provider: "claude",
+            cwd: "/work/paseo",
+            workspaceId: "ws-1",
+            lifecycle: "idle",
+            config: { title: "Live voice work" },
+          },
+        ],
+      },
+      workspaces: { list: async () => [] },
+      logger,
+      contextFiles: [identityPath, projectsPath],
+    });
+
+    const context = await provider.build();
+
+    expect(context?.initialItems).toHaveLength(3);
+    expect(context?.initialItems[0]?.text).toContain("Agent sessions on this daemon");
+    expect(context?.initialItems[1]?.text).toBe(
+      `User context file: ${identityPath}\nMy name is Dana.\n`,
+    );
+    expect(context?.initialItems[2]?.text).toBe(
+      `User context file: ${projectsPath}\nProject Lantern is the priority.\n`,
+    );
+    expect(context?.prompt).toContain('developer items labeled "User context file"');
+
+    await writeFile(identityPath, "My name is Riley.\n");
+    const refreshed = await provider.build();
+    expect(refreshed?.initialItems[1]?.text).toContain("My name is Riley.");
+    expect(refreshed?.initialItems[1]?.text).not.toContain("My name is Dana.");
+  });
+
+  it("truncates each context file at a line boundary", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "paseo-live-voice-context-per-file-"));
+    roots.push(root);
+    const filePath = path.join(root, "large.md");
+    await writeFile(filePath, "x".repeat(100).concat("\n").repeat(200));
+
+    const context = await emptyDaemonContextProvider([filePath]).build({
+      limits: { contextTokenBudget: 50_000, bytesPerToken: 4 },
+    });
+    const content = itemContent(context?.initialItems[0]?.text ?? "");
+
+    expect(Buffer.byteLength(content, "utf8")).toBeLessThanOrEqual(
+      LIVE_VOICE_CONTEXT_FILE_MAX_BYTES,
+    );
+    expect(content).toContain("[Truncated for Live Voice context limits.]");
+    expect(content.slice(0, content.indexOf("[Truncated"))).toMatch(/\n$/);
+  });
+
+  it("caps the combined context-file payload and truncates the final included file", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "paseo-live-voice-context-total-"));
+    roots.push(root);
+    const filePaths = ["one.md", "two.md", "three.md"].map((name) => path.join(root, name));
+    await Promise.all(
+      filePaths.map((filePath, index) =>
+        writeFile(filePath, `${index}`.repeat(100).concat("\n").repeat(200)),
+      ),
+    );
+
+    const context = await emptyDaemonContextProvider(filePaths).build({
+      limits: { contextTokenBudget: 50_000, bytesPerToken: 4 },
+    });
+    const contents = (context?.initialItems ?? []).map((item) => itemContent(item.text));
+
+    expect(contents).toHaveLength(3);
+    expect(
+      contents.reduce((total, content) => total + Buffer.byteLength(content, "utf8"), 0),
+    ).toBeLessThanOrEqual(LIVE_VOICE_CONTEXT_FILES_TOTAL_MAX_BYTES);
+    expect(contents[2]).toContain("[Truncated for Live Voice context limits.]");
+  });
+
+  it("skips missing context files without suppressing files that can be read", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "paseo-live-voice-context-missing-"));
+    roots.push(root);
+    const presentPath = path.join(root, "present.md");
+    await writeFile(presentPath, "Use the GTD inbox.\n");
+
+    const context = await emptyDaemonContextProvider([
+      path.join(root, "missing.md"),
+      presentPath,
+    ]).build();
+
+    expect(context?.initialItems).toHaveLength(1);
+    expect(context?.initialItems[0]?.text).toContain("Use the GTD inbox.");
+    expect(context?.prompt).toContain('developer items labeled "User context file"');
+
+    const missingOnly = await emptyDaemonContextProvider([
+      path.join(root, "still-missing.md"),
+    ]).build();
+    expect(missingOnly?.initialItems).toEqual([]);
+    expect(missingOnly?.prompt).not.toContain('developer items labeled "User context file"');
+  });
+
   it("builds context from live state, skipping closed sessions and archived workspaces", async () => {
     const provider = new LiveVoiceDaemonContextProvider({
       agents: {

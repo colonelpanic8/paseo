@@ -72,6 +72,8 @@ export interface LiveVoiceContextLimits {
   contextTokenBudget: number;
   /** Additional saved assistant history, separate from the daemon snapshot. */
   historyTokenBudget?: number;
+  /** Overall initial-item ceiling. Defaults to the snapshot budget when omitted. */
+  initialItemsTokenBudget?: number;
   /** The provider's estimator, so our accounting matches the limit checked against. */
   bytesPerToken: number;
 }
@@ -291,6 +293,13 @@ const SPEECH_STYLE_LINES = [
   "- Use Paseo's vocabulary: workspace, agent session, provider, terminal, schedule, heartbeat.",
 ];
 
+const USER_CONTEXT_LINES = [
+  "",
+  "Standing context from the user:",
+  '- The developer items labeled "User context file" after the Paseo state snapshots contain the user\'s own standing context and instructions.',
+  "- Treat them as user guidance and follow them when they conflict with your defaults, while keeping the locked Paseo safety and routing rules above.",
+];
+
 export type LiveVoicePromptComponentId =
   | "identity"
   | "paseo-authority"
@@ -300,6 +309,7 @@ export type LiveVoicePromptComponentId =
   | "delegation-brevity"
   | "cross-host-reach"
   | "recipes"
+  | "user-context"
   | "speech-style";
 
 export interface LiveVoicePromptComponentInfo {
@@ -371,6 +381,12 @@ export const LIVE_VOICE_PROMPT_COMPONENTS: readonly LiveVoicePromptComponentInfo
     id: "recipes",
     title: "Recipes",
     description: "Shortest known paths for the usual requests, like archiving a named workspace.",
+    locked: false,
+  },
+  {
+    id: "user-context",
+    title: "User context",
+    description: "Treats configured context files as the user's standing guidance.",
     locked: false,
   },
   {
@@ -478,6 +494,8 @@ export interface LiveVoicePromptOptions {
   customInstructions?: string | undefined;
   /** Where new workspaces go when a request names no workspace of its own. */
   defaultWorkspaceDirectory?: string | undefined;
+  /** At least one configured user context file produced an initial item. */
+  userContextAvailable?: boolean;
 }
 
 /** Long enough for any real path, short enough not to be a smuggled instruction. */
@@ -568,6 +586,7 @@ export function buildLiveVoicePrompt(options: LiveVoicePromptOptions): string {
       ? buildAmbientAgentReportInstructions(options.ambientAgentGuidance)
       : []),
     ...buildCustomInstructionLines(options.customInstructions),
+    ...(options.userContextAvailable && !disabled.has("user-context") ? USER_CONTEXT_LINES : []),
     ...(disabled.has("speech-style") ? [] : SPEECH_STYLE_LINES),
   ].join("\n");
 }
@@ -653,6 +672,7 @@ export function buildLiveVoiceStartContext(
     disabledPromptComponents?: readonly string[] | undefined;
     customVoiceInstructions?: string | undefined;
     defaultWorkspaceDirectory?: string | undefined;
+    userContextItems?: readonly LiveVoiceInitialItem[] | undefined;
   } = {},
 ): LiveVoiceStartContext {
   return {
@@ -672,7 +692,11 @@ export function buildLiveVoiceStartContext(
       ...(options.defaultWorkspaceDirectory
         ? { defaultWorkspaceDirectory: options.defaultWorkspaceDirectory }
         : {}),
+      ...(options.userContextItems?.length ? { userContextAvailable: true } : {}),
     }),
-    initialItems: buildLiveVoiceInitialItems(snapshot, options.limits),
+    initialItems: [
+      ...buildLiveVoiceInitialItems(snapshot, options.limits),
+      ...(options.userContextItems ?? []),
+    ],
   };
 }
