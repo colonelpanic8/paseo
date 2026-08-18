@@ -40,6 +40,38 @@ describe("server config", () => {
     expect(config.providerCatalogRefreshTimeoutMs).toBe(180_000);
   });
 
+  test("loads absolute Live Voice context files and expands ~", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-context-"));
+    roots.push(paseoHome);
+    const absolutePath = path.join(paseoHome, "standing.md");
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({
+        liveVoice: { contextFiles: [absolutePath, "~/chief-of-staff.md"] },
+      }),
+    );
+
+    const config = loadConfig(paseoHome, { env: {} });
+
+    expect(config.liveVoiceContextFiles).toEqual([
+      absolutePath,
+      path.resolve(process.env.HOME || os.homedir(), "chief-of-staff.md"),
+    ]);
+  });
+
+  test("rejects relative Live Voice context file paths", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-live-voice-relative-"));
+    roots.push(paseoHome);
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({ liveVoice: { contextFiles: ["notes/standing.md"] } }),
+    );
+
+    expect(() => loadConfig(paseoHome, { env: {} })).toThrow(
+      "Expected an absolute or ~-rooted path",
+    );
+  });
+
   test("resolves reload state from the supplied validated snapshot", async () => {
     const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-snapshot-"));
     roots.push(paseoHome);

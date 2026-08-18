@@ -163,6 +163,7 @@ interface WebSocketServerConfig {
   daemonStatusRpc?: boolean;
   relayConfig?: boolean;
   startPaused?: boolean;
+  liveVoiceContextFiles?: readonly string[];
 }
 
 type WebSocketRuntimeMetrics = SessionRuntimeMetrics & CheckoutDiffMetrics;
@@ -793,6 +794,7 @@ export class VoiceAssistantWebSocketServer {
         agents: this.agentManager,
         workspaces: this.workspaceRegistry,
         logger: this.logger,
+        contextFiles: wsConfig.liveVoiceContextFiles,
       }),
     });
 
