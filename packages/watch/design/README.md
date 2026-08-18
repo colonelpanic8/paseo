@@ -132,10 +132,16 @@ survive the phone app being backgrounded or killed.
 
 Live Voice starts from the activity, not directly from the tile. Starting opens a short-lived
 transparent phone activity so Android grants microphone foreground-service access with the phone
-locked. The tile shows the active/expected route as a label plus a kind glyph, but every tile tap
-still opens `LiveVoiceActivity`; route mutation needs the activity's live lifecycle and state.
-Inside that screen the route row cycles through the phone-advertised candidates. Earbuds are the
-default over wrist audio when both are present.
+locked. The tile shows the active/expected route as a label plus a kind glyph. Its Call target
+opens `LiveVoiceActivity`; route mutation needs the activity's live lifecycle and state. Inside
+that screen the route row cycles through the phone-advertised candidates. Earbuds are the default
+over wrist audio when both are present.
+
+Dispatch is the other tile target and does open directly into an action: its activity launches
+the system recognizer on entry, sends the finished text to the phone-owned target, haptics on the
+correlated acknowledgement, and closes. The tile uses two compact targets inside the responsive
+round-screen inset. An old phone omits Dispatch; an unconfigured new phone shows a muted setup
+hint instead of a clickable target.
 
 ## Settled
 
