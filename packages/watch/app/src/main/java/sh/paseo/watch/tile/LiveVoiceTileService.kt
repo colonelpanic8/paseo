@@ -26,6 +26,7 @@ import sh.paseo.watch.LiveVoiceActivity
 import sh.paseo.watch.data.readCachedLiveVoiceState
 import sh.paseo.watch.model.LiveVoicePhase
 import sh.paseo.watch.model.LiveVoiceState
+import sh.paseo.watch.model.audioRouteGlance
 import sh.paseo.watch.model.liveVoiceUnavailableMessage
 
 /**
@@ -146,22 +147,25 @@ private fun buildLayout(
  * A live call says which host, because "on call" alone leaves the only question
  * worth asking at a glance unanswered.
  */
-private fun statusLine(state: LiveVoiceState): String =
-  when (state.phase) {
-    LiveVoicePhase.Starting -> "Connecting…"
-    LiveVoicePhase.Active -> {
-      val muted = if (state.isMuted) "Muted" else "On call"
-      state.hostLabel?.let { "$muted · $it" } ?: muted
-    }
-    LiveVoicePhase.Stopping -> "Hanging up…"
-    LiveVoicePhase.Error -> "Call ended"
-    LiveVoicePhase.Idle ->
-      if (state.hosts.isEmpty()) {
-        liveVoiceUnavailableMessage(state.unavailableReason)
-      } else {
-        "Not on a call"
+internal fun statusLine(state: LiveVoiceState): String {
+  val callStatus =
+    when (state.phase) {
+      LiveVoicePhase.Starting -> "Connecting…"
+      LiveVoicePhase.Active -> {
+        val muted = if (state.isMuted) "Muted" else "On call"
+        state.hostLabel?.let { "$muted · $it" } ?: muted
       }
-  }
+      LiveVoicePhase.Stopping -> "Hanging up…"
+      LiveVoicePhase.Error -> "Call ended"
+      LiveVoicePhase.Idle ->
+        if (state.hosts.isEmpty()) {
+          liveVoiceUnavailableMessage(state.unavailableReason)
+        } else {
+          "Not on a call"
+        }
+    }
+  return state.audioRouteGlance()?.let { "$callStatus\n$it" } ?: callStatus
+}
 
 private fun statusColor(state: LiveVoiceState): Int =
   when (state.phase) {
