@@ -228,8 +228,10 @@ All of the user's UI asks are built. What remains is verification on hardware:
    the display wakes briefly, the activity never exposes app content over the lock
    screen, the microphone foreground service starts, the call reaches `active`, and
    the activity exits. Repeat with microphone permission revoked and with the app
-   process killed; neither case may look like a successful call. A live runtime
-   failure must publish `background_unavailable` and its watch copy.
+   process killed; neither case may look like a successful call. After the killed
+   process case, wait more than 60 seconds before opening Paseo and confirm the
+   queued start is logged as expired instead of opening the microphone. A live
+   runtime failure must publish `background_unavailable` and its watch copy.
 6. **Route arbitration needs the watch and earbuds connected together.** With Pixel
    Buds and Pixel Watch both available, earbuds must be selected first. Disconnect
    and reconnect each device during a call, then cycle every candidate from the
