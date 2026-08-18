@@ -490,7 +490,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   projectIconFallbackText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   statusDotOverlay: {
     position: "absolute",
@@ -544,7 +544,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   repoSlug: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 16,
     flexShrink: 1,
@@ -552,7 +552,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   timestamp: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 16,
   },
@@ -589,7 +589,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   branch: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 16,
     flexShrink: 1,
@@ -617,7 +617,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   archiveActionText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 16,
   },
