@@ -426,7 +426,7 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 1,
   },
   badgeCount: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     fontVariant: ["tabular-nums"],
   },
@@ -443,7 +443,7 @@ const styles = StyleSheet.create((theme) => ({
   footerText: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   toastRow: {

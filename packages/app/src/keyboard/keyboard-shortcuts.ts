@@ -196,6 +196,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
   "agent-input": [
     "focus-message-input",
     "cycle-agent-mode",
+    "stash-prompt",
     "voice-toggle",
     "dictation-toggle",
     "agent-interrupt",
@@ -1097,7 +1098,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "stash-prompt",
       section: "agent-input",
       label: "Stash prompt",
-      keys: ["mod", "S"],
     },
   },
   {
@@ -1111,7 +1111,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "stash-prompt",
       section: "agent-input",
       label: "Stash prompt",
-      keys: ["mod", "S"],
     },
   },
   {
