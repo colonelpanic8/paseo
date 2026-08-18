@@ -452,6 +452,7 @@ function IconTooltipContent({
 }
 
 function SidebarFooter({
+  active,
   theme,
   handleOpenProject,
   handleImportSession,
@@ -461,6 +462,7 @@ function SidebarFooter({
   handleOpenHostSettings,
   onBeforeNavigate,
 }: {
+  active: boolean;
   theme: SidebarTheme;
   handleOpenProject: () => void;
   handleImportSession: () => void;
@@ -496,7 +498,7 @@ function SidebarFooter({
             onAddHost={handleAddHost}
             onOpenHostSettings={handleOpenHostSettings}
           />
-          <LiveVoiceFooterButton />
+          <LiveVoiceFooterButton active={active} />
           <FooterIconButton
             onPress={handleImportSession}
             testID="sidebar-import-session"
@@ -647,6 +649,7 @@ function MobileSidebar({
         )}
 
         <SidebarFooter
+          active={dragGestureHostPresented}
           theme={theme}
           handleOpenProject={handleOpenProject}
           handleImportSession={handleImportSession}
@@ -827,6 +830,7 @@ function DesktopSidebar({
         <SidebarLiveVoiceSlot active={active} />
 
         <SidebarFooter
+          active={active}
           theme={theme}
           handleOpenProject={handleOpenProject}
           handleImportSession={handleImportSession}
