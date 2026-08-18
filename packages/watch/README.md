@@ -101,13 +101,16 @@ The Expo module is a separate workspace package rather than code inside
 Play Services starts `PaseoWearListenerService` even when the phone app's process is
 gone, so the message arrives — but there is no JS runtime to execute it against.
 Rather than spin up React Native headlessly (slow and unreliable), the command is
-persisted to a small on-disk queue and drained the next time the app starts.
+persisted to a small on-disk queue and drained the next time the app starts. Most
+commands stay there until they drain. `startLiveVoice` expires after 60 seconds;
+legacy start entries with no timestamp are discarded because their age is unknown.
 
-So: **a command sent while the phone app is killed takes effect when the app is next
-opened, not immediately.** The watch reports send failures rather than pretending
-success, and `WearBridge.start()` drains the queue before its first publish so a
-queued approval isn't immediately overwritten by a snapshot that still shows it
-pending.
+So: **a prompt or approval sent while the phone app is killed takes effect when the
+app is next opened, not immediately.** The watch reports send failures rather than
+pretending success, and `WearBridge.start()` drains the queue before its first
+publish so a queued approval isn't immediately overwritten by a snapshot that still
+shows it pending. A call start never survives long enough to surprise-start the
+microphone hours later.
 
 ### Transcripts are on demand, and the snapshot stays cheap
 
@@ -234,7 +237,8 @@ Turning the screen on is required for an activity launched while the display is 
 to reach `RESUMED`; the display can therefore wake briefly inside a pocket. The phone
 app process and JS runtime must still be alive. If the process was killed, the native
 listener has no runtime to execute the call and the command follows the existing
-on-disk queue behavior instead of claiming that a call started.
+on-disk queue behavior instead of claiming that a call started. That queued call
+start expires after 60 seconds.
 
 Companion Device Manager (CDM) association does not replace the activity:
 
