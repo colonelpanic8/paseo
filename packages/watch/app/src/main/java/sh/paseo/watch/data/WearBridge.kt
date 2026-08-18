@@ -5,6 +5,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import sh.paseo.watch.model.ActivityState
 import sh.paseo.watch.model.AgentSession
+import sh.paseo.watch.model.DispatchResult
+import sh.paseo.watch.model.DispatchResultStatus
+import sh.paseo.watch.model.DispatchState
 import sh.paseo.watch.model.LiveVoiceHost
 import sh.paseo.watch.model.LiveVoiceAudioRoute
 import sh.paseo.watch.model.LiveVoiceAudioRouteKind
@@ -244,6 +247,9 @@ data class WireCommand(
     const val TOGGLE_LIVE_VOICE_MUTE = "toggleLiveVoiceMute"
 
     const val SET_LIVE_VOICE_AUDIO_ROUTE = "setLiveVoiceAudioRoute"
+
+    /** One-shot prompt routed through the target configured on the phone. */
+    const val DISPATCH_PROMPT = "dispatchPrompt"
   }
 }
 
@@ -273,6 +279,23 @@ data class WireLiveVoice(
   val audioRouteCandidates: List<WireLiveVoiceAudioRoute>? = null,
   /** Optional: a missing value selects the legacy MessageClient start path. */
   val pocketStartSupported: Boolean? = null,
+  /** Optional: missing on phone builds that predate one-shot Dispatch. */
+  val dispatch: WireDispatch? = null,
+)
+
+@Serializable
+data class WireDispatch(
+  val configured: Boolean = false,
+  val label: String? = null,
+  val result: WireDispatchResult? = null,
+)
+
+@Serializable
+data class WireDispatchResult(
+  val requestId: String? = null,
+  /** "success" | "failure"; unknown values degrade to failure. */
+  val status: String = "failure",
+  val message: String? = null,
 )
 
 @Serializable data class WireLiveVoiceHost(val serverId: String = "", val label: String = "")
@@ -408,6 +431,25 @@ private fun String.toLiveVoiceAudioRouteKind(): LiveVoiceAudioRouteKind =
 private fun WireLiveVoiceAudioRoute.toAudioRoute(): LiveVoiceAudioRoute =
   LiveVoiceAudioRoute(id = id, label = label, kind = kind.toLiveVoiceAudioRouteKind())
 
+private fun WireDispatch.toDispatchState(): DispatchState =
+  DispatchState(
+    configured = configured,
+    label = label,
+    result =
+      result?.let {
+        DispatchResult(
+          requestId = it.requestId,
+          status =
+            if (it.status == "success") {
+              DispatchResultStatus.Success
+            } else {
+              DispatchResultStatus.Failure
+            },
+          message = it.message,
+        )
+      },
+  )
+
 fun WireLiveVoice.toLiveVoiceState(): LiveVoiceState =
   LiveVoiceState(
     phase = phase.toLiveVoicePhase(),
@@ -431,4 +473,5 @@ fun WireLiveVoice.toLiveVoiceState(): LiveVoiceState =
     audioRouteCandidates =
       audioRouteCandidates.orEmpty().filter { it.id.isNotEmpty() }.map { it.toAudioRoute() },
     pocketStartSupported = pocketStartSupported == true,
+    dispatch = dispatch?.toDispatchState(),
   )

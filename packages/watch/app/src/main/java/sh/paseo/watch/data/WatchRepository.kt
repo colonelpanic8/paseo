@@ -4,6 +4,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import sh.paseo.watch.model.ActivityState
 import sh.paseo.watch.model.AgentSession
+import sh.paseo.watch.model.DispatchResult
+import sh.paseo.watch.model.DispatchResultStatus
+import sh.paseo.watch.model.DispatchState
 import sh.paseo.watch.model.LiveVoiceHost
 import sh.paseo.watch.model.LiveVoiceAudioRoute
 import sh.paseo.watch.model.LiveVoiceAudioRouteKind
@@ -87,6 +90,9 @@ interface WatchRepository {
 
   /** Select one of the phone-advertised communication devices. */
   suspend fun setLiveVoiceAudioRoute(routeId: String)
+
+  /** Send one prompt to the phone-owned Dispatch target. */
+  suspend fun dispatchPrompt(requestId: String, text: String): Boolean
 }
 
 /**
@@ -123,6 +129,7 @@ class MockWatchRepository : WatchRepository {
             LiveVoiceAudioRoute("android:watch", "Pixel Watch", LiveVoiceAudioRouteKind.Watch),
           ),
         pocketStartSupported = true,
+        dispatch = DispatchState(configured = true, label = "Chief of staff", result = null),
       ),
     )
 
@@ -225,6 +232,22 @@ class MockWatchRepository : WatchRepository {
   override suspend fun setLiveVoiceAudioRoute(routeId: String) {
     val target = liveVoiceState.value.audioRouteCandidates.firstOrNull { it.id == routeId } ?: return
     liveVoiceState.value = liveVoiceState.value.copy(activeAudioRoute = target)
+  }
+
+  override suspend fun dispatchPrompt(requestId: String, text: String): Boolean {
+    liveVoiceState.value =
+      liveVoiceState.value.copy(
+        dispatch =
+          liveVoiceState.value.dispatch?.copy(
+            result =
+              DispatchResult(
+                requestId = requestId,
+                status = DispatchResultStatus.Success,
+                message = "Sent to Chief of staff",
+              ),
+          ),
+      )
+    return true
   }
 
   private fun mutateAgent(
