@@ -6,7 +6,5 @@
     <item name="android:windowNoTitle">true</item>
     <item name="android:backgroundDimEnabled">false</item>
     <item name="android:windowDisablePreview">true</item>
-    <item name="android:windowShowWhenLocked">true</item>
-    <item name="android:windowTurnScreenOn">true</item>
   </style>
 </resources>
