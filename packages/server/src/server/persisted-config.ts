@@ -171,11 +171,65 @@ const LiveVoiceContextFilePathSchema = z
     message: "Expected an absolute or ~-rooted path",
   });
 
+const LiveVoiceContextProfileIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, {
+    message: "Expected a lowercase slug containing letters, numbers, dots, underscores, or hyphens",
+  });
+
+const LiveVoiceContextProfileSchema = z
+  .object({
+    id: LiveVoiceContextProfileIdSchema,
+    label: z.string().trim().min(1).max(100).optional(),
+    files: z.array(LiveVoiceContextFilePathSchema),
+    instructions: z.string().max(1_000).optional(),
+  })
+  .strict();
+
 const LiveVoiceConfigSchema = z
   .object({
     contextFiles: z.array(LiveVoiceContextFilePathSchema).optional(),
+    contextProfiles: z.array(LiveVoiceContextProfileSchema).optional(),
+    defaultContextProfile: LiveVoiceContextProfileIdSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((config, context) => {
+    const ids = new Set<string>();
+    for (const [index, profile] of (config.contextProfiles ?? []).entries()) {
+      if (ids.has(profile.id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["contextProfiles", index, "id"],
+          message: `Duplicate Live Voice context profile id '${profile.id}'`,
+        });
+      }
+      ids.add(profile.id);
+    }
+
+    if (config.contextFiles !== undefined && ids.has("default")) {
+      context.addIssue({
+        code: "custom",
+        path: ["contextProfiles"],
+        message:
+          "Live Voice contextFiles defines the implicit 'default' profile and cannot be combined with a context profile using that id",
+      });
+    }
+
+    if (
+      config.defaultContextProfile !== undefined &&
+      !ids.has(config.defaultContextProfile) &&
+      !(config.defaultContextProfile === "default" && (config.contextFiles?.length ?? 0) > 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["defaultContextProfile"],
+        message: `Unknown Live Voice default context profile '${config.defaultContextProfile}'`,
+      });
+    }
+  });
 
 const StructuredGenerationProviderConfigSchema = z
   .object({

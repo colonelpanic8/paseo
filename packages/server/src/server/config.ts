@@ -409,14 +409,52 @@ function resolveVoiceLlmConfig(
   };
 }
 
-function resolveLiveVoiceContextFiles(
+function resolveLiveVoiceContextProfiles(
   paseoHome: string,
   persisted: ReturnType<typeof loadPersistedConfig>,
-): string[] | undefined {
-  const contextFiles = persisted.liveVoice?.contextFiles?.map((configuredPath) =>
+):
+  | {
+      profiles: Array<{
+        id: string;
+        label: string;
+        files: string[];
+        instructions?: string | undefined;
+      }>;
+      defaultProfileId?: string | undefined;
+    }
+  | undefined {
+  const configured = persisted.liveVoice;
+  if (!configured) return undefined;
+
+  const profiles = (configured.contextProfiles ?? []).map((profile) => {
+    const resolved: {
+      id: string;
+      label: string;
+      files: string[];
+      instructions?: string | undefined;
+    } = {
+      id: profile.id,
+      label: profile.label ?? profile.id,
+      files: profile.files.map((configuredPath) =>
+        resolveConfiguredPath(paseoHome, configuredPath),
+      ),
+    };
+    if (profile.instructions !== undefined) {
+      resolved.instructions = profile.instructions;
+    }
+    return resolved;
+  });
+  const legacyFiles = configured.contextFiles?.map((configuredPath) =>
     resolveConfiguredPath(paseoHome, configuredPath),
   );
-  return contextFiles?.length ? contextFiles : undefined;
+  if (legacyFiles?.length) {
+    profiles.unshift({ id: "default", label: "Default", files: legacyFiles });
+  }
+  if (profiles.length === 0) return undefined;
+
+  const defaultProfileId =
+    configured.defaultContextProfile ?? (legacyFiles?.length ? "default" : undefined);
+  return { profiles, ...(defaultProfileId ? { defaultProfileId } : {}) };
 }
 
 function resolveCorsAllowedOrigins(
@@ -643,7 +681,7 @@ export function resolveConfigFromPersisted(
     voiceLlmProvider: voiceLlm.provider,
     voiceLlmProviderExplicit: voiceLlm.providerExplicit,
     voiceLlmModel: voiceLlm.model,
-    liveVoiceContextFiles: resolveLiveVoiceContextFiles(paseoHome, persisted),
+    liveVoiceContextProfiles: resolveLiveVoiceContextProfiles(paseoHome, persisted),
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
     metadataGeneration: persisted.agents?.metadataGeneration,
