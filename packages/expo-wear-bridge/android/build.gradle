@@ -39,4 +39,6 @@ dependencies {
   // dependency, so a source-only build of the phone app must exclude this module.
   implementation "com.google.android.gms:play-services-wearable:20.0.1"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0"
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "org.json:json:20240303"
 }
