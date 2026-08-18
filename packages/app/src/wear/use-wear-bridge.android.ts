@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   addWearCommandListener,
   drainPendingWearCommands,
+  getConnectedWearNodes,
   isWearBridgeSupported,
   publishWearLiveVoice,
   publishWearProjectIcon,
@@ -10,10 +11,22 @@ import {
 } from "@getpaseo/expo-wear-bridge";
 
 import { useLiveVoiceRuntimeOptional } from "@/contexts/live-voice-context";
+import {
+  getLiveVoiceAudioRoutes,
+  setLiveVoiceAudioRoute,
+  setLiveVoiceWearNodeNames,
+  subscribeLiveVoiceAudioRoutes,
+  type LiveVoiceAudioRouteState,
+} from "@/live-voice/background-call-lifetime";
 import { readLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import { WearBridge, type NewAgentConfig, type WearLiveVoiceController } from "./wear-bridge";
+import {
+  WearBridge,
+  type NewAgentConfig,
+  type WearAudioRouteController,
+  type WearLiveVoiceController,
+} from "./wear-bridge";
 import type { WearSnapshotInput } from "./wear-snapshot";
 
 /**
@@ -80,6 +93,28 @@ export function useWearBridge(): void {
         }
       : undefined;
 
+    let audioRouteState: LiveVoiceAudioRouteState | null = null;
+    const audioRouteListeners = new Set<() => void>();
+    const updateAudioRoutes = (next: LiveVoiceAudioRouteState | null): void => {
+      if (JSON.stringify(next) === JSON.stringify(audioRouteState)) return;
+      audioRouteState = next;
+      for (const listener of audioRouteListeners) listener();
+    };
+    const audioRoutes: WearAudioRouteController = {
+      subscribe: (listener) => {
+        audioRouteListeners.add(listener);
+        return () => audioRouteListeners.delete(listener);
+      },
+      getSnapshot: () => audioRouteState,
+      select: setLiveVoiceAudioRoute,
+    };
+
+    const refreshAudioRoutes = async (): Promise<void> => {
+      const nodes = await getConnectedWearNodes();
+      await setLiveVoiceWearNodeNames(nodes.map((node) => node.name));
+      updateAudioRoutes(await getLiveVoiceAudioRoutes());
+    };
+
     const bridge = new WearBridge({
       transport: {
         publishSnapshot: publishWearSnapshot,
@@ -93,12 +128,15 @@ export function useWearBridge(): void {
       getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
       resolveNewAgentConfig,
       ...(liveVoice ? { liveVoice } : {}),
+      audioRoutes,
       logger: {
         warn: (message, error) => console.warn(`[wear] ${message}`, error ?? ""),
       },
     });
     bridgeRef.current = bridge;
     void bridge.start();
+    const unsubscribeAudioRoutes = subscribeLiveVoiceAudioRoutes(updateAudioRoutes);
+    void refreshAudioRoutes();
 
     // Any session-store change is a candidate for republishing; the bridge diffs the
     // payload so unrelated changes cost one JSON build and nothing else.
@@ -120,6 +158,7 @@ export function useWearBridge(): void {
 
     const interval = setInterval(() => {
       void bridge.publish();
+      void refreshAudioRoutes();
     }, AGE_REFRESH_MS);
 
     return () => {
@@ -127,6 +166,8 @@ export function useWearBridge(): void {
       unsubscribeStore();
       unsubscribeHostRuntime();
       unsubscribeHostList();
+      unsubscribeAudioRoutes();
+      audioRouteListeners.clear();
       bridge.stop();
       bridgeRef.current = null;
     };
