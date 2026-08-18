@@ -8,6 +8,7 @@ import {
 } from "@/live-voice/live-voice-availability-policy";
 import { useHosts, useHostRuntimeConnectionStatuses } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import { getLiveVoiceContextProfileHostInfo } from "@/live-voice/live-voice-context-profile-selection";
 
 /**
  * Every configured host with the facts live voice availability is decided from,
@@ -42,6 +43,7 @@ export function useLiveVoiceHostAvailability(): LiveVoiceHostAvailability[] {
           paseoToolsEnabled: serverInfo ? serverInfo.features?.agentPaseoTools !== false : null,
           // COMPAT(assistants): added in v0.7.2, drop the gate when floor >= v0.7.2.
           supportsAssistants: serverInfo?.features?.assistants === true,
+          contextProfiles: getLiveVoiceContextProfileHostInfo(serverInfo),
         };
       }),
     [connectionStatuses, hosts, serverInfos],
