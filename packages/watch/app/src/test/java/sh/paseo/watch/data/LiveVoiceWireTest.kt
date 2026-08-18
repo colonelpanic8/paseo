@@ -48,7 +48,16 @@ class LiveVoiceWireTest {
         { "id": "android:7", "label": "Pixel Buds Pro", "kind": "earbuds" },
         { "id": "android:8", "label": "Pixel Watch 3", "kind": "watch" }
       ],
-      "pocketStartSupported": true
+      "pocketStartSupported": true,
+      "dispatch": {
+        "configured": true,
+        "label": "Chief of staff",
+        "result": {
+          "requestId": "dispatch-1",
+          "status": "success",
+          "message": "Sent to Chief of staff"
+        }
+      }
     }
     """
       .trimIndent()
@@ -70,6 +79,10 @@ class LiveVoiceWireTest {
     assertEquals(LiveVoiceAudioRouteKind.Earbuds, state.activeAudioRoute?.kind)
     assertEquals(listOf("Pixel Buds Pro", "Pixel Watch 3"), state.audioRouteCandidates.map { it.label })
     assertTrue(state.pocketStartSupported)
+    val dispatch = state.dispatch!!
+    assertTrue(dispatch.configured)
+    assertEquals("Chief of staff", dispatch.label)
+    assertEquals("dispatch-1", dispatch.result?.requestId)
 
     assertEquals(2, state.transcripts.size)
     assertTrue(state.transcripts[0].fromUser)
@@ -119,7 +132,7 @@ class LiveVoiceWireTest {
   }
 
   @Test
-  fun `missing route and pocket fields from an old phone hide the new controls`() {
+  fun `missing optional fields from an old phone hide the new controls`() {
     val state =
       decodeLiveVoice(
         """{ "v": 1, "phase": "idle", "hosts": [{"serverId":"srv-1","label":"host"}] }""",
@@ -128,6 +141,7 @@ class LiveVoiceWireTest {
     assertNull(state.activeAudioRoute)
     assertTrue(state.audioRouteCandidates.isEmpty())
     assertFalse(state.pocketStartSupported)
+    assertNull(state.dispatch)
   }
 
   @Test
@@ -205,6 +219,22 @@ class LiveVoiceWireTest {
         """"workspaceId":null,"requestId":null,"text":null,"allow":null,""" +
         """"pocketStartRequestId":null,"routeId":"android:7"}""",
       WearBridge.json.encodeToString(WireCommand.serializer(), route),
+    )
+  }
+
+  @Test
+  fun `dispatch command carries text and correlation but no target ids`() {
+    val command =
+      WireCommand(
+        kind = WireCommand.DISPATCH_PROMPT,
+        requestId = "dispatch-1",
+        text = "Plan tomorrow",
+      )
+    assertEquals(
+      """{"v":1,"kind":"dispatchPrompt","serverId":null,"agentId":null,""" +
+        """"workspaceId":null,"requestId":"dispatch-1","text":"Plan tomorrow","allow":null,""" +
+        """"pocketStartRequestId":null,"routeId":null}""",
+      WearBridge.json.encodeToString(WireCommand.serializer(), command),
     )
   }
 
