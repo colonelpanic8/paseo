@@ -14,6 +14,7 @@ useDefaultAndroidSdkVersions()
 
 dependencies {
   implementation 'androidx.lifecycle:lifecycle-runtime:2.2.0'
+  testImplementation 'junit:junit:4.13.2'
 }
 
 android {

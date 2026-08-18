@@ -83,6 +83,7 @@ internal class BackgroundCallService : Service() {
         // communication route is what makes the microphone hot, and doing it before
         // the promotion is what Android 14's background-mic rules exist to stop.
         CallAudioRouter.attach(this)
+        BackgroundCallLifetime.serviceStarted(this)
         return START_NOT_STICKY
     }
 
