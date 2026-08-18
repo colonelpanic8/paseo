@@ -21,13 +21,14 @@ import {
 import { readLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import { getDispatchAgentTarget, useDispatchSettingsStore } from "@/stores/dispatch-settings-store";
 import {
   WearBridge,
   type NewAgentConfig,
   type WearAudioRouteController,
   type WearLiveVoiceController,
 } from "./wear-bridge";
-import type { WearSnapshotInput } from "./wear-snapshot";
+import { providerLabel, type WearSnapshotInput } from "./wear-snapshot";
 
 /**
  * Republish cadence for changes the store doesn't notify us about — mainly agent
@@ -82,6 +83,25 @@ export function useWearBridge(): void {
       return { provider, cwd: workspace.workspaceDirectory };
     };
 
+    const readDispatchTarget = () => {
+      const target = getDispatchAgentTarget();
+      if (!target) return null;
+      const agent = useSessionStore
+        .getState()
+        .sessions[target.serverId]?.agents.get(target.agentId);
+      const title = agent?.title?.trim();
+      let label: string | undefined;
+      if (title) {
+        label = title;
+      } else if (agent) {
+        label = providerLabel(agent.provider);
+      }
+      return {
+        ...target,
+        ...(label ? { label } : {}),
+      };
+    };
+
     const liveVoice: WearLiveVoiceController | undefined = liveVoiceRuntime
       ? {
           subscribe: liveVoiceRuntime.subscribe,
@@ -127,6 +147,7 @@ export function useWearBridge(): void {
       readState,
       getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
       resolveNewAgentConfig,
+      readDispatchTarget,
       ...(liveVoice ? { liveVoice } : {}),
       audioRoutes,
       logger: {
@@ -141,6 +162,9 @@ export function useWearBridge(): void {
     // Any session-store change is a candidate for republishing; the bridge diffs the
     // payload so unrelated changes cost one JSON build and nothing else.
     const unsubscribeStore = useSessionStore.subscribe(() => {
+      void bridge.publish();
+    });
+    const unsubscribeDispatchSettings = useDispatchSettingsStore.subscribe(() => {
       void bridge.publish();
     });
 
@@ -164,6 +188,7 @@ export function useWearBridge(): void {
     return () => {
       clearInterval(interval);
       unsubscribeStore();
+      unsubscribeDispatchSettings();
       unsubscribeHostRuntime();
       unsubscribeHostList();
       unsubscribeAudioRoutes();
