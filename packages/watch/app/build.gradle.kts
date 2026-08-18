@@ -73,6 +73,7 @@ dependencies {
   implementation(libs.wear.compose.foundation)
   implementation(libs.wear.compose.navigation)
   implementation(libs.wear.input)
+  implementation(libs.wear.remote.interactions)
 
   implementation(libs.wear.tiles)
   implementation(libs.wear.protolayout)

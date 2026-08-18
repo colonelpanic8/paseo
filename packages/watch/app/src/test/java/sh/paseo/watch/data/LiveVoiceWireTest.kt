@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.paseo.watch.model.LiveVoiceHost
+import sh.paseo.watch.model.LiveVoiceAudioRouteKind
 import sh.paseo.watch.model.LiveVoicePhase
 import sh.paseo.watch.model.LiveVoiceState
 import sh.paseo.watch.model.liveVoiceErrorMessage
@@ -39,7 +40,15 @@ class LiveVoiceWireTest {
       ],
       "errorCode": null,
       "errorMessage": null,
-      "closedCause": null
+      "closedCause": null,
+      "activeAudioRoute": {
+        "id": "android:7", "label": "Pixel Buds Pro", "kind": "earbuds"
+      },
+      "audioRouteCandidates": [
+        { "id": "android:7", "label": "Pixel Buds Pro", "kind": "earbuds" },
+        { "id": "android:8", "label": "Pixel Watch 3", "kind": "watch" }
+      ],
+      "pocketStartSupported": true
     }
     """
       .trimIndent()
@@ -57,6 +66,10 @@ class LiveVoiceWireTest {
     // Two callable hosts is exactly the case where the screen must show a picker
     // rather than a single start button.
     assertNull(state.soleHost)
+    assertEquals("Pixel Buds Pro", state.activeAudioRoute?.label)
+    assertEquals(LiveVoiceAudioRouteKind.Earbuds, state.activeAudioRoute?.kind)
+    assertEquals(listOf("Pixel Buds Pro", "Pixel Watch 3"), state.audioRouteCandidates.map { it.label })
+    assertTrue(state.pocketStartSupported)
 
     assertEquals(2, state.transcripts.size)
     assertTrue(state.transcripts[0].fromUser)
@@ -106,6 +119,18 @@ class LiveVoiceWireTest {
   }
 
   @Test
+  fun `missing route and pocket fields from an old phone hide the new controls`() {
+    val state =
+      decodeLiveVoice(
+        """{ "v": 1, "phase": "idle", "hosts": [{"serverId":"srv-1","label":"host"}] }""",
+      )!!.toLiveVoiceState()
+
+    assertNull(state.activeAudioRoute)
+    assertTrue(state.audioRouteCandidates.isEmpty())
+    assertFalse(state.pocketStartSupported)
+  }
+
+  @Test
   fun `blank transcript entries are dropped as rendering artifacts`() {
     val json =
       """
@@ -143,7 +168,8 @@ class LiveVoiceWireTest {
     val start = WireCommand(kind = WireCommand.START_LIVE_VOICE, serverId = "srv-1")
     assertEquals(
       """{"v":1,"kind":"startLiveVoice","serverId":"srv-1","agentId":null,""" +
-        """"workspaceId":null,"requestId":null,"text":null,"allow":null}""",
+        """"workspaceId":null,"requestId":null,"text":null,"allow":null,""" +
+        """"pocketStartRequestId":null,"routeId":null}""",
       WearBridge.json.encodeToString(WireCommand.serializer(), start),
     )
 
@@ -158,12 +184,38 @@ class LiveVoiceWireTest {
   }
 
   @Test
+  fun `pocket start and audio route commands pin their optional wire fields`() {
+    val pocketStart =
+      WireCommand(
+        kind = WireCommand.START_LIVE_VOICE,
+        serverId = "srv-1",
+        pocketStartRequestId = "12345678-1234-1234-1234-123456789abc",
+      )
+    assertEquals(
+      """{"v":1,"kind":"startLiveVoice","serverId":"srv-1","agentId":null,""" +
+        """"workspaceId":null,"requestId":null,"text":null,"allow":null,""" +
+        """"pocketStartRequestId":"12345678-1234-1234-1234-123456789abc","routeId":null}""",
+      WearBridge.json.encodeToString(WireCommand.serializer(), pocketStart),
+    )
+
+    val route =
+      WireCommand(kind = WireCommand.SET_LIVE_VOICE_AUDIO_ROUTE, routeId = "android:7")
+    assertEquals(
+      """{"v":1,"kind":"setLiveVoiceAudioRoute","serverId":null,"agentId":null,""" +
+        """"workspaceId":null,"requestId":null,"text":null,"allow":null,""" +
+        """"pocketStartRequestId":null,"routeId":"android:7"}""",
+      WearBridge.json.encodeToString(WireCommand.serializer(), route),
+    )
+  }
+
+  @Test
   fun `live voice commands round trip`() {
     for (kind in
       listOf(
         WireCommand.START_LIVE_VOICE,
         WireCommand.STOP_LIVE_VOICE,
         WireCommand.TOGGLE_LIVE_VOICE_MUTE,
+        WireCommand.SET_LIVE_VOICE_AUDIO_ROUTE,
       )) {
       val command = WireCommand(kind = kind, serverId = "srv-1")
       val encoded = WearBridge.json.encodeToString(WireCommand.serializer(), command)
