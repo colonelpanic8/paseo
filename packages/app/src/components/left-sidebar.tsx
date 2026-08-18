@@ -412,6 +412,7 @@ function IconTooltipContent({
 }
 
 function SidebarFooter({
+  active,
   handleOpenProject,
   handleSettings,
   labels,
@@ -419,6 +420,7 @@ function SidebarFooter({
   handleOpenHostSettings,
   onBeforeNavigate,
 }: {
+  active: boolean;
   handleOpenProject: () => void;
   handleSettings: () => void;
   labels: {
@@ -481,7 +483,7 @@ function SidebarFooter({
               onOpenHostSettings={handleOpenHostSettings}
             />
           ) : null}
-          <LiveVoiceFooterButton />
+          <LiveVoiceFooterButton active={active} />
           <View style={styles.footerSpacer} />
           {isInline("help") ? <SidebarHelpMenu /> : null}
           {overflow.length > 0 ? (
@@ -682,6 +684,7 @@ function MobileSidebar({
         </SidebarViewSlot>
 
         <SidebarFooter
+          active={dragGestureHostPresented}
           handleOpenProject={handleOpenProject}
           handleSettings={handleSettings}
           labels={labels}
@@ -884,6 +887,7 @@ function DesktopSidebar({
           <SidebarLiveVoiceSlot active={active} />
 
           <SidebarFooter
+            active={active}
             handleOpenProject={handleOpenProject}
             handleSettings={handleSettings}
             labels={labels}
