@@ -1,0 +1,185 @@
+import { describe, expect, it } from "vitest";
+import type {
+  LiveVoiceAvailability,
+  LiveVoiceHostAvailability,
+} from "@/live-voice/live-voice-availability-policy";
+import {
+  parseLiveVoiceLink,
+  resolveLiveVoiceLinkHost,
+  type LiveVoiceLink,
+} from "@/live-voice/live-voice-link";
+
+function host(overrides: Partial<LiveVoiceHostAvailability> = {}): LiveVoiceHostAvailability {
+  return {
+    serverId: "host-a",
+    label: "Host A",
+    connectionStatus: "online",
+    version: "0.2.5",
+    supportsLiveVoice: true,
+    supportsVoiceCatalog: false,
+    paseoToolsEnabled: true,
+    ...overrides,
+  };
+}
+
+function decide(input: {
+  link?: LiveVoiceLink;
+  isHostBootstrapReady?: boolean;
+  availability: LiveVoiceAvailability;
+  hosts?: LiveVoiceHostAvailability[];
+}) {
+  return resolveLiveVoiceLinkHost({
+    link: input.link ?? { host: null },
+    isHostBootstrapReady: input.isHostBootstrapReady ?? true,
+    availability: input.availability,
+    hosts: input.hosts ?? input.availability.hosts,
+  });
+}
+
+describe("parseLiveVoiceLink", () => {
+  it("parses the Live Voice link without a host", () => {
+    expect(parseLiveVoiceLink("paseo://live-voice")).toEqual({ host: null });
+  });
+
+  it("parses and decodes an explicit host", () => {
+    expect(parseLiveVoiceLink("paseo://live-voice?host=host%2Fremote")).toEqual({
+      host: "host/remote",
+    });
+  });
+
+  it.each([
+    "https://live-voice",
+    "paseo://settings/live-voice",
+    "paseo://live-voice/settings",
+    "not a url",
+  ])("rejects non-Live Voice URL %s", (url) => {
+    expect(parseLiveVoiceLink(url)).toBeNull();
+  });
+});
+
+describe("resolveLiveVoiceLinkHost", () => {
+  it("waits for host bootstrap before deciding", () => {
+    expect(
+      decide({
+        isHostBootstrapReady: false,
+        availability: { kind: "unavailable", reason: "no_hosts", hosts: [] },
+      }),
+    ).toEqual({ kind: "wait" });
+  });
+
+  it("uses an already-eligible default host while bootstrap finishes", () => {
+    const available = host();
+
+    expect(
+      decide({
+        isHostBootstrapReady: false,
+        availability: { kind: "available", hosts: [available] },
+      }),
+    ).toEqual({ kind: "start", serverId: "host-a" });
+  });
+
+  it("uses an eligible explicit host when several hosts are available", () => {
+    const hostA = host();
+    const hostB = host({ serverId: "host-b", label: "Host B" });
+
+    expect(
+      decide({
+        link: { host: "host-b" },
+        availability: { kind: "available", hosts: [hostA, hostB] },
+      }),
+    ).toEqual({ kind: "start", serverId: "host-b" });
+  });
+
+  it("waits for an explicit host whose eligibility is still loading", () => {
+    const readyHost = host();
+    const connectingHost = host({
+      serverId: "host-b",
+      label: "Host B",
+      connectionStatus: "connecting",
+      supportsLiveVoice: null,
+    });
+
+    expect(
+      decide({
+        link: { host: "host-b" },
+        availability: { kind: "available", hosts: [readyHost] },
+        hosts: [readyHost, connectingHost],
+      }),
+    ).toEqual({ kind: "wait" });
+  });
+
+  it("waits for bootstrap to discover an explicit host before falling back", () => {
+    const available = host();
+
+    expect(
+      decide({
+        link: { host: "host-b" },
+        isHostBootstrapReady: false,
+        availability: { kind: "available", hosts: [available] },
+      }),
+    ).toEqual({ kind: "wait" });
+  });
+
+  it("falls back to the sole eligible host when an explicit host is ineligible", () => {
+    const available = host();
+    const offline = host({
+      serverId: "host-b",
+      label: "Host B",
+      connectionStatus: "offline",
+    });
+
+    expect(
+      decide({
+        link: { host: "host-b" },
+        availability: { kind: "available", hosts: [available] },
+        hosts: [available, offline],
+      }),
+    ).toEqual({ kind: "start", serverId: "host-a" });
+  });
+
+  it("uses the sole eligible host when no host is requested", () => {
+    const available = host();
+
+    expect(decide({ availability: { kind: "available", hosts: [available] } })).toEqual({
+      kind: "start",
+      serverId: "host-a",
+    });
+  });
+
+  it("shows the launcher instead of guessing between eligible hosts", () => {
+    const hostA = host();
+    const hostB = host({ serverId: "host-b", label: "Host B" });
+
+    expect(decide({ availability: { kind: "available", hosts: [hostA, hostB] } })).toEqual({
+      kind: "show_launcher",
+    });
+  });
+
+  it("waits while hosts are connecting", () => {
+    const connecting = host({ connectionStatus: "connecting", supportsLiveVoice: null });
+
+    expect(
+      decide({
+        availability: {
+          kind: "unavailable",
+          reason: "hosts_connecting",
+          hosts: [connecting],
+        },
+      }),
+    ).toEqual({ kind: "wait" });
+  });
+
+  it("shows the launcher when no eligible host remains", () => {
+    const offline = host({ connectionStatus: "offline" });
+
+    expect(
+      decide({
+        availability: {
+          kind: "unavailable",
+          reason: "hosts_offline",
+          hosts: [offline],
+        },
+      }),
+    ).toEqual({ kind: "show_launcher" });
+  });
+});
