@@ -163,9 +163,13 @@ constraints are in [mobile-testing.md](mobile-testing.md).
 
 Where a call's audio plays is decided by the OS, not by the call. `react-native-webrtc`
 does not touch `AudioManager` on Android, so `packages/app/modules/paseo-background-call`
-owns the audio mode and picks a communication device, preferring a Bluetooth
-headset. A Wear OS watch with a speaker and mic is one, which is how a call reaches
-a wrist without the watch app carrying any audio — see
+owns the audio mode and picks a communication device. It matches Bluetooth product
+names against connected Wear Data Layer node names without requesting
+`BLUETOOTH_CONNECT`; non-watch Bluetooth devices win over the watch, then wired,
+USB and speaker routes. The native module exposes the active route and candidates,
+so the Wear screen can select a route while the tile remains display-only. A Wear
+OS watch with a speaker and mic presents as a communication device, which is how a
+call reaches a wrist without the watch app carrying any audio — see
 [packages/watch/README.md](../packages/watch/README.md). iOS sets an equivalent
 `AVAudioSession` category, but an Apple Watch is not reachable this way: its call
 audio needs CallKit, which Paseo does not yet register with. Nothing here integrates
@@ -177,6 +181,16 @@ service never changes call state itself: a button press travels back through the
 Expo module to the app runtime, which stays the only writer. iOS has no
 equivalent — its module manages the audio session and nothing else, and a pinned
 call presence there would mean a Live Activity.
+
+A watch-initiated Android call stages its command over the signed Wearable Data
+Layer, then uses `RemoteActivityHelper` to open a transparent, one-shot phone
+activity above the lock screen. The activity turns the display on, becomes resumed,
+starts the call through the JS runtime, and exits when the microphone foreground
+service reports startup. Android's Companion Device Manager exemption permits a
+general background foreground-service start but does not grant microphone
+while-in-use access, including on Android 14/15, so CDM association alone cannot
+replace this foreground handoff. The foreground service still owns only lifetime,
+notification and routing; call state remains app-runtime-owned.
 
 Only the app knows the user's other hosts — `getSavedHosts` lives there and
 nowhere in the daemon — so cross-host work exists only on this app-mediated
