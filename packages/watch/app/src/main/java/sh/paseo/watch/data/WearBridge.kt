@@ -6,6 +6,8 @@ import kotlinx.serialization.json.Json
 import sh.paseo.watch.model.ActivityState
 import sh.paseo.watch.model.AgentSession
 import sh.paseo.watch.model.LiveVoiceHost
+import sh.paseo.watch.model.LiveVoiceAudioRoute
+import sh.paseo.watch.model.LiveVoiceAudioRouteKind
 import sh.paseo.watch.model.LiveVoicePhase
 import sh.paseo.watch.model.LiveVoiceState
 import sh.paseo.watch.model.LiveVoiceTranscriptEntry
@@ -104,6 +106,12 @@ object WearBridge {
   /** MessageClient path asking the phone to republish immediately. */
   const val REFRESH_PATH = "/paseo/refresh"
 
+  const val POCKET_START_URI_SCHEME = "paseo-wear-live-voice"
+  const val POCKET_START_URI_HOST = "start"
+
+  fun pocketStartUri(requestId: String): String =
+    "$POCKET_START_URI_SCHEME://$POCKET_START_URI_HOST?requestId=$requestId"
+
   /** DataItem key holding the JSON payload — same key for snapshots and transcripts. */
   const val SNAPSHOT_KEY = "payload"
 
@@ -201,6 +209,10 @@ data class WireCommand(
   val requestId: String? = null,
   val text: String? = null,
   val allow: Boolean? = null,
+  /** Random nonce staged over MessageClient before the phone trampoline opens. */
+  val pocketStartRequestId: String? = null,
+  /** Android communication-device id for [SET_LIVE_VOICE_AUDIO_ROUTE]. */
+  val routeId: String? = null,
 ) {
   companion object {
     const val SEND_PROMPT = "sendPrompt"
@@ -230,6 +242,8 @@ data class WireCommand(
 
     /** Toggle the phone's microphone. Carries no serverId. */
     const val TOGGLE_LIVE_VOICE_MUTE = "toggleLiveVoiceMute"
+
+    const val SET_LIVE_VOICE_AUDIO_ROUTE = "setLiveVoiceAudioRoute"
   }
 }
 
@@ -254,6 +268,11 @@ data class WireLiveVoice(
   val errorCode: String? = null,
   val errorMessage: String? = null,
   val closedCause: String? = null,
+  /** Optional for compatibility with phone builds before route visibility. */
+  val activeAudioRoute: WireLiveVoiceAudioRoute? = null,
+  val audioRouteCandidates: List<WireLiveVoiceAudioRoute>? = null,
+  /** Optional: a missing value selects the legacy MessageClient start path. */
+  val pocketStartSupported: Boolean? = null,
 )
 
 @Serializable data class WireLiveVoiceHost(val serverId: String = "", val label: String = "")
@@ -264,6 +283,14 @@ data class WireLiveVoiceTranscript(
   /** "user" | "assistant". */
   val role: String = "",
   val text: String = "",
+)
+
+@Serializable
+data class WireLiveVoiceAudioRoute(
+  val id: String = "",
+  val label: String = "",
+  /** "watch" | "earbuds" | "wired" | "speaker" | "other". */
+  val kind: String = "other",
 )
 
 // ---------------------------------------------------------------------------
@@ -369,6 +396,18 @@ private fun String.toLiveVoicePhase(): LiveVoicePhase =
     else -> LiveVoicePhase.Idle
   }
 
+private fun String.toLiveVoiceAudioRouteKind(): LiveVoiceAudioRouteKind =
+  when (this) {
+    "watch" -> LiveVoiceAudioRouteKind.Watch
+    "earbuds" -> LiveVoiceAudioRouteKind.Earbuds
+    "wired" -> LiveVoiceAudioRouteKind.Wired
+    "speaker" -> LiveVoiceAudioRouteKind.Speaker
+    else -> LiveVoiceAudioRouteKind.Other
+  }
+
+private fun WireLiveVoiceAudioRoute.toAudioRoute(): LiveVoiceAudioRoute =
+  LiveVoiceAudioRoute(id = id, label = label, kind = kind.toLiveVoiceAudioRouteKind())
+
 fun WireLiveVoice.toLiveVoiceState(): LiveVoiceState =
   LiveVoiceState(
     phase = phase.toLiveVoicePhase(),
@@ -388,4 +427,8 @@ fun WireLiveVoice.toLiveVoiceState(): LiveVoiceState =
     errorCode = errorCode,
     errorMessage = errorMessage,
     closedCause = closedCause,
+    activeAudioRoute = activeAudioRoute?.takeIf { it.id.isNotEmpty() }?.toAudioRoute(),
+    audioRouteCandidates =
+      audioRouteCandidates.orEmpty().filter { it.id.isNotEmpty() }.map { it.toAudioRoute() },
+    pocketStartSupported = pocketStartSupported == true,
   )
