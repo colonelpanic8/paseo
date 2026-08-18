@@ -195,35 +195,52 @@ produces both signed APKs).
   distinguish the watch without `BLUETOOTH_CONNECT`; other Bluetooth devices rank
   ahead of the watch. The activity cycles candidates and the tile displays the
   selected route without mutating it.
+- **One-shot watch Dispatch.** Phone Settings → Voice persists a host and agent target.
+  The Live Voice DataItem carries only configured state, the display label, and a
+  correlated command result; agent ids stay phone-side. The tile places Call and
+  Dispatch compact targets on one row inside the responsive round-screen inset.
+  Missing state hides Dispatch for an old phone, while an unconfigured new phone gets
+  a muted, non-clickable setup hint. `DispatchActivity` launches the same offline-
+  preferred system recognizer as Reply, haptics once on success, closes after a brief
+  acknowledgement, and keeps failures visible with Retry and Type actions.
 - 27 phone-side tests, 47 watch unit tests, 1 on-device instrumented test.
 
 ## Open work
 
 All of the user's UI asks are built. What remains is verification on hardware:
 
-1. **The one-tap reply has never been tapped on a watch.** Reply now launches the
+1. **Dispatch needs a physical round-watch pass.** Confirm a configured tile tap
+   launches the recognizer directly, the dictated prompt reaches the configured agent,
+   the success acknowledgement haptics exactly once, and the activity closes after the
+   brief confirmation. Force a phone-side failure and confirm its message stays visible,
+   Retry resends the same prompt, and Type opens the remote-input picker. Inspect the
+   Call + Dispatch row on a 450×450 round display, including long labels; then clear the
+   phone setting and confirm the muted setup hint is legible and non-clickable. Pair an
+   old phone build and confirm Dispatch is absent rather than disabled.
+
+2. **The one-tap reply has never been tapped on a watch.** Reply now launches the
    recognizer from inside the agent screen's `ScalingLazyColumn` rather than from a
    dedicated screen, and that is the thing to check first: that the recognizer sheet
    actually comes up on the first tap, that the spoken string lands in the
    conversation, and that returning from the sheet leaves the list where it was
    instead of re-anchoring. `Type` on the same row needs the same pass.
-2. **Nothing about the transcript has run on a real phone+watch pair.** The watch
+3. **Nothing about the transcript has run on a real phone+watch pair.** The watch
    half is unit-tested against pinned JSON and the phone half against its own tests,
    but the hop carrying a `/paseo/transcript/<agentId>` DataItem has not been
    exercised. Worth watching for specifically: DataItem size against the ~100 KB
    Data Layer cap if the phone's projection ever stops capping entries, and whether
    the initial scroll actually lands at the bottom on a round 450×450 display.
-3. **`RemoteInputIntentHelper` is untested on device.** It resolves to a system
+4. **`RemoteInputIntentHelper` is untested on device.** It resolves to a system
    activity; if a watch has no input picker the launch would fail. The mic path is
    unchanged and still works.
-4. **No project icon has crossed the hop.** The watch half is unit-tested and the
+5. **No project icon has crossed the hop.** The watch half is unit-tested and the
    phone half publishes, but nothing has confirmed a real icon rendering on a wrist.
    Check specifically: that the projectKey survives `Uri.encode`/`Uri.decode` intact
    (a wrong key silently shows the initial forever — indistinguishable from "this
    project has no icon"), that assets actually sync over Bluetooth rather than
    waiting on WiFi, that a 32 KB PNG scaled into a 26dp square is still legible, and
    that a project whose icon is an SVG falls back cleanly rather than drawing blank.
-5. **Pocket start needs Android 14 and 15 hardware passes.** Background Paseo, lock
+6. **Pocket start needs Android 14 and 15 hardware passes.** Background Paseo, lock
    the Pixel phone with its screen off, and start from `LiveVoiceActivity`. Confirm
    the display wakes briefly, the activity never exposes app content over the lock
    screen, the microphone foreground service starts, the call reaches `active`, and
@@ -232,19 +249,19 @@ All of the user's UI asks are built. What remains is verification on hardware:
    process case, wait more than 60 seconds before opening Paseo and confirm the
    queued start is logged as expired instead of opening the microphone. A live
    runtime failure must publish `background_unavailable` and its watch copy.
-6. **Route arbitration needs the watch and earbuds connected together.** With Pixel
+7. **Route arbitration needs the watch and earbuds connected together.** With Pixel
    Buds and Pixel Watch both available, earbuds must be selected first. Disconnect
    and reconnect each device during a call, then cycle every candidate from the
    watch screen. Confirm the route label follows the audible device and the call
    keeps running. Check `AudioDeviceInfo.productName` against the connected Wear
    node name; a generic product label can make the watch look like ordinary
    Bluetooth audio and is the known heuristic boundary.
-7. **The route tile has not rendered in a physical carousel.** Confirm every kind's
+8. **The route tile has not rendered in a physical carousel.** Confirm every kind's
    glyph and label fit beside call status on a round display. Change routes while
    the tile is visible and measure the Data Layer push-to-refresh cadence; it must
    update from `LiveVoiceTileUpdateService` without polling. Tile taps must keep
    opening the activity and must never change the route directly.
-8. **There is no CDM pairing flow to exercise.** The association permission is not
+9. **There is no CDM pairing flow to exercise.** The association permission is not
    a microphone while-in-use exemption on Android 11–15, so adding the one-time
    chooser would not make a pocket call work. If a future feature needs CDM, put
    the association action in phone Settings → Voice inside
