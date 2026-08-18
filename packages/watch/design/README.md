@@ -130,6 +130,13 @@ Wearable Data Layer, and the phone app owns the daemon connection, pairing, and 
 to design around, not ignore: **the phone must be reachable**, and Data Layer wakeups have to
 survive the phone app being backgrounded or killed.
 
+Live Voice starts from the activity, not directly from the tile. Starting opens a short-lived
+transparent phone activity so Android grants microphone foreground-service access with the phone
+locked. The tile shows the active/expected route as a label plus a kind glyph, but every tile tap
+still opens `LiveVoiceActivity`; route mutation needs the activity's live lifecycle and state.
+Inside that screen the route row cycles through the phone-advertised candidates. Earbuds are the
+default over wrist audio when both are present.
+
 ## Settled
 
 - **Agent detail needed the scrollable transcript, not a bigger tail.** Answered by building
