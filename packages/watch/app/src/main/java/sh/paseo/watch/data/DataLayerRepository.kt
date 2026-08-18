@@ -451,6 +451,15 @@ class DataLayerRepository(
     send(WireCommand(kind = WireCommand.SET_LIVE_VOICE_AUDIO_ROUTE, routeId = routeId))
   }
 
+  override suspend fun dispatchPrompt(requestId: String, text: String): Boolean =
+    send(
+      WireCommand(
+        kind = WireCommand.DISPATCH_PROMPT,
+        requestId = requestId,
+        text = text,
+      ),
+    )
+
   private suspend fun startLiveVoiceThroughPhoneActivity(
     staged: WireCommand,
     fallback: WireCommand,
@@ -486,9 +495,9 @@ class DataLayerRepository(
     broadcast(WearBridge.REFRESH_PATH, payload)
   }
 
-  private suspend fun send(command: WireCommand) {
+  private suspend fun send(command: WireCommand): Boolean {
     val payload = WearBridge.json.encodeToString(WireCommand.serializer(), command).toByteArray()
-    broadcast(WearBridge.COMMAND_PATH, payload)
+    return broadcast(WearBridge.COMMAND_PATH, payload)
   }
 
   /**
@@ -496,16 +505,16 @@ class DataLayerRepository(
    * list of one is not guaranteed, and picking "the first" would silently drop the
    * command when the ordering isn't what we assumed.
    */
-  private suspend fun broadcast(path: String, payload: ByteArray) {
+  private suspend fun broadcast(path: String, payload: ByteArray): Boolean =
     withContext(Dispatchers.IO) {
-      val nodes = connectedNodes() ?: return@withContext
+      val nodes = connectedNodes() ?: return@withContext false
       var delivered = false
       for (node in nodes) {
         if (sendToNode(node, path, payload)) delivered = true
       }
       updateDeliveryState(delivered)
+      delivered
     }
-  }
 
   private suspend fun connectedNodes(): List<Node>? {
     val nodes =
