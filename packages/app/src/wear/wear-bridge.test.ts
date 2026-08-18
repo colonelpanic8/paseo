@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LiveVoiceAvailability } from "@/live-voice/live-voice-availability-policy";
+import type { LiveVoiceAudioRouteState } from "@/live-voice/background-call-lifetime";
 import type { LiveVoiceSnapshot } from "@/live-voice/live-voice-runtime";
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
-import { WearBridge, type WearBridgeTransport, type WearLiveVoiceController } from "./wear-bridge";
+import {
+  WearBridge,
+  type WearAudioRouteController,
+  type WearBridgeTransport,
+  type WearLiveVoiceController,
+} from "./wear-bridge";
 import { parseWearCommand, WEAR_PROTOCOL_VERSION } from "./wear-protocol";
 import { buildWearSnapshot, formatAge, providerLabel } from "./wear-snapshot";
 
@@ -357,6 +363,15 @@ describe("parseWearCommand", () => {
     expect(parseWearCommand(JSON.stringify({ v: 1, kind: "toggleLiveVoiceMute" }))).toEqual({
       kind: "toggleLiveVoiceMute",
     });
+  });
+
+  it("parses an audio route selection without a serverId", () => {
+    expect(
+      parseWearCommand(
+        JSON.stringify({ v: 1, kind: "setLiveVoiceAudioRoute", routeId: "android:7" }),
+      ),
+    ).toEqual({ kind: "setLiveVoiceAudioRoute", routeId: "android:7" });
+    expect(parseWearCommand(JSON.stringify({ v: 1, kind: "setLiveVoiceAudioRoute" }))).toBeNull();
   });
 
   it("rejects a startLiveVoice with no host to call", () => {
@@ -1613,20 +1628,34 @@ describe("WearBridge live voice", () => {
 
   function makeLiveVoiceBridge(initialAvailability: LiveVoiceAvailability = AVAILABLE) {
     const transport = makeTransport();
-    const listeners = new Set<() => void>();
+    const liveVoiceListeners = new Set<() => void>();
+    const audioRouteListeners = new Set<() => void>();
     let snapshot = IDLE_SNAPSHOT;
     let availability = initialAvailability;
+    let audioRouteState: LiveVoiceAudioRouteState = {
+      active: { id: "android:7", label: "Pixel Buds Pro", kind: "earbuds" },
+      candidates: [
+        { id: "android:7", label: "Pixel Buds Pro", kind: "earbuds" },
+        { id: "android:9", label: "Pixel Watch 3", kind: "watch" },
+      ],
+    };
 
     const calls = {
       start: vi.fn(async (_serverId: string) => {}),
       stop: vi.fn(async () => {}),
       toggleMute: vi.fn(),
+      selectAudioRoute: vi.fn(async (_routeId: string) => true),
     };
 
     /** Move the runtime the way a real call would, then notify subscribers. */
     const emit = (next: Partial<LiveVoiceSnapshot>) => {
       snapshot = { ...snapshot, ...next };
-      for (const listener of listeners) listener();
+      for (const listener of liveVoiceListeners) listener();
+    };
+
+    const emitAudioRoute = (next: LiveVoiceAudioRouteState) => {
+      audioRouteState = next;
+      for (const listener of audioRouteListeners) listener();
     };
 
     /**
@@ -1640,14 +1669,22 @@ describe("WearBridge live voice", () => {
 
     const liveVoice: WearLiveVoiceController = {
       subscribe: (listener) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
+        liveVoiceListeners.add(listener);
+        return () => liveVoiceListeners.delete(listener);
       },
       getSnapshot: () => snapshot,
       readAvailability: () => availability,
       start: calls.start,
       stop: calls.stop,
       toggleMute: calls.toggleMute,
+    };
+    const audioRoutes: WearAudioRouteController = {
+      subscribe: (listener) => {
+        audioRouteListeners.add(listener);
+        return () => audioRouteListeners.delete(listener);
+      },
+      getSnapshot: () => audioRouteState,
+      select: calls.selectAudioRoute,
     };
 
     const bridge = new WearBridge({
@@ -1658,13 +1695,14 @@ describe("WearBridge live voice", () => {
       getClient: () => null,
       resolveNewAgentConfig: () => null,
       liveVoice,
+      audioRoutes,
       now: () => NOW,
       logger: { warn: vi.fn() },
     });
 
     const last = () => JSON.parse(transport.liveVoice.at(-1) ?? "null");
 
-    return { bridge, transport, emit, setAvailability, calls, last };
+    return { bridge, transport, emit, emitAudioRoute, setAvailability, calls, last };
   }
 
   it("publishes the current state on start, so a call already up is on the wrist", async () => {
@@ -1774,7 +1812,7 @@ describe("WearBridge live voice", () => {
     bridge.stop();
   });
 
-  it("runs the three commands and publishes the result", async () => {
+  it("runs Live Voice and audio-route commands and publishes the result", async () => {
     const { bridge, transport, calls } = makeLiveVoiceBridge();
     await bridge.start();
 
@@ -1786,27 +1824,62 @@ describe("WearBridge live voice", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(calls.toggleMute).toHaveBeenCalled();
 
+    transport.emit(JSON.stringify({ v: 1, kind: "setLiveVoiceAudioRoute", routeId: "android:9" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls.selectAudioRoute).toHaveBeenCalledWith("android:9");
+
     transport.emit(JSON.stringify({ v: 1, kind: "stopLiveVoice" }));
     await vi.advanceTimersByTimeAsync(0);
     expect(calls.stop).toHaveBeenCalled();
     bridge.stop();
   });
 
-  it("keeps publishing after a start the runtime refuses", async () => {
+  it("publishes native audio-route events immediately", async () => {
+    const { bridge, transport, emitAudioRoute, last } = makeLiveVoiceBridge();
+    await bridge.start();
+
+    emitAudioRoute({
+      active: { id: "android:9", label: "Pixel Watch 3", kind: "watch" },
+      candidates: [
+        { id: "android:7", label: "Pixel Buds Pro", kind: "earbuds" },
+        { id: "android:9", label: "Pixel Watch 3", kind: "watch" },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(transport.liveVoice).toHaveLength(2);
+    expect(last()).toMatchObject({
+      activeAudioRoute: { id: "android:9", kind: "watch" },
+    });
+    bridge.stop();
+  });
+
+  it("publishes background_unavailable after a pocket start the runtime refuses", async () => {
     const { bridge, transport, emit, calls, last } = makeLiveVoiceBridge();
     await bridge.start();
 
     // The runtime records the failure in its own snapshot and rethrows; the
     // wrist needs the error on screen, not a spinner.
     calls.start.mockImplementationOnce(async () => {
-      emit({ phase: "error", serverId: "srv-1", error: { code: "mic_busy", message: null } });
-      throw new Error("mic_busy");
+      emit({
+        phase: "error",
+        serverId: "srv-1",
+        error: {
+          code: "background_unavailable",
+          message: "Live Voice could not establish background audio support.",
+        },
+      });
+      throw new Error("background_unavailable");
     });
 
     transport.emit(JSON.stringify({ v: 1, kind: "startLiveVoice", serverId: "srv-1" }));
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(last()).toMatchObject({ phase: "error", errorCode: "mic_busy" });
+    expect(last()).toMatchObject({
+      phase: "error",
+      errorCode: "background_unavailable",
+      errorMessage: "Live Voice could not establish background audio support.",
+    });
     bridge.stop();
   });
 
