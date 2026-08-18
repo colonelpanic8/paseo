@@ -60,7 +60,10 @@ function emptyDaemonContextProvider(
     agents: { hasPaseoMcpInjection: () => true, listAgents: () => [] },
     workspaces: { list: async () => [] },
     logger,
-    contextFiles,
+    contextProfiles: {
+      profiles: [{ id: "default", label: "Default", files: contextFiles }],
+      defaultProfileId: "default",
+    },
   });
 }
 
@@ -309,6 +312,25 @@ describe("live voice prompt", () => {
     expect(empty).not.toContain("Standing instructions");
   });
 
+  it("quotes selected context-profile instructions with the same bound", () => {
+    const prompt = buildLiveVoicePrompt({
+      paseoToolsAvailable: true,
+      profileInstructions: "Keep work-call answers focused on Acme.",
+      userContextAvailable: true,
+    });
+
+    expect(prompt).toContain("Context profile instructions from the user:");
+    expect(prompt).toContain('"Keep work-call answers focused on Acme."');
+    expect(prompt).toContain("selected context profile");
+
+    const bounded = buildLiveVoicePrompt({
+      paseoToolsAvailable: true,
+      profileInstructions: "x".repeat(5_000),
+    });
+    expect(bounded).toContain(`${"x".repeat(1_000)}…`);
+    expect(bounded).not.toContain("x".repeat(1_001));
+  });
+
   it("forbids inventing a workspace directory on both routing shapes", () => {
     for (const crossHostRoutingAvailable of [true, false]) {
       const prompt = buildLiveVoicePrompt({ paseoToolsAvailable: true, crossHostRoutingAvailable });
@@ -509,6 +531,80 @@ describe("live voice initial items", () => {
 });
 
 describe("daemon context provider", () => {
+  it("selects the configured default profile and lets a call override it", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "paseo-live-voice-profile-selection-"));
+    roots.push(root);
+    const orgPath = path.join(root, "org.md");
+    await writeFile(orgPath, "Project Lantern is next.\n");
+    const provider = new LiveVoiceDaemonContextProvider({
+      agents: { hasPaseoMcpInjection: () => true, listAgents: () => [] },
+      workspaces: { list: async () => [] },
+      logger,
+      contextProfiles: {
+        profiles: [
+          {
+            id: "full-org",
+            label: "Full org",
+            files: [orgPath],
+            instructions: "Use my GTD system proactively.",
+          },
+          {
+            id: "lean",
+            label: "Lean",
+            files: [],
+            instructions: "Keep this call focused on work.",
+          },
+        ],
+        defaultProfileId: "lean",
+      },
+    });
+
+    const defaultContext = await provider.build();
+    expect(defaultContext?.initialItems).toEqual([]);
+    expect(defaultContext?.prompt).toContain('"Keep this call focused on work."');
+    expect(defaultContext?.prompt).toContain("selected context profile");
+
+    const fullContext = await provider.build({
+      crossHostRoutingAvailable: true,
+      contextProfileId: "full-org",
+    });
+    expect(fullContext?.initialItems[0]?.text).toContain("Project Lantern is next.");
+    expect(fullContext?.prompt).toContain('"Use my GTD system proactively."');
+    expect(fullContext?.prompt).not.toContain("Keep this call focused on work.");
+  });
+
+  it("fails a call-specific request for an unknown context profile", async () => {
+    const provider = new LiveVoiceDaemonContextProvider({
+      agents: { hasPaseoMcpInjection: () => true, listAgents: () => [] },
+      workspaces: { list: async () => [] },
+      logger,
+      contextProfiles: {
+        profiles: [{ id: "lean", label: "Lean", files: [] }],
+      },
+    });
+
+    await expect(
+      provider.build({ crossHostRoutingAvailable: true, contextProfileId: "missing" }),
+    ).rejects.toThrow("Unknown Live Voice context profile 'missing'");
+  });
+
+  it("omits user-context guidance when the selected profile contributes nothing", async () => {
+    const provider = new LiveVoiceDaemonContextProvider({
+      agents: { hasPaseoMcpInjection: () => true, listAgents: () => [] },
+      workspaces: { list: async () => [] },
+      logger,
+      contextProfiles: {
+        profiles: [{ id: "lean", label: "Lean", files: [], instructions: "   " }],
+        defaultProfileId: "lean",
+      },
+    });
+
+    const context = await provider.build();
+    expect(context?.initialItems).toEqual([]);
+    expect(context?.prompt).not.toContain("selected context profile");
+    expect(context?.prompt).not.toContain("Context profile instructions");
+  });
+
   it("reads configured context files into separate items after the snapshots", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "paseo-live-voice-context-files-"));
     roots.push(root);
@@ -534,7 +630,10 @@ describe("daemon context provider", () => {
       },
       workspaces: { list: async () => [] },
       logger,
-      contextFiles: [identityPath, projectsPath],
+      contextProfiles: {
+        profiles: [{ id: "default", label: "Default", files: [identityPath, projectsPath] }],
+        defaultProfileId: "default",
+      },
     });
 
     const context = await provider.build();
