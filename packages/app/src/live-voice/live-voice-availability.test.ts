@@ -13,6 +13,7 @@ function host(overrides: Partial<LiveVoiceHostAvailability> = {}): LiveVoiceHost
     supportsLiveVoice: true,
     supportsVoiceCatalog: false,
     paseoToolsEnabled: true,
+    contextProfiles: { profiles: [], defaultProfileId: null },
     ...overrides,
   };
 }
