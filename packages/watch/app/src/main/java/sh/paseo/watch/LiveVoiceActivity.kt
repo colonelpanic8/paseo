@@ -86,6 +86,9 @@ private fun LiveVoiceRoot(repository: WatchRepository) {
         onStart = { serverId -> scope.launch { repository.startLiveVoice(serverId) } },
         onStop = { scope.launch { repository.stopLiveVoice() } },
         onToggleMute = { scope.launch { repository.toggleLiveVoiceMute() } },
+        onSetAudioRoute = { routeId ->
+          scope.launch { repository.setLiveVoiceAudioRoute(routeId) }
+        },
       )
     }
   }
