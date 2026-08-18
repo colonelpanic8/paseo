@@ -82,6 +82,7 @@ export interface LiveVoiceDaemonClient {
     ambientAgentGuidance?: string;
     disabledPromptComponents?: string[];
     customVoiceInstructions?: string;
+    contextProfileId?: string;
     defaultWorkspaceDirectory?: string;
     backendModel?: string;
     backendThinkingOptionId?: string;
@@ -138,7 +139,7 @@ export interface LiveVoiceRuntimeDeps {
 export interface LiveVoiceRuntime {
   subscribe(listener: () => void): () => void;
   getSnapshot(): LiveVoiceSnapshot;
-  start(serverId: string): Promise<void>;
+  start(serverId: string, options?: { contextProfileId?: string }): Promise<void>;
   stop(): Promise<void>;
   /** Drive mute to an absolute value. No-op unless a call is active. */
   setMuted(muted: boolean): void;
@@ -464,7 +465,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
       return snapshot;
     },
 
-    async start(serverId) {
+    async start(serverId, options) {
       if (snapshot.phase === "starting" || snapshot.phase === "active") {
         throw new LiveVoiceStartError({ code: "already_active", message: null });
       }
@@ -531,6 +532,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
             ...(callSettings?.customVoiceInstructions
               ? { customVoiceInstructions: callSettings.customVoiceInstructions }
               : {}),
+            ...(options?.contextProfileId ? { contextProfileId: options.contextProfileId } : {}),
             ...(callSettings?.defaultWorkspaceDirectory
               ? { defaultWorkspaceDirectory: callSettings.defaultWorkspaceDirectory }
               : {}),

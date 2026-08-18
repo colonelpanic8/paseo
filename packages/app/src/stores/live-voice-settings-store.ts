@@ -77,6 +77,8 @@ interface LiveVoiceSettingsState {
    */
   backendModel: string | null;
   backendThinkingOptionId: string | null;
+  /** Last context-profile choice, scoped by daemon identity. */
+  contextProfileIdsByHost: Record<string, string>;
   setVoice: (voice: string | null) => void;
   setAmbientAgentReports: (enabled: boolean) => void;
   setAmbientAgentGuidance: (guidance: string) => void;
@@ -85,6 +87,7 @@ interface LiveVoiceSettingsState {
   setDefaultWorkspaceDirectory: (directory: string) => void;
   setBackendModel: (model: string | null) => void;
   setBackendThinkingOptionId: (thinkingOptionId: string | null) => void;
+  setContextProfileForHost: (serverId: string, profileId: string) => void;
 }
 
 export const useLiveVoiceSettingsStore = create<LiveVoiceSettingsState>()(
@@ -100,6 +103,7 @@ export const useLiveVoiceSettingsStore = create<LiveVoiceSettingsState>()(
       defaultWorkspaceDirectory: "",
       backendModel: null,
       backendThinkingOptionId: null,
+      contextProfileIdsByHost: {},
       setVoice: (voice) => set({ voice }),
       setAmbientAgentReports: (enabled) => set({ ambientAgentReports: enabled }),
       setAmbientAgentGuidance: (guidance) =>
@@ -123,6 +127,13 @@ export const useLiveVoiceSettingsStore = create<LiveVoiceSettingsState>()(
       setBackendModel: (model) => set({ backendModel: model }),
       setBackendThinkingOptionId: (thinkingOptionId) =>
         set({ backendThinkingOptionId: thinkingOptionId }),
+      setContextProfileForHost: (serverId, profileId) =>
+        set((state) => ({
+          contextProfileIdsByHost: {
+            ...state.contextProfileIdsByHost,
+            [serverId]: profileId,
+          },
+        })),
     }),
     {
       name: "paseo-live-voice-settings",

@@ -1772,6 +1772,7 @@ export const fr: TranslationResources = {
     label: "Voix en direct",
     menu: {
       hosts: "Hôte",
+      contextProfiles: "Profil de contexte",
     },
     actions: {
       start: "Démarrer la voix en direct",
