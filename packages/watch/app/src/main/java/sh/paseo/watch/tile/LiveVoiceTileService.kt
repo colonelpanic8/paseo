@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.wear.protolayout.ActionBuilders
 import androidx.wear.protolayout.ColorBuilders.argb
+import androidx.wear.protolayout.DimensionBuilders.dp
 import androidx.wear.protolayout.DeviceParametersBuilders.DeviceParameters
+import androidx.wear.protolayout.LayoutElementBuilders
 import androidx.wear.protolayout.LayoutElementBuilders.LayoutElement
+import androidx.wear.protolayout.ModifiersBuilders
 import androidx.wear.protolayout.ModifiersBuilders.Clickable
 import androidx.wear.protolayout.ResourceBuilders
 import androidx.wear.protolayout.TimelineBuilders
@@ -23,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import sh.paseo.watch.LiveVoiceActivity
+import sh.paseo.watch.DispatchActivity
 import sh.paseo.watch.data.readCachedLiveVoiceState
 import sh.paseo.watch.model.LiveVoicePhase
 import sh.paseo.watch.model.LiveVoiceState
@@ -136,8 +140,74 @@ private fun buildLayout(
         .setMaxLines(3)
         .build(),
     )
-    .setPrimaryChipContent(
-      CompactChip.Builder(context, chipLabel(state), openAppAction(context), device).build(),
+    .setPrimaryChipContent(buildActions(context, state, device))
+    .build()
+
+internal enum class DispatchTileMode {
+  Hidden,
+  Disabled,
+  Enabled,
+}
+
+internal fun dispatchTileMode(state: LiveVoiceState): DispatchTileMode =
+  when {
+    state.dispatch == null -> DispatchTileMode.Hidden
+    state.dispatch.configured -> DispatchTileMode.Enabled
+    else -> DispatchTileMode.Disabled
+  }
+
+/**
+ * Two compact, horizontally paired targets stay inside PrimaryLayout's responsive
+ * round-screen inset. Older phones get the original single full-width call chip.
+ */
+private fun buildActions(
+  context: Context,
+  state: LiveVoiceState,
+  device: DeviceParameters,
+): LayoutElement {
+  if (dispatchTileMode(state) == DispatchTileMode.Hidden) {
+    return CompactChip.Builder(context, chipLabel(state), openCallAction(context), device).build()
+  }
+
+  val row =
+    LayoutElementBuilders.Row.Builder()
+      .addContent(CompactChip.Builder(context, "Call", openCallAction(context), device).build())
+      .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(dp(6f)).build())
+
+  val dispatch =
+    if (dispatchTileMode(state) == DispatchTileMode.Enabled) {
+      CompactChip.Builder(context, "🎙 Dispatch", openDispatchAction(context), device).build()
+    } else {
+      disabledDispatchHint(context)
+    }
+  return row.addContent(dispatch).build()
+}
+
+private fun disabledDispatchHint(context: Context): LayoutElement =
+  LayoutElementBuilders.Box.Builder()
+    .setHeight(dp(32f))
+    .setModifiers(
+      ModifiersBuilders.Modifiers.Builder()
+        .setBackground(
+          ModifiersBuilders.Background.Builder()
+            .setColor(argb(COLOR_SURFACE_2))
+            .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(16f)).build())
+            .build(),
+        )
+        .setPadding(
+          ModifiersBuilders.Padding.Builder()
+            .setStart(dp(10f))
+            .setEnd(dp(10f))
+            .build(),
+        )
+        .build(),
+    )
+    .addContent(
+      Text.Builder(context, "🎙 Off")
+        .setTypography(Typography.TYPOGRAPHY_CAPTION2)
+        .setColor(argb(COLOR_FOREGROUND_EXTRA_MUTED))
+        .setMaxLines(1)
+        .build(),
     )
     .build()
 
@@ -164,7 +234,12 @@ internal fun statusLine(state: LiveVoiceState): String {
           "Not on a call"
         }
     }
-  return state.audioRouteGlance()?.let { "$callStatus\n$it" } ?: callStatus
+  val withRoute = state.audioRouteGlance()?.let { "$callStatus\n$it" } ?: callStatus
+  return if (dispatchTileMode(state) == DispatchTileMode.Disabled) {
+    "$withRoute\nSet Dispatch on your phone"
+  } else {
+    withRoute
+  }
 }
 
 private fun statusColor(state: LiveVoiceState): Int =
@@ -195,15 +270,21 @@ private fun chipLabel(state: LiveVoiceState): String =
  * cannot then show you the call — or let you end it — would be the wrong trade
  * even if it could.
  */
-private fun openAppAction(context: Context): Clickable =
+private fun openCallAction(context: Context): Clickable =
+  openActivityAction(context, "open-live-voice", LiveVoiceActivity::class.java.name)
+
+private fun openDispatchAction(context: Context): Clickable =
+  openActivityAction(context, "open-dispatch", DispatchActivity::class.java.name)
+
+private fun openActivityAction(context: Context, id: String, className: String): Clickable =
   Clickable.Builder()
-    .setId("open-live-voice")
+    .setId(id)
     .setOnClick(
       ActionBuilders.LaunchAction.Builder()
         .setAndroidActivity(
           ActionBuilders.AndroidActivity.Builder()
             .setPackageName(context.packageName)
-            .setClassName(LiveVoiceActivity::class.java.name)
+            .setClassName(className)
             .build(),
         )
         .build(),
@@ -214,6 +295,8 @@ private fun openAppAction(context: Context): Clickable =
 // outside Compose and cannot read a MaterialTheme. Keep the two in step.
 private const val COLOR_FOREGROUND = 0xFFFAFAFA.toInt()
 private const val COLOR_FOREGROUND_MUTED = 0xFFA1A5A4.toInt()
+private const val COLOR_FOREGROUND_EXTRA_MUTED = 0xFF717574.toInt()
+private const val COLOR_SURFACE_2 = 0xFF272A29.toInt()
 private const val COLOR_ACCENT_BRIGHT = 0xFF239956.toInt()
 private const val COLOR_WARNING = 0xFFD9A13B.toInt()
 private const val COLOR_DESTRUCTIVE = 0xFFC4564C.toInt()
