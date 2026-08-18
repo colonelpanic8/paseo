@@ -6,13 +6,33 @@ import { requireOptionalNativeModule, type EventSubscription } from "expo-module
  */
 export type LiveVoiceBackgroundCallAction = "toggleMute" | "end";
 
+export type LiveVoiceAudioRouteKind = "watch" | "earbuds" | "wired" | "speaker" | "other";
+
+export interface LiveVoiceAudioRoute {
+  id: string;
+  label: string;
+  kind: LiveVoiceAudioRouteKind;
+}
+
+export interface LiveVoiceAudioRouteState {
+  active: LiveVoiceAudioRoute | null;
+  candidates: LiveVoiceAudioRoute[];
+}
+
 interface PaseoBackgroundCallModule {
   begin(): Promise<void>;
   update(isMuted: boolean): Promise<void>;
   end(): Promise<void>;
+  getAudioRoutes?(): Promise<LiveVoiceAudioRouteState>;
+  setAudioRoute?(routeId: string): Promise<boolean>;
+  setWearNodeNames?(names: string[]): Promise<void>;
   addListener(
     eventName: "onBackgroundCallAction",
     handler: (event: { action: string }) => void,
+  ): EventSubscription;
+  addListener(
+    eventName: "onBackgroundCallAudioRouteChanged",
+    handler: (event: LiveVoiceAudioRouteState) => void,
   ): EventSubscription;
 }
 
@@ -47,6 +67,33 @@ export async function updateLiveVoiceBackgroundCall(params: { isMuted: boolean }
 
 export async function endLiveVoiceBackgroundCall(): Promise<void> {
   await getBackgroundCallModule().end();
+}
+
+export async function getLiveVoiceAudioRoutes(): Promise<LiveVoiceAudioRouteState | null> {
+  const backgroundCallModule = getOptionalBackgroundCallModule();
+  return (await backgroundCallModule?.getAudioRoutes?.()) ?? null;
+}
+
+export async function setLiveVoiceAudioRoute(routeId: string): Promise<boolean> {
+  const backgroundCallModule = getOptionalBackgroundCallModule();
+  return (await backgroundCallModule?.setAudioRoute?.(routeId)) ?? false;
+}
+
+export async function setLiveVoiceWearNodeNames(names: string[]): Promise<void> {
+  const backgroundCallModule = getOptionalBackgroundCallModule();
+  await backgroundCallModule?.setWearNodeNames?.(names);
+}
+
+export function subscribeLiveVoiceAudioRoutes(
+  listener: (state: LiveVoiceAudioRouteState) => void,
+): () => void {
+  const backgroundCallModule = getOptionalBackgroundCallModule();
+  if (!backgroundCallModule?.addListener) return () => undefined;
+  const subscription = backgroundCallModule.addListener(
+    "onBackgroundCallAudioRouteChanged",
+    listener,
+  );
+  return () => subscription.remove();
 }
 
 /**
