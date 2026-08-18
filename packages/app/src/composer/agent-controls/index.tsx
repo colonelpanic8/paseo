@@ -92,7 +92,6 @@ import {
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import { ShortcutHint } from "@/components/ui/shortcut-hint";
-import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useShowControlShortcutBadges } from "@/hooks/use-show-shortcut-badges";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
