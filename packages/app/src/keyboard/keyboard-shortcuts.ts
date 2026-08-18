@@ -87,7 +87,7 @@ interface ShortcutHelp {
   id: string;
   section: ShortcutSectionId;
   label: string;
-  keys: ShortcutKey[];
+  keys?: ShortcutKey[];
   defaultDisplayKeys?: ShortcutKey[];
   note?: string;
 }
