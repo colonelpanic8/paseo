@@ -58,6 +58,8 @@ data class LiveVoiceState(
   val activeAudioRoute: LiveVoiceAudioRoute?,
   val audioRouteCandidates: List<LiveVoiceAudioRoute>,
   val pocketStartSupported: Boolean,
+  /** Null means the phone did not advertise Dispatch, so every surface hides it. */
+  val dispatch: DispatchState?,
 ) {
   /** A call is up or coming up: the controls should offer hang-up and mute. */
   val isLive: Boolean
@@ -87,6 +89,7 @@ data class LiveVoiceState(
         activeAudioRoute = null,
         audioRouteCandidates = emptyList(),
         pocketStartSupported = false,
+        dispatch = null,
       )
   }
 }
