@@ -196,6 +196,9 @@ export default {
           android: {
             minSdkVersion: 29,
             kotlinVersion: "2.1.20",
+            // GitHub Pages is published from a Git branch, whose blobs must stay below 100 MB.
+            // Compress native libraries in the directly distributed F-Droid APK.
+            ...(isFdroidBuild ? { useLegacyPackaging: true } : {}),
             // Allow HTTP connections for local network hosts in release builds
             usesCleartextTraffic: true,
           },
