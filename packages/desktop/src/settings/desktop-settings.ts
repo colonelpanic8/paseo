@@ -7,6 +7,9 @@ import { loadSettingsSeed, type SettingsSeedDocument } from "./settings-seed.js"
 
 export interface DesktopSettings {
   releaseChannel: AppReleaseChannel;
+  notifications: {
+    playSound: boolean;
+  };
   daemon: {
     manageBuiltInDaemon: boolean;
     keepRunningAfterQuit: boolean;
@@ -15,6 +18,7 @@ export interface DesktopSettings {
 
 interface DesktopSettingsPatch {
   releaseChannel?: AppReleaseChannel;
+  notifications?: Partial<DesktopSettings["notifications"]>;
   daemon?: Partial<DesktopSettings["daemon"]>;
 }
 
@@ -42,6 +46,9 @@ export interface DesktopSettingsStore {
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   releaseChannel: "stable",
+  notifications: {
+    playSound: true,
+  },
   daemon: {
     manageBuiltInDaemon: true,
     keepRunningAfterQuit: false,
@@ -75,6 +82,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 function cloneDefaultSettings(): DesktopSettings {
   return {
     releaseChannel: DEFAULT_DESKTOP_SETTINGS.releaseChannel,
+    notifications: { ...DEFAULT_DESKTOP_SETTINGS.notifications },
     daemon: { ...DEFAULT_DESKTOP_SETTINGS.daemon },
   };
 }
@@ -100,6 +108,11 @@ function coerceDesktopSettingsPatch(input: unknown): DesktopSettingsPatch {
   const releaseChannel = coerceReleaseChannel(input.releaseChannel);
   if (releaseChannel) {
     patch.releaseChannel = releaseChannel;
+  }
+
+  if (isRecord(input.notifications)) {
+    const playSound = coerceBoolean(input.notifications.playSound);
+    if (playSound !== null) patch.notifications = { playSound };
   }
 
   if (isRecord(input.daemon)) {
@@ -147,6 +160,7 @@ function mergeDesktopSettings(
 ): DesktopSettings {
   return {
     releaseChannel: patch.releaseChannel ?? current.releaseChannel,
+    notifications: { ...current.notifications, ...patch.notifications },
     daemon: { ...current.daemon, ...patch.daemon },
   };
 }
@@ -159,6 +173,10 @@ function diffDesktopSettings(
 
   if (desired.releaseChannel !== base.releaseChannel) {
     delta.releaseChannel = desired.releaseChannel;
+  }
+
+  if (desired.notifications.playSound !== base.notifications.playSound) {
+    delta.notifications = { playSound: desired.notifications.playSound };
   }
 
   const daemon: Partial<DesktopSettings["daemon"]> = {};
