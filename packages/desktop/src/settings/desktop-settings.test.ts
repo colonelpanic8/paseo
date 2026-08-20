@@ -306,6 +306,7 @@ describe("desktop-settings", () => {
 
       expect(settings).toEqual({
         releaseChannel: "beta",
+        notifications: { playSound: true },
         daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: false },
       });
       expect(await readPersistedSettings(userDataPath)).toEqual({});
@@ -326,6 +327,7 @@ describe("desktop-settings", () => {
 
       expect(next).toEqual({
         releaseChannel: "beta",
+        notifications: { playSound: true },
         daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: true },
       });
       expect(await readPersistedSettings(userDataPath)).toEqual({
@@ -360,6 +362,7 @@ describe("desktop-settings", () => {
 
       expect(settings).toEqual({
         releaseChannel: "stable",
+        notifications: { playSound: true },
         daemon: { manageBuiltInDaemon: true, keepRunningAfterQuit: true },
       });
     });
@@ -379,6 +382,7 @@ describe("desktop-settings", () => {
 
       expect(settings).toEqual({
         releaseChannel: "stable",
+        notifications: { playSound: true },
         daemon: { manageBuiltInDaemon: true, keepRunningAfterQuit: true },
       });
     });
@@ -402,6 +406,7 @@ describe("desktop-settings", () => {
       // No seed means no delta layer: the file still holds the full settings.
       expect(await readPersistedSettings(userDataPath)).toEqual({
         releaseChannel: "beta",
+        notifications: { playSound: true },
         daemon: { manageBuiltInDaemon: true, keepRunningAfterQuit: false },
       });
       expect(consoleError).toHaveBeenCalled();
