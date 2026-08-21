@@ -2573,12 +2573,18 @@ export class Session {
     return undefined;
   }
 
+  private dispatchVoiceMessage(
+    msg: SessionInboundMessage,
+    source?: object,
+  ): Promise<void> | undefined {
+    return this.dispatchVoiceAndControlMessage(msg) ?? this.dispatchLiveVoiceMessage(msg, source);
+  }
+
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
       this.connectedHostSession?.dispatch(msg) ??
       this.dispatchSubscriptionMessage(msg, source) ??
-      this.dispatchVoiceAndControlMessage(msg) ??
-      this.dispatchLiveVoiceMessage(msg, source) ??
+      this.dispatchVoiceMessage(msg, source) ??
       this.dispatchAgentObservationMessage(msg, source) ??
       this.dispatchHubExecutionMessage(msg) ??
       this.dispatchCreationMessage(msg, source) ??
