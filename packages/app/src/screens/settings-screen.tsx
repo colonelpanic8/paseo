@@ -653,7 +653,7 @@ function LiveVoiceSettingsCard() {
               {t("liveVoice.settings.agentReportGuidance.description")}
             </Text>
             <TextInput
-              value={ambientAgentGuidance}
+              initialValue={ambientAgentGuidance}
               onChangeText={setAmbientAgentGuidance}
               placeholder={t("liveVoice.settings.agentReportGuidance.placeholder")}
               multiline
@@ -756,7 +756,7 @@ function LiveVoiceSettingsCard() {
             {t("liveVoice.settings.customInstructions.description")}
           </Text>
           <TextInput
-            value={customVoiceInstructions}
+            initialValue={customVoiceInstructions}
             onChangeText={setCustomVoiceInstructions}
             placeholder={t("liveVoice.settings.customInstructions.placeholder")}
             multiline
@@ -776,7 +776,7 @@ function LiveVoiceSettingsCard() {
             {t("liveVoice.settings.defaultWorkspaceDirectory.description")}
           </Text>
           <TextInput
-            value={defaultWorkspaceDirectory}
+            initialValue={defaultWorkspaceDirectory}
             onChangeText={setDefaultWorkspaceDirectory}
             placeholder={t("liveVoice.settings.defaultWorkspaceDirectory.placeholder")}
             // A path, so the keyboard's writing aids only get in the way.
