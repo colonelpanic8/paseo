@@ -1,7 +1,10 @@
 import { describe, expect, test } from "vitest";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
 import { CodexAppServerAgentClient } from "./codex-app-server-agent.js";
+import { createFakeCodexAppServer } from "./codex/test-utils/fake-app-server.js";
 import { createTestLogger } from "../../../test-utils/test-logger.js";
+import { asInternals } from "../../test-utils/class-mocks.js";
 
 describe("CodexAppServerAgentClient spawn error handling", () => {
   const logger = createTestLogger();
@@ -53,5 +56,45 @@ describe("CodexAppServerAgentClient spawn error handling", () => {
     } finally {
       process.off("uncaughtException", onUncaught);
     }
+  });
+
+  test("createSession retries a fresh app-server after SQLite initialization contention", async () => {
+    const sqliteError =
+      "failed to initialize sqlite state runtime under /tmp/codex-home: " +
+      "failed to initialize state runtime at /tmp/codex-home";
+    const contendedAppServer = createFakeCodexAppServer({
+      initialize: () => ({ __jsonRpcError: { message: sqliteError } }),
+    });
+    const healthyAppServer = createFakeCodexAppServer();
+    const appServers = [contendedAppServer, healthyAppServer];
+    const client = new CodexAppServerAgentClient(logger);
+    const internals = asInternals<{
+      goalsEnabledPromise: Promise<boolean> | null;
+      autoReviewEnabledPromise: Promise<boolean> | null;
+      spawnAppServer: () => Promise<ChildProcessWithoutNullStreams>;
+    }>(client);
+    internals.goalsEnabledPromise = Promise.resolve(false);
+    internals.autoReviewEnabledPromise = Promise.resolve(false);
+    internals.spawnAppServer = async () => {
+      const appServer = appServers.shift();
+      if (!appServer) throw new Error("No fake Codex app-server available");
+      return appServer.child;
+    };
+
+    const session = await client.createSession({
+      provider: "codex",
+      cwd: "/tmp/codex-home",
+      modeId: "auto",
+      model: "gpt-5.4",
+    });
+
+    expect(appServers).toHaveLength(0);
+    expect(contendedAppServer.requests()).toContainEqual(
+      expect.objectContaining({ method: "initialize" }),
+    );
+    expect(healthyAppServer.requests()).toContainEqual(
+      expect.objectContaining({ method: "initialize" }),
+    );
+    await session.close();
   });
 });
