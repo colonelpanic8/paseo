@@ -524,6 +524,23 @@ function requireWebSocketServices(params: {
   return { scheduleService, checkoutDiffManager };
 }
 
+function resolveLiveVoiceToolExecution(toolExecutor?: LiveVoiceToolExecutor): {
+  available: boolean;
+  executor: LiveVoiceToolExecutor;
+} {
+  if (toolExecutor !== undefined) {
+    return { available: true, executor: toolExecutor };
+  }
+  return {
+    available: false,
+    executor: new LiveVoiceToolExecutor({
+      createCatalog: async () => {
+        throw new Error("Live Voice routed tool execution is not configured");
+      },
+    }),
+  };
+}
+
 /**
  * WebSocket server that only accepts sockets + parses/forwards messages to the session layer.
  */
@@ -685,15 +702,10 @@ export class VoiceAssistantWebSocketServer {
     this.credentialSource = auth;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.browserToolsBroker = browserToolsBroker ?? null;
-    this.liveVoiceToolExecutionAvailable = liveVoiceToolExecutor !== undefined;
+    const liveVoiceToolExecution = resolveLiveVoiceToolExecution(liveVoiceToolExecutor);
+    this.liveVoiceToolExecutionAvailable = liveVoiceToolExecution.available;
     this.liveVoiceRouteBroker = liveVoiceRouteBroker ?? new LiveVoiceRouteBroker();
-    this.liveVoiceToolExecutor =
-      liveVoiceToolExecutor ??
-      new LiveVoiceToolExecutor({
-        createCatalog: async () => {
-          throw new Error("Live Voice routed tool execution is not configured");
-        },
-      });
+    this.liveVoiceToolExecutor = liveVoiceToolExecution.executor;
     this.liveVoiceAgentNotifier = new LiveVoiceAgentNotifier({
       agentManager,
       agentStorage,

@@ -2315,11 +2315,17 @@ export class Session {
     return undefined;
   }
 
+  private dispatchVoiceMessage(
+    msg: SessionInboundMessage,
+    source?: object,
+  ): Promise<void> | undefined {
+    return this.dispatchVoiceAndControlMessage(msg) ?? this.dispatchLiveVoiceMessage(msg, source);
+  }
+
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
       this.dispatchSubscriptionMessage(msg, source) ??
-      this.dispatchVoiceAndControlMessage(msg) ??
-      this.dispatchLiveVoiceMessage(msg, source) ??
+      this.dispatchVoiceMessage(msg, source) ??
       this.dispatchAgentRewindMessage(msg, source) ??
       this.dispatchAgentRelationshipMessage(msg) ??
       this.dispatchAgentTimelineMessage(msg, source) ??
