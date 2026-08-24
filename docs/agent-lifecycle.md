@@ -35,7 +35,16 @@ be in flight.
 
 ### Cancellation
 
-Cancellation changes lifecycle state only after the provider acknowledges the interrupt or emits a terminal turn event. If the interrupt is rejected or times out, the agent remains `running` with its active foreground turn intact. Follow-up actions such as replacement, reload, rewind, and Stop must report that failure instead of accepting work they cannot perform. Synthesizing a local cancellation without provider acknowledgment creates a split-brain session: Paseo accepts a new prompt while the provider still owns the previous foreground turn.
+Provider interruption is idempotent at the `AgentSession` boundary. It resolves when the prior
+foreground turn can no longer run, including when the provider reports that it is already idle. It
+rejects only when the provider may still own the turn. Provider adapters translate native errors
+into that contract; lifecycle callers do not interpret provider-specific errors.
+
+After an acknowledged interrupt, the manager settles the captured run even when no terminal event
+arrives or the run was still waiting for its provider turn id. The captured run token prevents an
+older cancellation from settling a newer turn. If interruption is rejected or times out, the agent
+keeps its active foreground turn and replacement, reload, rewind, and Stop report the failure.
+Accepting new work after an ambiguous interruption would create a split-brain session.
 
 ## Relationships
 
@@ -103,7 +112,9 @@ recoverable from History. Opening one pins its tab and renders the archived-agen
 timeline catch-up may load provider history with a runtime-only `history` resume purpose, which must
 leave both Paseo's `archivedAt` and the provider's native archive state unchanged. **Unarchive** remains
 the only transition back to an interactive runtime: it runs the provider's native unarchive hook
-(including Codex `thread/unarchive`) before the normal agent resume and timeline hydration flow.
+(including Codex `thread/unarchive`) before the normal agent resume and timeline hydration flow. A
+provider session can be archived outside Paseo while its Paseo agent remains active. Interactive
+resume repairs that drift through the provider's native unarchive hook; history resume does not.
 
 Provider session connection owns every process it spawns until the session is registered with
 `AgentManager`. If initialization, persisted-session resume, or initial history hydration fails,
@@ -160,6 +171,7 @@ Claude Code announces subagent lifecycle on the SDK stream (`task_started` / `ta
 - **Not every announced task belongs in the track.** Task subagents announce as `local_agent` and workflows as `local_workflow`; a backgrounded shell announces as `local_bash` with the same `tool_use_id` shape, and ambient housekeeping sets `skip_transcript`. The Claude provider normalizes a workflow to a generic provider-subagent descriptor titled `Workflow`, using Claude's summary as its description and timeline opener. Shared storage, protocol, and UI do not distinguish it from another provider subagent.
 - **A task that was never declared gets no descriptor, by any route.** Filtered tasks still emit `task_notification`s carrying a `tool_use_id`, and still emit frames carrying `parent_tool_use_id`. Attributing either produces a descriptor with no identity and a defaulted `running` status — a nameless row that never finishes. Status, presentation updates, and sidechain frames all route through the declaration table.
 - **Task ids are session-scoped, not turn-scoped.** Cancelling a turn must not clear the routing table: a backgrounded child settles after the interrupt and needs its descriptor to still exist. Cancellation instead terminalizes the declared children that were running in the foreground, and a later `task_notification` is free to correct that guess. Backgrounded children are identified by `task_updated.patch.is_backgrounded`.
+- **A resumed task can be announced again with a new `tool_use_id`.** The first Task tool id remains the canonical descriptor and later ids are routing aliases for the same session-scoped task. The resumed prompt is added to that child timeline.
 - **Effort is only reachable through hooks.** It appears nowhere on the message stream at any depth, and the level Paseo requests is not necessarily the level that runs — a model that does not support it is silently downgraded. A hook firing inside a subagent reports the active post-downgrade level next to its `agent_id`, which is the same id `task_started` calls `task_id`.
 - **Backgrounded subagents emit no frames carrying `parent_tool_use_id` at all.** Everything keyed off that field sees nothing for one; they are visible only because the task protocol announces them.
 - **On replay, `<session>/subagents/` holds every descendant, not just this session's children.** `agent-<id>.meta.json` carries `spawnDepth`: `1` is a direct child, `2+` was spawned by another subagent and its `toolUseId` names a Task call made inside its parent's session, which nothing in this transcript can resolve. Replaying those adds rows the live stream never showed, each with no Task card and no recoverable outcome, so they render as running forever. One recorded session showed 10 subagents live and would have replayed 22.

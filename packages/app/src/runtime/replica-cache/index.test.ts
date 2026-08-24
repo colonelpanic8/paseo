@@ -149,6 +149,7 @@ function seedSession(): void {
           ...workspace(),
           workspaceKind: "worktree",
           worktreeSlug: "owned-worktree",
+          labels: ["backend"],
         }),
       ],
     ]),
@@ -208,6 +209,35 @@ afterEach(() => {
 });
 
 describe("ReplicaCache", () => {
+  it("persists after user inactivity even while replica changes continue", async () => {
+    vi.useFakeTimers();
+    const storage = new MemoryStorage();
+    const cache = new ReplicaCache(storage);
+    cache.setHosts([SERVER_ID]);
+    seedSession();
+    await cache.flush();
+    cache.start();
+    const writesBeforeChange = storage.writes;
+
+    useSessionStore
+      .getState()
+      .setAgentStreamTail(SERVER_ID, new Map([["agent-1", [message("first", "First")]]]));
+    await vi.advanceTimersByTimeAsync(4_000);
+    cache.recordUserActivity();
+    await vi.advanceTimersByTimeAsync(1_000);
+    useSessionStore
+      .getState()
+      .setAgentStreamTail(SERVER_ID, new Map([["agent-1", [message("second", "Second")]]]));
+    await vi.advanceTimersByTimeAsync(3_999);
+
+    expect(storage.writes).toBe(writesBeforeChange);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(storage.writes).toBe(writesBeforeChange + 1);
+    cache.setHosts([]);
+  });
+
   it("persists focused replica changes without writing transient stream head updates", async () => {
     vi.useFakeTimers();
     const storage = new MemoryStorage();
@@ -221,14 +251,14 @@ describe("ReplicaCache", () => {
     useSessionStore
       .getState()
       .setAgentStreamHead(SERVER_ID, new Map([["agent-1", [message("live", "Streaming")]]]));
-    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(5_000);
 
     expect(storage.writes).toBe(writesBeforeStream);
 
     useSessionStore
       .getState()
       .setAgentStreamTail(SERVER_ID, new Map([["agent-1", [message("saved", "Committed")]]]));
-    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(5_000);
 
     expect(storage.writes).toBe(writesBeforeStream + 1);
     cache.setHosts([]);
@@ -261,6 +291,9 @@ describe("ReplicaCache", () => {
     expect(session.agents.get("agent-1")?.projectPlacement?.checkout.cwd).toBe("/repo/paseo");
     expect(session.workspaces.get("workspace-1")?.statusEnteredAt).toBeInstanceOf(Date);
     expect(session.workspaces.get("workspace-1")?.worktreeSlug).toBe("owned-worktree");
+    // A restored row draws its label chips. The reconnect cursor is current, so nothing re-sends
+    // them and a cache that dropped them would leave the sidebar unlabelled until the next edit.
+    expect(session.workspaces.get("workspace-1")?.labels).toEqual(["backend"]);
     expect(session.agentStreamTail.get("agent-1")).toEqual([message("message-1", "Cached")]);
     expect(session.agentAuthoritativeHistoryApplied).toEqual(new Map([["agent-1", true]]));
     expect(session.agentTimelineCursor).toEqual(

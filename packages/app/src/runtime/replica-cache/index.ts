@@ -1,4 +1,5 @@
 import { Buffer } from "buffer";
+import { Keyboard } from "react-native";
 import { z } from "zod";
 import {
   AgentStatusSchema,
@@ -23,7 +24,7 @@ import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 
 const STORAGE_KEY = "@paseo:replica-cache";
 const CACHE_VERSION = 6;
-const PERSIST_DELAY_MS = 750;
+const PERSIST_AFTER_USER_INACTIVITY_MS = 5_000;
 const MAX_TIMELINE_ITEMS = 50;
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
 const IsoDateSchema = z.iso.datetime();
@@ -235,6 +236,10 @@ const StoredWorkspaceSchema = z.strictObject({
   name: z.string(),
   title: z.string().nullable(),
   pinnedAt: z.string().nullable(),
+  // Optional because entries written before labels existed have none. A cached workspace that
+  // dropped them painted its row without its chips and stayed that way: the directory cursor is
+  // current on reconnect, so the daemon has nothing newer to send back.
+  labels: z.array(z.string()).optional(),
   status: z.enum(["needs_input", "failed", "running", "attention", "done"]),
   statusEnteredAt: IsoDateSchema.nullable(),
   activityAt: z.null(),
@@ -559,6 +564,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     name: workspace.name,
     title: workspace.title ?? null,
     pinnedAt: workspace.pinnedAt ?? null,
+    labels: workspace.labels,
     status: workspace.status,
     statusEnteredAt: workspace.statusEnteredAt?.toISOString() ?? null,
     activityAt: null,
@@ -800,17 +806,19 @@ export class ReplicaCache {
     }
   }
 
+  recordUserActivity(): void {
+    if (!this.persistTimer) return;
+    clearTimeout(this.persistTimer);
+    this.persistTimer = null;
+    this.schedulePersist();
+  }
+
   start(): void {
     if (this.unsubscribe) return;
     const changedBeforeSubscription = this.captureSessions();
-    this.unsubscribe = useSessionStore.subscribe((state) => {
+    this.unsubscribe = useSessionStore.subscribe(() => {
       if (this.activeServerIds.size === 0) return;
-      let changed = false;
-      for (const serverId of this.activeServerIds) {
-        const session = state.sessions[serverId];
-        if (session && this.captureHost(serverId, session)) changed = true;
-      }
-      if (changed) this.schedulePersist();
+      this.schedulePersist();
     });
     if (changedBeforeSubscription || this.needsPersist) this.schedulePersist();
   }
@@ -851,15 +859,29 @@ export class ReplicaCache {
     }
     this.storedHosts.delete(serverId);
     this.storedHosts.set(serverId, { ...stored, directorySync: checkpoint });
+    this.needsPersist = true;
     this.schedulePersist();
   }
 
   async flush(): Promise<void> {
+    await this.persist(false);
+  }
+
+  private async flushPending(): Promise<void> {
+    if (Keyboard.isVisible()) {
+      this.schedulePersist();
+      return;
+    }
+    await this.persist(true);
+  }
+
+  private async persist(skipUnchanged: boolean): Promise<void> {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
-    this.captureSessions();
+    const changed = this.captureSessions();
+    if (skipUnchanged && !changed && !this.needsPersist) return;
     const bounded = this.buildBoundedPayload();
     this.needsPersist = false;
     if (!bounded) {
@@ -947,7 +969,7 @@ export class ReplicaCache {
     if (this.persistTimer) return;
     this.persistTimer = setTimeout(() => {
       this.persistTimer = null;
-      void this.flush();
-    }, PERSIST_DELAY_MS);
+      void this.flushPending();
+    }, PERSIST_AFTER_USER_INACTIVITY_MS);
   }
 }
