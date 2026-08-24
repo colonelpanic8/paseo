@@ -72,9 +72,17 @@ environments:
     cwd: /workspace/project
     worktree:
       mode: branch-off
-      newBranch: paseo/review
+      newBranch: trigger-${{ paseo.execution.id }}
       base: origin/main
 ```
+
+`newBranch` is a branch-name string. Embed `${{ paseo.execution.id }}`, which renders the execution's UUID, so every execution branches off `base` on its own branch and keeps it when Hub retries or recovers that execution.
+
+One execution is one step run, so two steps selecting the same environment get separate branches.
+
+`${{ paseo.execution.id }}` is the only expression `newBranch` accepts. `paseo.prompt`, `paseo.context`, `paseo.inputs.*`, `values.*`, `steps.<id>.outputs.*`, and provider event fields are unavailable here, and each one fails bundle activation at the authored field, such as `.paseo/hub.yml.environments.review.worktree.newBranch`.
+
+`${{ paseo.execution.id }}` fails activation the same way anywhere else in a bundle. `branch` and `prNumber` take literal values.
 
 An environment is a complete named object. A step selects its name; objects are not inherited, merged, or partially overridden.
 
@@ -128,6 +136,39 @@ steps:
 | `inputs`      | no       | Typed invocation headers.                                 |
 | `values`      | no       | Named expressions.                                        |
 | `steps`       | yes      | One or more ordered inline steps.                         |
+
+### GitHub events and filters
+
+Use one of these semantic event names for new GitHub workflows:
+
+| `on`                                  | Matches                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------- |
+| `github.issue_created`                | An `issues` delivery whose action is `opened`.                            |
+| `github.pull_request_created`         | A `pull_request` delivery whose action is `opened`.                       |
+| `github.issue_comment_created`        | An `issue_comment` delivery whose action is `created`, on an issue.       |
+| `github.pull_request_comment_created` | An `issue_comment` delivery whose action is `created`, on a pull request. |
+| `github.issue_label_added`            | An `issues` delivery whose action is `labeled`.                           |
+| `github.pull_request_label_added`     | A `pull_request` delivery whose action is `labeled`.                      |
+
+Existing configurations may continue to use `github.issues`, `github.issue_comment`, `github.pull_request_review`, `github.pull_request_review_comment`, and `github.push`. These legacy events retain their existing behavior.
+
+`filters` supports these GitHub fields. `from_users` must be non-empty for every externally sourced workflow. All supplied filters compose with AND.
+
+| Field        | Type                                | Applies to                                                    | Meaning                                                                         |
+| ------------ | ----------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `from_users` | non-empty list of strings           | all GitHub events                                             | GitHub logins allowed to start the workflow.                                    |
+| `repo`       | non-empty string                    | all GitHub events                                             | Repository in `owner/name` form.                                                |
+| `connection` | string                              | all GitHub events                                             | GitHub connection slug.                                                         |
+| `contains`   | string                              | issue, pull-request, and comment events                       | Substring in the issue or pull-request title plus body, or in the comment body. |
+| `pattern`    | string                              | issue, pull-request, and comment events                       | Start of that same text.                                                        |
+| `label`      | non-empty string                    | `github.issue_label_added`, `github.pull_request_label_added` | The label added by the delivery.                                                |
+| `labels`     | non-empty list of non-empty strings | issue, pull-request, and comment events                       | Every listed label must be currently present on the issue or pull request.      |
+
+`label` and `labels` match GitHub labels case-insensitively. `label` checks the one changed label; `labels` checks the full current label set and requires every entry. For example, `labels: [bug, backend]` requires both `bug` and `backend`.
+
+Use `label` only with a label-added event. It has no match on other events. Use `labels` to require the item state, including when a comment starts the workflow.
+
+See [GitHub triggers](/docs/hub/triggers/github) for complete triage, pull-request review, and ready-for-agent workflows.
 
 ### Inputs and values
 
