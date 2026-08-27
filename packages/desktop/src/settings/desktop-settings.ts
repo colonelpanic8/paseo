@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { z } from "zod";
+
 import type { AppReleaseChannel } from "../features/auto-updater.js";
 import { loadSettingsSeed, type SettingsSeedDocument } from "./settings-seed.js";
 
@@ -20,22 +22,6 @@ interface DesktopSettingsPatch {
   releaseChannel?: AppReleaseChannel;
   notifications?: Partial<DesktopSettings["notifications"]>;
   daemon?: Partial<DesktopSettings["daemon"]>;
-}
-
-interface PersistedDesktopSettingsDocument {
-  version: 1;
-  // Without a seed file this holds the full settings, exactly as older versions
-  // wrote it. With a seed file it holds only the diff against defaults ⊕ seed,
-  // so later seed edits keep applying to everything the user has not overridden.
-  settings: DesktopSettingsPatch;
-  migrations: {
-    legacyRendererSettingsImported: boolean;
-    // Installs created before the stop-on-quit default persisted the old
-    // `keepRunningAfterQuit: true` default to disk, so the new default alone
-    // would only reach fresh installs. Reset it once; a later explicit toggle
-    // persists this flag and is never overridden again.
-    daemonStopOnQuitDefaultApplied: boolean;
-  };
 }
 
 export interface DesktopSettingsStore {
@@ -57,18 +43,66 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
 
 const DESKTOP_SETTINGS_FILENAME = "desktop-settings.json";
 
+const ReleaseChannelSchema = z.enum(["stable", "beta"]);
+
+// Without a seed file this holds the full settings, exactly as older versions wrote it. With a
+// seed file it holds only the diff against defaults ⊕ seed, so later seed edits keep applying to
+// everything the user has not overridden. Either way every key is optional and unmodelled keys
+// survive the round trip, so a build that writes settings this one does not know does not lose
+// them.
+const StoredSettingsSchema = z
+  .looseObject({
+    releaseChannel: ReleaseChannelSchema.optional().catch(undefined),
+    notifications: z
+      .looseObject({ playSound: z.boolean().optional().catch(undefined) })
+      .optional()
+      .catch(undefined),
+    daemon: z
+      .looseObject({
+        manageBuiltInDaemon: z.boolean().optional().catch(undefined),
+        keepRunningAfterQuit: z.boolean().optional().catch(undefined),
+      })
+      .optional()
+      .catch(undefined),
+  })
+  .catch(() => ({}));
+
+const MigrationsSchema = z
+  .looseObject({
+    legacyRendererSettingsImported: z.boolean().catch(false),
+    // Installs created before the stop-on-quit default persisted the old
+    // `keepRunningAfterQuit: true` default to disk, so the new default alone
+    // would only reach fresh installs. Reset it once; a later explicit toggle
+    // persists this flag and is never overridden again.
+    daemonStopOnQuitDefaultApplied: z.boolean().catch(false),
+  })
+  .catch(() => ({
+    legacyRendererSettingsImported: false,
+    daemonStopOnQuitDefaultApplied: false,
+  }));
+
+const PersistedDocumentSchema = z
+  .looseObject({
+    version: z.literal(1).catch(1),
+    settings: StoredSettingsSchema,
+    migrations: MigrationsSchema,
+  })
+  .catch(() => ({
+    version: 1 as const,
+    settings: {},
+    migrations: { legacyRendererSettingsImported: false, daemonStopOnQuitDefaultApplied: true },
+  }));
+
+type StoredSettings = z.output<typeof StoredSettingsSchema>;
+type PersistedDesktopSettingsDocument = z.output<typeof PersistedDocumentSchema>;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function coerceReleaseChannel(value: unknown): AppReleaseChannel | null {
-  if (value === "beta") {
-    return "beta";
-  }
-  if (value === "stable") {
-    return "stable";
-  }
-  return null;
+  const result = ReleaseChannelSchema.safeParse(value);
+  return result.success ? result.data : null;
 }
 
 function coerceBoolean(value: unknown): boolean | null {
@@ -87,10 +121,22 @@ function cloneDefaultSettings(): DesktopSettings {
   };
 }
 
+function buildDefaultStoredSettings(hasSeed: boolean): StoredSettings {
+  if (hasSeed) {
+    return {};
+  }
+  const defaults = cloneDefaultSettings();
+  return {
+    releaseChannel: defaults.releaseChannel,
+    notifications: { ...defaults.notifications },
+    daemon: { ...defaults.daemon },
+  };
+}
+
 function buildDefaultDocument(hasSeed: boolean): PersistedDesktopSettingsDocument {
   return {
     version: 1,
-    settings: hasSeed ? {} : cloneDefaultSettings(),
+    settings: buildDefaultStoredSettings(hasSeed),
     migrations: {
       legacyRendererSettingsImported: false,
       daemonStopOnQuitDefaultApplied: true,
@@ -104,7 +150,6 @@ function coerceDesktopSettingsPatch(input: unknown): DesktopSettingsPatch {
   }
 
   const patch: DesktopSettingsPatch = {};
-
   const releaseChannel = coerceReleaseChannel(input.releaseChannel);
   if (releaseChannel) {
     patch.releaseChannel = releaseChannel;
@@ -154,14 +199,20 @@ function pickDesktopSettingsFromLegacyRendererSettings(
   return patch;
 }
 
+/** Every modelled key resolved against `base`, so the result is a complete settings object. */
 function mergeDesktopSettings(
-  current: DesktopSettings,
-  patch: DesktopSettingsPatch,
+  base: DesktopSettings,
+  patch: DesktopSettingsPatch | StoredSettings,
 ): DesktopSettings {
   return {
-    releaseChannel: patch.releaseChannel ?? current.releaseChannel,
-    notifications: { ...current.notifications, ...patch.notifications },
-    daemon: { ...current.daemon, ...patch.daemon },
+    releaseChannel: patch.releaseChannel ?? base.releaseChannel,
+    notifications: {
+      playSound: patch.notifications?.playSound ?? base.notifications.playSound,
+    },
+    daemon: {
+      manageBuiltInDaemon: patch.daemon?.manageBuiltInDaemon ?? base.daemon.manageBuiltInDaemon,
+      keepRunningAfterQuit: patch.daemon?.keepRunningAfterQuit ?? base.daemon.keepRunningAfterQuit,
+    },
   };
 }
 
@@ -193,24 +244,66 @@ function diffDesktopSettings(
   return delta;
 }
 
+/** Replaces the keys this build models and keeps every key it does not. */
+function mergeUnmodelled(
+  previous: Record<string, unknown> | undefined,
+  next: Record<string, unknown> | undefined,
+  modelled: readonly string[],
+): Record<string, unknown> | undefined {
+  const carried: Record<string, unknown> = { ...previous };
+  for (const key of modelled) delete carried[key];
+  const merged = { ...carried, ...next };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+/**
+ * The settings to write: `next` for everything this build models, and whatever the stored
+ * document already held for everything it does not.
+ */
+function buildStoredSettings(previous: StoredSettings, next: DesktopSettingsPatch): StoredSettings {
+  const {
+    releaseChannel: _releaseChannel,
+    notifications: previousNotifications,
+    daemon: previousDaemon,
+    ...unmodelled
+  } = previous;
+  const stored: StoredSettings = { ...unmodelled };
+
+  if (next.releaseChannel !== undefined) {
+    stored.releaseChannel = next.releaseChannel;
+  }
+  const notifications = mergeUnmodelled(previousNotifications, next.notifications, ["playSound"]);
+  if (notifications) {
+    stored.notifications = notifications;
+  }
+  const daemon = mergeUnmodelled(previousDaemon, next.daemon, [
+    "manageBuiltInDaemon",
+    "keepRunningAfterQuit",
+  ]);
+  if (daemon) {
+    stored.daemon = daemon;
+  }
+
+  return stored;
+}
+
 function hasLegacyRendererOwnedPatch(patch: DesktopSettingsPatch): boolean {
   return patch.releaseChannel !== undefined || patch.daemon?.manageBuiltInDaemon !== undefined;
 }
 
 // Drops the stored keep-running override so the value falls back to the layer
 // underneath it: the seed when there is one, otherwise the app default.
-function withoutKeepRunningAfterQuit(settings: DesktopSettingsPatch): DesktopSettingsPatch {
+function withoutKeepRunningAfterQuit(settings: StoredSettings): StoredSettings {
   if (settings.daemon?.keepRunningAfterQuit === undefined) {
     return settings;
   }
 
   const { keepRunningAfterQuit: _dropped, ...daemon } = settings.daemon;
-  const next: DesktopSettingsPatch = {};
-  if (settings.releaseChannel !== undefined) {
-    next.releaseChannel = settings.releaseChannel;
-  }
+  const next: StoredSettings = { ...settings };
   if (Object.keys(daemon).length > 0) {
     next.daemon = daemon;
+  } else {
+    delete next.daemon;
   }
   return next;
 }
@@ -220,26 +313,15 @@ function coerceDocument(input: unknown, hasSeed: boolean): PersistedDesktopSetti
     return buildDefaultDocument(hasSeed);
   }
 
-  let settings = coerceDesktopSettingsPatch(input.settings);
-  const migrations = isRecord(input.migrations)
-    ? {
-        legacyRendererSettingsImported: input.migrations.legacyRendererSettingsImported === true,
-        daemonStopOnQuitDefaultApplied: input.migrations.daemonStopOnQuitDefaultApplied === true,
-      }
-    : {
-        legacyRendererSettingsImported: false,
-        daemonStopOnQuitDefaultApplied: false,
-      };
-
-  if (!migrations.daemonStopOnQuitDefaultApplied) {
-    settings = withoutKeepRunningAfterQuit(settings);
-    migrations.daemonStopOnQuitDefaultApplied = true;
+  const document = PersistedDocumentSchema.parse(input);
+  if (document.migrations.daemonStopOnQuitDefaultApplied) {
+    return document;
   }
 
   return {
-    version: 1,
-    settings,
-    migrations,
+    ...document,
+    settings: withoutKeepRunningAfterQuit(document.settings),
+    migrations: { ...document.migrations, daemonStopOnQuitDefaultApplied: true },
   };
 }
 
@@ -334,8 +416,12 @@ export function createDesktopSettingsStore({
     migrations: PersistedDesktopSettingsDocument["migrations"],
   ): Promise<void> {
     await persistDocument({
+      ...resolved.document,
       version: 1,
-      settings: resolved.hasSeed ? diffDesktopSettings(desired, resolved.base) : desired,
+      settings: buildStoredSettings(
+        resolved.document.settings,
+        resolved.hasSeed ? diffDesktopSettings(desired, resolved.base) : desired,
+      ),
       migrations,
     });
   }

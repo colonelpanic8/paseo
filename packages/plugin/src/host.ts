@@ -7,6 +7,9 @@ import type {
   PluginSidebarContribution,
   PluginSurfaceContribution,
   PluginSurfaceProps,
+  PluginThemeContribution,
+  PluginTimelineRendererContribution,
+  PluginTimelineTransformerContribution,
   PluginWorkspacePanelContribution,
 } from "./contracts.js";
 import { PluginRpcProvider } from "./rpc-context.js";
@@ -20,6 +23,9 @@ interface PluginCollector {
   addWorkspacePanel(contribution: PluginWorkspacePanelContribution): void;
   addCommandCenterItem(contribution: PluginCommandCenterItemContribution): void;
   addAttachmentSource(contribution: PluginAttachmentSourceContribution): void;
+  addTheme(contribution: PluginThemeContribution): void;
+  addTimelineTransformer(contribution: PluginTimelineTransformerContribution): void;
+  addTimelineRenderer(contribution: PluginTimelineRendererContribution): void;
 }
 
 export interface PluginRegistrationCollector {
@@ -28,6 +34,9 @@ export interface PluginRegistrationCollector {
   workspacePanels: PluginWorkspacePanelContribution[];
   commandCenterItems: PluginCommandCenterItemContribution[];
   attachmentSources: PluginAttachmentSourceContribution[];
+  themes: PluginThemeContribution[];
+  timelineTransformers: PluginTimelineTransformerContribution[];
+  timelineRenderers: PluginTimelineRendererContribution[];
 }
 
 export function createPluginContext(
@@ -39,6 +48,9 @@ export function createPluginContext(
   | "addWorkspacePanel"
   | "addCommandCenterItem"
   | "addAttachmentSource"
+  | "addTheme"
+  | "addTimelineTransformer"
+  | "addTimelineRenderer"
 > {
   return {
     addSurface(id, Component) {
@@ -55,6 +67,15 @@ export function createPluginContext(
     },
     addAttachmentSource(contribution) {
       collector.addAttachmentSource(contribution);
+    },
+    addTheme(contribution) {
+      collector.addTheme(contribution);
+    },
+    addTimelineTransformer(contribution) {
+      collector.addTimelineTransformer(contribution);
+    },
+    addTimelineRenderer(contribution) {
+      collector.addTimelineRenderer(contribution);
     },
   };
 }
