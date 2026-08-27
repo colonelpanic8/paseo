@@ -15,7 +15,6 @@ import {
   ListRenderItemInfo,
   Pressable,
   Text,
-  TextInput,
   View,
   type NativeSyntheticEvent,
   type PressableStateCallbackType,
@@ -23,31 +22,29 @@ import {
   type TextInputKeyPressEventData,
   type ViewStyle,
 } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import * as Clipboard from "expo-clipboard";
-import {
-  ChevronDown,
-  Eye,
-  EyeOff,
-  FilePlus,
-  Folder,
-  FolderPlus,
-  RotateCw,
-} from "lucide-react-native";
+import { ChevronDown, Eye, EyeOff, FilePlus, FolderPlus, RotateCw } from "lucide-react-native";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import {
   TreeChevron,
-  TreeIndentGuides,
   treeRowPaddingLeft,
-  WORKSPACE_FILE_ROW_TRAILING_PADDING,
-  WORKSPACE_FILE_ROW_VERTICAL_PADDING,
+  workspaceTreeRowStyles,
   WORKSPACE_TREE_ICON_LABEL_GAP,
   WORKSPACE_TREE_ICON_SIZE,
   WORKSPACE_TREE_LOADING_ICON_SIZE,
 } from "@/components/tree-primitives";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  PaneContentToolbar,
+  paneContentToolbarIconSize,
+  paneContentToolbarTrailingPadding,
+  ToolbarButton,
+  ToolbarControls,
+} from "@/components/ui/pane-content-toolbar";
 import {
   useOverlayFlatListScrollbar,
   type OverlayFlatListScrollbar,
@@ -62,11 +59,10 @@ import { useSessionStore } from "@/stores/session-store";
 import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import { usePanelStore, type ExpandedPathsUpdate, type SortOption } from "@/stores/panel-store";
-import { formatTimeAgo } from "@/utils/time";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { isHiddenExplorerPath } from "@/file-explorer/visibility";
 import {
@@ -81,6 +77,7 @@ import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-dra
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useToast } from "@/contexts/toast-context";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
+import { useOpenDirectoryInEditor } from "@/workspace/open-in-editor/directory";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
@@ -89,7 +86,6 @@ const SORT_OPTIONS: { value: SortOption }[] = [
 ];
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const ThemedFolder = withUnistyles(Folder);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
@@ -106,16 +102,6 @@ function DirectoryChevronIcon({ loading, expanded }: { loading: boolean; expande
   return <TreeChevron expanded={expanded} />;
 }
 
-function formatFileSize({ size }: { size: number }): string {
-  if (size < 1024) {
-    return `${size} B`;
-  }
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 interface TreeRowItemProps {
   serverId: string;
   workspaceId?: string | null;
@@ -128,10 +114,13 @@ interface TreeRowItemProps {
   onSelectEntry: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void;
   onCopyRelativePath: (path: string) => void;
+  onOpenInEditor?: (entry: ExplorerEntry) => void;
+  editorTargetName?: string;
   onRevealEntry?: (entry: ExplorerEntry) => void;
   revealTargetName?: string;
   onDownloadEntry: (entry: ExplorerEntry) => void;
   onAddToChat?: (path: string) => void;
+  onOpenFileToSide?: (path: string) => void;
   onNewEntry?: (parentPath: string, kind: "file" | "directory") => void;
   onCollapseDirectory?: (path: string) => void;
   onRenameEntry?: (entry: ExplorerEntry) => void;
@@ -145,10 +134,6 @@ function sortTriggerStyle({
   pressed,
 }: PressableStateCallbackType & { hovered?: boolean }) {
   return [styles.sortTrigger, (Boolean(hovered) || pressed) && styles.sortTriggerHovered];
-}
-
-function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) {
-  return [styles.iconButton, (Boolean(hovered) || pressed) && styles.iconButtonHovered];
 }
 
 type ExplorerListRow =
@@ -210,22 +195,18 @@ function EntryNameInputRow({
   );
 
   return (
-    <View style={[styles.entryRow, { paddingLeft: treeRowPaddingLeft(depth) }]}>
-      <TreeIndentGuides depth={depth} />
+    <View style={[workspaceTreeRowStyles.row, { paddingLeft: treeRowPaddingLeft(depth) }]}>
       <View style={styles.entryInfo}>
-        <View style={styles.entryChevron}>
-          {kind === "directory" ? <TreeChevron expanded={false} /> : null}
-        </View>
         <View style={styles.entryIcon}>
           {kind === "directory" ? (
-            <ThemedFolder size={WORKSPACE_TREE_ICON_SIZE} uniProps={foregroundMutedColorMapping} />
+            <TreeChevron expanded={false} />
           ) : (
             <MaterialFileIcon fileName={name || "untitled"} size={WORKSPACE_TREE_ICON_SIZE} />
           )}
         </View>
         <TextInput
           autoFocus
-          value={name}
+          initialValue={name}
           onChangeText={setName}
           onSubmitEditing={commit}
           onBlur={commit}
@@ -237,6 +218,7 @@ function EntryNameInputRow({
           }
           autoCapitalize="none"
           autoCorrect={false}
+          placeholderTextColor={styles.draftPlaceholder.color}
           style={styles.draftInput}
           selectTextOnFocus={Boolean(initialName)}
           testID="file-explorer-name-input"
@@ -258,10 +240,13 @@ function TreeRowItem({
   onSelectEntry,
   onCopyPath,
   onCopyRelativePath,
+  onOpenInEditor,
+  editorTargetName,
   onRevealEntry,
   revealTargetName,
   onDownloadEntry,
   onAddToChat,
+  onOpenFileToSide,
   onNewEntry,
   onCollapseDirectory,
   onRenameEntry,
@@ -269,7 +254,9 @@ function TreeRowItem({
   onDeleteEntry,
   testID,
 }: TreeRowItemProps) {
-  const { t } = useTranslation();
+  const [isHovered, setIsHovered] = useState(false);
+  const showNameHover = useCallback(() => setIsHovered(true), []);
+  const hideNameHover = useCallback(() => setIsHovered(false), []);
   const isDirectory = entry.kind === "directory";
   const dragSourceRef = useWorkspaceFileDragSource({
     enabled: !isDirectory,
@@ -293,9 +280,9 @@ function TreeRowItem({
 
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.entryRow,
+      workspaceTreeRowStyles.row,
       { paddingLeft: treeRowPaddingLeft(depth) },
-      (Boolean(hovered) || pressed || isSelected) && styles.entryRowActive,
+      (Boolean(hovered) || pressed || isSelected) && workspaceTreeRowStyles.active,
     ],
     [depth, isSelected],
   );
@@ -308,6 +295,10 @@ function TreeRowItem({
     onCopyRelativePath(entry.path);
   }, [onCopyRelativePath, entry.path]);
 
+  const handleOpenInEditor = useCallback(() => {
+    onOpenInEditor?.(entry);
+  }, [entry, onOpenInEditor]);
+
   const handleReveal = useCallback(() => {
     onRevealEntry?.(entry);
   }, [onRevealEntry, entry]);
@@ -319,6 +310,10 @@ function TreeRowItem({
   const handleAddToChat = useCallback(() => {
     onAddToChat?.(entry.path);
   }, [onAddToChat, entry.path]);
+
+  const handleOpenToSide = useCallback(() => {
+    onOpenFileToSide?.(entry.path);
+  }, [entry.path, onOpenFileToSide]);
 
   const handleNewFile = useCallback(() => {
     onNewEntry?.(entry.path, "file");
@@ -344,30 +339,6 @@ function TreeRowItem({
     onDeleteEntry?.(entry);
   }, [onDeleteEntry, entry]);
 
-  const metaHeader = useMemo(
-    () => (
-      <View style={styles.contextMetaBlock}>
-        <View style={styles.contextMetaRow}>
-          <Text style={styles.contextMetaLabel} numberOfLines={1}>
-            {t("workspace.fileExplorer.context.size")}
-          </Text>
-          <Text style={styles.contextMetaValue} numberOfLines={1} ellipsizeMode="tail">
-            {formatFileSize({ size: entry.size })}
-          </Text>
-        </View>
-        <View style={styles.contextMetaRow}>
-          <Text style={styles.contextMetaLabel} numberOfLines={1}>
-            {t("workspace.fileExplorer.context.modified")}
-          </Text>
-          <Text style={styles.contextMetaValue} numberOfLines={1} ellipsizeMode="tail">
-            {formatTimeAgo(new Date(entry.modifiedAt))}
-          </Text>
-        </View>
-      </View>
-    ),
-    [entry.modifiedAt, entry.size, t],
-  );
-
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -375,45 +346,50 @@ function TreeRowItem({
         onLongPress={handleSelect}
         onContextMenu={handleSelect}
         style={pressableStyle}
+        onHoverIn={showNameHover}
+        onHoverOut={hideNameHover}
         accessibilityState={accessibilityState}
         aria-selected={isSelected}
         testID={testID}
       >
-        <TreeIndentGuides depth={depth} />
         <View ref={dragSourceRef} style={styles.entryInfo}>
-          <View style={styles.entryChevron}>
-            {isDirectory ? <DirectoryChevronIcon loading={loading} expanded={isExpanded} /> : null}
-          </View>
           <View style={styles.entryIcon}>
             {isDirectory ? (
-              <ThemedFolder
-                size={WORKSPACE_TREE_ICON_SIZE}
-                uniProps={foregroundMutedColorMapping}
-              />
+              <DirectoryChevronIcon loading={loading} expanded={isExpanded} />
             ) : (
               <MaterialFileIcon fileName={entry.name} size={WORKSPACE_TREE_ICON_SIZE} />
             )}
           </View>
-          <Text style={styles.entryName} numberOfLines={1}>
+          <Text
+            style={[
+              styles.entryName,
+              workspaceTreeRowStyles.name,
+              isHovered && workspaceTreeRowStyles.nameHovered,
+            ]}
+            numberOfLines={1}
+            testID={testID ? `${testID}-name` : undefined}
+          >
             {entry.name}
           </Text>
         </View>
       </ContextMenuTrigger>
       <FileActionsContextMenuContent
         fileKind={entry.kind}
+        onOpenInEditor={isDirectory && onOpenInEditor ? handleOpenInEditor : undefined}
+        editorTargetName={editorTargetName}
         onCopyPath={handleCopy}
         onCopyRelativePath={handleCopyRelativePath}
         onReveal={onRevealEntry ? handleReveal : undefined}
         revealTargetName={revealTargetName}
         onDownload={handleDownload}
         onAddToChat={onAddToChat ? handleAddToChat : undefined}
+        onOpenToSide={!isDirectory && onOpenFileToSide ? handleOpenToSide : undefined}
         onNewFile={onNewEntry ? handleNewFile : undefined}
         onNewFolder={onNewEntry ? handleNewFolder : undefined}
         onCollapseFolder={isDirectory && isExpanded ? handleCollapseDirectory : undefined}
         onRename={onRenameEntry ? handleRename : undefined}
         onDuplicate={onDuplicateEntry ? handleDuplicate : undefined}
         onDelete={onDeleteEntry ? handleDelete : undefined}
-        header={metaHeader}
         testIDPrefix={testID}
       />
     </ContextMenu>
@@ -425,6 +401,7 @@ interface FileExplorerPaneProps {
   workspaceId?: string | null;
   workspaceRoot: string;
   onOpenFile?: (filePath: string) => void;
+  onOpenFileToSide?: (filePath: string) => void;
   onAddToChat?: (path: string) => void;
 }
 
@@ -433,6 +410,7 @@ export function FileExplorerPane({
   workspaceId,
   workspaceRoot,
   onOpenFile,
+  onOpenFileToSide,
   onAddToChat,
 }: FileExplorerPaneProps) {
   const { t } = useTranslation();
@@ -472,6 +450,10 @@ export function FileExplorerPane({
     isLocalExecution: isLocalDaemon,
   });
   const fileManagerTarget = desktopOpenTargets.find((target) => target.kind === "file-manager");
+  const openDirectoryInEditor = useOpenDirectoryInEditor({
+    serverId,
+    workspaceDirectory: normalizedWorkspaceRoot,
+  });
   // COMPAT(fsEntryOps): added in v0.3.0, remove gate after 2027-02-08.
   const fsEntryOpsEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryOps === true,
@@ -639,6 +621,11 @@ export function FileExplorerPane({
       }
     },
     [fileManagerTarget, normalizedWorkspaceRoot, t, toast],
+  );
+
+  const handleOpenDirectoryInEditor = useCallback(
+    (entry: ExplorerEntry) => openDirectoryInEditor?.open(entry.path),
+    [openDirectoryInEditor],
   );
 
   const handleDownloadEntry = useCallback(
@@ -992,10 +979,13 @@ export function FileExplorerPane({
           onSelectEntry={handleSelectEntry}
           onCopyPath={handleCopyPath}
           onCopyRelativePath={handleCopyRelativePath}
+          onOpenInEditor={openDirectoryInEditor ? handleOpenDirectoryInEditor : undefined}
+          editorTargetName={openDirectoryInEditor?.targetName}
           onRevealEntry={fileManagerTarget ? handleRevealEntry : undefined}
           revealTargetName={fileManagerTarget?.label}
           onDownloadEntry={handleDownloadEntry}
           onAddToChat={onAddToChat}
+          onOpenFileToSide={onOpenFileToSide}
           onNewEntry={fsEntryOpsEnabled ? handleNewEntry : undefined}
           onCollapseDirectory={handleCollapseDirectory}
           onRenameEntry={fsEntryOpsEnabled ? handleRenameEntry : undefined}
@@ -1011,6 +1001,7 @@ export function FileExplorerPane({
       handleCollapseDirectory,
       handleCopyPath,
       handleCopyRelativePath,
+      handleOpenDirectoryInEditor,
       handleDeleteEntry,
       handleDownloadEntry,
       handleDraftCommit,
@@ -1024,8 +1015,10 @@ export function FileExplorerPane({
       handleSelectEntry,
       isDirectoryLoading,
       fileManagerTarget,
+      openDirectoryInEditor,
       selectedEntryPath,
       onAddToChat,
+      onOpenFileToSide,
       serverId,
       workspaceId,
     ],
@@ -1066,6 +1059,7 @@ export function FileExplorerPane({
     >
       <FileExplorerPaneContent
         error={error}
+        isCompact={isCompact}
         showInitialLoading={showInitialLoading}
         showBackFromError={showBackFromError}
         listRows={listRows}
@@ -1081,7 +1075,6 @@ export function FileExplorerPane({
         handleBackFromError={handleBackFromError}
         handleRetry={handleRetry}
         sortTriggerStyle={sortTriggerStyle}
-        iconButtonStyle={iconButtonStyle}
       />
     </View>
   );
@@ -1140,6 +1133,7 @@ function RootCreationContextTarget({
 
 interface FileExplorerPaneContentProps {
   error: string | null;
+  isCompact: boolean;
   showInitialLoading: boolean;
   showBackFromError: boolean;
   listRows: ExplorerListRow[];
@@ -1155,7 +1149,6 @@ interface FileExplorerPaneContentProps {
   handleBackFromError: () => void;
   handleRetry: () => void;
   sortTriggerStyle: (state: PressableStateCallbackType) => StyleProp<ViewStyle>;
-  iconButtonStyle: (state: PressableStateCallbackType) => StyleProp<ViewStyle>;
 }
 
 function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
@@ -1163,6 +1156,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   const { t } = useTranslation();
   const {
     error,
+    isCompact,
     showInitialLoading,
     showBackFromError,
     listRows,
@@ -1178,7 +1172,6 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     handleBackFromError,
     handleRetry,
     sortTriggerStyle: sortTriggerStyleProp,
-    iconButtonStyle: iconButtonStyleProp,
   } = props;
 
   const showHiddenFiles = usePanelStore((state) => state.explorerShowHiddenFiles);
@@ -1196,17 +1189,6 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   const emptyLabel = showHiddenFiles
     ? t("workspace.fileExplorer.empty.noFiles")
     : t("workspace.fileExplorer.empty.noVisibleFiles");
-  const hiddenFilesToggleStyle = useCallback(
-    (state: PressableStateCallbackType) => [
-      iconButtonStyleProp(state),
-      !showHiddenFiles && styles.iconButtonActive,
-    ],
-    [showHiddenFiles, iconButtonStyleProp],
-  );
-  const hiddenFilesToggleAccessibilityState = useMemo(
-    () => ({ selected: !showHiddenFiles }),
-    [showHiddenFiles],
-  );
 
   if (error) {
     return (
@@ -1237,7 +1219,10 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
 
   return (
     <View style={[styles.treePane, styles.treePaneFill]}>
-      <View style={styles.paneHeader} testID="files-pane-header">
+      <PaneContentToolbar
+        style={[styles.paneHeader, { paddingRight: paneContentToolbarTrailingPadding(isCompact) }]}
+        testID="files-pane-header"
+      >
         <Pressable
           onPress={handleSortCycle}
           style={sortTriggerStyleProp}
@@ -1248,69 +1233,83 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           </Text>
           <ChevronDown size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
-        <View style={styles.headerActions}>
+        <ToolbarControls style={styles.headerActions}>
           {onNewEntryAtRoot ? (
             <>
-              <Pressable
-                onPress={handleNewFileAtRoot}
+              <ToolbarButton
+                label={t("workspace.fileActions.newFile")}
+                compact={isCompact}
                 hitSlop={8}
-                style={iconButtonStyleProp}
-                accessibilityRole="button"
-                accessibilityLabel={t("workspace.fileActions.newFile")}
                 testID="files-new-file"
+                onPress={handleNewFileAtRoot}
               >
-                <FilePlus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-              </Pressable>
-              <Pressable
-                onPress={handleNewFolderAtRoot}
+                <FilePlus
+                  size={paneContentToolbarIconSize(isCompact)}
+                  color={theme.colors.foregroundExtraMuted}
+                />
+              </ToolbarButton>
+              <ToolbarButton
+                label={t("workspace.fileActions.newFolder")}
+                compact={isCompact}
                 hitSlop={8}
-                style={iconButtonStyleProp}
-                accessibilityRole="button"
-                accessibilityLabel={t("workspace.fileActions.newFolder")}
                 testID="files-new-folder"
+                onPress={handleNewFolderAtRoot}
               >
-                <FolderPlus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-              </Pressable>
+                <FolderPlus
+                  size={paneContentToolbarIconSize(isCompact)}
+                  color={theme.colors.foregroundExtraMuted}
+                />
+              </ToolbarButton>
             </>
           ) : null}
-          <Pressable
-            onPress={handleToggleHiddenFiles}
+          <ToolbarButton
+            label={hiddenFilesToggleAccessibilityLabel}
+            selected={!showHiddenFiles}
+            compact={isCompact}
             hitSlop={8}
-            style={hiddenFilesToggleStyle}
-            accessibilityRole="button"
-            accessibilityLabel={hiddenFilesToggleAccessibilityLabel}
-            accessibilityState={hiddenFilesToggleAccessibilityState}
             testID="files-hidden-toggle"
+            onPress={handleToggleHiddenFiles}
           >
             {showHiddenFiles ? (
-              <Eye size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <Eye
+                size={paneContentToolbarIconSize(isCompact)}
+                color={theme.colors.foregroundExtraMuted}
+              />
             ) : (
-              <EyeOff size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <EyeOff
+                size={paneContentToolbarIconSize(isCompact)}
+                color={theme.colors.foregroundExtraMuted}
+              />
             )}
-          </Pressable>
-          <Pressable
-            onPress={handleRefresh}
-            disabled={isRefreshFetching}
-            hitSlop={8}
-            style={iconButtonStyleProp}
-            accessibilityRole="button"
-            accessibilityLabel={
+          </ToolbarButton>
+          <ToolbarButton
+            label={
               isRefreshFetching
                 ? t("workspace.fileExplorer.actions.refreshing")
                 : t("workspace.fileExplorer.actions.refresh")
             }
+            compact={isCompact}
+            disabled={isRefreshFetching}
+            hitSlop={8}
             testID="files-refresh"
+            onPress={handleRefresh}
           >
             <View style={styles.refreshIcon}>
               {isRefreshFetching ? (
-                <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+                <LoadingSpinner
+                  size={paneContentToolbarIconSize(isCompact)}
+                  color={theme.colors.foregroundExtraMuted}
+                />
               ) : (
-                <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+                <RotateCw
+                  size={paneContentToolbarIconSize(isCompact)}
+                  color={theme.colors.foregroundExtraMuted}
+                />
               )}
             </View>
-          </Pressable>
-        </View>
-      </View>
+          </ToolbarButton>
+        </ToolbarControls>
+      </PaneContentToolbar>
       <ContextMenu>
         <RootCreationContextTarget enabled={Boolean(onNewEntryAtRoot)}>
           {listRows.length === 0 ? (
@@ -1449,10 +1448,13 @@ function TreeRowDispatcher({
   onSelectEntry,
   onCopyPath,
   onCopyRelativePath,
+  onOpenInEditor,
+  editorTargetName,
   onRevealEntry,
   revealTargetName,
   onDownloadEntry,
   onAddToChat,
+  onOpenFileToSide,
   onNewEntry,
   onCollapseDirectory,
   onRenameEntry,
@@ -1470,10 +1472,13 @@ function TreeRowDispatcher({
   onSelectEntry: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void | Promise<void>;
   onCopyRelativePath: (path: string) => void | Promise<void>;
+  onOpenInEditor?: (entry: ExplorerEntry) => void;
+  editorTargetName?: string;
   onRevealEntry?: (entry: ExplorerEntry) => void;
   revealTargetName?: string;
   onDownloadEntry: (entry: ExplorerEntry) => void;
   onAddToChat?: (path: string) => void;
+  onOpenFileToSide?: (path: string) => void;
   onNewEntry?: (parentPath: string, kind: "file" | "directory") => void;
   onCollapseDirectory?: (path: string) => void;
   onRenameEntry?: (entry: ExplorerEntry) => void;
@@ -1500,10 +1505,13 @@ function TreeRowDispatcher({
       onSelectEntry={onSelectEntry}
       onCopyPath={onCopyPath}
       onCopyRelativePath={onCopyRelativePath}
+      onOpenInEditor={onOpenInEditor}
+      editorTargetName={editorTargetName}
       onRevealEntry={onRevealEntry}
       revealTargetName={revealTargetName}
       onDownloadEntry={onDownloadEntry}
       onAddToChat={onAddToChat}
+      onOpenFileToSide={onOpenFileToSide}
       onNewEntry={onNewEntry}
       onCollapseDirectory={onCollapseDirectory}
       onRenameEntry={onRenameEntry}
@@ -1636,7 +1644,6 @@ function getErrorRecoveryPath(state: AgentFileExplorerState | undefined): string
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surfaceSidebar,
   },
   desktopSplit: {
     flex: 1,
@@ -1670,13 +1677,10 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   paneHeader: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingRight: theme.spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSidebar,
   },
   sortTrigger: {
     flexDirection: "row",
@@ -1689,16 +1693,15 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.base,
   },
   sortTriggerHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   sortTriggerText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
   },
   treeList: {
     flex: 1,
@@ -1722,7 +1725,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   loadingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   errorText: {
     color: theme.colors.destructive,
@@ -1738,7 +1741,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   retryButtonText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold,
   },
   errorActions: {
@@ -1753,17 +1756,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   binaryMetaText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
-  entryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: WORKSPACE_FILE_ROW_VERTICAL_PADDING,
-    paddingRight: WORKSPACE_FILE_ROW_TRAILING_PADDING,
-  },
-  entryRowActive: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    fontSize: theme.fontSize.base,
   },
   entryInfo: {
     flex: 1,
@@ -1771,13 +1764,6 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: WORKSPACE_TREE_ICON_LABEL_GAP,
     minWidth: 0,
-  },
-  entryChevron: {
-    width: WORKSPACE_TREE_ICON_SIZE,
-    height: WORKSPACE_TREE_ICON_SIZE,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
   },
   entryIcon: {
     width: WORKSPACE_TREE_ICON_SIZE,
@@ -1789,57 +1775,24 @@ const styles = StyleSheet.create((theme) => ({
   entryName: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     userSelect: "none",
   },
   draftInput: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     paddingVertical: 0,
     paddingHorizontal: 0,
   },
-  contextMetaBlock: {
-    paddingVertical: theme.spacing[1],
-  },
-  contextMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 32,
-    paddingHorizontal: theme.spacing[3],
-  },
-  contextMetaLabel: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foregroundMuted,
-    flexShrink: 0,
-  },
-  contextMetaValue: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.medium,
-    flex: 1,
-    minWidth: 0,
-    textAlign: "right",
+  draftPlaceholder: {
+    color: theme.colors.foregroundExtraMuted,
   },
   previewHeaderText: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
-  },
-  iconButton: {
-    width: 22,
-    height: 22,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  iconButtonActive: {
-    backgroundColor: theme.colors.surface2,
   },
   refreshIcon: {
     width: 16,
@@ -1892,7 +1845,7 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomColor: theme.colors.border,
   },
   sheetTitle: {
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold,
     color: theme.colors.foreground,
     flex: 1,

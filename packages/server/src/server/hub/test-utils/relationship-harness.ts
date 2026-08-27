@@ -62,6 +62,20 @@ const execFileAsync = promisify(execFile);
 const HUB_ORIGIN = "https://hub.test";
 const SOCKET_URL = "wss://hub.test/daemon";
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../../../../../..");
+const REMOVAL_RETRY_CODES = new Set(["EBUSY", "ENOTEMPTY", "EPERM"]);
+
+async function removeDirectoryAfterWritesSettle(directory: string): Promise<void> {
+  for (let retry = 0; retry < 10; retry += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!code || !REMOVAL_RETRY_CODES.has(code) || retry === 9) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100 * (retry + 1)));
+    }
+  }
+}
 
 interface PersistedRelationship {
   version: number;
@@ -284,6 +298,7 @@ class InMemoryHubRelationships implements HubRelationshipRemote {
   private enrollmentRejection: 401 | 403 | null = null;
   private enrollmentScopes = ["hub.execution.*"];
   private revokeFailures = 0;
+  private revocationGate: Deferred<void> | null = null;
   private readonly relationships = new Set<string>();
   readonly enrollmentSnapshots: RelationshipInvocationSnapshot[] = [];
   readonly socketSnapshots: RelationshipInvocationSnapshot[] = [];
@@ -353,8 +368,19 @@ class InMemoryHubRelationships implements HubRelationshipRemote {
     this.revokeFailures = count;
   }
 
+  holdRevocation(): void {
+    this.revocationGate = deferred<void>();
+  }
+
+  completeRevocation(): void {
+    if (!this.revocationGate) throw new Error("No revocation is waiting");
+    this.revocationGate.resolve();
+    this.revocationGate = null;
+  }
+
   async revoke(input: HubRevocation): Promise<void> {
     this.revocations.push({ ...input });
+    await this.revocationGate?.promise;
     if (this.revokeFailures > 0) {
       this.revokeFailures--;
       throw new Error("Hub is offline");
@@ -510,6 +536,14 @@ export class HubRelationshipHarness {
     }
   }
 
+  async connectionStateBecomes(expected: string): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if ((await this.status()).state === expected) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`Hub connection state did not become ${expected}`);
+  }
+
   async manageRelationshipFromExternalSocket(): Promise<SessionOutboundMessage[]> {
     const address = Object.values(networkInterfaces())
       .flat()
@@ -594,6 +628,14 @@ export class HubRelationshipHarness {
 
   failRevocations(count: number): void {
     this.remote.failRevocations(count);
+  }
+
+  holdRevocation(): void {
+    this.remote.holdRevocation();
+  }
+
+  completeRevocation(): void {
+    this.remote.completeRevocation();
   }
 
   failProviderPromptStart(prompt = "Create through the Hub"): void {
@@ -832,6 +874,10 @@ export class HubRelationshipHarness {
 
   providerCreations(): number {
     return this.codex.creations;
+  }
+
+  executionProviderCreations(): number {
+    return this.codex.createdConfigs.filter((config) => config.internal !== true).length;
   }
 
   providerResumes(): number {
@@ -1412,24 +1458,7 @@ export class HubRelationshipHarness {
   }
 
   private async removeRoot(): Promise<void> {
-    // Daemon may still flush into .paseo/projects during teardown; recursive rm
-    // can race and hit ENOTEMPTY/EBUSY/EPERM. Observed on Linux CI as well as macOS/Windows.
-    const retryableCodes = new Set(["ENOTEMPTY", "EBUSY", "EPERM"]);
-    const attempts = 10;
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      try {
-        await rm(this.root, { recursive: true, force: true });
-        return;
-      } catch (error) {
-        if (
-          !retryableCodes.has((error as NodeJS.ErrnoException).code ?? "") ||
-          attempt === attempts
-        ) {
-          throw error;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
-      }
-    }
+    await removeDirectoryAfterWritesSettle(this.root);
   }
 
   private latestSocket(): SocketAttempt {
