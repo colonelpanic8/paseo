@@ -4,17 +4,28 @@ import type {
   PluginCommandCenterItemContribution,
   PluginSidebarContribution,
   PluginSurfaceContribution,
+  PluginThemeContribution,
+  PluginTimelineRendererContribution,
+  PluginTimelineTransformerContribution,
+  PluginPanelLocation,
   PluginWorkspacePanelContribution,
 } from "@getpaseo/plugin";
+
+export type EvaluatedPluginWorkspacePanelContribution = PluginWorkspacePanelContribution & {
+  locations: readonly PluginPanelLocation[];
+};
 
 export interface EvaluatedPlugin {
   id: string;
   cleanup: () => void;
   surfaces: PluginSurfaceContribution[];
   sidebarItems: PluginSidebarContribution[];
-  workspacePanels: PluginWorkspacePanelContribution[];
+  workspacePanels: EvaluatedPluginWorkspacePanelContribution[];
   commandCenterItems: PluginCommandCenterItemContribution[];
   attachmentSources: PluginAttachmentSourceContribution[];
+  themes: PluginThemeContribution[];
+  timelineTransformers: PluginTimelineTransformerContribution[];
+  timelineRenderers: PluginTimelineRendererContribution[];
 }
 
 export interface InstalledPlugin extends EvaluatedPlugin {
@@ -28,5 +39,8 @@ export type {
   PluginCommandCenterItemContribution,
   PluginSidebarContribution,
   PluginSurfaceContribution,
+  PluginThemeContribution,
+  PluginTimelineRendererContribution,
+  PluginTimelineTransformerContribution,
   PluginWorkspacePanelContribution,
 };
