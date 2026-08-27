@@ -131,8 +131,15 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
       openWorkspaceFileFromExplorer({
         filePath: path,
         persistenceKey: buildWorkspaceTabPersistenceKey({ serverId, workspaceId }),
+        closeExplorerAfterOpen: true,
         showMobileAgent: usePanelStore.getState().showMobileAgent,
-        openWorkspaceTabInFocusedPane: useWorkspaceLayoutStore.getState().openTabInFocusedPane,
+        openWorkspaceTabInFocusedPane: (workspaceKey, target, placement) =>
+          useWorkspaceLayoutStore.getState().openTab({
+            workspaceKey,
+            target,
+            intent: "reveal",
+            placement,
+          }),
         focusWorkspaceTab: useWorkspaceLayoutStore.getState().focusTab,
       });
     },

@@ -10,6 +10,49 @@ function bundle(body: string): string {
 }
 
 describe("evaluatePluginClientBundle", () => {
+  it("collects timeline transformers and renderers", () => {
+    const plugin = evaluatePluginClientBundle(
+      "reports",
+      bundle(`
+        function Card() { return null; }
+        const schema = { safeParse(value) { return { success: true, data: value }; } };
+        plugin.addTimelineTransformer({
+          id: "test-report",
+          query: { itemType: "tool_call" },
+          transform() { return { items: [] }; },
+        });
+        plugin.addTimelineRenderer({
+          kind: "test-report",
+          version: 1,
+          schema,
+          Component: Card,
+        });
+      `),
+    );
+
+    expect(plugin.timelineTransformers.map(({ id, query }) => ({ id, query }))).toEqual([
+      { id: "test-report", query: { itemType: "tool_call" } },
+    ]);
+    expect(plugin.timelineRenderers.map(({ kind, version }) => ({ kind, version }))).toEqual([
+      { kind: "test-report", version: 1 },
+    ]);
+  });
+
+  it("rejects unknown timeline item types", () => {
+    expect(() =>
+      evaluatePluginClientBundle(
+        "reports",
+        bundle(`
+          plugin.addTimelineTransformer({
+            id: "bad-query",
+            query: { itemType: "settled" },
+            transform() { return { items: [] }; },
+          });
+        `),
+      ),
+    ).toThrow("Timeline transformer bad-query has invalid item type: settled");
+  });
+
   it("collects a surface and its sidebar placement", () => {
     const plugin = evaluatePluginClientBundle(
       "example",
@@ -77,13 +120,22 @@ describe("evaluatePluginClientBundle", () => {
     );
 
     expect(
-      plugin.workspacePanels.map(({ id, title, icon, context }) => ({
+      plugin.workspacePanels.map(({ id, title, icon, context, locations }) => ({
         id,
         title,
         icon,
         context,
+        locations,
       })),
-    ).toEqual([{ id: "review", title: "Review", icon: "Scan", context: "agent" }]);
+    ).toEqual([
+      {
+        id: "review",
+        title: "Review",
+        icon: "Scan",
+        context: "agent",
+        locations: ["workspace"],
+      },
+    ]);
     expect(
       plugin.commandCenterItems.map(({ id, title, icon, context }) => ({
         id,
@@ -92,6 +144,47 @@ describe("evaluatePluginClientBundle", () => {
         context,
       })),
     ).toEqual([{ id: "open-review", title: "Open review", icon: "Scan", context: "agent" }]);
+  });
+
+  it("normalizes and validates workspace panel locations", () => {
+    const plugin = evaluatePluginClientBundle(
+      "review",
+      bundle(`
+        function ReviewPanel() { return null; }
+        plugin.addWorkspacePanel({
+          id: "review",
+          title: "Review",
+          icon: "Scan",
+          context: "agent",
+          locations: ["workspace", "explorer"],
+          Component: ReviewPanel,
+        });
+      `),
+    );
+    expect(plugin.workspacePanels[0]?.locations).toEqual(["workspace", "explorer"]);
+
+    for (const [locations, message] of [
+      ["[]", "must support at least one location"],
+      ['["sidebar"]', "has invalid location: sidebar"],
+      ['["explorer", "explorer"]', "has duplicate locations"],
+    ] as const) {
+      expect(() =>
+        evaluatePluginClientBundle(
+          "review",
+          bundle(`
+            function ReviewPanel() { return null; }
+            plugin.addWorkspacePanel({
+              id: "review",
+              title: "Review",
+              icon: "Scan",
+              context: "agent",
+              locations: ${locations},
+              Component: ReviewPanel,
+            });
+          `),
+        ),
+      ).toThrow(message);
+    }
   });
 
   it("rejects duplicate workspace panel and Command Center ids", () => {
@@ -139,6 +232,84 @@ describe("evaluatePluginClientBundle", () => {
     ).toThrow("Duplicate attachment source: issues");
   });
 
+  it("collects a contributed theme", () => {
+    const plugin = evaluatePluginClientBundle(
+      "catppuccin",
+      bundle(`
+        plugin.addTheme({
+          id: "mocha",
+          name: "Catppuccin Mocha",
+          appearance: "dark",
+          colors: {
+            background: "#1e1e2e",
+            foreground: "#cdd6f4",
+            raised: "#313244",
+            control: "#45475a",
+            border: "#45475a",
+            accent: "#cba6f7",
+            mutedForeground: "#a6adc8",
+            ring: "#6c7086",
+          },
+        });
+      `),
+    );
+
+    expect(plugin.themes.map((theme) => [theme.id, theme.name])).toEqual([
+      ["mocha", "Catppuccin Mocha"],
+    ]);
+    expect(plugin.themes[0]?.colors.accent).toBe("#cba6f7");
+  });
+
+  it("rejects a theme with a color that is not a hex value", () => {
+    expect(() =>
+      evaluatePluginClientBundle(
+        "catppuccin",
+        bundle(`
+          plugin.addTheme({
+            id: "mocha",
+            name: "Catppuccin Mocha",
+            appearance: "dark",
+            colors: {
+              background: "rebeccapurple",
+              foreground: "#cdd6f4",
+              raised: "#313244",
+              control: "#45475a",
+              border: "#45475a",
+              mutedForeground: "#a6adc8",
+              ring: "#6c7086",
+            },
+          });
+        `),
+      ),
+    ).toThrow("Must be a hex color");
+  });
+
+  it("rejects duplicate theme ids", () => {
+    expect(() =>
+      evaluatePluginClientBundle(
+        "catppuccin",
+        bundle(`
+          const theme = {
+            id: "mocha",
+            name: "Catppuccin Mocha",
+            appearance: "dark",
+            colors: {
+              background: "#1e1e2e",
+              foreground: "#cdd6f4",
+              raised: "#313244",
+              control: "#45475a",
+              border: "#45475a",
+              mutedForeground: "#a6adc8",
+              ring: "#6c7086",
+            },
+          };
+          plugin.addTheme(theme);
+          plugin.addTheme(theme);
+        `),
+      ),
+    ).toThrow("Duplicate theme: mocha");
+  });
+
   it("rejects a sidebar placement whose surface does not exist", () => {
     expect(() =>
       evaluatePluginClientBundle(
@@ -160,6 +331,28 @@ describe("evaluatePluginClientBundle", () => {
     expect(() =>
       evaluatePluginClientBundle("example", `(function() { return { default: function() {} }; })`),
     ).toThrow("must return a cleanup function");
+  });
+
+  it("provides the host Icon component through @getpaseo/plugin", () => {
+    const plugin = evaluatePluginClientBundle(
+      "example",
+      `(function(require) {
+        const { Icon } = require("@getpaseo/plugin");
+        const module = { exports: {} };
+        module.exports.default = function(plugin) {
+          plugin.addSurface("main", function Surface() {
+            return Icon({ name: "Settings", size: 18, color: "#123456" });
+          });
+          return function() {};
+        };
+        return module.exports;
+      })`,
+    );
+
+    const Component = plugin.surfaces[0]?.Component;
+    expect(Component).toBeTypeOf("function");
+    const element = (Component as (props: never) => { props: unknown })({} as never);
+    expect(element).toMatchObject({ props: { size: 18, color: "#123456" } });
   });
 
   it("resolves @getpaseo/plugin/server for shared RPC contracts", () => {
