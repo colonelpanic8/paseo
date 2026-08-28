@@ -6,6 +6,7 @@ import type {
 import {
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
+  resolveModelBrowserScrolling,
   groupProfilesByProviderModel,
   resolveModelBrowserScrolling,
 } from "./model-browser-view";
@@ -232,5 +233,19 @@ describe("model browser all view", () => {
         isSearchFocused: true,
       }),
     ).toEqual({ kind: "noSearchMatches" });
+  });
+});
+
+describe("resolveModelBrowserScrolling", () => {
+  it("keeps sheet scrolling inside a bottom sheet", () => {
+    expect(resolveModelBrowserScrolling("sheet", true)).toBe("sheet");
+  });
+
+  it("falls back to independent scrolling outside a bottom sheet", () => {
+    expect(resolveModelBrowserScrolling("sheet", false)).toBe("independent");
+  });
+
+  it("never promotes an independent list to a sheet scrollable", () => {
+    expect(resolveModelBrowserScrolling("independent", true)).toBe("independent");
   });
 });
