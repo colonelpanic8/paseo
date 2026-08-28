@@ -59,8 +59,10 @@ import {
   groupProfilesByProviderModel,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
+  resolveModelBrowserScrolling,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
+import { useIsInsideBottomSheet } from "@/components/ui/text-input/bottom-sheet-scope";
 
 const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
@@ -1520,6 +1522,7 @@ export function ModelBrowser({
   rootBrowseContent,
   showProfilesSection,
 }: ModelBrowserProps) {
+  const insideBottomSheet = useIsInsideBottomSheet();
   return (
     <ModelBrowserContent
       serverId={state.serverId}
@@ -1538,7 +1541,7 @@ export function ModelBrowser({
       onDrillDown={state.drillDown}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
-      scrolling={scrolling}
+      scrolling={resolveModelBrowserScrolling(scrolling, insideBottomSheet)}
       searchAllOnFocus={searchAllOnFocus}
       rootBrowseContent={rootBrowseContent}
       showProfilesSection={showProfilesSection}
