@@ -1548,6 +1548,7 @@ export const ru: TranslationResources = {
     profiles: "Профили",
     providers: "Провайдеры",
     model: "Модель",
+    allModels: "Все модели",
     editProfiles: "Изменить",
     editProfilesLabel: "Изменить профили агентов",
     createProfile: "Создать профиль",
@@ -2043,6 +2044,11 @@ export const ru: TranslationResources = {
         label: "Всегда разворачивать размышления",
         description:
           "По умолчанию полностью разворачивать блоки размышлений и хода рассуждений агента",
+      },
+      modelPickerAllModels: {
+        label: "Открывать выбор модели по всем моделям",
+        description:
+          "Открывать выбор модели сразу в едином списке с поиском по всем моделям всех провайдеров, вместо списка провайдеров",
       },
       toolCallDetail: {
         label: "Отображение вызовов инструментов",

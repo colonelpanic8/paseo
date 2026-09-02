@@ -2364,6 +2364,7 @@ function ComposerContentImpl({
                   onQueue={handleQueue}
                   onSubmitLoadingPress={submitLoadingPressHandler}
                   onKeyPress={handleCommandKeyPress}
+                  ownsListNavigation={autocompleteVisible}
                   onSelectionChange={handleSelectionChange}
                   onFocusChange={handleFocusChange}
                   onHeightChange={onComposerHeightChange}

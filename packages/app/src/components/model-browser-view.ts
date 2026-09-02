@@ -7,6 +7,7 @@ import {
 
 export type ModelBrowserView =
   | { kind: "all" }
+  | { kind: "allModels" }
   | { kind: "provider"; providerId: string; providerLabel: string };
 
 export function resolveModelBrowserScrolling({
@@ -75,18 +76,28 @@ export function resolveModelBrowserAllView({
   return { kind: "searchResults", rows };
 }
 
-/** Where the picker lands when it opens. A sole provider skips the redundant root view. */
+/**
+ * Where the picker lands when it opens. The explicit All models preference wins
+ * on multi-provider hosts; otherwise a sole provider skips the redundant root
+ * view.
+ */
 export function resolveInitialModelBrowserView({
   providers,
   selectedProvider,
   selectedModel,
   hasProfiles,
+  startWithAllModels = false,
 }: {
   providers: ProviderSelectorProvider[];
   selectedProvider: string;
   selectedModel: string;
   hasProfiles: boolean;
+  startWithAllModels?: boolean;
 }): ModelBrowserView {
+  if (startWithAllModels && providers.length > 1) {
+    return { kind: "allModels" };
+  }
+
   const singleProvider = providers.length === 1 ? providers[0] : undefined;
   if (singleProvider) {
     return {

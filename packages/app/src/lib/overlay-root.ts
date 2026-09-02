@@ -111,7 +111,7 @@ export function hasActiveWebOverlay(): boolean {
   return getTopWebOverlay() !== undefined;
 }
 
-function getFocusableElements(scope: HTMLElement): HTMLElement[] {
+export function getFocusableElements(scope: HTMLElement): HTMLElement[] {
   const selector = [
     "a[href]",
     "button:not([disabled])",
