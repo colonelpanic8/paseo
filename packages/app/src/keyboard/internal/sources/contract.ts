@@ -3,6 +3,8 @@ import type { KeyboardInputEvent } from "../overlays";
 export interface KeyboardSourceInput {
   event: KeyboardInputEvent;
   focusScope: KeyboardFocusScope;
+  /** A focused list search owns its navigation keys (arrows, Enter, Ctrl+N/P). */
+  ownsListNavigation?: boolean;
   captureFocusRestore(): void;
 }
 export interface KeyboardSourceHandlers {

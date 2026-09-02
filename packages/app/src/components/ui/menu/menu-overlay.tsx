@@ -27,6 +27,7 @@ import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
 import type { KeyboardFocusScope } from "@/keyboard/actions";
 import { getOverlayRoot, OverlayLayerProvider, useOverlayLayer } from "@/lib/overlay-root";
+import { LIST_SEARCH_DATASET } from "@/keyboard/list-search-keys";
 import {
   computePosition,
   fitSurfaceWidth,
@@ -430,6 +431,7 @@ export function MenuOverlay({
         }}
         ref={setOverlayScope}
         collapsable={false}
+        dataSet={LIST_SEARCH_DATASET}
         style={[
           styles.overlay,
           isWeb ? styles.overlayWeb : null,

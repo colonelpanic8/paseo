@@ -99,12 +99,21 @@ export function CombinedModelSelector({
   const anchorRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isContentReady, setIsContentReady] = useState(isWeb);
+  const openChangeRef = useRef<(open: boolean) => void>(noop);
+  const handleSelect = useCallback(
+    (provider: string, modelId: string) => {
+      onSelect(provider, modelId);
+      openChangeRef.current(false);
+    },
+    [onSelect],
+  );
   const browser = useModelBrowser({
     providers,
     selectedProvider,
     selectedModel,
     isLoading,
     profiles,
+    onSelect: handleSelect,
     serverId,
   });
   const { prepareToOpen, reset } = browser;
@@ -123,13 +132,9 @@ export function CombinedModelSelector({
     [onClose, onOpen, prepareToOpen, reset],
   );
 
-  const handleSelect = useCallback(
-    (provider: string, modelId: string) => {
-      onSelect(provider, modelId);
-      handleOpenChange(false);
-    },
-    [handleOpenChange, onSelect],
-  );
+  useEffect(() => {
+    openChangeRef.current = handleOpenChange;
+  }, [handleOpenChange]);
 
   useEffect(() => {
     if (isWeb) return () => {};
@@ -285,7 +290,8 @@ export function CombinedModelSelector({
         desktopFixedHeight={browser.desktopFixedHeight}
         desktopChildrenScrollEnabled={false}
         header={browser.header}
-        mobileChildrenScrollEnabled={!browser.isProviderView || !isNative}
+        onOverlayKeyDown={browser.handleOverlayKeyDown}
+        mobileChildrenScrollEnabled={!browser.isModelListView || !isNative}
         mobileChildrenContentContainerStyle={styles.mobileBrowserContent}
       >
         {selectorBody}
