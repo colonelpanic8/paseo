@@ -13,7 +13,8 @@ import {
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
 } from "@/keyboard/keyboard-shortcuts";
-import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
+import { ownsListNavigationKeys, resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
+import { resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 import {
   buildBrowserKeyboardPolicy,
   parseBrowserShortcutInput,
@@ -349,6 +350,10 @@ export function useKeyboardShortcuts({
       if (state.altDown || state.cmdOrCtrlDown) {
         state.resetModifiers();
       }
+    }
+
+    if (resolveListSearchKeyAction(event) !== null && ownsListNavigationKeys(event.target)) {
+      return;
     }
 
     const focusScope = resolveKeyboardFocusScope({
