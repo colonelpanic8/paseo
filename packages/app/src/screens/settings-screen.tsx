@@ -282,6 +282,7 @@ interface GeneralSectionProps {
   handleServiceUrlBehaviorChange: (behavior: ServiceUrlBehavior) => void;
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
+  handleModelPickerStartChange: (enabled: boolean) => void;
 }
 
 interface ServiceUrlBehaviorMenuItemProps {
@@ -356,6 +357,7 @@ function GeneralSection({
   handleServiceUrlBehaviorChange,
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
+  handleModelPickerStartChange,
 }: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
@@ -427,6 +429,21 @@ function GeneralSection({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.general.modelPickerAllModels.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.modelPickerAllModels.description")}
+            </Text>
+          </View>
+          <Switch
+            value={settings.modelPickerStartsWithAllModels}
+            onValueChange={handleModelPickerStartChange}
+            accessibilityLabel={t("settings.general.modelPickerAllModels.label")}
+          />
         </View>
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
@@ -1256,6 +1273,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     [updateSettings],
   );
 
+  const handleModelPickerStartChange = useCallback(
+    (modelPickerStartsWithAllModels: boolean) => {
+      void updateSettings({ modelPickerStartsWithAllModels });
+    },
+    [updateSettings],
+  );
+
   const handleUseLegacyTerminalRendererChange = useCallback(
     (useLegacyTerminalRenderer: boolean) => {
       void updateSettings({ useLegacyTerminalRenderer });
@@ -1476,6 +1500,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                   handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
                   handleLanguageChange={handleLanguageChange}
                   handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+                  handleModelPickerStartChange={handleModelPickerStartChange}
                 />
                 {isDesktopApp ? <BrowserDataSection /> : null}
               </>

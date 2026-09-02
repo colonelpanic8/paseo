@@ -272,6 +272,26 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.workspaceTitleSource).toBe("branch");
   });
 
+  it("loads the model picker start preference and rejects non-boolean values", async () => {
+    const enabledDeps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ modelPickerStartsWithAllModels: true }),
+      }),
+    });
+    const invalidDeps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ modelPickerStartsWithAllModels: "yes" }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(enabledDeps)).modelPickerStartsWithAllModels).toBe(
+      true,
+    );
+    expect((await loadAppSettingsFromStorage(invalidDeps)).modelPickerStartsWithAllModels).toBe(
+      false,
+    );
+  });
+
   it("drops an unknown workspace title source back to title", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({

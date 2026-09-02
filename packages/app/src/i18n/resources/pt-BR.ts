@@ -1532,6 +1532,7 @@ export const ptBR: TranslationResources = {
     profiles: "Perfis",
     providers: "Provedores",
     model: "Modelo",
+    allModels: "Todos os modelos",
     editProfiles: "Editar",
     editProfilesLabel: "Editar perfis de agente",
     createProfile: "Criar perfil",
@@ -2024,6 +2025,11 @@ export const ptBR: TranslationResources = {
         label: "Sempre expandir raciocínio",
         description:
           "Mostrar os blocos de pensamento e raciocínio do agente totalmente expandidos por padrão",
+      },
+      modelPickerAllModels: {
+        label: "Abrir o seletor de modelos em todos os modelos",
+        description:
+          "Iniciar o seletor de modelos em uma única lista pesquisável com todos os modelos de todos os provedores, em vez da lista de provedores",
       },
       toolCallDetail: {
         label: "Exibição de chamadas de ferramentas",
