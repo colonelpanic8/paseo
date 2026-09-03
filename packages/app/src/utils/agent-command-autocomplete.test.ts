@@ -241,6 +241,12 @@ describe("shouldSubmitShellVariable", () => {
         command: { ...shellVariable, query: "XDG_CONFIG_HOME" },
       }),
     ).toBe(true);
+    expect(
+      shouldSubmitShellVariable({
+        key: "Enter",
+        command: { ...shellVariable, query: "path" },
+      }),
+    ).toBe(true);
   });
 
   it("protects shell variables when the dollar sigil is the command trigger", () => {
