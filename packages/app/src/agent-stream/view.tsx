@@ -329,6 +329,10 @@ function resolveBottomOverlayControlOffset(clearance: number | undefined): numbe
   return Math.max(16, clearance ?? 0);
 }
 
+function supportsNativeFork(context: AgentScreenAgent, readOnly: boolean): boolean {
+  return Boolean(context.capabilities?.supportsNativeFork) && !readOnly;
+}
+
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
   function AgentStreamView(
     {
@@ -508,7 +512,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     // Provider-session forking is only meaningful for a live agent that
     // reports the capability; the summary path covers everything else.
-    const canForkNatively = Boolean(context.capabilities?.supportsNativeFork) && !readOnly;
+    const canForkNatively = supportsNativeFork(context, readOnly);
 
     const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(
       async ({ target, boundary }) => {
