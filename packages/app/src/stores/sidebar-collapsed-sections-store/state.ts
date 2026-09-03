@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export interface CollapsedProjectsState {
   collapsedProjectKeys: Set<string>;
+  collapsedWorkspaceGroupKeys: Set<string>;
   collapsedStatusGroupKeys: Set<string>;
   collapsedPinned: boolean;
   /** Workspace keys (`${serverId}:${workspaceId}`) whose agent tree is open. */
@@ -10,6 +11,7 @@ export interface CollapsedProjectsState {
 
 export interface PersistedCollapsedProjects {
   collapsedProjectKeys?: string[];
+  collapsedWorkspaceGroupKeys?: string[];
   collapsedStatusGroupKeys?: string[];
   collapsedPinned?: boolean;
   expandedAgentTreeWorkspaceKeys?: string[];
@@ -18,9 +20,13 @@ export interface PersistedCollapsedProjects {
 export const PersistedCollapsedProjectsSchema: z.ZodType<PersistedCollapsedProjects> =
   z.strictObject({
     collapsedProjectKeys: z.array(z.string()).optional(),
+    collapsedWorkspaceGroupKeys: z.array(z.string()).optional(),
     collapsedStatusGroupKeys: z.array(z.string()).optional(),
     collapsedPinned: z.boolean().optional(),
-    expandedAgentTreeWorkspaceKeys: z.array(z.string()).optional(),
+    expandedAgentTreeWorkspaceKeys: z
+      .array(z.unknown())
+      .transform((values) => values.filter((value): value is string => typeof value === "string"))
+      .optional(),
   });
 
 export function togglePinnedCollapsed(state: CollapsedProjectsState): CollapsedProjectsState {
@@ -69,6 +75,19 @@ export function toggleStatusGroupCollapsed(
   return { ...state, collapsedStatusGroupKeys: next };
 }
 
+export function toggleWorkspaceGroupCollapsed(
+  state: CollapsedProjectsState,
+  workspaceGroupKey: string,
+): CollapsedProjectsState {
+  const next = new Set(state.collapsedWorkspaceGroupKeys);
+  if (next.has(workspaceGroupKey)) {
+    next.delete(workspaceGroupKey);
+  } else {
+    next.add(workspaceGroupKey);
+  }
+  return { ...state, collapsedWorkspaceGroupKeys: next };
+}
+
 export function toggleAgentTreeExpanded(
   state: CollapsedProjectsState,
   workspaceKey: string,
@@ -98,12 +117,14 @@ export function setProjectCollapsed(
 
 export function serializeCollapsedProjects(state: CollapsedProjectsState): {
   collapsedProjectKeys: string[];
+  collapsedWorkspaceGroupKeys: string[];
   collapsedStatusGroupKeys: string[];
   collapsedPinned: boolean;
   expandedAgentTreeWorkspaceKeys: string[];
 } {
   return {
     collapsedProjectKeys: Array.from(state.collapsedProjectKeys),
+    collapsedWorkspaceGroupKeys: Array.from(state.collapsedWorkspaceGroupKeys),
     collapsedStatusGroupKeys: Array.from(state.collapsedStatusGroupKeys),
     collapsedPinned: state.collapsedPinned,
     expandedAgentTreeWorkspaceKeys: Array.from(state.expandedAgentTreeWorkspaceKeys),
@@ -122,6 +143,9 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   const restoredProjects = deserializeCollapsedKeys(
     persisted.collapsedProjectKeys ?? Array.from(current.collapsedProjectKeys),
   );
+  const restoredWorkspaceGroups = deserializeCollapsedKeys(
+    persisted.collapsedWorkspaceGroupKeys ?? Array.from(current.collapsedWorkspaceGroupKeys),
+  );
   const restoredStatusGroups = deserializeCollapsedKeys(
     persisted.collapsedStatusGroupKeys ?? Array.from(current.collapsedStatusGroupKeys),
   );
@@ -131,6 +155,7 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   const restoredPinned = persisted.collapsedPinned ?? current.collapsedPinned;
   if (
     areSetsEqual(current.collapsedProjectKeys, restoredProjects) &&
+    areSetsEqual(current.collapsedWorkspaceGroupKeys, restoredWorkspaceGroups) &&
     areSetsEqual(current.collapsedStatusGroupKeys, restoredStatusGroups) &&
     areSetsEqual(current.expandedAgentTreeWorkspaceKeys, restoredAgentTrees) &&
     current.collapsedPinned === restoredPinned
@@ -140,6 +165,7 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   return {
     ...current,
     collapsedProjectKeys: restoredProjects,
+    collapsedWorkspaceGroupKeys: restoredWorkspaceGroups,
     collapsedStatusGroupKeys: restoredStatusGroups,
     collapsedPinned: restoredPinned,
     expandedAgentTreeWorkspaceKeys: restoredAgentTrees,

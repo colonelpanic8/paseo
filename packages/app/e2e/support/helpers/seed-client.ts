@@ -12,6 +12,8 @@ export interface SeedWorkspaceDescriptor {
   projectDisplayName: string;
   projectRootPath: string;
   workspaceDirectory: string;
+  diffStat: { additions: number; deletions: number } | null;
+  labels?: string[];
   snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
 }
 
@@ -44,6 +46,11 @@ export interface SeedDaemonClient {
     entries: SeedWorkspaceDescriptor[];
   }>;
   setWorkspacePinned(workspaceId: string, pinned: boolean): Promise<{ pinnedAt: string | null }>;
+  setWorkspaceLabel(input: {
+    workspaceId: string;
+    label: { name: string; color: "red" };
+    assigned: boolean;
+  }): Promise<unknown>;
   listProjects(): Promise<{ projects: SeedProjectDescriptor[] }>;
   setWorkspaceSnooze(
     workspaceId: string,
@@ -67,6 +74,7 @@ export interface SeedDaemonClient {
     workspace: SeedWorkspaceDescriptor | null;
     error: string | null;
   }>;
+  archiveWorkspace(workspaceId: string): Promise<{ error: string | null }>;
   /**
    * Force the daemon to recompute its git snapshot and diff for a checkout,
    * mirroring the UI's manual refresh. Tests use this to make an out-of-band

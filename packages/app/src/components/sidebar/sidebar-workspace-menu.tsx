@@ -18,6 +18,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Tag,
   Sun,
 } from "lucide-react-native";
 import { isWeb } from "@/constants/platform";
@@ -31,6 +32,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -48,6 +50,11 @@ import {
 } from "@/components/sidebar/workspace-meta-row";
 import type { SidebarWorkspaceRowDisclosure } from "@/components/sidebar/sidebar-workspace-row-content";
 import type { SidebarWorkspaceSnoozeActions } from "@/workspace-snooze/use-workspace-snooze-menu";
+import {
+  useWorkspaceLabelMenuPages,
+  WORKSPACE_LABEL_PAGE_ID,
+  type WorkspaceLabelTarget,
+} from "@/workspace-labels/picker";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -61,6 +68,7 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
+const ThemedTag = withUnistyles(Tag);
 const ThemedMoon = withUnistyles(Moon);
 const ThemedSun = withUnistyles(Sun);
 const ThemedListTree = withUnistyles(ListTree);
@@ -88,6 +96,9 @@ function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
 
 export interface SidebarWorkspaceMenuProps {
   workspaceKey: string;
+  serverId?: string;
+  workspaceId?: string;
+  workspaceLabels?: readonly string[];
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
   onRename?: () => void;
@@ -142,6 +153,8 @@ function WorkspaceMenuItem({
 function SidebarWorkspaceMenuItems({
   surface,
   workspaceKey,
+  serverId,
+  workspaceId,
   onCopyPath,
   onCopyBranchName,
   onRename,
@@ -161,6 +174,10 @@ function SidebarWorkspaceMenuItems({
   const archiveTrailing = useMemo(
     () => (archiveShortcutKeys ? <Shortcut chord={archiveShortcutKeys} /> : null),
     [archiveShortcutKeys],
+  );
+  const labelLeading = useMemo(
+    () => <ThemedTag size={14} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
 
   return (
@@ -215,6 +232,15 @@ function SidebarWorkspaceMenuItems({
           {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
         </WorkspaceMenuItem>
       ) : null}
+      {serverId && workspaceId ? (
+        <DropdownMenuSubTrigger
+          id={WORKSPACE_LABEL_PAGE_ID}
+          leading={labelLeading}
+          testID={`sidebar-workspace-menu-labels-${workspaceKey}`}
+        >
+          {t("workspaceLabels.title")}
+        </DropdownMenuSubTrigger>
+      ) : null}
       {agentTree ? (
         <WorkspaceMenuItem
           surface={surface}
@@ -258,6 +284,9 @@ function SidebarWorkspaceMenuItems({
 
 export function SidebarWorkspaceMenu({
   workspaceKey,
+  serverId,
+  workspaceId,
+  workspaceLabels,
   onCopyPath,
   onCopyBranchName,
   onRename,
@@ -276,6 +305,12 @@ export function SidebarWorkspaceMenu({
   onOpenChange,
 }: SidebarWorkspaceMenuProps) {
   const { t } = useTranslation();
+  const workspaceTarget = useMemo<WorkspaceLabelTarget | null>(
+    () =>
+      serverId && workspaceId ? { serverId, workspaceId, labels: workspaceLabels ?? [] } : null,
+    [serverId, workspaceId, workspaceLabels],
+  );
+  const pages = useWorkspaceLabelMenuPages(workspaceTarget);
   return (
     <DropdownMenu compactMode="sheet" open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
@@ -287,10 +322,17 @@ export function SidebarWorkspaceMenu({
       >
         {renderTriggerIcon}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={260} sheetTitle={t("sidebar.workspace.actions.menu")}>
+      <DropdownMenuContent
+        align="end"
+        width={260}
+        pages={pages}
+        sheetTitle={t("sidebar.workspace.actions.menu")}
+      >
         <SidebarWorkspaceMenuItems
           surface="dropdown"
           workspaceKey={workspaceKey}
+          serverId={serverId}
+          workspaceId={workspaceId}
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
