@@ -12,7 +12,7 @@ test("always-show host labels is a client Appearance setting", async ({ page }) 
     const serverId = getServerId();
     const hostBadge = page
       .getByTestId(`sidebar-workspace-row-${serverId}:${workspace.workspaceId}`)
-      .getByTestId(`sidebar-host-badge-${serverId}`);
+      .getByTestId(`host-badge-${serverId}`);
 
     await gotoAppShell(page);
     await waitForSidebarHydration(page);
@@ -29,6 +29,7 @@ test("always-show host labels is a client Appearance setting", async ({ page }) 
     await expect(hostBadge).toBeVisible();
 
     await openSidebarDisplayPreferences(page);
+    await page.getByTestId("sidebar-display-show").click();
     const sidebarShortcut = page.getByTestId("sidebar-always-show-host-labels");
     await expect(sidebarShortcut).toHaveAttribute("aria-checked", "true");
     await sidebarShortcut.click();
