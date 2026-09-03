@@ -77,7 +77,7 @@ vi.mock("@/components/adaptive-modal-sheet", async () => {
     testID?: string;
   }) => (visible ? ReactModule.createElement("div", { "data-testid": testID }, children) : null);
   const AdaptiveTextInput = ReactModule.forwardRef<
-    { setNativeProps: (props: { text?: string }) => void },
+    { replaceText: (text: string) => void },
     {
       initialValue?: string;
       editable?: boolean;
@@ -89,8 +89,8 @@ vi.mock("@/components/adaptive-modal-sheet", async () => {
     const inputRef = ReactModule.useRef<HTMLInputElement>(null);
     inputCallbacks.onChangeText = props.onChangeText;
     ReactModule.useImperativeHandle(ref, () => ({
-      setNativeProps: ({ text }: { text?: string }) => {
-        if (inputRef.current && text != null) inputRef.current.value = text;
+      replaceText: (text: string) => {
+        if (inputRef.current) inputRef.current.value = text;
       },
     }));
     return ReactModule.createElement("input", {
