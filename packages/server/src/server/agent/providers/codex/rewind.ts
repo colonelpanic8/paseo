@@ -118,8 +118,7 @@ export async function forkCodexThreadAt(
       ...forkParams,
       beforeTurnId: targetTurn.turnId,
     });
-    await input.setThreadId(forked.thread.id);
-    return;
+    return { providerHandleId: forked.thread.id };
   }
 
   // Legacy threads on Codex before 0.156 fork and then roll back. Fork is
