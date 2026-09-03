@@ -7,16 +7,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import type { TFunction } from "i18next";
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-  memo,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -294,13 +285,6 @@ function renderContextWindowMeter(
       glyphSize={glyphSize}
     />
   );
-}
-
-function resolveContextWindowPlacement(
-  meter: ReactElement | null,
-  reserveSlot: boolean,
-): ReactNode {
-  return reserveSlot ? <View style={styles.contextWindowMeterSlot}>{meter}</View> : null;
 }
 
 interface RenderLeftContentArgs {
@@ -2022,7 +2006,8 @@ function ComposerContentImpl({
     ],
   );
   const beforeVoiceContent = useMemo(
-    () => resolveContextWindowPlacement(contextWindowMeter, hasAgent),
+    () =>
+      hasAgent ? <View style={styles.contextWindowMeterSlot}>{contextWindowMeter}</View> : null,
     [contextWindowMeter, hasAgent],
   );
 

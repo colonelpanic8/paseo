@@ -28,6 +28,10 @@ export const CLIENT_CAPS = {
   // reconstructed timeline replay after 2027-02-21 once the client floor supports invalidation.
   timelineReplacementInvalidation: "timeline_replacement_invalidation",
   browserHost: "browser_host",
+  // COMPAT(liveVoiceCrossHostRouter): added in v0.2.5, remove after 2027-01-30.
+  // The daemon only asks clients advertising this capability to route Live Voice
+  // operations to another saved host.
+  liveVoiceCrossHostRouter: "live_voice_cross_host_router",
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPS)[keyof typeof CLIENT_CAPS];
