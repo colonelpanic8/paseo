@@ -312,7 +312,9 @@ function WorkspaceRowBody({
       <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
         {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
           const isDesktop = !isTouchPlatform;
-          const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
+          const serviceSummary = isDesktop
+            ? selectWorkspaceServiceSummary(workspace.scripts)
+            : null;
           const workspaceRowStyle = getWorkspaceRowStyle({
             isDragging,
             isPressed,
@@ -325,7 +327,9 @@ function WorkspaceRowBody({
               {...(draggable ? dragAttributes : {})}
               {...(draggable ? dragHandleProps?.listeners : {})}
               ref={
-                draggable ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>) : undefined
+                draggable
+                  ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>)
+                  : undefined
               }
               style={styles.workspaceRowContainer}
               {...hoverHandlers}

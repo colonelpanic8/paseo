@@ -1117,7 +1117,7 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
-  onSubmitRename,
+  onSubmitRename: _onSubmitRename,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -1182,7 +1182,9 @@ function WorkspaceRowInner({
       <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
         {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
           const isDesktop = !isTouchPlatform;
-          const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
+          const serviceSummary = isDesktop
+            ? selectWorkspaceServiceSummary(workspace.scripts)
+            : null;
           const workspaceRowStyle = getProjectWorkspaceRowStyle({
             isDragging,
             isPressed,
@@ -2108,10 +2110,10 @@ function SidebarStatusModeWrapper({
   hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
-  onPinnedWorkspaceReorder,
+  onPinnedWorkspaceReorder: _onPinnedWorkspaceReorder,
   parentGestureRef,
   listHeaderComponent,
-  dragGestureHostPresented,
+  dragGestureHostPresented: _dragGestureHostPresented,
 }: {
   statusGroups: StatusGroup[];
   allServerIds: string[];
