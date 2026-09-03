@@ -150,6 +150,10 @@ interface TimeoutOptions {
   onLateError?: (error: unknown) => void;
 }
 
+export interface ArchiveSnapshotOptions {
+  nativeArchiveMode: "best-effort" | "required";
+}
+
 function formatProviderList(providers: readonly string[]): string {
   return providers.length > 0 ? providers.join(", ") : "none";
 }
@@ -1981,7 +1985,11 @@ export class AgentManager {
     }
   }
 
-  async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
+  async archiveSnapshot(
+    agentId: string,
+    archivedAt: string,
+    options: ArchiveSnapshotOptions = { nativeArchiveMode: "best-effort" },
+  ): Promise<StoredAgentRecord> {
     const registry = this.requireRegistry();
     const liveAgent = this.getAgent(agentId);
     if (liveAgent) {
@@ -1995,10 +2003,16 @@ export class AgentManager {
       throw new Error(`Agent not found: ${agentId}`);
     }
 
+    if (options.nativeArchiveMode === "required") {
+      await this.syncNativeArchiveState(record.provider, record.persistence, "archive-required");
+    }
+
     const nextRecord = buildArchivedAgentRecord(record, { archivedAt });
     await registry.upsert(nextRecord);
 
-    await this.syncNativeArchiveState(record.provider, record.persistence, "archive");
+    if (options.nativeArchiveMode === "best-effort") {
+      await this.syncNativeArchiveState(record.provider, record.persistence, "archive");
+    }
 
     if (this.agents.has(agentId)) {
       this.notifyAgentState(agentId);
@@ -5011,14 +5025,14 @@ export class AgentManager {
   private async syncNativeArchiveState(
     provider: AgentProvider,
     persistence: AgentPersistenceHandle | null | undefined,
-    state: "archive" | "restore",
+    state: "archive" | "archive-required" | "restore",
   ): Promise<void> {
     if (!persistence) return;
     const client = this.clients.get(provider);
     const sync =
-      state === "archive" ? client?.archiveNativeSession : client?.unarchiveNativeSession;
+      state === "restore" ? client?.unarchiveNativeSession : client?.archiveNativeSession;
     if (!sync) return;
-    if (state === "restore") {
+    if (state !== "archive") {
       await sync.call(client, persistence);
       return;
     }
@@ -5031,7 +5045,6 @@ export class AgentManager {
       );
     }
   }
-
   private requireAgent(id: string): LiveManagedAgent {
     const normalizedId = validateAgentId(id, "requireAgent");
     const agent = this.agents.get(normalizedId);

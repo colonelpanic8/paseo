@@ -377,10 +377,14 @@ class NativeArchiveRecordingClient extends TestAgentClient {
   readonly unarchivedHandles: AgentPersistenceHandle[] = [];
   readArchivedAtDuringUnarchive: (() => Promise<string | null | undefined>) | null = null;
   archivedAtDuringUnarchive: string | null | undefined;
+  archiveFailure: Error | null = null;
   unarchiveFailure: Error | null = null;
 
   async archiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
     this.archivedHandles.push(handle);
+    if (this.archiveFailure) {
+      throw this.archiveFailure;
+    }
   }
 
   async unarchiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
@@ -7585,6 +7589,39 @@ test("fires onAgentArchived for stored-only snapshot archives", async () => {
 
   await manager.archiveSnapshot(storedOnly.id, new Date().toISOString());
   expect(archivedIds).toEqual([storedOnly.id]);
+});
+
+test("archiveSnapshot keeps the stored record active when required native archive fails", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-native-archive-failure-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const client = new NativeArchiveRecordingClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+  });
+
+  const agent = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      title: "Required native archive target",
+    },
+    undefined,
+    { workspaceId: undefined },
+  );
+  await manager.closeAgent(agent.id);
+  client.archiveFailure = new Error("provider archive failed");
+
+  await expect(
+    manager.archiveSnapshot(agent.id, new Date().toISOString(), {
+      nativeArchiveMode: "required",
+    }),
+  ).rejects.toThrow("provider archive failed");
+
+  expect((await storage.get(agent.id))?.archivedAt).toBeUndefined();
+  expect(client.archivedHandles).toHaveLength(1);
 });
 
 test("unarchiveSnapshot skips native provider unarchive for active records", async () => {

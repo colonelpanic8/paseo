@@ -644,7 +644,11 @@ async function rollbackWorkspaceContents(
         archivedWithWorkspaceId: workspaceId,
       })),
     );
-    await runRollbackStep(() => dependencies.agentManager.archiveSnapshot(record.id, archivedAt));
+    await runRollbackStep(() =>
+      dependencies.agentManager.archiveSnapshot(record.id, archivedAt, {
+        nativeArchiveMode: "required",
+      }),
+    );
     await runRollbackStep(() =>
       dependencies.agentStorage.updateRecord(record.id, (current) => ({
         ...current,
