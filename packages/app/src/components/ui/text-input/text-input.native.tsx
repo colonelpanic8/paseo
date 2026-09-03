@@ -15,10 +15,6 @@ import PasteInput, {
 import { useIsInsideBottomSheet } from "@/components/ui/bottom-sheet-scope";
 import type { EditingTextInputHandle, EditingTextInputProps } from "./types";
 
-export function hasFocusedEditingTextInput(): boolean {
-  return TextInput.State.currentlyFocusedInput() !== null;
-}
-
 type NativeInput = (TextInput | PasteTextInputInstance) & {
   blur(): void;
   focus(): void;
@@ -178,3 +174,7 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
     );
   },
 );
+
+export function hasFocusedTextInput(): boolean {
+  return TextInput.State.currentlyFocusedInput() !== null;
+}
