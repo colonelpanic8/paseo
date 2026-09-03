@@ -1,5 +1,6 @@
 import type { StreamItem } from "@/types/stream";
 import { createAssistantMarkdownParser } from "@/utils/assistant-markdown-parser";
+import { getMarkdownListMarker } from "@/utils/markdown-list";
 import type Token from "markdown-it/lib/token.mjs";
 
 export interface SessionFindMatch {
@@ -43,8 +44,59 @@ function extractVisibleTokenText(token: Token): string {
   }
 }
 
+/**
+ * The list bullet and the ordered number are drawn by the renderer, not present
+ * in the source, and they land in the row as ordinary text nodes (see the
+ * `list_item` rule in `components/message.tsx`). Rebuilding them here through
+ * the renderer's own marker function keeps the projection and the rendered row
+ * in step, so a search for `1.` or a bullet matches, and the occurrence ordinals
+ * of everything after a list still line up.
+ */
+interface ListMarkerFrame {
+  listNode: { type: string; attributes?: { start?: number | string } };
+  itemCount: number;
+}
+
+function openListFrame(token: Token): ListMarkerFrame {
+  if (token.type === "ordered_list_open") {
+    const start = token.attrGet("start");
+    return {
+      listNode: { type: "ordered_list", attributes: { start: start ?? undefined } },
+      itemCount: 0,
+    };
+  }
+  return { listNode: { type: "bullet_list" }, itemCount: 0 };
+}
+
 function extractVisibleMarkdownText(markdown: string): string {
-  return assistantMarkdownParser.parse(markdown, {}).map(extractVisibleTokenText).join("");
+  const listStack: ListMarkerFrame[] = [];
+  let text = "";
+  for (const token of assistantMarkdownParser.parse(markdown, {})) {
+    switch (token.type) {
+      case "ordered_list_open":
+      case "bullet_list_open":
+        listStack.push(openListFrame(token));
+        break;
+      case "ordered_list_close":
+      case "bullet_list_close":
+        listStack.pop();
+        break;
+      case "list_item_open": {
+        const frame = listStack[listStack.length - 1];
+        text += getMarkdownListMarker(
+          { index: frame?.itemCount ?? 0, markup: token.markup },
+          frame?.listNode,
+        ).marker;
+        if (frame) {
+          frame.itemCount += 1;
+        }
+        break;
+      }
+      default:
+        text += extractVisibleTokenText(token);
+    }
+  }
+  return text;
 }
 
 /**

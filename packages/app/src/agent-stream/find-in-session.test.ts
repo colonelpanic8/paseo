@@ -89,6 +89,29 @@ describe("extractSearchableText", () => {
     ]);
   });
 
+  it("includes the list markers the renderer draws as text", () => {
+    const bullets = assistantMessage("a1", "- alpha\n- beta");
+    expect(extractSearchableText(bullets)).toBe("\u2022alpha\u2022beta");
+
+    const ordered = assistantMessage("a2", "3) alpha\n4) beta");
+    expect(extractSearchableText(ordered)).toBe("3)alpha4)beta");
+  });
+
+  it("numbers nested list markers independently of the outer list", () => {
+    const item = assistantMessage("a1", "1. outer\n   1. inner\n2. next");
+
+    expect(extractSearchableText(item)).toBe("1.outer1.inner2.next");
+  });
+
+  it("counts a rendered marker ahead of later occurrences of the same text", () => {
+    const item = assistantMessage("a1", "1. first step\n\nRepeat step 1. until done.");
+
+    expect(computeSessionFindMatches([item], "1.")).toEqual([
+      { itemId: "a1", occurrenceIndex: 0 },
+      { itemId: "a1", occurrenceIndex: 1 },
+    ]);
+  });
+
   it("returns activity log messages", () => {
     const item: StreamItem = {
       kind: "activity_log",
