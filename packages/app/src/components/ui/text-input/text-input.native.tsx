@@ -174,3 +174,7 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
     );
   },
 );
+
+export function hasFocusedTextInput(): boolean {
+  return TextInput.State.currentlyFocusedInput() !== null;
+}
