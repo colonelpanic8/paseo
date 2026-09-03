@@ -1133,6 +1133,8 @@ interface TimelineMessageState {
   assistantText: string;
   reasoningText: string;
   model?: string;
+  thinkingOptionId?: ClaudeThinkingEffort;
+  emittedThinkingOptionId?: ClaudeThinkingEffort;
   emittedAssistantLength: number;
   emittedReasoningLength: number;
   stopped: boolean;
@@ -1175,6 +1177,7 @@ class TimelineAssembler {
     }
     const state = this.ensureMessageState(messageId, runId);
     this.captureMessageModel(state, message.message?.model);
+    this.captureMessageEffort(state, toObjectRecord(message)?.effort);
     const fragments = this.extractFragments(message.message?.content);
     return this.applyAbsoluteFragments(state, fragments);
   }
@@ -1310,18 +1313,28 @@ class TimelineAssembler {
   private emitNewContent(state: TimelineMessageState): AgentTimelineItem[] {
     const items: AgentTimelineItem[] = [];
     const nextAssistantText = state.assistantText.slice(state.emittedAssistantLength);
-    if (
+    const hasAssistantText =
       nextAssistantText.length > 0 &&
       nextAssistantText !== INTERRUPT_TOOL_USE_PLACEHOLDER &&
-      !isClaudeTranscriptNoiseText(nextAssistantText)
-    ) {
-      state.emittedAssistantLength = state.assistantText.length;
+      !isClaudeTranscriptNoiseText(nextAssistantText);
+    // The complete assistant frame reports effort after its text may already
+    // have streamed. An empty same-message item updates that earlier chunk.
+    const hasNewEffort =
+      state.emittedAssistantLength > 0 &&
+      state.thinkingOptionId !== undefined &&
+      state.thinkingOptionId !== state.emittedThinkingOptionId;
+    if (hasAssistantText || hasNewEffort) {
+      if (hasAssistantText) {
+        state.emittedAssistantLength = state.assistantText.length;
+      }
       items.push({
         type: "assistant_message",
-        text: nextAssistantText,
+        text: hasAssistantText ? nextAssistantText : "",
         messageId: state.id,
         ...(state.model ? { model: state.model } : {}),
+        ...(state.thinkingOptionId ? { thinkingOptionId: state.thinkingOptionId } : {}),
       });
+      state.emittedThinkingOptionId = state.thinkingOptionId;
     }
 
     const nextReasoningText = state.reasoningText.slice(state.emittedReasoningLength);
@@ -1361,6 +1374,13 @@ class TimelineAssembler {
       typeof runtimeModel === "string" ? resolveObservedClaudeModelId(runtimeModel) : null;
     if (observedModel) {
       state.model = observedModel;
+    }
+  }
+
+  private captureMessageEffort(state: TimelineMessageState, runtimeEffort: unknown): void {
+    const observedEffort = resolveObservedClaudeEffort(runtimeEffort);
+    if (observedEffort) {
+      state.thinkingOptionId = observedEffort;
     }
   }
 

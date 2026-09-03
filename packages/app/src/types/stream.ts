@@ -934,6 +934,15 @@ function toAttributionFields(
   };
 }
 
+function isEmptyAssistantUpdateWithoutAttribution(
+  chunk: string,
+  attribution: AssistantMessageAttribution,
+): boolean {
+  return (
+    chunk === "" && attribution.model === undefined && attribution.thinkingOptionId === undefined
+  );
+}
+
 function appendAssistantMessage(
   state: StreamItem[],
   text: string,
@@ -946,7 +955,7 @@ function appendAssistantMessage(
 ): StreamItem[] {
   const attributionFields = toAttributionFields(attribution);
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!chunk) {
+  if (isEmptyAssistantUpdateWithoutAttribution(chunk, attributionFields)) {
     return state;
   }
 

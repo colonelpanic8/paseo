@@ -1421,6 +1421,89 @@ test("assembles assistant timeline when message_delta arrives before message_sta
   await session.close();
 });
 
+test("keeps assistant effort when the pumped timeline already emitted the text", async () => {
+  const session = await createSession();
+  const internal = asInternals<{
+    buildPumpedMessageEvents: (
+      message: Record<string, unknown>,
+      messageIdHint: string | null,
+      turnId: string | null,
+    ) => Promise<AgentStreamEvent[]>;
+  }>(session);
+
+  try {
+    await internal.buildPumpedMessageEvents(
+      {
+        type: "stream_event",
+        event: {
+          type: "message_start",
+          message: {
+            id: "message-with-effort",
+            role: "assistant",
+            model: "claude-opus-4-6-20260101",
+          },
+        },
+      },
+      null,
+      "foreground-turn-1",
+    );
+    const streamed = await internal.buildPumpedMessageEvents(
+      {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          message_id: "message-with-effort",
+          delta: { type: "text_delta", text: "Already streamed." },
+        },
+      },
+      null,
+      "foreground-turn-1",
+    );
+    const completed = await internal.buildPumpedMessageEvents(
+      {
+        type: "assistant",
+        effort: "low",
+        message: {
+          id: "message-with-effort",
+          role: "assistant",
+          model: "claude-opus-4-6-20260101",
+          content: [{ type: "text", text: "Already streamed." }],
+          usage: { input_tokens: 10, output_tokens: 2 },
+        },
+        parent_tool_use_id: null,
+        uuid: "assistant-with-effort",
+        session_id: "redesign-timeline-session",
+      },
+      null,
+      "foreground-turn-1",
+    );
+
+    expect(streamed).toContainEqual({
+      type: "timeline",
+      provider: "claude",
+      item: {
+        type: "assistant_message",
+        text: "Already streamed.",
+        messageId: "message-with-effort",
+        model: "claude-opus-4-6",
+      },
+    });
+    expect(completed).toContainEqual({
+      type: "timeline",
+      provider: "claude",
+      item: {
+        type: "assistant_message",
+        text: "",
+        messageId: "message-with-effort",
+        model: "claude-opus-4-6",
+        thinkingOptionId: "low",
+      },
+    });
+  } finally {
+    await session.close();
+  }
+});
+
 test("does not use stream_event uuid as assistant message identity when message_id is missing", async () => {
   sdkQueryFactory.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
     const readPromptUuid = createPromptUuidReader(prompt);
