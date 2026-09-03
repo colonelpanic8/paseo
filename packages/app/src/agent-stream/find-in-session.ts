@@ -1,4 +1,6 @@
 import type { StreamItem } from "@/types/stream";
+import { createAssistantMarkdownParser } from "@/utils/assistant-markdown-parser";
+import type Token from "markdown-it/lib/token.mjs";
 
 export interface SessionFindMatch {
   itemId: string;
@@ -18,19 +20,31 @@ export interface SessionFindState {
   activeItemOccurrenceCount: number;
 }
 
+const assistantMarkdownParser = createAssistantMarkdownParser();
+
+function extractVisibleTokenText(token: Token): string {
+  if (token.type === "image") {
+    return "";
+  }
+  if (token.children) {
+    return token.children.map(extractVisibleTokenText).join("");
+  }
+  switch (token.type) {
+    case "text":
+    case "code_inline":
+    case "code_block":
+    case "fence":
+      return token.content;
+    case "softbreak":
+    case "hardbreak":
+      return "\n";
+    default:
+      return "";
+  }
+}
+
 function extractVisibleMarkdownText(markdown: string): string {
-  return markdown
-    .replace(/!\[([^\]]*)\]\((?:[^()\\]|\\.)*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\((?:[^()\\]|\\.)*\)/g, "$1")
-    .replace(/^\s*```[^\n]*$/gm, "")
-    .replace(/^\s*~~~[^\n]*$/gm, "")
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-    .replace(/^\s{0,3}>+\s?/gm, "")
-    .replace(/^\s{0,3}(?:[*+-]|\d+\.)\s+/gm, "")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")
-    .replace(/(\*|_)(.*?)\1/g, "$2")
-    .replace(/~~([^~]+)~~/g, "$1");
+  return assistantMarkdownParser.parse(markdown, {}).map(extractVisibleTokenText).join("");
 }
 
 /**
@@ -41,6 +55,7 @@ function extractVisibleMarkdownText(markdown: string): string {
 export function extractSearchableText(item: StreamItem): string {
   switch (item.kind) {
     case "user_message":
+      return item.text;
     case "assistant_message":
       return extractVisibleMarkdownText(item.text);
     case "activity_log":

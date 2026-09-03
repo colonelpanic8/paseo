@@ -53,8 +53,13 @@ function bashToolCall(id: string, input: string): StreamItem {
 }
 
 describe("extractSearchableText", () => {
-  it("returns message text for user and assistant messages", () => {
-    expect(extractSearchableText(userMessage("u1", "hello world"))).toBe("hello world");
+  it("keeps user message Markdown markers because they render as literal text", () => {
+    expect(extractSearchableText(userMessage("u1", "Run `deploy` after **review**."))).toBe(
+      "Run `deploy` after **review**.",
+    );
+  });
+
+  it("returns assistant message text", () => {
     expect(extractSearchableText(assistantMessage("a1", "response text"))).toBe("response text");
   });
 
@@ -66,6 +71,22 @@ describe("extractSearchableText", () => {
     ]);
     expect(computeSessionFindMatches([item], "`deploy`")).toEqual([]);
     expect(computeSessionFindMatches([item], "**review**")).toEqual([]);
+  });
+
+  it("excludes image alt text that is not rendered as a DOM text node", () => {
+    const item = assistantMessage("a1", "Before ![deployment diagram](diagram.png) after");
+
+    expect(extractSearchableText(item)).toBe("Before  after");
+    expect(computeSessionFindMatches([item], "deployment diagram")).toEqual([]);
+  });
+
+  it("keeps escaped emphasis delimiters that render as text", () => {
+    const item = assistantMessage("a1", String.raw`Search for \*literal emphasis\* here.`);
+
+    expect(extractSearchableText(item)).toBe("Search for *literal emphasis* here.");
+    expect(computeSessionFindMatches([item], "*literal emphasis*")).toEqual([
+      { itemId: "a1", occurrenceIndex: 0 },
+    ]);
   });
 
   it("returns activity log messages", () => {
