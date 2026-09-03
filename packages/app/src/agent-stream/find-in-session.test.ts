@@ -112,12 +112,13 @@ describe("extractSearchableText", () => {
     ]);
   });
 
-  it("returns activity log messages", () => {
+  it("returns notification messages", () => {
     const item: StreamItem = {
-      kind: "activity_log",
+      kind: "notification",
       id: "log1",
       timestamp: new Date(0),
-      activityType: "error",
+      sourceType: "error",
+      level: "error",
       message: "something failed",
     };
     expect(extractSearchableText(item)).toBe("something failed");
