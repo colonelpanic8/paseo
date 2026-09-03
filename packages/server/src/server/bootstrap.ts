@@ -626,6 +626,18 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
   return initialConfig;
 }
 
+function startAgentPurposeSummaryService(
+  enabled: boolean,
+  createService: () => AgentPurposeSummaryService,
+): AgentPurposeSummaryService | null {
+  if (!enabled) {
+    return null;
+  }
+  const service = createService();
+  service.start();
+  return service;
+}
+
 export async function createPaseoDaemon(
   config: PaseoDaemonConfig,
   rootLogger: Logger,
@@ -1209,37 +1221,38 @@ export async function createPaseoDaemon(
     },
     logger,
   });
-  const agentPurposeSummary =
-    config.agentPurposeSummariesEnabled === false
-      ? null
-      : new AgentPurposeSummaryService({
+  const agentPurposeSummary = startAgentPurposeSummaryService(
+    config.agentPurposeSummariesEnabled !== false,
+    () =>
+      new AgentPurposeSummaryService({
+        agentManager,
+        generation: createAgentStructuredTextGeneration({
           agentManager,
-          generation: createAgentStructuredTextGeneration({
-            agentManager,
-            providerSnapshotManager,
-            readDaemonConfig: () => ({
-              metadataGeneration: daemonConfigStore.get().metadataGeneration,
-            }),
-            getFocusedSelection: (cwd) => {
-              const agent = agentManager
-                .listAgents()
-                .filter((candidate) => candidate.cwd === cwd)
-                .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0];
-              if (!agent) {
-                return undefined;
-              }
-              return {
-                provider: agent.provider,
-                model: agent.runtimeInfo?.model ?? agent.config.model ?? null,
-                thinkingOptionId:
-                  agent.runtimeInfo?.thinkingOptionId ?? agent.config.thinkingOptionId ?? null,
-              };
-            },
+          providerSnapshotManager,
+          readDaemonConfig: () => ({
+            metadataGeneration: daemonConfigStore.get().metadataGeneration,
           }),
-          workspaceGitService,
+          getFocusedSelection: (cwd) => {
+            const agent = agentManager
+              .listAgents()
+              .filter((candidate) => candidate.cwd === cwd)
+              .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0];
+            if (!agent) {
+              return undefined;
+            }
+            return {
+              provider: agent.provider,
+              model: agent.runtimeInfo?.model ?? agent.config.model ?? null,
+              thinkingOptionId:
+                agent.runtimeInfo?.thinkingOptionId ?? agent.config.thinkingOptionId ?? null,
+            };
+          },
           logger,
-        });
-  agentPurposeSummary?.start();
+        }),
+        workspaceGitService,
+        logger,
+      }),
+  );
 
   setupAutoArchiveOnMerge({
     paseoHome: config.paseoHome,
