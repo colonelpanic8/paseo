@@ -15,7 +15,10 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import type { Theme } from "@/styles/theme";
 import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
-import { estimateStreamItemHeight } from "./web-virtualization";
+import {
+  estimateStreamItemHeight,
+  shouldAdjustScrollForVirtualRowResize,
+} from "./web-virtualization";
 import {
   acquireSessionFindHighlightOwner,
   applySessionFindHighlights,
@@ -24,6 +27,7 @@ import {
   type SessionFindHighlightOwner,
 } from "./find-highlight";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
+import { useRevisedHistoryRows } from "./history-row-revision";
 import { createStreamStrategy } from "./strategy";
 import {
   abandonHistoryStartPaginationRequest,
@@ -295,7 +299,8 @@ function isScrollContainerOverscrolledPastBottom(
 
 function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: boolean }) {
   const {
-    segments,
+    segments: inputSegments,
+    historyRowRevision,
     liveHeadRowRevision,
     boundary,
     renderers,
@@ -313,6 +318,15 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     scrollEnabled,
     isMobileBreakpoint,
   } = props;
+  const historyVirtualized = useRevisedHistoryRows(
+    inputSegments.historyVirtualized,
+    historyRowRevision,
+  );
+  const historyMounted = useRevisedHistoryRows(inputSegments.historyMounted, historyRowRevision);
+  const segments = useMemo(
+    () => ({ ...inputSegments, historyVirtualized, historyMounted }),
+    [historyMounted, historyVirtualized, inputSegments],
+  );
   const isActive = useRetainedPanelActive();
   const isActiveRef = useRef(isActive);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -400,14 +414,17 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     overscan: 8,
   });
   useEffect(() => {
-    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (_item, _delta, instance) => {
-      if (historyStartPrependAnchorActiveRef.current) {
-        return false;
-      }
+    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
       const viewportHeight = instance.scrollRect?.height ?? 0;
       const scrollOffset = instance.scrollOffset ?? 0;
       const remainingDistance = instance.getTotalSize() - (scrollOffset + viewportHeight);
-      return remainingDistance > AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
+      return shouldAdjustScrollForVirtualRowResize({
+        isHistoryStartPrependActive: historyStartPrependAnchorActiveRef.current,
+        rowStart: item.start,
+        scrollOffset,
+        remainingDistanceFromBottom: remainingDistance,
+        bottomThreshold: AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+      });
     };
     return () => {
       rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
