@@ -943,6 +943,55 @@ function isEmptyAssistantUpdateWithoutAttribution(
   );
 }
 
+function findAssistantRowToExtend(
+  state: StreamItem[],
+  source: StreamUpdateSource,
+  messageId: string | undefined,
+): { index: number; item: AssistantMessageItem } | null {
+  const matchAt = (index: number): AssistantMessageItem | null => {
+    const entry = state[index];
+    if (entry?.kind !== "assistant_message") {
+      return null;
+    }
+    return messageId === undefined || entry.messageId === messageId ? entry : null;
+  };
+
+  const lastIndex = state.length - 1;
+  const tail = matchAt(lastIndex);
+  if (tail) {
+    return { index: lastIndex, item: tail };
+  }
+
+  // A submitted user row can follow the streaming assistant during interrupt.
+  // In that case, look one row further back for the assistant to extend.
+  if (source !== "live" || state[lastIndex]?.kind !== "user_message") {
+    return null;
+  }
+  const previous = matchAt(lastIndex - 1);
+  return previous ? { index: lastIndex - 1, item: previous } : null;
+}
+
+/**
+ * The frame that reports a turn's effort can also carry a tool call, which the
+ * provider emits first. By the time the empty attribution update arrives the
+ * assistant message is no longer the tail, so find it by id instead.
+ */
+function applyAssistantAttribution(
+  state: StreamItem[],
+  messageId: string,
+  attributionFields: AssistantMessageAttribution,
+): StreamItem[] {
+  for (let index = state.length - 1; index >= 0; index -= 1) {
+    const entry = state[index];
+    if (entry.kind !== "assistant_message" || entry.messageId !== messageId) {
+      continue;
+    }
+    const updated: AssistantMessageItem = { ...entry, ...attributionFields };
+    return [...state.slice(0, index), updated, ...state.slice(index + 1)];
+  }
+  return state;
+}
+
 function appendAssistantMessage(
   state: StreamItem[],
   text: string,
@@ -959,39 +1008,20 @@ function appendAssistantMessage(
     return state;
   }
 
-  const last = state[state.length - 1];
-  const shouldAppendToLast =
-    last &&
-    last.kind === "assistant_message" &&
-    (messageId === undefined || last.messageId === messageId);
-  if (shouldAppendToLast) {
+  const extend = findAssistantRowToExtend(state, source, messageId);
+  if (extend) {
     const updated: AssistantMessageItem = {
-      ...last,
-      text: `${last.text}${chunk}`,
+      ...extend.item,
+      text: `${extend.item.text}${chunk}`,
       timestamp,
       ...(timelineCursor ? { timelineCursor } : {}),
       ...attributionFields,
     };
-    return [...state.slice(0, -1), updated];
+    return [...state.slice(0, extend.index), updated, ...state.slice(extend.index + 1)];
   }
 
-  // A submitted user row can follow the streaming assistant during interrupt.
-  // In that case, look one row further back for the assistant to extend.
-  const secondLast = state[state.length - 2];
-  if (
-    source === "live" &&
-    last?.kind === "user_message" &&
-    secondLast?.kind === "assistant_message" &&
-    (messageId === undefined || secondLast.messageId === messageId)
-  ) {
-    const updated: AssistantMessageItem = {
-      ...secondLast,
-      text: `${secondLast.text}${chunk}`,
-      timestamp,
-      ...(timelineCursor ? { timelineCursor } : {}),
-      ...attributionFields,
-    };
-    return [...state.slice(0, -2), updated, last];
+  if (chunk === "" && messageId !== undefined) {
+    return applyAssistantAttribution(state, messageId, attributionFields);
   }
 
   if (!hasContent) {
