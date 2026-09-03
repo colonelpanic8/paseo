@@ -52,6 +52,15 @@ const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
 const PROVIDER_REFRESH_DEADLINE_ENV = "PASEO_PROVIDER_REFRESH_TIMEOUT_MS";
 export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "paseo:global";
 
+export class ProviderCatalogInvariantError extends Error {
+  readonly scope = "global";
+
+  constructor(readonly provider: AgentProvider) {
+    super(`Global catalog for provider '${provider}' did not settle`);
+    this.name = "ProviderCatalogInvariantError";
+  }
+}
+
 function validRefreshDeadline(value: unknown): number | undefined {
   return typeof value === "number" &&
     Number.isSafeInteger(value) &&
@@ -814,20 +823,6 @@ export class ProviderSnapshotManager {
     const providerSet = providers ? new Set(providers) : null;
     const loadingEntries = this.createLoadingEntries();
 
-    for (const [cwd, providerLoads] of Array.from(this.providerLoads.entries())) {
-      if (!providerSet) {
-        this.providerLoads.delete(cwd);
-        continue;
-      }
-
-      for (const provider of providerSet) {
-        providerLoads.delete(provider);
-      }
-      if (providerLoads.size === 0) {
-        this.providerLoads.delete(cwd);
-      }
-    }
-
     for (const [cwd, snapshot] of this.snapshots.entries()) {
       if (!providerSet) {
         snapshot.clear();
@@ -864,7 +859,7 @@ export class ProviderSnapshotManager {
     }
 
     const existingLoad = this.getProviderLoad(options.snapshotCwd, options.provider);
-    if (existingLoad && !options.force) {
+    if (existingLoad) {
       return existingLoad.promise;
     }
     const existingEntry = this.snapshots.get(options.snapshotCwd)?.get(options.provider);
@@ -916,12 +911,16 @@ export class ProviderSnapshotManager {
       description: definition.description,
       defaultModeId: definition.defaultModeId,
     };
+    let mirrorsGlobalCatalog = false;
     const setEntry = (entry: ProviderSnapshotEntry) => {
       if (!this.isCurrentProviderLoad(snapshotCwd, provider, load)) {
         return false;
       }
       snapshot.set(provider, entry);
       this.emitChange(snapshotCwd);
+      if (catalogScope.scope === "global" && mirrorsGlobalCatalog) {
+        this.mirrorGlobalCatalogEntry(provider, entry);
+      }
       return true;
     };
 
@@ -932,6 +931,7 @@ export class ProviderSnapshotManager {
       }
 
       const client = this.ensureClient(provider, definition);
+      mirrorsGlobalCatalog = client.capabilities.hasGlobalCatalog === true;
       if (catalogScope.scope === "workspace" && client.capabilities.hasGlobalCatalog === true) {
         setEntry(cloneEntry(await this.loadGlobalEntry(provider, force)));
         return;
@@ -1003,9 +1003,19 @@ export class ProviderSnapshotManager {
     });
     const entry = this.snapshots.get(target.snapshotCwd)?.get(provider);
     if (!entry || entry.status === "loading") {
-      throw new Error(`Global catalog for provider '${provider}' did not settle`);
+      throw new ProviderCatalogInvariantError(provider);
     }
     return entry;
+  }
+
+  private mirrorGlobalCatalogEntry(provider: AgentProvider, entry: ProviderSnapshotEntry): void {
+    for (const [cwd, snapshot] of this.snapshots) {
+      if (cwd === GLOBAL_PROVIDER_SNAPSHOT_KEY || !snapshot.has(provider)) {
+        continue;
+      }
+      snapshot.set(provider, cloneEntry(entry));
+      this.emitChange(cwd);
+    }
   }
 
   private getProviderLoad(cwdKey: string, provider: AgentProvider): ProviderLoad | undefined {
