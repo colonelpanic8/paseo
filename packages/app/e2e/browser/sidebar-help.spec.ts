@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "../support/fixtures";
 import { gotoAppShell, openSettings } from "../support/helpers/app";
+import { navigateToFocusedListItem } from "../support/helpers/list-navigation";
 import { openSettingsSection } from "../support/helpers/settings";
 import { openWhatsNew, release, serveChangelog } from "../support/helpers/changelog";
 
@@ -121,14 +122,11 @@ test("navigates shared menus with Ctrl+N and Ctrl+P", async ({ page }) => {
   await gotoAppShell(page);
   await openHelpMenu(page);
 
-  await page.keyboard.press("Control+n");
-  await expect(page.getByTestId("sidebar-help-shortcuts")).toBeFocused();
-
-  await page.keyboard.press("Control+n");
-  await expect(page.getByTestId("sidebar-help-changelog")).toBeFocused();
-
-  await page.keyboard.press("Control+p");
-  await expect(page.getByTestId("sidebar-help-shortcuts")).toBeFocused();
+  const shortcuts = page.getByTestId("sidebar-help-shortcuts");
+  const changelog = page.getByTestId("sidebar-help-changelog");
+  await navigateToFocusedListItem(page, "next", shortcuts);
+  await navigateToFocusedListItem(page, "next", changelog);
+  await navigateToFocusedListItem(page, "previous", shortcuts);
 });
 test("searches keyboard shortcuts from the sidebar help menu", async ({ page }) => {
   await page.addInitScript(() => {
