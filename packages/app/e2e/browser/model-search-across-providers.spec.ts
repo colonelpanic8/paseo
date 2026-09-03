@@ -20,6 +20,10 @@ import {
 } from "../support/helpers/agent-profiles";
 import { expectComposerVisible } from "../support/helpers/composer";
 import { clickNewChat, clickNewTerminal, gotoWorkspace } from "../support/helpers/launcher";
+import {
+  activateFirstListHighlight,
+  navigateToHighlightedListItem,
+} from "../support/helpers/list-navigation";
 import { seedWorkspace } from "../support/helpers/seed-client";
 
 const MOCK_PROVIDER_LABEL = "Mock Load Test";
@@ -53,14 +57,6 @@ const LARGE_CATALOG = {
     description: `Bulk search result ${index}`,
   })),
 };
-
-function readBackground(locator: Locator): Promise<string> {
-  return locator.evaluate((element) => getComputedStyle(element).backgroundColor);
-}
-
-async function expectBackground(locator: Locator, expected: string): Promise<void> {
-  await expect.poll(() => readBackground(locator)).toBe(expected);
-}
 
 test.describe("Cross-provider model search", () => {
   test("one query over the picker root reaches every provider and names each result's provider", async ({
@@ -114,17 +110,10 @@ test.describe("Cross-provider model search", () => {
         await searchAllModels(page, "ten second stream");
         const first = page.getByTestId("model-row-mock-ten-second-stream");
         const second = page.getByTestId(`model-row-${STUDIO.id}-studio-fast`);
-        const inactiveBackground = await readBackground(first);
+        const activeBackground = await activateFirstListHighlight(page, first);
 
-        await page.keyboard.press("Control+n");
-        const activeBackground = await readBackground(first);
-        expect(activeBackground).not.toBe(inactiveBackground);
-
-        await page.keyboard.press("Control+n");
-        await expectBackground(second, activeBackground);
-
-        await page.keyboard.press("Control+p");
-        await expectBackground(first, activeBackground);
+        await navigateToHighlightedListItem(page, "next", second, activeBackground);
+        await navigateToHighlightedListItem(page, "previous", first, activeBackground);
       });
 
       // Search falls back to subsequence matching, so "no matches" needs letters
