@@ -391,6 +391,12 @@ interface HandleStreamEventOptions {
   fromHistory?: boolean;
 }
 
+function resolveInitialLastMessageAt(
+  options: { lastMessageAt?: Date | null; lastUserMessageAt?: Date | null } | undefined,
+): Date | null {
+  return options?.lastMessageAt ?? options?.lastUserMessageAt ?? null;
+}
+
 interface ManagedAgentBase {
   id: string;
   provider: AgentProvider;
@@ -419,6 +425,7 @@ interface ManagedAgentBase {
   pendingReplacement: boolean;
   persistence: AgentPersistenceHandle | null;
   historyPrimed: boolean;
+  lastMessageAt: Date | null;
   lastUserMessageAt: Date | null;
   activeTurnId: string | null;
   activeTurnStartedAt: Date | null;
@@ -576,6 +583,10 @@ const AgentIdSchema = z.guid();
 
 function isAgentBusy(status: AgentLifecycleStatus): boolean {
   return BUSY_STATUSES.has(status);
+}
+
+function isConversationMessage(item: AgentTimelineItem): boolean {
+  return item.type === "user_message" || item.type === "assistant_message";
 }
 
 function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
@@ -1898,6 +1909,7 @@ export class AgentManager {
         unsubscribeSession: null,
         persistence: record.persistence ?? null,
         historyPrimed: true,
+        lastMessageAt: lastMessageAt ? new Date(lastMessageAt) : null,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
@@ -3663,6 +3675,7 @@ export class AgentManager {
         config.cwd,
       ),
       historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
+      lastMessageAt: resolveInitialLastMessageAt(options),
       lastUserMessageAt: options?.lastUserMessageAt ?? null,
       lastUsage: options?.lastUsage,
       lastError: options?.lastError,
@@ -4776,10 +4789,17 @@ export class AgentManager {
       timestamp?: string;
       providerMessageId?: string;
       turnId?: string;
+      trackMessageActivity?: boolean;
     },
   ): AgentTimelineRow {
     item = limitAgentTimelineItemContent(item);
     const row = this.timelineStore.append(agentId, item, options);
+    if (options?.trackMessageActivity && isConversationMessage(item)) {
+      const agent = this.agents.get(agentId);
+      if (agent) {
+        this.touchMessageAt(agent, row.timestamp);
+      }
+    }
     this.enqueueDurableTimelineAppend(agentId, row);
     return row;
   }
