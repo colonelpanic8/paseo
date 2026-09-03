@@ -1862,6 +1862,61 @@ describe("ProviderSnapshotManager cwd routing", () => {
     }
   });
 
+  test("forced global catalog refreshes share one follow-up to an overlapping warm-up", async () => {
+    let releaseWarmUp: (() => void) | undefined;
+    const warmUpStarted = Promise.withResolvers<void>();
+    const warmUpReleased = new Promise<void>((finish) => {
+      releaseWarmUp = finish;
+    });
+    const fetchCatalog = vi.fn(async (options: FetchCatalogOptions) => {
+      if (!options.force) {
+        warmUpStarted.resolve();
+        await warmUpReleased;
+      }
+      return {
+        models: [
+          {
+            provider: "codex",
+            id: options.force ? "gpt-5.4-mini-forced" : "gpt-5.4-mini-warm",
+            label: "GPT 5.4 Mini",
+          },
+        ],
+        modes: [],
+      };
+    });
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: disableBuiltinsExcept("codex"),
+      extraClients: {
+        codex: createExtraClient("codex", {
+          capabilities: { ...TEST_CAPABILITIES, hasGlobalCatalog: true },
+          isAvailable: async () => true,
+          fetchCatalog,
+        }),
+      },
+    });
+    try {
+      const warmUp = manager.getProvider({ provider: "codex", wait: true });
+      await warmUpStarted.promise;
+      const firstForced = manager.refreshSettingsSnapshot({ providers: ["codex"] });
+      const secondForced = manager.refreshSettingsSnapshot({ providers: ["codex"] });
+      releaseWarmUp?.();
+      await Promise.all([warmUp, firstForced, secondForced]);
+
+      expect(fetchCatalog).toHaveBeenCalledTimes(2);
+      expect(fetchCatalog.mock.calls.map(([options]) => options)).toEqual([
+        { scope: "global", force: false },
+        { scope: "global", force: true },
+      ]);
+      expect(await manager.getProvider({ provider: "codex", wait: false })).toMatchObject({
+        status: "ready",
+        models: [expect.objectContaining({ id: "gpt-5.4-mini-forced" })],
+      });
+    } finally {
+      manager.destroy();
+    }
+  });
+
   test("global catalog invariant errors expose provider and scope metadata", () => {
     expect(new ProviderCatalogInvariantError("codex")).toMatchObject({
       name: "ProviderCatalogInvariantError",

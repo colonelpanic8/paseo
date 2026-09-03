@@ -190,6 +190,7 @@ interface ProviderLoadOptions {
 }
 interface ProviderLoad {
   promise: Promise<void>;
+  force: boolean;
 }
 
 interface MutableProviderState {
@@ -860,6 +861,9 @@ export class ProviderSnapshotManager {
 
     const existingLoad = this.getProviderLoad(options.snapshotCwd, options.provider);
     if (existingLoad) {
+      if (options.force && !existingLoad.force) {
+        return existingLoad.promise.then(() => this.loadProvider(options));
+      }
       return existingLoad.promise;
     }
     const existingEntry = this.snapshots.get(options.snapshotCwd)?.get(options.provider);
@@ -869,6 +873,7 @@ export class ProviderSnapshotManager {
 
     const load: ProviderLoad = {
       promise: Promise.resolve(),
+      force: options.force,
     };
     this.setProviderLoad(options.snapshotCwd, options.provider, load);
     load.promise = Promise.resolve()
