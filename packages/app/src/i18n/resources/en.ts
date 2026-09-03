@@ -1720,6 +1720,146 @@ export const en = {
       copied: "Copied",
     },
   },
+  audioSession: {
+    busy: {
+      voiceMode: "Voice mode is using the microphone. Stop it first.",
+      dictation: "Dictation is using the microphone. Stop it first.",
+      liveVoice: "Live voice is using the microphone. Stop it first.",
+      unknown: "The microphone is in use. Stop the other audio feature first.",
+    },
+  },
+  liveVoice: {
+    label: "Live voice",
+    menu: {
+      hosts: "Host",
+    },
+    actions: {
+      start: "Start live voice",
+      unavailable: "Live voice unavailable",
+      stop: "Stop live voice",
+      mute: "Mute microphone",
+      unmute: "Unmute microphone",
+      enableAudio: "Tap to enable audio",
+      showTranscript: "Show transcript",
+      hideTranscript: "Hide transcript",
+      dismiss: "Dismiss",
+    },
+    unavailable: {
+      platform: "Live voice is not supported on this device.",
+      noHosts: "Add a host to use live voice.",
+      connecting: "Connecting to hosts. Live voice will appear when one is ready.",
+      offline: "No hosts are online. Connect to a host to use live voice.",
+      upgrade: "Connected hosts do not advertise live voice. Update their daemons.",
+      toolsDisabled: "Enable Paseo tools in this host's settings to use live voice.",
+    },
+    settings: {
+      title: "Live voice",
+      voice: {
+        label: "Voice",
+        description: "Used for new calls. An active call keeps its current voice.",
+        default: "Default",
+      },
+      backendModel: {
+        label: "Action model",
+        description:
+          "Runs the call's actions behind the scenes. Default is fast and cheap; pick a stronger model if actions need more judgement.",
+        default: "Default (fast)",
+      },
+      backendThinking: {
+        label: "Action thinking",
+        description: "Reasoning depth for the action model.",
+        default: "Default",
+      },
+      agentReports: {
+        label: "Report agent activity",
+        description:
+          "During a call, hear when any agent session finishes, fails, or needs permission — including ones you started outside the call, on any connected host.",
+      },
+      agentReportGuidance: {
+        label: "When to interrupt",
+        description: "Passed to the voice agent as written. Leave empty to let it decide.",
+        placeholder: "Only interrupt me for permission requests and failures.",
+      },
+      promptComponents: {
+        "canonical-tools": {
+          label: "Tool cheat sheet",
+          description: "Give the assistant exact tool names so it skips discovery turns.",
+        },
+        "delegation-brevity": {
+          label: "Brief delegation prompts",
+          description: "Keep prompts to agent sessions short — no dictated code or step lists.",
+        },
+        "cross-host-reach": {
+          label: "Cross-machine awareness",
+          description: "Teach the assistant which reads cover every machine in one call.",
+        },
+        recipes: {
+          label: "Recipes",
+          description: "Shortest known paths for common requests, like archiving by name.",
+        },
+        "speech-style": {
+          label: "Speaking style",
+          description: "Spoken-sentence output, act-first narration, and Paseo vocabulary.",
+        },
+      },
+      customInstructions: {
+        label: "Standing instructions",
+        description: "Passed to the voice agent as written, for every call.",
+        placeholder: "Always answer in one sentence unless I ask for more.",
+      },
+      defaultWorkspaceDirectory: {
+        label: "Default workspace directory",
+        description:
+          "Where new workspaces go when a request has no obvious one. Leave empty and the voice agent asks.",
+        placeholder: "~/Projects",
+      },
+    },
+    diagnostics: {
+      title: "Live voice",
+      statusTitle: "Status",
+      noHosts: "No hosts configured.",
+      hostSummary: "{{version}} · {{support}}",
+      unknownVersion: "Version unknown",
+      supported: "Live voice supported",
+      unsupported: "Live voice not supported",
+      supportUnknown: "Live voice support unknown",
+      connection: {
+        idle: "Idle",
+        connecting: "Connecting",
+        online: "Online",
+        offline: "Offline",
+        error: "Error",
+      },
+    },
+    status: {
+      connecting: "Connecting...",
+      live: "Live",
+      audioBlocked: "Audio blocked",
+      stopping: "Stopping...",
+      ended: "Call ended",
+      error: "Failed",
+    },
+    transcript: {
+      empty: "Nothing spoken yet.",
+      user: "You:",
+      assistant: "Agent:",
+    },
+    errors: {
+      busy: "A live voice call is already active on this host.",
+      unsupported: "This host does not support live voice.",
+      startFailed: "Live voice could not be started.",
+      micBusy: "The microphone is in use by another feature.",
+      notConnected: "This host is not connected.",
+      alreadyActive: "A live voice call is already running.",
+      stopping: "The previous live voice call is still stopping.",
+      micDenied: "Microphone access is blocked. Allow Paseo to use your microphone, then retry.",
+      micUnavailable:
+        "No usable microphone was found. Connect or select one in your device's audio settings, then retry.",
+      backgroundUnavailable: "Background audio could not be started.",
+      iceTimeout: "The connection could not be negotiated in time.",
+      connectionLost: "The live voice connection dropped.",
+    },
+  },
   realtimeVoice: {
     actions: {
       mute: "Mute realtime voice",
@@ -1919,6 +2059,7 @@ export const en = {
     groupInfo: "About {{title}}",
     sections: {
       general: "General",
+      voice: "Live voice",
       appearance: "Appearance",
       layout: "Layout",
       editor: "Editor",
@@ -2316,9 +2457,12 @@ export const en = {
         sendMessage: "Send message",
         queueMessage: "Queue message",
         muteUnmuteVoiceMode: "Mute/unmute voice mode",
+        muteUnmuteLiveVoice: "Mute/unmute live voice",
+        holdInvertLiveVoiceMute: "Hold to invert live voice mute",
         switchProject: "Switch project",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute: "Push-to-talk while muted, push-to-mute while live.",
         showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",
       },
     },
