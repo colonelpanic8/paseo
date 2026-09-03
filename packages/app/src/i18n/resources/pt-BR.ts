@@ -2152,14 +2152,6 @@ export const ptBR: TranslationResources = {
           auto: "Sistema",
         },
       },
-      sidebar: {
-        title: "Barra lateral",
-        alwaysShowHostLabels: {
-          title: "Sempre mostrar rótulos do host",
-          description:
-            "Mostra os rótulos do host mesmo quando todos os espaços de trabalho visíveis estão neste dispositivo",
-        },
-      },
       detailLevel: {
         title: "Nível de detalhe",
       },
@@ -2169,6 +2161,11 @@ export const ptBR: TranslationResources = {
       },
       sidebar: {
         title: "Barra lateral",
+        alwaysShowHostLabels: {
+          title: "Sempre mostrar rótulos do host",
+          description:
+            "Mostra os rótulos do host mesmo quando todos os espaços de trabalho visíveis estão neste dispositivo",
+        },
         description: "Escolha quais itens aparecem no topo da barra lateral e em que ordem",
         moveUp: "Mover para cima",
         moveDown: "Mover para baixo",

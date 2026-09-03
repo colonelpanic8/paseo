@@ -2172,14 +2172,6 @@ export const fr: TranslationResources = {
           auto: "Système",
         },
       },
-      sidebar: {
-        title: "Barre latérale",
-        alwaysShowHostLabels: {
-          title: "Toujours afficher les étiquettes d’hôte",
-          description:
-            "Affiche les étiquettes d’hôte même lorsque tous les espaces de travail visibles sont sur cet appareil",
-        },
-      },
       detailLevel: {
         title: "Niveau de détail",
       },
@@ -2189,6 +2181,11 @@ export const fr: TranslationResources = {
       },
       sidebar: {
         title: "Barre latérale",
+        alwaysShowHostLabels: {
+          title: "Toujours afficher les étiquettes d’hôte",
+          description:
+            "Affiche les étiquettes d’hôte même lorsque tous les espaces de travail visibles sont sur cet appareil",
+        },
         description: "Choisissez les éléments affichés en haut de la barre latérale et leur ordre",
         moveUp: "Déplacer vers le haut",
         moveDown: "Déplacer vers le bas",

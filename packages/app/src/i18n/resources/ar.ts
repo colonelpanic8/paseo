@@ -2118,13 +2118,6 @@ export const ar: TranslationResources = {
           auto: "نظام",
         },
       },
-      sidebar: {
-        title: "الشريط الجانبي",
-        alwaysShowHostLabels: {
-          title: "إظهار تسميات المضيف دائمًا",
-          description: "اعرض تسميات المضيف حتى عندما تكون كل مساحات العمل المرئية على هذا الجهاز",
-        },
-      },
       detailLevel: {
         title: "مستوى التفاصيل",
       },
@@ -2134,6 +2127,10 @@ export const ar: TranslationResources = {
       },
       sidebar: {
         title: "الشريط الجانبي",
+        alwaysShowHostLabels: {
+          title: "إظهار تسميات المضيف دائمًا",
+          description: "اعرض تسميات المضيف حتى عندما تكون كل مساحات العمل المرئية على هذا الجهاز",
+        },
         description: "اختر العناصر التي تظهر أعلى الشريط الجانبي وترتيبها",
         moveUp: "نقل لأعلى",
         moveDown: "نقل لأسفل",

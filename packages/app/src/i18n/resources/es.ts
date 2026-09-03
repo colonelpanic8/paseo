@@ -2168,14 +2168,6 @@ export const es: TranslationResources = {
           auto: "Sistema",
         },
       },
-      sidebar: {
-        title: "Barra lateral",
-        alwaysShowHostLabels: {
-          title: "Mostrar siempre las etiquetas de host",
-          description:
-            "Muestra las etiquetas de host incluso cuando todos los espacios de trabajo visibles están en este dispositivo",
-        },
-      },
       detailLevel: {
         title: "Nivel de detalle",
       },
@@ -2185,6 +2177,11 @@ export const es: TranslationResources = {
       },
       sidebar: {
         title: "Barra lateral",
+        alwaysShowHostLabels: {
+          title: "Mostrar siempre las etiquetas de host",
+          description:
+            "Muestra las etiquetas de host incluso cuando todos los espacios de trabajo visibles están en este dispositivo",
+        },
         description:
           "Elige qué elementos aparecen en la parte superior de la barra lateral y en qué orden",
         moveUp: "Mover hacia arriba",

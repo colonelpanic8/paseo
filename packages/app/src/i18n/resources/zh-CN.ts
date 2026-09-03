@@ -2094,13 +2094,6 @@ export const zhCN: TranslationResources = {
           auto: "系统",
         },
       },
-      sidebar: {
-        title: "侧边栏",
-        alwaysShowHostLabels: {
-          title: "始终显示主机标签",
-          description: "即使所有可见工作区都在此设备上，也显示主机标签",
-        },
-      },
       detailLevel: {
         title: "详细程度",
       },
@@ -2110,6 +2103,10 @@ export const zhCN: TranslationResources = {
       },
       sidebar: {
         title: "侧边栏",
+        alwaysShowHostLabels: {
+          title: "始终显示主机标签",
+          description: "即使所有可见工作区都在此设备上，也显示主机标签",
+        },
         description: "选择侧边栏顶部显示的项目及其顺序",
         moveUp: "上移",
         moveDown: "下移",
