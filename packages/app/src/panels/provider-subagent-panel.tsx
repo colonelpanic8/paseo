@@ -44,10 +44,12 @@ function resolveChildTrackClearance(childCount: number, isCompact: boolean) {
 
 function ProviderSubagentChildTrack({
   serverId,
+  cwd,
   rows,
   onOpenProviderSubagent,
 }: {
   serverId: string;
+  cwd: string | null;
   rows: ReturnType<typeof useSubagentsForParent>;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
 }) {
@@ -57,6 +59,7 @@ function ProviderSubagentChildTrack({
       <SubagentsTrack
         serverId={serverId}
         rows={rows}
+        cwd={cwd}
         onOpenSubagent={NOOP_SUBAGENT}
         onOpenProviderSubagent={onOpenProviderSubagent}
         onArchiveSubagent={NOOP_SUBAGENT}
@@ -265,6 +268,7 @@ function ProviderSubagentPanel() {
       />
       <ProviderSubagentChildTrack
         serverId={serverId}
+        cwd={streamContext.cwd || null}
         rows={childRows}
         onOpenProviderSubagent={openProviderChild}
       />
