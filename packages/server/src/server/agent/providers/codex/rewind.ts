@@ -107,8 +107,7 @@ export async function forkCodexThreadAt(
       excludeTurns: false,
       persistExtendedHistory: true,
     });
-    await input.setThreadId(forked.thread.id);
-    return;
+    return { providerHandleId: forked.thread.id };
   }
 
   // Fork is non-destructive: the old thread file stays on disk and remains
