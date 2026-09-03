@@ -2,88 +2,89 @@ import { Fragment, useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ExternalLink, Folder, GitBranch, Globe } from "lucide-react-native";
 import {
-  ExternalLink,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  Globe,
-  Server,
-  SquareTerminal,
-} from "lucide-react-native";
-import { hostColorValue, type HostBadgeModel, type HostColor } from "@/hosts/appearance";
+  workspaceLabelKey,
+  type WorkspaceLabelDefinition,
+} from "@getpaseo/protocol/workspace-labels";
+import type { HostBadgeModel } from "@/hosts/appearance";
+import { HostBadge, HOST_BADGE_ICON_SIZE } from "@/hosts/host-badge";
+import { WorkspaceLabelChip, WORKSPACE_LABEL_CHIP_INSET } from "@/workspace-labels/chip";
 import type { PrHint } from "@/git/pr-hint";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
+import { useSidebarMetaPreferences } from "@/components/sidebar/display-preferences/model";
 import type { Theme } from "@/styles/theme";
+import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { CheckIndicator } from "./check-indicator";
 import type { CheckSummary, CheckSummaryState } from "./check-summary";
 import { selectMetaRowItems, type MetaRowItem } from "./meta-items";
-import type { WorkspaceScriptSummary } from "./script-summary";
+import { workspaceServiceLabelKey, type WorkspaceServiceSummary } from "./service-summary";
 
-export { selectWorkspaceScriptSummary, type WorkspaceScriptSummary } from "./script-summary";
+export {
+  selectWorkspaceServiceSummary,
+  workspaceServiceLabelKey,
+  type WorkspaceServiceSummary,
+} from "./service-summary";
 
 /**
  * One size for every glyph on the line. The items are peers — host, change request, CI,
- * running service — so a glyph that differs in size reads as a different rank.
+ * running service — so a glyph that differs in size reads as a different rank. The host badge
+ * owns the size because it is the one item that also appears off this line.
  */
-const META_ICON_SIZE = 12;
+const META_ICON_SIZE = HOST_BADGE_ICON_SIZE;
 
-const ThemedServer = withUnistyles(Server);
 const ThemedExternalLink = withUnistyles(ExternalLink);
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedGitMerge = withUnistyles(GitMerge);
-const ThemedGitPullRequestClosed = withUnistyles(GitPullRequestClosed);
+const ThemedFolder = withUnistyles(Folder);
+const ThemedGitBranch = withUnistyles(GitBranch);
 const ThemedGlobe = withUnistyles(Globe);
-const ThemedSquareTerminal = withUnistyles(SquareTerminal);
 
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+/** Stable identity so a row without labels doesn't re-select its items on every render. */
+const EMPTY_LABELS: readonly WorkspaceLabelDefinition[] = [];
+
 const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const mergedMapping = (theme: Theme) => ({ color: theme.colors.statusMutedMerged });
-const dangerMapping = (theme: Theme) => ({ color: theme.colors.statusMutedDanger });
-
-// Theme-independent, so a color's mapping is fixed once it is first seen. Cached rather than
-// built up front because a custom color is any hex string, and a fresh `uniProps` identity on
-// every render makes withUnistyles re-subscribe each pass.
-const hostIconMappings = new Map<HostColor, (theme: Theme) => { color: string }>();
-
-function hostIconMapping(color: HostColor): (theme: Theme) => { color: string } {
-  const cached = hostIconMappings.get(color);
-  if (cached) {
-    return cached;
-  }
-  const value = hostColorValue(color);
-  const mapping = value ? () => ({ color: value }) : mutedMapping;
-  hostIconMappings.set(color, mapping);
-  return mapping;
-}
+const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const dangerMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
 
 /**
  * The subtitle under a workspace title: which host it lives on, its change request, that
- * change request's CI, and any running service. Everything the row knows about a workspace
- * that isn't its name.
+ * change request's CI, any running service, and the labels someone put on it. Everything the
+ * row knows about a workspace that isn't its name.
  *
  * Items are peers separated by a dot rather than ranked by chrome. The host used to be a
  * tinted pill on the title line, which made it the loudest thing in a row whose subject is
- * the title; flattening it lets the whole line read as one piece of secondary text and
- * leaves color to mean status.
+ * the title; flattening it lets the line read as one piece of secondary text.
+ *
+ * Labels are the one exception, and a deliberate one. Everything else here reports state, and
+ * state has its own colors — a label is a name a person chose, so it carries its own identity
+ * color on a tint instead (see `WorkspaceLabelChip`). It sits last so the reported facts are
+ * read first, and it stays the same height as the rest of the line.
  */
 export function WorkspaceMetaRow({
+  currentBranch,
+  projectName,
   hostBadge,
   prHint,
-  scriptSummary,
+  serviceSummary,
+  labels = EMPTY_LABELS,
 }: {
+  currentBranch: string | null;
+  projectName: string | null;
   hostBadge: HostBadgeModel | null;
   prHint: PrHint | null;
-  scriptSummary: WorkspaceScriptSummary | null;
+  serviceSummary: WorkspaceServiceSummary | null;
+  labels?: readonly WorkspaceLabelDefinition[];
 }) {
-  const visible = useSidebarRowItems();
+  const { rowItems, checksDisplay } = useSidebarMetaPreferences();
   const items = selectMetaRowItems({
+    currentBranch,
+    projectName,
     hasHostBadge: hostBadge !== null,
     prHint,
-    scriptSummary,
-    visible,
+    serviceSummary,
+    labels,
+    visible: rowItems,
+    checksDisplay,
   });
 
   if (items.length === 0) return null;
@@ -93,7 +94,7 @@ export function WorkspaceMetaRow({
       {items.map((item, index) => (
         <Fragment key={item.kind}>
           {index > 0 ? <Text style={styles.separator}>·</Text> : null}
-          <MetaItemNode item={item} hostBadge={hostBadge} />
+          <MetaItemNode item={item} hostBadge={hostBadge} leading={index === 0} />
         </Fragment>
       ))}
     </View>
@@ -103,36 +104,73 @@ export function WorkspaceMetaRow({
 function MetaItemNode({
   item,
   hostBadge,
+  leading,
 }: {
   item: MetaRowItem;
   hostBadge: HostBadgeModel | null;
+  /** First on the line, so this item's ink sets the rail the title above it already uses. */
+  leading: boolean;
 }): ReactNode {
+  if (item.kind === "branch") {
+    return <IdentityItem kind="branch" name={item.name} />;
+  }
+  if (item.kind === "project") {
+    return <IdentityItem kind="project" name={item.name} />;
+  }
   if (item.kind === "host") {
-    return hostBadge ? <HostItem hostBadge={hostBadge} /> : null;
+    return hostBadge ? <HostBadge badge={hostBadge} /> : null;
   }
   if (item.kind === "changeRequest") {
     return <PullRequestItem hint={item.hint} />;
   }
   if (item.kind === "checks") {
-    return <ChecksItem summary={item.summary} />;
+    return <ChecksItem summary={item.summary} label={item.label} />;
   }
-  return <ScriptItem summary={item.summary} />;
+  if (item.kind === "labels") {
+    return <LabelsItem labels={item.labels} leading={leading} />;
+  }
+  return <ServiceItem summary={item.summary} />;
 }
 
-function HostItem({ hostBadge }: { hostBadge: HostBadgeModel }) {
-  const color = hostColorValue(hostBadge.color);
+function IdentityItem({ kind, name }: { kind: "branch" | "project"; name: string }) {
+  const Icon = kind === "branch" ? ThemedGitBranch : ThemedFolder;
   return (
-    <View
-      style={styles.hostItem}
-      testID={`sidebar-host-badge-${hostBadge.serverId}`}
-      accessibilityLabel={hostBadge.label}
-    >
-      <ThemedServer size={META_ICON_SIZE} uniProps={hostIconMapping(hostBadge.color)} />
-      {hostBadge.showLabel ? (
-        <Text style={[styles.hostLabel, color ? { color } : null]} numberOfLines={1}>
-          {hostBadge.label}
-        </Text>
-      ) : null}
+    <View style={styles.identityItem} testID={`sidebar-workspace-${kind}`}>
+      <View style={styles.identityIcon}>
+        <Icon size={META_ICON_SIZE} uniProps={mutedMapping} />
+      </View>
+      <Text style={styles.identityText} numberOfLines={1}>
+        {name}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Every label on the workspace, in one run. The chips sit closer to each other than the line's
+ * items do to each other, so several labels still read as one item rather than as new peers,
+ * and they take no separator between them — each chip's ground already ends it.
+ *
+ * The run shrinks and clips, the way the host badge does. A `+N` counter would be a second
+ * thing to read on a line that exists to be skimmed.
+ *
+ * A workspace whose only meta item is its labels puts a chip where every other row puts a glyph,
+ * and a chip's ground is chrome — so it hangs left by its own padding and the label's first
+ * letter lands on the rail the title above it uses. Mid-line the ground stays in the flow: there
+ * is a separator to its left, and pulling the tint up against that dot buys nothing.
+ */
+function LabelsItem({
+  labels,
+  leading,
+}: {
+  labels: readonly WorkspaceLabelDefinition[];
+  leading: boolean;
+}) {
+  return (
+    <View style={[styles.labels, leading && styles.labelsLeading]}>
+      {labels.map((label) => (
+        <WorkspaceLabelChip key={workspaceLabelKey(label.name)} label={label} />
+      ))}
     </View>
   );
 }
@@ -163,7 +201,6 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
   const handleHoverIn = useCallback(() => setIsHovered(true), []);
   const handleHoverOut = useCallback(() => setIsHovered(false), []);
 
-  const Icon = isHovered ? ThemedExternalLink : PR_ICONS[hint.state];
   return (
     <Pressable
       accessibilityRole="link"
@@ -178,10 +215,11 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
       onHoverOut={handleHoverOut}
       style={pressableItemStyle}
     >
-      <Icon
-        size={META_ICON_SIZE}
-        uniProps={isHovered ? foregroundMapping : PR_COLOR_MAPPINGS[hint.state]}
-      />
+      {isHovered ? (
+        <ThemedExternalLink size={META_ICON_SIZE} uniProps={foregroundMapping} />
+      ) : (
+        <PullRequestStateIcon state={hint.state} size={META_ICON_SIZE} />
+      )}
       <Text style={isHovered ? styles.prTextHovered : styles.prText} numberOfLines={1}>
         {hint.number}
         {/* An open change request is the unremarkable case and says nothing extra; a merged
@@ -193,15 +231,19 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
 }
 
 /**
- * Every state says its own name. A tick on its own has no subject — the reader has to already
- * know the glyph is about CI to read it at all, and sitting after a host and a change request it
- * reads as something left over. One short word costs less than that ambiguity.
+ * By default every state says its own name. A tick on its own has no subject — the reader has to
+ * already know the glyph is about CI to read it at all, and sitting after a host and a change
+ * request it reads as something left over. One short word costs less than that ambiguity, which
+ * is why icon-and-text is the default and dropping the word is something you ask for.
  *
  * The words are the outcome, not the noun: "passed" against "failed", both naming how a finished
  * run ended, "running" for one still deciding. Repeating the subject on every healthy row —
  * "checks passed" — is the noise worth avoiding; naming the outcome is not.
+ *
+ * The accessible name is on the wrapper either way, so turning the word off shrinks the row
+ * without taking the state away from a screen reader.
  */
-function ChecksItem({ summary }: { summary: CheckSummary }) {
+function ChecksItem({ summary, label }: { summary: CheckSummary; label: boolean }) {
   const { t } = useTranslation();
   return (
     <View
@@ -210,9 +252,11 @@ function ChecksItem({ summary }: { summary: CheckSummary }) {
       testID={`sidebar-workspace-checks-${summary.state}`}
     >
       <CheckIndicator summary={summary} size={META_ICON_SIZE} />
-      <Text style={checksTextStyle(summary.state)} numberOfLines={1}>
-        {t(CHECK_STATE_LABEL_KEYS[summary.state])}
-      </Text>
+      {label ? (
+        <Text style={checksTextStyle(summary.state)} numberOfLines={1}>
+          {t(CHECK_STATE_LABEL_KEYS[summary.state])}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -229,39 +273,32 @@ const CHECK_STATE_ACCESSIBLE_KEYS = {
   running: "workspace.git.pr.checksSummary.runningAccessible",
 } as const;
 
-function ScriptItem({ summary }: { summary: WorkspaceScriptSummary }) {
+/**
+ * A running service, named. It is the one item on the line whose text is arbitrary — everything
+ * else is a number, a short word, or a host label the user already picked — so it is also the
+ * only one allowed to shrink, and it truncates rather than pushing the line past the row.
+ *
+ * A failed health check turns the whole item danger, glyph and name together. Colouring only the
+ * glyph would leave the name reading as fine, and the name is the part you look at.
+ */
+function ServiceItem({ summary }: { summary: WorkspaceServiceSummary }) {
   const { t } = useTranslation();
+  const unhealthy = summary.health === "unhealthy";
   return (
     <View
-      style={styles.item}
-      accessibilityLabel={t("workspace.status.scriptsAvailable")}
-      testID={summary.kind === "service" ? "workspace-globe-icon" : "workspace-terminal-icon"}
+      style={styles.serviceItem}
+      accessibilityLabel={t(workspaceServiceLabelKey(summary), { name: summary.name })}
+      testID={unhealthy ? "workspace-service-unhealthy" : "workspace-service"}
     >
-      {summary.kind === "service" ? (
-        <ThemedGlobe size={META_ICON_SIZE} uniProps={successMapping} />
-      ) : (
-        <ThemedSquareTerminal size={META_ICON_SIZE} uniProps={successMapping} />
-      )}
-      {summary.port !== null ? <Text style={styles.scriptPort}>:{summary.port}</Text> : null}
+      <ThemedGlobe size={META_ICON_SIZE} uniProps={unhealthy ? dangerMapping : successMapping} />
+      <Text style={unhealthy ? styles.serviceNameUnhealthy : styles.serviceName} numberOfLines={1}>
+        {summary.name}
+      </Text>
     </View>
   );
 }
 
-const successMapping = (theme: Theme) => ({ color: theme.colors.statusMutedSuccess });
-
-const PR_ICONS = {
-  open: ThemedGitPullRequest,
-  merged: ThemedGitMerge,
-  closed: ThemedGitPullRequestClosed,
-} as const;
-
-// Same three colours the hover card gives the same three states — a change request has one
-// identity, and it shouldn't shift when you hover the row that names it.
-const PR_COLOR_MAPPINGS = {
-  open: successMapping,
-  merged: mergedMapping,
-  closed: dangerMapping,
-} as const;
+const successMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 
 const PR_STATE_LABEL_KEYS = {
   merged: "workspace.git.pr.states.merged",
@@ -286,13 +323,20 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 0,
   },
-  // The host is the only unbounded item, so it consumes the remaining width and gives way
-  // before the bounded change request, CI, and service items.
-  hostItem: {
+  identityItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
     minWidth: 0,
+    flexShrink: 1,
+  },
+  identityIcon: {
+    flexShrink: 0,
+  },
+  identityText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 16,
     flexShrink: 1,
   },
   itemPressed: {
@@ -300,51 +344,72 @@ const styles = StyleSheet.create((theme) => ({
   },
   separator: {
     color: theme.colors.foregroundExtraMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
   },
-  hostLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+  // Tighter than the line's own gap so a run of chips reads as one item — see `LabelsItem`.
+  // Shrinks at the same weight as the service name: both are arbitrary text somebody chose, so
+  // a crowded line takes from the two of them in proportion rather than emptying one of them.
+  // The host badge still gives up its space before either — see `flexShrink` in host-badge.tsx.
+  labels: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  labelsLeading: {
+    marginLeft: -WORKSPACE_LABEL_CHIP_INSET,
+  },
+  // The one item that gives way when the line runs out of room — see `ServiceItem`.
+  serviceItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  serviceName: {
+    color: theme.colors.statusSuccess,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 1,
-    minWidth: 0,
   },
-  scriptPort: {
-    color: theme.colors.statusMutedSuccess,
-    fontSize: theme.fontSize.xs,
+  serviceNameUnhealthy: {
+    color: theme.colors.statusDanger,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
-    flexShrink: 0,
+    flexShrink: 1,
   },
   prText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
   },
   prTextHovered: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
   },
   // Matches the indicator — see COLOR_MAPPINGS in check-indicator.tsx.
   checksTextPassed: {
-    color: theme.colors.statusMutedSuccess,
-    fontSize: theme.fontSize.xs,
+    color: theme.colors.statusSuccess,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
   },
   checksTextFailed: {
-    color: theme.colors.statusMutedDanger,
-    fontSize: theme.fontSize.xs,
+    color: theme.colors.statusDanger,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
   },
   checksTextRunning: {
-    color: theme.colors.statusMutedWarning,
-    fontSize: theme.fontSize.xs,
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
   },
