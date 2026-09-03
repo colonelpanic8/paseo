@@ -104,7 +104,11 @@ export class AgentStreamCoalescer {
       return false;
     }
 
-    if (isTextTimelineItem(event.item) && event.item.text === "") {
+    const isEmptyAssistantAttribution =
+      event.item.type === "assistant_message" &&
+      event.item.text === "" &&
+      (event.item.model !== undefined || event.item.thinkingOptionId !== undefined);
+    if (isTextTimelineItem(event.item) && event.item.text === "" && !isEmptyAssistantAttribution) {
       return true;
     }
 
