@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState } from "react-native";
 import { usePathname, useRouter } from "expo-router";
-import { hasFocusedEditingTextInput } from "@/components/ui/text-input";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
@@ -56,6 +55,7 @@ import {
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
+import { hasFocusedTextInput } from "@/components/ui/text-input";
 
 export function useKeyboardShortcuts({
   enabled,
@@ -410,7 +410,7 @@ export function useKeyboardShortcuts({
     const store = useKeyboardShortcutsStore.getState();
     if (store.capturingShortcut) return;
 
-    const focusScope: KeyboardFocusScope = hasFocusedEditingTextInput() ? "editable" : "other";
+    const focusScope: KeyboardFocusScope = hasFocusedTextInput() ? "editable" : "other";
     routeNativeListSearchBeforeShortcut({
       event: nativeEvent,
       dispatchList: (event) => listSearchDispatcher.dispatch(event),
