@@ -4,11 +4,13 @@ import {
   type IdentityColorName,
 } from "@/styles/identity-colors";
 import type { HostProfile } from "@/types/host-connection";
+import { z } from "zod";
 
 export type CustomHostColor = `#${string}`;
-export type HostColor = "none" | IdentityColorName | CustomHostColor;
+export type PresetHostColor = "none" | IdentityColorName;
+export type HostColor = PresetHostColor | CustomHostColor;
 
-export const HOST_COLORS: readonly HostColor[] = ["none", ...IDENTITY_COLOR_NAMES];
+export const HOST_COLORS: readonly PresetHostColor[] = ["none", ...IDENTITY_COLOR_NAMES];
 
 export type HostBadgeDisplay = "name" | "icon" | "hidden";
 
@@ -24,12 +26,17 @@ export interface HostAppearance {
   badgeDisplay: HostBadgeDisplay | null;
 }
 
+const CustomHostColorSchema = z
+  .custom<CustomHostColor>((value) => normalizeCustomHostColor(value) !== null)
+  .transform((value) => normalizeCustomHostColor(value) ?? value);
+
+export const HostAppearanceSchema: z.ZodType<HostAppearance> = z.strictObject({
+  color: z.union([z.enum(["none", ...IDENTITY_COLOR_NAMES]), CustomHostColorSchema]),
+  badgeDisplay: z.enum(["name", "icon", "hidden"]).nullable(),
+});
+
 export function defaultHostAppearance(): HostAppearance {
   return { color: "none", badgeDisplay: null };
-}
-
-function isPresetHostColor(value: unknown): value is "none" | IdentityColorName {
-  return HOST_COLORS.some((color) => color === value);
 }
 
 export function normalizeCustomHostColor(value: unknown): CustomHostColor | null {
@@ -47,10 +54,6 @@ export function normalizeCustomHostColor(value: unknown): CustomHostColor | null
   return null;
 }
 
-export function normalizeHostColor(value: unknown): HostColor | null {
-  return isPresetHostColor(value) ? value : normalizeCustomHostColor(value);
-}
-
 export function isCustomHostColor(color: HostColor): color is CustomHostColor {
   return color.startsWith("#");
 }
@@ -62,19 +65,9 @@ export function hostColorValue(color: HostColor): string | null {
   return isCustomHostColor(color) ? color : identityColor(color);
 }
 
-function isHostBadgeDisplay(value: unknown): value is HostBadgeDisplay {
-  return HOST_BADGE_DISPLAYS.some((display) => display === value);
-}
-
 export function normalizeStoredHostAppearance(value: unknown): HostAppearance {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return defaultHostAppearance();
-  }
-  const record = value as Record<string, unknown>;
-  return {
-    color: normalizeHostColor(record.color) ?? "none",
-    badgeDisplay: isHostBadgeDisplay(record.badgeDisplay) ? record.badgeDisplay : null,
-  };
+  const result = HostAppearanceSchema.safeParse(value);
+  return result.success ? result.data : defaultHostAppearance();
 }
 
 export function resolveHostBadgeDisplay(input: {

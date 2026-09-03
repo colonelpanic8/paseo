@@ -4,7 +4,12 @@ import {
   type SidebarWorkspaceTrailing,
   type WorkspaceTitleSource,
 } from "@/hooks/use-settings";
-import { useSidebarViewStore, type SidebarGroupMode } from "@/stores/sidebar-view-store";
+import {
+  useSidebarViewStore,
+  type SidebarGroupMode,
+  type SidebarLabelFilter,
+} from "@/stores/sidebar-view-store";
+import { DEFAULT_SIDEBAR_CHECKS_DISPLAY, type SidebarChecksDisplay } from "./checks-display";
 import { DEFAULT_SIDEBAR_ROW_ITEMS, type SidebarRowItem, type SidebarRowItems } from "./row-items";
 
 /** The trailing slot holds one thing, so these are a choice rather than toggles. */
@@ -17,8 +22,9 @@ export interface SidebarDisplayPreferences {
   setTitleSource: (source: WorkspaceTitleSource) => void;
   rowItems: SidebarRowItems;
   toggleRowItem: (item: SidebarRowItem) => void;
+  checksDisplay: SidebarChecksDisplay;
+  setChecksDisplay: (display: SidebarChecksDisplay) => void;
   alwaysShowHostLabels: boolean;
-  /** A shortcut to the persisted Appearance preference. */
   toggleAlwaysShowHostLabels: () => void;
   trailing: SidebarWorkspaceTrailing;
   /** Picking the choice that is already showing clears the slot. */
@@ -26,6 +32,13 @@ export interface SidebarDisplayPreferences {
   hostFilters: readonly string[];
   toggleHostFilter: (serverId: string) => void;
   clearHostFilters: () => void;
+  /** Raw stored selection. For anything the user sees, use the model's resolved list instead. */
+  projectFilters: readonly string[];
+  toggleProjectFilter: (viewKey: string) => void;
+  clearProjectFilters: () => void;
+  labelFilter: SidebarLabelFilter;
+  toggleLabelFilter: (name: string) => void;
+  clearLabelFilter: () => void;
 }
 
 /**
@@ -42,12 +55,19 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
   const hostFilters = useSidebarViewStore((state) => state.hostFilters);
   const toggleHostFilter = useSidebarViewStore((state) => state.toggleHostFilter);
   const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
+  const projectFilters = useSidebarViewStore((state) => state.projectFilters);
+  const toggleProjectFilter = useSidebarViewStore((state) => state.toggleProjectFilter);
+  const clearProjectFilters = useSidebarViewStore((state) => state.clearProjectFilters);
+  const labelFilter = useSidebarViewStore((state) => state.labelFilter);
+  const toggleLabelFilter = useSidebarViewStore((state) => state.toggleLabelFilter);
+  const clearLabelFilter = useSidebarViewStore((state) => state.clearLabelFilter);
 
   const {
     settings: {
       workspaceTitleSource,
       sidebarWorkspaceTrailing,
       sidebarRowItems,
+      sidebarChecksDisplay,
       alwaysShowHostLabels,
     },
     updateSettings,
@@ -67,6 +87,13 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       });
     },
     [updateSettings, sidebarRowItems],
+  );
+
+  const setChecksDisplay = useCallback(
+    (display: SidebarChecksDisplay) => {
+      void updateSettings({ sidebarChecksDisplay: display });
+    },
+    [updateSettings],
   );
 
   const toggleAlwaysShowHostLabels = useCallback(() => {
@@ -90,6 +117,8 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       setTitleSource,
       rowItems: sidebarRowItems,
       toggleRowItem,
+      checksDisplay: sidebarChecksDisplay,
+      setChecksDisplay,
       alwaysShowHostLabels,
       toggleAlwaysShowHostLabels,
       trailing: sidebarWorkspaceTrailing,
@@ -97,6 +126,12 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       hostFilters,
       toggleHostFilter,
       clearHostFilters,
+      projectFilters,
+      toggleProjectFilter,
+      clearProjectFilters,
+      labelFilter,
+      toggleLabelFilter,
+      clearLabelFilter,
     }),
     [
       grouping,
@@ -105,6 +140,8 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       setTitleSource,
       sidebarRowItems,
       toggleRowItem,
+      sidebarChecksDisplay,
+      setChecksDisplay,
       alwaysShowHostLabels,
       toggleAlwaysShowHostLabels,
       sidebarWorkspaceTrailing,
@@ -112,6 +149,12 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       hostFilters,
       toggleHostFilter,
       clearHostFilters,
+      projectFilters,
+      toggleProjectFilter,
+      clearProjectFilters,
+      labelFilter,
+      toggleLabelFilter,
+      clearLabelFilter,
     ],
   );
 }
@@ -125,4 +168,32 @@ export function useSidebarRowItems(): SidebarRowItems {
     settings: { sidebarRowItems },
   } = useAppSettings();
   return sidebarRowItems ?? DEFAULT_SIDEBAR_ROW_ITEMS;
+}
+
+export function useAlwaysShowHostLabels(): boolean {
+  const {
+    settings: { alwaysShowHostLabels },
+  } = useAppSettings();
+  return alwaysShowHostLabels;
+}
+
+/**
+ * Everything the line under a workspace title needs to know, in one read. The two settings are
+ * answered together by `selectMetaRowItems`, so asking for them separately would only mean two
+ * subscriptions per row for one decision.
+ */
+export function useSidebarMetaPreferences(): {
+  rowItems: SidebarRowItems;
+  checksDisplay: SidebarChecksDisplay;
+} {
+  const {
+    settings: { sidebarRowItems, sidebarChecksDisplay },
+  } = useAppSettings();
+  return useMemo(
+    () => ({
+      rowItems: sidebarRowItems ?? DEFAULT_SIDEBAR_ROW_ITEMS,
+      checksDisplay: sidebarChecksDisplay ?? DEFAULT_SIDEBAR_CHECKS_DISPLAY,
+    }),
+    [sidebarRowItems, sidebarChecksDisplay],
+  );
 }
