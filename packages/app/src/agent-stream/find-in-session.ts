@@ -110,7 +110,7 @@ export function extractSearchableText(item: StreamItem): string {
       return item.text;
     case "assistant_message":
       return extractVisibleMarkdownText(item.text);
-    case "activity_log":
+    case "notification":
       return item.message;
     case "todo_list":
       return item.items.map((entry) => entry.text).join("\n");
