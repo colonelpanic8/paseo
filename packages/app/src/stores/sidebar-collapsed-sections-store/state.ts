@@ -126,8 +126,7 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
     persisted.collapsedStatusGroupKeys ?? Array.from(current.collapsedStatusGroupKeys),
   );
   const restoredAgentTrees = deserializeCollapsedKeys(
-    persisted.expandedAgentTreeWorkspaceKeys ??
-      Array.from(current.expandedAgentTreeWorkspaceKeys),
+    persisted.expandedAgentTreeWorkspaceKeys ?? Array.from(current.expandedAgentTreeWorkspaceKeys),
   );
   const restoredPinned = persisted.collapsedPinned ?? current.collapsedPinned;
   if (

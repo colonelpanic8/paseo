@@ -189,6 +189,10 @@ function normalizeCurrentBranch(currentBranch: string | null | undefined): strin
   return trimmed.length === 0 || trimmed === "HEAD" ? null : trimmed;
 }
 
+function workspaceRemoteUrl(workspace: WorkspaceDescriptor): string | null {
+  return workspace.gitRuntime?.remoteUrl ?? workspace.project?.checkout.remoteUrl ?? null;
+}
+
 export function createSidebarWorkspaceEntry(input: {
   serverId: string;
   workspace: WorkspaceDescriptor;
@@ -220,8 +224,7 @@ export function createSidebarWorkspaceEntry(input: {
     pinnedAt: input.workspace.pinnedAt,
     labels: input.workspace.labels ?? EMPTY_WORKSPACE_LABELS,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
-    remoteUrl:
-      input.workspace.gitRuntime?.remoteUrl ?? input.workspace.project?.checkout.remoteUrl ?? null,
+    remoteUrl: workspaceRemoteUrl(input.workspace),
     providers: agentActivity?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
