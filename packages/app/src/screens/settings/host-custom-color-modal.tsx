@@ -19,7 +19,8 @@ import {
 } from "@/hosts/appearance";
 import { identityColor } from "@/styles/identity-colors";
 
-const DEFAULT_CUSTOM_COLOR = identityColor("teal");
+const DEFAULT_CUSTOM_COLOR =
+  `#${identityColor("teal").replace(/^#/, "")}` satisfies CustomHostColor;
 
 interface HostCustomColorModalProps {
   visible: boolean;
@@ -29,7 +30,7 @@ interface HostCustomColorModalProps {
 }
 
 function initialPickerColor(color: HostColor): CustomHostColor {
-  return (hostColorValue(color) ?? DEFAULT_CUSTOM_COLOR) as CustomHostColor;
+  return normalizeCustomHostColor(hostColorValue(color)) ?? DEFAULT_CUSTOM_COLOR;
 }
 
 export function HostCustomColorModal({
@@ -65,7 +66,7 @@ export function HostCustomColorModal({
     setDraft(displayValue);
     setPickerColor(normalized);
     setError(null);
-    inputRef.current?.setNativeProps({ text: displayValue });
+    inputRef.current?.replaceText(displayValue);
   }, []);
 
   const handleInputChange = useCallback((value: string) => {
