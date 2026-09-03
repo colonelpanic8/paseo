@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Text,
-  TextInput,
   View,
   type NativeSyntheticEvent,
   type PointerEvent,
@@ -11,6 +10,10 @@ import {
   type TextStyle,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 
@@ -41,7 +44,7 @@ export function SidebarWorkspaceInlineTitle({
   const { t } = useTranslation();
   const toast = useToast();
   const [state, setState] = useState<InlineRenameState>({ kind: "idle" });
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<EditingTextInputHandle>(null);
   const titleRef = useRef<View>(null);
   const cancelledRef = useRef(false);
   const submittingRef = useRef(false);
