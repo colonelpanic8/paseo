@@ -429,6 +429,28 @@ type AgentLookupState =
   | { tag: "not_found"; message: string }
   | { tag: "error"; message: string };
 
+function useHostUnavailableState(serverId: string | null): {
+  serverLabel: string;
+  connectionStatus: HostRuntimeConnectionStatus;
+  lastError: string | null;
+  isUnknownDaemon: boolean;
+  t: TFunction;
+} {
+  const { t } = useTranslation();
+  const daemons = useHosts();
+  const runtimeServerId = serverId ?? "";
+  const runtimeConnectionStatus = useHostRuntimeConnectionStatus(runtimeServerId);
+  const lastError = useHostRuntimeLastError(runtimeServerId);
+  const daemon = serverId ? (daemons.find((entry) => entry.serverId === serverId) ?? null) : null;
+  const serverLabel = daemon?.label ?? serverId ?? t("agentPanel.unavailable.selectedHost");
+  const isUnknownDaemon = Boolean(serverId && !daemon);
+  const connectionStatus: HostRuntimeConnectionStatus =
+    isUnknownDaemon && runtimeConnectionStatus === "connecting"
+      ? "offline"
+      : runtimeConnectionStatus;
+  return { serverLabel, connectionStatus, lastError, isUnknownDaemon, t };
+}
+
 function AgentPanelContent({
   serverId,
   workspaceId,
@@ -442,15 +464,12 @@ function AgentPanelContent({
   isPaneFocused: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
-  const { t } = useTranslation();
   const resolvedAgentId = resolveConversationAgentId(target);
   const resolvedServerId = serverId.trim() || undefined;
-  const daemons = useHosts();
   const runtimeServerId = resolvedServerId ?? "";
   const runtimeClient = useHostRuntimeClient(runtimeServerId);
   const runtimeIsConnected = useHostRuntimeIsConnected(runtimeServerId);
-  const runtimeConnectionStatus = useHostRuntimeConnectionStatus(runtimeServerId);
-  const runtimeLastError = useHostRuntimeLastError(runtimeServerId);
+  const hostUnavailable = useHostUnavailableState(resolvedServerId ?? null);
   const hasCachedAgent = useSessionStore((state) => {
     if (!resolvedServerId || !resolvedAgentId) return false;
     const session = state.sessions[resolvedServerId];
@@ -459,29 +478,13 @@ function AgentPanelContent({
     );
   });
 
-  const connectionServerId = resolvedServerId ?? null;
-  const daemon = connectionServerId
-    ? (daemons.find((entry) => entry.serverId === connectionServerId) ?? null)
-    : null;
-  const serverLabel =
-    daemon?.label ?? connectionServerId ?? t("agentPanel.unavailable.selectedHost");
-  const isUnknownDaemon = Boolean(connectionServerId && !daemon);
-  const connectionStatus: HostRuntimeConnectionStatus =
-    isUnknownDaemon && runtimeConnectionStatus === "connecting"
-      ? "offline"
-      : runtimeConnectionStatus;
-  const lastConnectionError = runtimeLastError;
-
-  if (target.kind === "agent" && (!resolvedServerId || (!runtimeClient && !hasCachedAgent))) {
-    return (
-      <AgentSessionUnavailableState
-        serverLabel={serverLabel}
-        connectionStatus={connectionStatus}
-        lastError={lastConnectionError}
-        isUnknownDaemon={isUnknownDaemon}
-        t={t}
-      />
-    );
+  // A draft has no agent to fall back on, so it needs a live host to create one.
+  const isHostMissing =
+    target.kind === "agent"
+      ? !resolvedServerId || (!runtimeClient && !hasCachedAgent)
+      : !runtimeClient;
+  if (isHostMissing) {
+    return <AgentSessionUnavailableState {...hostUnavailable} />;
   }
 
   return (
