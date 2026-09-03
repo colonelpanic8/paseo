@@ -11,6 +11,7 @@ import sh.paseo.watch.model.WorkspaceDestination
 import sh.paseo.watch.model.destination
 import sh.paseo.watch.model.sortedForWrist
 import sh.paseo.watch.model.summaryLine
+import sh.paseo.watch.model.workspaceByIdentity
 
 /**
  * The watch/phone wire contract has no generated code keeping the two halves in
@@ -121,13 +122,20 @@ class WearBridgeTest {
     // Pending permission wins over everything else.
     val permission = workspaces[0].destination()
     assertTrue(permission is WorkspaceDestination.Permission)
-    assertEquals("a-1", (permission as WorkspaceDestination.Permission).agentId)
+    assertEquals("srv-1", (permission as WorkspaceDestination.Permission).serverId)
+    assertEquals("a-1", permission.agentId)
 
     // Two agents, nothing urgent -> the picker is the only correct destination.
-    assertTrue(workspaces[1].destination() is WorkspaceDestination.Picker)
+    val picker = workspaces[1].destination()
+    assertTrue(picker is WorkspaceDestination.Picker)
+    assertEquals("srv-1", (picker as WorkspaceDestination.Picker).serverId)
+    assertEquals("ws-2", picker.workspaceId)
 
     // Empty workspace -> straight to dictating a prompt.
-    assertTrue(workspaces[2].destination() is WorkspaceDestination.NewAgent)
+    val newAgent = workspaces[2].destination()
+    assertTrue(newAgent is WorkspaceDestination.NewAgent)
+    assertEquals("srv-1", (newAgent as WorkspaceDestination.NewAgent).serverId)
+    assertEquals("ws-3", newAgent.workspaceId)
   }
 
   @Test
@@ -140,7 +148,19 @@ class WearBridgeTest {
       )
     val destination = ws.destination()
     assertTrue(destination is WorkspaceDestination.Agent)
-    assertEquals("a-1", (destination as WorkspaceDestination.Agent).agentId)
+    assertEquals("srv-1", (destination as WorkspaceDestination.Agent).serverId)
+    assertEquals("a-1", destination.agentId)
+  }
+
+  @Test
+  fun `workspace identity includes its server`() {
+    val first = decodeSnapshot(phoneJson)!!.toWorkspaces().first()
+    val sameIdOnAnotherServer = first.copy(serverId = "srv-2", name = "other daemon")
+
+    val selected = listOf(first, sameIdOnAnotherServer).workspaceByIdentity("srv-2", first.id)
+
+    assertEquals("srv-2", selected?.serverId)
+    assertEquals("other daemon", selected?.name)
   }
 
   @Test

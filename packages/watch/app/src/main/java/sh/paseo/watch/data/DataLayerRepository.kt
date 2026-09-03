@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import sh.paseo.watch.model.AgentSession
 import sh.paseo.watch.model.Transcript
 import sh.paseo.watch.model.Workspace
+import sh.paseo.watch.model.workspaceByIdentity
 
 private const val TAG = "PaseoWear"
 
@@ -288,7 +289,8 @@ class DataLayerRepository(
     if (kept.size != current.size) iconState.value = kept
   }
 
-  override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
+  override fun workspace(serverId: String, id: String): Workspace? =
+    state.value.workspaceByIdentity(serverId, id)
 
   private fun agent(serverId: String, agentId: String): AgentSession? =
     state.value.flatMap { it.agents }.firstOrNull { it.serverId == serverId && it.id == agentId }
@@ -305,8 +307,8 @@ class DataLayerRepository(
     )
   }
 
-  override suspend fun createAgent(workspaceId: String, prompt: String) {
-    val workspace = workspace(workspaceId) ?: return
+  override suspend fun createAgent(serverId: String, workspaceId: String, prompt: String) {
+    val workspace = workspace(serverId, workspaceId) ?: return
     send(
       WireCommand(
         kind = WireCommand.CREATE_AGENT,

@@ -183,7 +183,7 @@ produces both signed APKs).
   undecodable one falls back to the colored initial, so the pre-existing look is the
   failure mode. A third DataItem prefix means a third listener object — see the
   README; that gotcha now applies three times.
-- 27 phone-side tests, 46 watch unit tests, 1 on-device instrumented test.
+- 27 phone-side tests, 47 watch unit tests, 1 on-device instrumented test.
 
 ## Open work
 

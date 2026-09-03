@@ -79,12 +79,12 @@ class TranscriptCacheTest {
   fun `pruning keeps only agents the snapshot still lists`() {
     val cache =
       mapOf(
-        "a-1" to transcript("a-1", 100),
-        "a-2" to transcript("a-2", 100),
-        "gone" to transcript("gone", 100),
+        "srv-1\u0000a-1" to transcript("a-1", 100),
+        "srv-1\u0000a-2" to transcript("a-2", 100),
+        "srv-1\u0000gone" to transcript("gone", 100),
       )
     val kept = cache.retainingAgentsIn(listOf(workspace("ws-1", "a-1"), workspace("ws-2", "a-2")))
-    assertEquals(setOf("a-1", "a-2"), kept.keys)
+    assertEquals(setOf("srv-1\u0000a-1", "srv-1\u0000a-2"), kept.keys)
   }
 
   @Test
@@ -97,7 +97,11 @@ class TranscriptCacheTest {
 
   @Test
   fun `pruning an unchanged agent set keeps every entry`() {
-    val cache = mapOf("a-1" to transcript("a-1", 100), "a-2" to transcript("a-2", 100))
+    val cache =
+      mapOf(
+        "srv-1\u0000a-1" to transcript("a-1", 100),
+        "srv-1\u0000a-2" to transcript("a-2", 100),
+      )
     val kept = cache.retainingAgentsIn(listOf(workspace("ws-1", "a-1", "a-2")))
     assertEquals(cache, kept)
   }
