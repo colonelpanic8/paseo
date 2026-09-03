@@ -11474,3 +11474,36 @@ test("workspace archive stamps its agents and workspace unarchive restores exact
   expect(dispatchedAgentIds).toContain(agentB.id);
   expect(dispatchedAgentIds).not.toContain(individuallyArchived.id);
 });
+
+test("archiveSnapshot keeps the stored record active when required native archive fails", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-native-archive-failure-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const client = new NativeArchiveRecordingClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+  });
+
+  const agent = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      title: "Required native archive target",
+    },
+    undefined,
+    { workspaceId: undefined },
+  );
+  await manager.closeAgent(agent.id);
+  client.archiveFailure = new Error("provider archive failed");
+
+  await expect(
+    manager.archiveSnapshot(agent.id, new Date().toISOString(), {
+      nativeArchiveMode: "required",
+    }),
+  ).rejects.toThrow("provider archive failed");
+
+  expect((await storage.get(agent.id))?.archivedAt).toBeUndefined();
+  expect(client.archivedHandles).toHaveLength(1);
+});
