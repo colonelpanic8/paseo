@@ -2209,13 +2209,6 @@ export const en = {
           auto: "System",
         },
       },
-      sidebar: {
-        title: "Sidebar",
-        alwaysShowHostLabels: {
-          title: "Always show host labels",
-          description: "Show host labels even when every visible workspace is on this device",
-        },
-      },
       detailLevel: {
         title: "Detail level",
       },
@@ -2225,6 +2218,10 @@ export const en = {
       },
       sidebar: {
         title: "Sidebar",
+        alwaysShowHostLabels: {
+          title: "Always show host labels",
+          description: "Show host labels even when every visible workspace is on this device",
+        },
         description: "Choose which items appear at the top of the sidebar and in what order",
         moveUp: "Move up",
         moveDown: "Move down",

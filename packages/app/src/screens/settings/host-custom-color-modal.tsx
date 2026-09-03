@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import ColorPicker, { HueSlider, Panel1, type ColorFormatsObject } from "reanimated-color-picker";
@@ -9,6 +9,7 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import {
   hostColorValue,
   isCustomHostColor,
@@ -43,7 +44,7 @@ export function HostCustomColorModal({
   const [pickerColor, setPickerColor] = useState<CustomHostColor>(initialColor);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<EditingTextInputHandle>(null);
   const header = useMemo<SheetHeader>(
     () => ({ title: t("settings.host.appearance.color.custom.title") }),
     [t],

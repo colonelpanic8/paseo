@@ -2127,14 +2127,6 @@ export const ja: TranslationResources = {
           auto: "システム",
         },
       },
-      sidebar: {
-        title: "サイドバー",
-        alwaysShowHostLabels: {
-          title: "ホストラベルを常に表示",
-          description:
-            "表示中のすべてのワークスペースがこのデバイス上にある場合もホストラベルを表示します",
-        },
-      },
       detailLevel: {
         title: "詳細レベル",
       },
@@ -2144,6 +2136,11 @@ export const ja: TranslationResources = {
       },
       sidebar: {
         title: "サイドバー",
+        alwaysShowHostLabels: {
+          title: "ホストラベルを常に表示",
+          description:
+            "表示中のすべてのワークスペースがこのデバイス上にある場合もホストラベルを表示します",
+        },
         description: "サイドバー上部に表示する項目とその順序を選択します",
         moveUp: "上に移動",
         moveDown: "下に移動",
