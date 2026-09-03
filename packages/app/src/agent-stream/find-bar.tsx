@@ -4,13 +4,16 @@ import { useTranslation } from "react-i18next";
 import {
   Pressable,
   Text,
-  TextInput,
   View,
   type NativeSyntheticEvent,
   type PressableStateCallbackType,
   type TextInputKeyPressEventData,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 
@@ -61,7 +64,7 @@ export function SessionFindBar({
   onClose,
 }: SessionFindBarProps) {
   const { t } = useTranslation();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<EditingTextInputHandle>(null);
 
   useEffect(() => {
     const input = inputRef.current;
