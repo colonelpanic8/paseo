@@ -13,6 +13,10 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import {
+  useAgentModelDisplayResolver,
+  type AgentModelDisplayResolver,
+} from "@/hooks/use-agent-model-display";
+import {
   WorkspaceTabIcon,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
@@ -41,6 +45,7 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 export interface SubagentsTrackProps {
   serverId: string;
   rows: SubagentRow[];
+  cwd: string | null;
   onOpenSubagent: (address: AgentAddress) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   /**
@@ -60,13 +65,22 @@ const ROW_ICON_SIZE = 14;
 
 interface SubagentRowView {
   presentation: WorkspaceTabPresentation;
+  meta: string | null;
   ownership: SubagentOwnership;
 }
 
-function useRowView(row: SubagentRow, serverId: string): SubagentRowView {
+function useRowView(
+  row: SubagentRow,
+  serverId: string,
+  resolveModelDisplay: AgentModelDisplayResolver,
+): SubagentRowView {
   const icon = useProviderIcon(row.provider, serverId);
-  const data = buildSubagentRowPresentationData(row);
+  const data = buildSubagentRowPresentationData(
+    row,
+    resolveModelDisplay({ provider: row.provider, source: row }),
+  );
   return {
+    meta: data.meta,
     ownership: data.ownership,
     presentation: {
       key: data.key,
@@ -86,6 +100,7 @@ function useRowView(row: SubagentRow, serverId: string): SubagentRowView {
 export function SubagentsTrack({
   serverId,
   rows,
+  cwd,
   onOpenSubagent,
   onOpenProviderSubagent,
   sheetTabFor,
@@ -96,6 +111,7 @@ export function SubagentsTrack({
 }: SubagentsTrackProps): ReactElement | null {
   const { t } = useTranslation();
   const sheetPanePage = useSheetPanePage();
+  const resolveModelDisplay = useAgentModelDisplayResolver(serverId, cwd);
 
   const isArchivingFinished = archiveFinishedStatus.kind === "archiving";
   const isArchiveFinishedFailed = archiveFinishedStatus.kind === "failed";
@@ -131,6 +147,7 @@ export function SubagentsTrack({
           key={row.kind === "paseo" ? `${row.address.serverId}:${row.id}` : row.id}
           row={row}
           serverId={serverId}
+          resolveModelDisplay={resolveModelDisplay}
           onOpenSubagent={onOpenSubagent}
           onOpenProviderSubagent={onOpenProviderSubagent}
           sheetTabId={sheets[index]?.tab.tabId ?? null}
@@ -203,6 +220,7 @@ function ArchiveFinishedRow({
 interface SubagentsTrackRowProps {
   serverId: string;
   row: SubagentRow;
+  resolveModelDisplay: AgentModelDisplayResolver;
   onOpenSubagent: (address: AgentAddress) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   /** The sheet page the row opens in place of the list, when it opens in a sheet. */
@@ -214,6 +232,7 @@ interface SubagentsTrackRowProps {
 function SubagentsTrackRow({
   serverId,
   row,
+  resolveModelDisplay,
   onOpenSubagent,
   onOpenProviderSubagent,
   sheetTabId,
@@ -224,7 +243,7 @@ function SubagentsTrackRow({
   const isCompact = useIsCompactFormFactor();
   const rowServerId = row.kind === "paseo" ? row.address.serverId : serverId;
   const hostLabel = useHosts().find((host) => host.serverId === rowServerId)?.label ?? rowServerId;
-  const { presentation, ownership } = useRowView(row, rowServerId);
+  const { presentation, meta, ownership } = useRowView(row, rowServerId, resolveModelDisplay);
   const displayLabel =
     presentation.titleState === "loading" ? t("common.states.loading") : presentation.label;
   const ownershipLabel =
@@ -261,6 +280,15 @@ function SubagentsTrackRow({
             <SubagentFacts rowId={row.id} text={presentation.subtitle} />
           )}
         </View>
+        {meta ? (
+          <Text
+            style={styles.rowTrailing}
+            numberOfLines={1}
+            testID={`subagents-track-row-meta-${row.id}`}
+          >
+            {meta}
+          </Text>
+        ) : null}
         <View testID={`subagents-track-row-ownership-${row.id}`}>
           <StatusBadge label={ownershipLabel} />
         </View>
@@ -274,10 +302,7 @@ function SubagentsTrackRow({
             onArchivePress={handleArchivePress}
           />
         ) : (
-          <View
-            style={styles.actionClusterSpacer(onDetachSubagent ? 2 : 1)}
-            pointerEvents="none"
-          />
+          <View style={styles.actionClusterSpacer(onDetachSubagent ? 2 : 1)} pointerEvents="none" />
         )}
       </>
     ),
@@ -287,6 +312,7 @@ function SubagentsTrackRow({
       handleArchivePress,
       handleDetachPress,
       isCompact,
+      meta,
       onDetachSubagent,
       ownershipLabel,
       presentation,
