@@ -13,7 +13,7 @@ import { ComposerTrackBar } from "@/composer/tracks";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
-import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
+import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
 import { useSessionStore } from "@/stores/session-store";
 import { useSubagentsForParent } from "@/subagents/select";
 import { SubagentsTrack } from "@/subagents/track";
@@ -290,8 +290,7 @@ const styles = StyleSheet.create((theme) => ({
   unsupportedText: { color: theme.colors.foregroundMuted, textAlign: "center" },
 }));
 
-export const providerSubagentPanelRegistration: PanelRegistration<"provider_subagent"> = {
-  kind: "provider_subagent",
+export const providerSubagentPanelRegistration = definePanel("provider_subagent", {
   component: ProviderSubagentPanel,
   useDescriptor: useProviderSubagentDescriptor,
-};
+});
