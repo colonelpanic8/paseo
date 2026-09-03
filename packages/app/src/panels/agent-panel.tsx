@@ -511,13 +511,15 @@ type AgentLookupState =
   | { tag: "not_found"; message: string }
   | { tag: "error"; message: string };
 
-function useHostUnavailableState(serverId: string | null): {
+interface HostUnavailableState {
   serverLabel: string;
   connectionStatus: HostRuntimeConnectionStatus;
   lastError: string | null;
   isUnknownDaemon: boolean;
   t: TFunction;
-} {
+}
+
+function useHostUnavailableState(serverId: string | null): HostUnavailableState {
   const { t } = useTranslation();
   const daemons = useHosts();
   const runtimeServerId = serverId ?? "";
@@ -1671,15 +1673,9 @@ function AgentSessionUnavailableState({
   serverLabel,
   connectionStatus,
   lastError,
-  isUnknownDaemon = false,
+  isUnknownDaemon,
   t,
-}: {
-  serverLabel: string;
-  connectionStatus: HostRuntimeConnectionStatus;
-  lastError: string | null;
-  isUnknownDaemon?: boolean;
-  t: TFunction;
-}) {
+}: HostUnavailableState) {
   if (isUnknownDaemon) {
     return (
       <View style={styles.container}>
