@@ -1467,7 +1467,10 @@ test("keeps assistant effort when the pumped timeline already emitted the text",
           id: "message-with-effort",
           role: "assistant",
           model: "claude-opus-4-6-20260101",
-          content: [{ type: "text", text: "Already streamed." }],
+          content: [
+            { type: "text", text: "Already streamed." },
+            { type: "tool_use", id: "tool-after-text", name: "Read", input: { file_path: "a.ts" } },
+          ],
           usage: { input_tokens: 10, output_tokens: 2 },
         },
         parent_tool_use_id: null,
@@ -1499,6 +1502,20 @@ test("keeps assistant effort when the pumped timeline already emitted the text",
         thinkingOptionId: "low",
       },
     });
+    // The tool call from the same frame is emitted first, so the attribution
+    // update reaches the reducer after the assistant row stops being the tail.
+    const toolCallIndex = completed.findIndex(
+      (event) => event.type === "timeline" && event.item.type === "tool_call",
+    );
+    const attributionIndex = completed.findIndex(
+      (event) =>
+        event.type === "timeline" &&
+        event.item.type === "assistant_message" &&
+        event.item.text === "" &&
+        event.item.thinkingOptionId === "low",
+    );
+    expect(toolCallIndex).toBeGreaterThanOrEqual(0);
+    expect(attributionIndex).toBeGreaterThan(toolCallIndex);
   } finally {
     await session.close();
   }
