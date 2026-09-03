@@ -39,19 +39,17 @@ import {
   selectSettingsHost,
   expectSettingsHostPickerLabel,
   openSettingsHostSection,
+  openSettingsWithSeededHost,
   removeCurrentHostFromSettings,
+  scrollSettingsSidebarToBottom,
+  expectSettingsSidebarScrollTop,
 } from "../support/helpers/settings";
 import { getServerId } from "../support/helpers/server-id";
 import { expectAppRoute } from "../support/helpers/route-assertions";
-import { buildSeededHost } from "../support/helpers/daemon-registry";
 
 async function openWorkspace(page: Page, workspace: { workspaceId: string }) {
   await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.workspaceId));
   await expect(page.getByTestId("menu-button")).toBeVisible();
-}
-
-async function readSettingsSidebarScrollTop(page: Page): Promise<number> {
-  return page.getByTestId("settings-sidebar-scroll-body").evaluate((element) => element.scrollTop);
 }
 
 test.describe("Settings sidebar navigation", () => {
@@ -161,27 +159,19 @@ test.describe("Settings sidebar navigation", () => {
 });
 
 metroTest.describe("Settings sidebar scroll persistence", () => {
+  metroTest.use({ viewport: { width: 900, height: 420 } });
+
   metroTest("keeps the scroll position across settings route boundaries", async ({ page }) => {
     const serverId = "srv_settings_scroll";
-    const nowIso = new Date().toISOString();
-    const host = buildSeededHost({ serverId, endpoint: "127.0.0.1:1", nowIso });
-    await page.addInitScript((seededHost) => {
-      localStorage.setItem("@paseo:daemon-registry", JSON.stringify([seededHost]));
-    }, host);
-    await page.setViewportSize({ width: 900, height: 420 });
-    await page.goto(buildSettingsSectionRoute("general"));
-
-    const scrollBody = page.getByTestId("settings-sidebar-scroll-body");
-    await expect(scrollBody).toBeVisible();
-    const scrollTop = await scrollBody.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-      return element.scrollTop;
+    await openSettingsWithSeededHost(page, {
+      serverId,
+      label: "Settings scroll host",
+      endpoint: "127.0.0.1:1",
     });
-    expect(scrollTop).toBeGreaterThan(0);
 
-    await page.getByTestId("settings-host-section-usage").click();
-    await expectAppRoute(page, buildSettingsHostSectionRoute(serverId, "usage"));
-    await expect.poll(() => readSettingsSidebarScrollTop(page)).toBe(scrollTop);
+    const scrollTop = await scrollSettingsSidebarToBottom(page);
+    await openSettingsHostSection(page, serverId, "usage");
+    await expectSettingsSidebarScrollTop(page, scrollTop);
   });
 });
 
