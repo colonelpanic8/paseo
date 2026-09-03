@@ -170,6 +170,13 @@ export function useSidebarRowItems(): SidebarRowItems {
   return sidebarRowItems ?? DEFAULT_SIDEBAR_ROW_ITEMS;
 }
 
+export function useAlwaysShowHostLabels(): boolean {
+  const {
+    settings: { alwaysShowHostLabels },
+  } = useAppSettings();
+  return alwaysShowHostLabels;
+}
+
 /**
  * Everything the line under a workspace title needs to know, in one read. The two settings are
  * answered together by `selectMetaRowItems`, so asking for them separately would only mean two
