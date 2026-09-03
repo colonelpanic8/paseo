@@ -932,6 +932,11 @@ export class ProviderSnapshotManager {
       }
 
       const client = this.ensureClient(provider, definition);
+      if (catalogScope.scope === "workspace" && client.capabilities.hasGlobalCatalog === true) {
+        setEntry(cloneEntry(await this.loadGlobalEntry(provider, force)));
+        return;
+      }
+
       const catalog = await runProviderRefreshWithDeadline({
         label: definition.label,
         timeoutMs: this.refreshTimeoutMs,
@@ -976,6 +981,31 @@ export class ProviderSnapshotManager {
         );
       }
     }
+  }
+
+  // Workspace entries for providers with a global catalog wait on the shared
+  // global load, so a burst of new workspaces costs one probe instead of one per cwd.
+  private async loadGlobalEntry(
+    provider: AgentProvider,
+    force: boolean,
+  ): Promise<ProviderSnapshotEntry> {
+    const target = createGlobalSnapshotTarget();
+    if (force) {
+      this.resetSnapshotToLoading(target.snapshotCwd, [provider]);
+      this.emitChange(target.snapshotCwd);
+    }
+    await this.loadProvider({
+      snapshotCwd: target.snapshotCwd,
+      catalogScope: target.catalogScope,
+      providers: [provider],
+      provider,
+      force,
+    });
+    const entry = this.snapshots.get(target.snapshotCwd)?.get(provider);
+    if (!entry || entry.status === "loading") {
+      throw new Error(`Global catalog for provider '${provider}' did not settle`);
+    }
+    return entry;
   }
 
   private getProviderLoad(cwdKey: string, provider: AgentProvider): ProviderLoad | undefined {

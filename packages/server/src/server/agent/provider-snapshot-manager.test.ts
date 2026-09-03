@@ -19,6 +19,7 @@ import {
   resolveSnapshotCwd,
 } from "./provider-snapshot-manager.js";
 import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
+import { BUILTIN_PROVIDER_IDS } from "@getpaseo/protocol/provider-manifest";
 
 const TEST_CAPABILITIES = {
   supportsStreaming: false,
@@ -53,6 +54,12 @@ function createExtraClient(
     },
     ...overrides,
   } satisfies AgentClient;
+}
+
+function disableBuiltinsExcept(provider: AgentProvider): Record<string, { enabled: false }> {
+  return Object.fromEntries(
+    BUILTIN_PROVIDER_IDS.filter((id) => id !== provider).map((id) => [id, { enabled: false }]),
+  );
 }
 
 async function withEnv(key: string, value: string, run: () => Promise<void>): Promise<void> {
@@ -1714,6 +1721,86 @@ describe("ProviderSnapshotManager cwd routing", () => {
       expect(resolved).toBe("C:\\");
     } else {
       expect(resolved).toBeDefined();
+    }
+  });
+  test("hasGlobalCatalog providers probe once and mirror the global entry into workspace snapshots", async () => {
+    const isAvailable = vi.fn(async () => true);
+    const fetchCatalog = vi.fn(async (_options: FetchCatalogOptions) => {
+      await waitForDelay(20);
+      return {
+        models: [
+          { provider: "codex", id: "gpt-5.4-mini", label: "GPT 5.4 Mini" },
+        ] as AgentModelDefinition[],
+        modes: [] as AgentMode[],
+      };
+    });
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: disableBuiltinsExcept("codex"),
+      extraClients: {
+        codex: createExtraClient("codex", {
+          capabilities: { ...TEST_CAPABILITIES, hasGlobalCatalog: true },
+          isAvailable,
+          fetchCatalog,
+        }),
+      },
+    });
+    try {
+      const [[first], [second]] = await Promise.all([
+        manager.listProviders({ cwd: "/tmp/project-a", providers: ["codex"], wait: true }),
+        manager.listProviders({ cwd: "/tmp/project-b", providers: ["codex"], wait: true }),
+      ]);
+      expect(first).toMatchObject({
+        provider: "codex",
+        status: "ready",
+        models: [expect.objectContaining({ id: "gpt-5.4-mini" })],
+      });
+      expect(second).toEqual(first);
+      const global = await manager.getProvider({ provider: "codex", wait: true });
+      expect(global).toEqual(first);
+      expect(fetchCatalog).toHaveBeenCalledTimes(1);
+      expect(fetchCatalog.mock.calls[0]?.[0]).toEqual({ scope: "global", force: false });
+    } finally {
+      manager.destroy();
+    }
+  });
+
+  test("workspace refresh of a hasGlobalCatalog provider re-probes the global scope once", async () => {
+    const isAvailable = vi.fn(async () => true);
+    const fetchCatalog = vi.fn(async (_options: FetchCatalogOptions) => ({
+      models: [
+        { provider: "codex", id: "gpt-5.4-mini", label: "GPT 5.4 Mini" },
+      ] as AgentModelDefinition[],
+      modes: [] as AgentMode[],
+    }));
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: disableBuiltinsExcept("codex"),
+      extraClients: {
+        codex: createExtraClient("codex", {
+          capabilities: { ...TEST_CAPABILITIES, hasGlobalCatalog: true },
+          isAvailable,
+          fetchCatalog,
+        }),
+      },
+    });
+    try {
+      await manager.listProviders({ cwd: "/tmp/project-a", providers: ["codex"], wait: true });
+      await manager.refreshSnapshotForCwd({ cwd: "/tmp/project-a", providers: ["codex"] });
+
+      expect(fetchCatalog).toHaveBeenCalledTimes(2);
+      expect(fetchCatalog.mock.calls[1]?.[0]).toEqual({ scope: "global", force: true });
+      const [entry] = await manager.listProviders({
+        cwd: "/tmp/project-a",
+        providers: ["codex"],
+        wait: true,
+      });
+      const global = await manager.getProvider({ provider: "codex", wait: true });
+      expect(entry).toMatchObject({ status: "ready" });
+      expect(global.fetchedAt).toBe(entry.fetchedAt);
+      expect(fetchCatalog).toHaveBeenCalledTimes(2);
+    } finally {
+      manager.destroy();
     }
   });
 });
