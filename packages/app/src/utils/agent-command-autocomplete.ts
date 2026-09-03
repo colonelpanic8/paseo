@@ -98,7 +98,7 @@ export function filterInlineSkillCommandEntries<TEntry extends InlineSkillComman
 }
 
 const INVALID_QUERY_CHARS = /[/\s\n\r\t"']/;
-const SHELL_VARIABLE_QUERY = /^[A-Z_][A-Z0-9_]*$/;
+const SHELL_VARIABLE_QUERY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function isInvalidQuery(query: string, sigils: ComposerSigils): boolean {
   // A second sigil inside the query means the earlier one was not the live
@@ -160,7 +160,7 @@ export function applySlashCommandReplacement(input: ApplySlashCommandReplacement
 }
 
 /**
- * `$NAME` is shell-variable shaped because of the `$` character, not because of
+ * `$name` is shell-variable shaped because of the `$` character, not because of
  * which menu it happens to open. The check keys off the sigil and deliberately
  * ignores `command.menu`: if the user assigns `$` to the command trigger,
  * `check $HOME` must still submit verbatim rather than being rewritten to
