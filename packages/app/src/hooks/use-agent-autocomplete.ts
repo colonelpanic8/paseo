@@ -13,6 +13,8 @@ import { useAutocomplete } from "./use-autocomplete";
 import { useSessionStore } from "@/stores/session-store";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { CLIENT_SLASH_COMMANDS, type ClientSlashCommand } from "@/client-slash-commands";
+import type { PluginClientSlashCommand } from "@/plugins/client-slash-commands";
+import { mergeSlashCommandSources } from "@/plugins/client-slash-commands/model";
 import {
   applySlashCommandReplacement,
   filterAndRankCommandAutocompleteEntries,
@@ -39,6 +41,7 @@ interface UseAgentAutocompleteInput {
   onAutocompleteApplied?: () => void;
   onClientSlashCommand?: (command: ClientSlashCommand) => void;
   canExecuteClientSlashCommand?: boolean;
+  pluginClientSlashCommands?: readonly PluginClientSlashCommand[];
   sigils: ComposerSigils;
 }
 
@@ -55,6 +58,10 @@ interface AgentAutocompleteInputSnapshot {
 
 type AgentAutocompleteOption =
   | (AutocompleteOption & { type: "client_command"; command: ClientSlashCommand })
+  | (AutocompleteOption & {
+      type: "plugin_command";
+      command: PluginClientSlashCommand;
+    })
   | (AutocompleteOption & { type: "provider_command" })
   | (AutocompleteOption & {
       type: "workspace_entry";
@@ -113,6 +120,7 @@ interface DirectorySuggestionEntry {
 
 type AvailableCommand =
   | { source: "client"; command: ClientSlashCommand }
+  | { source: "plugin"; command: PluginClientSlashCommand }
   | { source: "provider"; command: AgentSlashCommand };
 
 function normalizeDraftCommandConfig(
@@ -185,6 +193,9 @@ function mapCommandToOption(
       command: entry.command,
     };
   }
+  if (entry.source === "plugin") {
+    return { ...base, type: "plugin_command", command: entry.command };
+  }
   return {
     ...base,
     type: "provider_command",
@@ -197,6 +208,7 @@ interface BuildAutocompleteOptionsInput {
   isVisible: boolean;
   mode: AutocompleteMode;
   commands: AgentSlashCommand[];
+  pluginCommands: readonly PluginClientSlashCommand[];
   isDraftContext: boolean;
   commandFilterQuery: string;
   activeSlashCommand: SlashCommandRange | null;
@@ -212,23 +224,28 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
   }
 
   if (input.mode === "command") {
-    const providerCommands = input.commands.map(
-      (command): AvailableCommand => ({ source: "provider", command }),
-    );
-    const clientCommandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
-    const rootCommands: AvailableCommand[] = input.isDraftContext
-      ? providerCommands
-      : [
-          ...CLIENT_SLASH_COMMANDS.map(
-            (command): AvailableCommand => ({ source: "client", command }),
-          ),
-          ...providerCommands.filter((entry) => !clientCommandNames.has(entry.command.name)),
-        ];
-    // The skill sigil always means skills-only. The command sigil keeps its
-    // existing split: full list at the start of the message, skills inline.
+    const providerCommands = input.commands.map((command) => ({
+      source: "provider" as const,
+      command,
+    }));
+    const rootCommands: AvailableCommand[] = mergeSlashCommandSources({
+      builtIn: CLIENT_SLASH_COMMANDS,
+      plugins: input.pluginCommands,
+      provider: input.commands,
+      onPluginCollision(command, winner) {
+        console.warn(
+          `[Plugins] Client slash command /${command.name} from ${command.pluginId} ignored; ${winner} command wins`,
+        );
+      },
+    })
+      .filter((entry) => !input.isDraftContext || entry.source !== "built-in")
+      .map((entry): AvailableCommand => {
+        if (entry.source === "built-in") return { source: "client", command: entry.command };
+        return entry;
+      });
     const skillsOnly =
       input.activeSlashCommand?.menu === "skill" || input.activeSlashCommand?.position === "inline";
-    const availableCommands = skillsOnly
+    const availableCommands: AvailableCommand[] = skillsOnly
       ? filterInlineSkillCommandEntries(providerCommands)
       : rootCommands;
     const matches = filterAndRankCommandAutocompleteEntries(
@@ -278,15 +295,7 @@ export function resolveAutocompleteIsVisible(args: {
   isDraftContext: boolean;
 }): boolean {
   if (args.mode === "command") {
-    if (!args.canLoadCommands) {
-      return false;
-    }
-    // A draft composer has no agent session yet, so its first command listing
-    // has to spin up a provider session: seconds at best, an error if the
-    // provider cannot start. Staying hidden through all of that makes the
-    // trigger character look dead — show the loading and error states instead.
-    // In-session listings resolve fast enough that hiding the flash still wins.
-    return args.isDraftContext || !args.isCommandsLoading;
+    return args.canLoadCommands && (args.isDraftContext || !args.isCommandsLoading);
   }
   if (args.mode === "file") {
     return Boolean(args.serverId) && args.autocompleteCwd.length > 0;
@@ -355,6 +364,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     onAutocompleteApplied,
     onClientSlashCommand,
     canExecuteClientSlashCommand,
+    pluginClientSlashCommands = [],
     sigils,
   } = input;
 
@@ -414,7 +424,6 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const isConnected = useHostRuntimeIsConnected(serverId);
 
   const mode = resolveAutocompleteMode({ showFileAutocomplete, showCommandAutocomplete });
-
   const {
     commands,
     isLoading: isCommandsLoading,
@@ -429,6 +438,9 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
 
   const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
     const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
+    for (const command of pluginClientSlashCommands) {
+      commandNames.add(command.name);
+    }
     const skillNames = new Set<string>();
     for (const command of commands) {
       commandNames.add(command.name);
@@ -437,7 +449,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       }
     }
     return { commandNames, skillNames };
-  }, [commands]);
+  }, [commands, pluginClientSlashCommands]);
 
   const isVisible = resolveAutocompleteIsVisible({
     mode,
@@ -490,6 +502,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         activeFileMention,
         commandFilterQuery,
         commands,
+        pluginCommands: pluginClientSlashCommands,
         activeSlashCommand,
         fileSuggestions: fileSuggestionsQuery.data ?? [],
         isDraftContext,
@@ -503,6 +516,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       activeSlashCommand,
       commandFilterQuery,
       commands,
+      pluginClientSlashCommands,
       fileSuggestionsQuery.data,
       isDraftContext,
       isVisible,
@@ -524,7 +538,9 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         activeFileMention,
       });
       const selectedIsCommand =
-        selected.type === "client_command" || selected.type === "provider_command";
+        selected.type === "client_command" ||
+        selected.type === "plugin_command" ||
+        selected.type === "provider_command";
       if (snapshot && selectedIsCommand && !current.slashCommand) return;
       if (
         selected.type === "client_command" &&
