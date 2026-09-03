@@ -331,6 +331,18 @@ function resolveBottomOverlayControlOffset(clearance: number | undefined): numbe
   return Math.max(16, clearance ?? 0);
 }
 
+function useRunningTurnModelDisplay(serverId: string, context: AgentScreenAgent) {
+  return useAgentModelDisplay({
+    serverId,
+    cwd: context.cwd,
+    provider: context.provider,
+    model: context.model,
+    runtimeModelId: context.runtimeInfo?.model ?? null,
+    thinkingOptionId: context.thinkingOptionId,
+    effectiveThinkingOptionId: context.effectiveThinkingOptionId,
+  });
+}
+
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
   function AgentStreamView(
     {
@@ -381,15 +393,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
-    const runningTurnModelDisplay = useAgentModelDisplay({
-      serverId: resolvedServerId,
-      cwd: context.cwd,
-      provider: context.provider,
-      model: context.model,
-      runtimeModelId: context.runtimeInfo?.model ?? null,
-      thinkingOptionId: context.thinkingOptionId,
-      effectiveThinkingOptionId: context.runtimeInfo?.thinkingOptionId,
-    });
+    const runningTurnModelDisplay = useRunningTurnModelDisplay(resolvedServerId, context);
     const transformTimelineItem = useInstalledTimelineTransform(resolvedServerId);
 
     const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
@@ -1006,6 +1010,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         handleForkInFlightTurn,
         readOnly,
         isTurnActive,
+        runningTurnMeta,
         baseRenderModel.turnTiming.runningStartedAt,
         bottomTurnFooterHost,
         streamRenderStrategy,

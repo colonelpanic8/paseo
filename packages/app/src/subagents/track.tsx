@@ -10,6 +10,10 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import {
+  useAgentModelDisplayResolver,
+  type AgentModelDisplayResolver,
+} from "@/hooks/use-agent-model-display";
+import {
   WorkspaceTabIcon,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
@@ -34,6 +38,7 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 export interface SubagentsTrackProps {
   serverId: string;
   rows: SubagentRow[];
+  cwd: string | null;
   onOpenSubagent: (id: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   onArchiveSubagent: (id: string) => void;
@@ -49,12 +54,21 @@ const ROW_ICON_SIZE = 14;
 
 interface SubagentRowView {
   presentation: WorkspaceTabPresentation;
+  meta: string | null;
   ownership: SubagentOwnership;
 }
 
-function buildRowView(row: SubagentRow, serverId: string): SubagentRowView {
-  const data = buildSubagentRowPresentationData(row);
+function buildRowView(
+  row: SubagentRow,
+  serverId: string,
+  resolveModelDisplay: AgentModelDisplayResolver,
+): SubagentRowView {
+  const data = buildSubagentRowPresentationData(
+    row,
+    resolveModelDisplay({ provider: row.provider, source: row }),
+  );
   return {
+    meta: data.meta,
     ownership: data.ownership,
     presentation: {
       key: data.key,
@@ -73,6 +87,7 @@ function buildRowView(row: SubagentRow, serverId: string): SubagentRowView {
 export function SubagentsTrack({
   serverId,
   rows,
+  cwd,
   onOpenSubagent,
   onOpenProviderSubagent,
   onArchiveSubagent,
@@ -81,6 +96,7 @@ export function SubagentsTrack({
   onDetachSubagent,
 }: SubagentsTrackProps): ReactElement | null {
   const { t } = useTranslation();
+  const resolveModelDisplay = useAgentModelDisplayResolver(serverId, cwd);
 
   const isArchivingFinished = archiveFinishedStatus.kind === "archiving";
   const isArchiveFinishedFailed = archiveFinishedStatus.kind === "failed";
@@ -113,6 +129,7 @@ export function SubagentsTrack({
           key={row.id}
           row={row}
           serverId={serverId}
+          resolveModelDisplay={resolveModelDisplay}
           onOpenSubagent={onOpenSubagent}
           onOpenProviderSubagent={onOpenProviderSubagent}
           onArchiveSubagent={onArchiveSubagent}
@@ -184,6 +201,7 @@ function ArchiveFinishedRow({
 interface SubagentsTrackRowProps {
   serverId: string;
   row: SubagentRow;
+  resolveModelDisplay: AgentModelDisplayResolver;
   onOpenSubagent: (id: string) => void;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
   onArchiveSubagent: (id: string) => void;
@@ -193,6 +211,7 @@ interface SubagentsTrackRowProps {
 function SubagentsTrackRow({
   serverId,
   row,
+  resolveModelDisplay,
   onOpenSubagent,
   onOpenProviderSubagent,
   onArchiveSubagent,
@@ -200,7 +219,10 @@ function SubagentsTrackRow({
 }: SubagentsTrackRowProps): ReactElement {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const { presentation, ownership } = useMemo(() => buildRowView(row, serverId), [row, serverId]);
+  const { presentation, meta, ownership } = useMemo(
+    () => buildRowView(row, serverId, resolveModelDisplay),
+    [resolveModelDisplay, row, serverId],
+  );
   const displayLabel =
     presentation.titleState === "loading" ? t("common.states.loading") : presentation.label;
   const ownershipLabel =
@@ -232,6 +254,15 @@ function SubagentsTrackRow({
             {presentation.subtitle}
           </Text>
         ) : null}
+        {meta ? (
+          <Text
+            style={styles.rowTrailing}
+            numberOfLines={1}
+            testID={`subagents-track-row-meta-${row.id}`}
+          >
+            {meta}
+          </Text>
+        ) : null}
         <View testID={`subagents-track-row-ownership-${row.id}`}>
           <StatusBadge label={ownershipLabel} />
         </View>
@@ -244,10 +275,7 @@ function SubagentsTrackRow({
             onArchivePress={handleArchivePress}
           />
         ) : (
-          <View
-            style={styles.actionClusterSpacer(onDetachSubagent ? 2 : 1)}
-            pointerEvents="none"
-          />
+          <View style={styles.actionClusterSpacer(onDetachSubagent ? 2 : 1)} pointerEvents="none" />
         )}
       </>
     ),
@@ -256,6 +284,7 @@ function SubagentsTrackRow({
       displayLabel,
       handleArchivePress,
       handleDetachPress,
+      meta,
       onDetachSubagent,
       ownershipLabel,
       presentation,
