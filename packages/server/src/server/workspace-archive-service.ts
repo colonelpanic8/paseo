@@ -515,6 +515,7 @@ export async function archiveWorkspaceContents(
   const agentIdsToArchive = new Set([
     ...liveAgents.map((agent) => agent.id),
     ...matchingStoredRecords.filter((record) => !record.archivedAt).map((record) => record.id),
+    ...cascadedAgentIds,
   ]);
   const archiveResults = await Promise.allSettled([
     ...[...agentIdsToArchive].map((agentId) =>
