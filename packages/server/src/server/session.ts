@@ -2576,6 +2576,14 @@ export class Session {
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      case "workspace.snooze.set.request":
+        return this.handleWorkspaceSnoozeSetRequest(
+          msg.workspaceId,
+          msg.snoozedUntil,
+          msg.requestId,
+        );
+      case "workspace.archived.list.request":
+        return this.handleWorkspaceArchivedListRequest(msg);
       default:
         return undefined;
     }
@@ -3516,6 +3524,38 @@ export class Session {
         requestId: request.requestId,
         state,
       },
+    });
+  }
+
+  private async handleWorkspaceArchivedListRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.archived.list.request" }>,
+  ): Promise<void> {
+    const [workspaces, projects] = await Promise.all([
+      this.workspaceRegistry.list(),
+      this.projectRegistry.list(),
+    ]);
+    const activeProjects = new Map(
+      projects
+        .filter((project) => !project.archivedAt)
+        .map((project) => [project.projectId, project] as const),
+    );
+    const entries = workspaces
+      .flatMap((workspace) => {
+        if (!workspace.archivedAt) return [];
+        const project = activeProjects.get(workspace.projectId);
+        if (!project) return [];
+        return [{
+          id: workspace.workspaceId,
+          projectDisplayName: resolveProjectDisplayName(project),
+          name: resolveWorkspaceDisplayName(workspace),
+          archivedAt: workspace.archivedAt,
+        }];
+      })
+      .sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
+      .slice(0, 25);
+    this.emit({
+      type: "workspace.archived.list.response",
+      payload: { requestId: request.requestId, entries },
     });
   }
 
@@ -5045,6 +5085,7 @@ export class Session {
       name: resolveWorkspaceDisplayName(workspace),
       title: workspace.title,
       pinnedAt: workspace.pinnedAt,
+      snoozeStatus: workspace.snoozeStatus,
       ...(workspace.labels && workspace.labels.length > 0 ? { labels: workspace.labels } : {}),
       archivingAt: null,
       status: "done",
@@ -5137,6 +5178,7 @@ export class Session {
       }),
       title: result.workspace.title,
       pinnedAt: result.workspace.pinnedAt,
+      snoozeStatus: result.workspace.snoozeStatus,
       ...(result.workspace.labels && result.workspace.labels.length > 0
         ? { labels: result.workspace.labels }
         : {}),
