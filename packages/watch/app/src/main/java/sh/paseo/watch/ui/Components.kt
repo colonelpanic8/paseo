@@ -211,7 +211,6 @@ fun CommandBlock(text: String, modifier: Modifier = Modifier) {
       color = PaseoColors.foreground,
       fontSize = 11.sp,
       fontFamily = FontFamily.Monospace,
-      maxLines = 2,
       modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
     )
   }

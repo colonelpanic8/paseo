@@ -29,6 +29,7 @@ import sh.paseo.watch.data.WatchRepository
 import sh.paseo.watch.model.Workspace
 import sh.paseo.watch.model.WorkspaceDestination
 import sh.paseo.watch.model.destination
+import sh.paseo.watch.model.workspaceByIdentity
 import sh.paseo.watch.theme.PaseoColors
 import sh.paseo.watch.theme.PaseoWatchTheme
 import sh.paseo.watch.ui.AgentPickerScreen
@@ -60,19 +61,21 @@ private const val TRANSCRIPT_KEEPALIVE_MS = 60_000L
 
 private object Routes {
   const val WORKSPACES = "workspaces"
-  const val PICKER = "picker/{workspaceId}"
+  const val PICKER = "picker/{serverId}/{workspaceId}"
   const val AGENT = "agent/{serverId}/{agentId}"
   const val PERMISSION = "permission/{serverId}/{agentId}"
-  const val NEW_AGENT = "newAgent/{workspaceId}"
+  const val NEW_AGENT = "newAgent/{serverId}/{workspaceId}"
 
-  fun picker(workspaceId: String) = "picker/$workspaceId"
+  fun picker(serverId: String, workspaceId: String) =
+    "picker/${Uri.encode(serverId)}/${Uri.encode(workspaceId)}"
 
   fun agent(serverId: String, agentId: String) = "agent/${Uri.encode(serverId)}/${Uri.encode(agentId)}"
 
   fun permission(serverId: String, agentId: String) =
     "permission/${Uri.encode(serverId)}/${Uri.encode(agentId)}"
 
-  fun newAgent(workspaceId: String) = "newAgent/$workspaceId"
+  fun newAgent(serverId: String, workspaceId: String) =
+    "newAgent/${Uri.encode(serverId)}/${Uri.encode(workspaceId)}"
 }
 
 @Composable
@@ -117,13 +120,13 @@ fun PaseoWatchApp(
               // pick" rule is applied. Keep it that way.
               when (val target = workspace.destination()) {
                 is WorkspaceDestination.Permission ->
-                  navController.navigate(Routes.permission(workspace.serverId, target.agentId))
+                  navController.navigate(Routes.permission(target.serverId, target.agentId))
                 is WorkspaceDestination.Agent ->
-                  navController.navigate(Routes.agent(workspace.serverId, target.agentId))
+                  navController.navigate(Routes.agent(target.serverId, target.agentId))
                 is WorkspaceDestination.Picker ->
-                  navController.navigate(Routes.picker(target.workspaceId))
+                  navController.navigate(Routes.picker(target.serverId, target.workspaceId))
                 is WorkspaceDestination.NewAgent ->
-                  navController.navigate(Routes.newAgent(target.workspaceId))
+                  navController.navigate(Routes.newAgent(target.serverId, target.workspaceId))
               }
             },
           )
@@ -131,10 +134,14 @@ fun PaseoWatchApp(
 
         composable(
           Routes.PICKER,
-          arguments = listOf(navArgument("workspaceId") { type = NavType.StringType }),
+          arguments = listOf(
+            navArgument("serverId") { type = NavType.StringType },
+            navArgument("workspaceId") { type = NavType.StringType },
+          ),
         ) { entry ->
-          val workspaceId = entry.arguments?.getString("workspaceId")
-          val workspace = workspaces.firstOrNull { it.id == workspaceId }
+          val serverId = entry.arguments?.getString("serverId")?.let(Uri::decode)
+          val workspaceId = entry.arguments?.getString("workspaceId")?.let(Uri::decode)
+          val workspace = workspaces.workspaceByIdentity(serverId, workspaceId)
           if (workspace == null) {
             Missing("Workspace is gone")
           } else {
@@ -142,7 +149,7 @@ fun PaseoWatchApp(
               workspace = workspace,
               listState = rememberScalingLazyListState(),
               onAgentClick = { agent -> navController.navigate(Routes.agent(workspace.serverId, agent.id)) },
-              onNewAgent = { navController.navigate(Routes.newAgent(workspace.id)) },
+              onNewAgent = { navController.navigate(Routes.newAgent(workspace.serverId, workspace.id)) },
               icon = icons[workspace.projectKey],
             )
           }
@@ -240,10 +247,14 @@ fun PaseoWatchApp(
 
         composable(
           Routes.NEW_AGENT,
-          arguments = listOf(navArgument("workspaceId") { type = NavType.StringType }),
+          arguments = listOf(
+            navArgument("serverId") { type = NavType.StringType },
+            navArgument("workspaceId") { type = NavType.StringType },
+          ),
         ) { entry ->
-          val workspaceId = entry.arguments?.getString("workspaceId")
-          val workspace = workspaces.firstOrNull { it.id == workspaceId }
+          val serverId = entry.arguments?.getString("serverId")?.let(Uri::decode)
+          val workspaceId = entry.arguments?.getString("workspaceId")?.let(Uri::decode)
+          val workspace = workspaces.workspaceByIdentity(serverId, workspaceId)
           if (workspace == null) {
             Missing("Workspace is gone")
           } else {
@@ -253,7 +264,7 @@ fun PaseoWatchApp(
               projectName = workspace.projectName,
               listState = rememberScalingLazyListState(),
               onSubmit = { text ->
-                scope.launch { repository.createAgent(workspace.id, text) }
+                scope.launch { repository.createAgent(workspace.serverId, workspace.id, text) }
                 navController.popBackStack()
               },
               icon = icons[workspace.projectKey],
