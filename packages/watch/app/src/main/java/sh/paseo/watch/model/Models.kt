@@ -62,6 +62,11 @@ data class Workspace(
     get() = agents.firstNotNullOfOrNull { it.pendingPermission }
 }
 
+fun List<Workspace>.workspaceByIdentity(serverId: String?, workspaceId: String?): Workspace? {
+  if (serverId == null || workspaceId == null) return null
+  return firstOrNull { it.serverId == serverId && it.id == workspaceId }
+}
+
 /**
  * How a transcript entry is rendered. [Unknown] exists so the phone can start
  * emitting a new kind before the watch learns to style it — the text still shows,
@@ -112,23 +117,23 @@ data class PermissionRequest(
  * rule from drifting.
  */
 sealed interface WorkspaceDestination {
-  data class Permission(val agentId: String) : WorkspaceDestination
+  data class Permission(val serverId: String, val agentId: String) : WorkspaceDestination
 
-  data class Agent(val agentId: String) : WorkspaceDestination
+  data class Agent(val serverId: String, val agentId: String) : WorkspaceDestination
 
   /** Ambiguous: 2+ agents and nothing demanding attention. */
-  data class Picker(val workspaceId: String) : WorkspaceDestination
+  data class Picker(val serverId: String, val workspaceId: String) : WorkspaceDestination
 
   /** Empty workspace — go straight to dictating a prompt for a new agent. */
-  data class NewAgent(val workspaceId: String) : WorkspaceDestination
+  data class NewAgent(val serverId: String, val workspaceId: String) : WorkspaceDestination
 }
 
 fun Workspace.destination(): WorkspaceDestination {
-  pendingPermission?.let { return WorkspaceDestination.Permission(it.agentId) }
+  pendingPermission?.let { return WorkspaceDestination.Permission(serverId, it.agentId) }
   return when (agents.size) {
-    0 -> WorkspaceDestination.NewAgent(id)
-    1 -> WorkspaceDestination.Agent(agents.single().id)
-    else -> WorkspaceDestination.Picker(id)
+    0 -> WorkspaceDestination.NewAgent(serverId, id)
+    1 -> WorkspaceDestination.Agent(serverId, agents.single().id)
+    else -> WorkspaceDestination.Picker(serverId, id)
   }
 }
 

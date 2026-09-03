@@ -9,6 +9,7 @@ import sh.paseo.watch.model.Transcript
 import sh.paseo.watch.model.TranscriptEntry
 import sh.paseo.watch.model.TranscriptKind
 import sh.paseo.watch.model.Workspace
+import sh.paseo.watch.model.workspaceByIdentity
 
 /**
  * Everything the watch UI needs, and nothing about how it gets there.
@@ -41,7 +42,7 @@ interface WatchRepository {
    */
   val icons: StateFlow<Map<String, ByteArray>>
 
-  fun workspace(id: String): Workspace?
+  fun workspace(serverId: String, id: String): Workspace?
 
   /**
    * Ask the phone to publish this agent's transcript. Fire and forget — the answer
@@ -53,7 +54,7 @@ interface WatchRepository {
   suspend fun sendPrompt(serverId: String, agentId: String, text: String)
 
   /** Create a new agent session in a workspace with an initial prompt. */
-  suspend fun createAgent(workspaceId: String, prompt: String)
+  suspend fun createAgent(serverId: String, workspaceId: String, prompt: String)
 
   suspend fun respondToPermission(serverId: String, agentId: String, requestId: String, allow: Boolean)
 
@@ -82,7 +83,8 @@ class MockWatchRepository : WatchRepository {
    */
   override val icons: StateFlow<Map<String, ByteArray>> = MutableStateFlow(emptyMap())
 
-  override fun workspace(id: String): Workspace? = state.value.firstOrNull { it.id == id }
+  override fun workspace(serverId: String, id: String): Workspace? =
+    state.value.workspaceByIdentity(serverId, id)
 
   /**
    * The seeded transcripts are already present, so this is a no-op. `agent-main-copilot`
@@ -97,10 +99,10 @@ class MockWatchRepository : WatchRepository {
     }
   }
 
-  override suspend fun createAgent(workspaceId: String, prompt: String) {
+  override suspend fun createAgent(serverId: String, workspaceId: String, prompt: String) {
     state.value =
       state.value.map { workspace ->
-        if (workspace.id != workspaceId) {
+        if (workspace.serverId != serverId || workspace.id != workspaceId) {
           workspace
         } else {
           workspace.copy(

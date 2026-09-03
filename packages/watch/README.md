@@ -286,7 +286,7 @@ of that surface; migrating is a deliberate later step, not a v1 risk.
 
 Verified:
 
-- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — 46 tests pinning the wire
+- **Watch unit tests** (`gradle :app:testDebugUnitTest`) — 47 tests pinning the wire
   format for both snapshots and transcripts, version rejection, unknown-state and
   unknown-transcript-kind degradation, the exact serialized command JSON, the
   navigation rule, the transcript cache's staleness and pruning rules, and the icon

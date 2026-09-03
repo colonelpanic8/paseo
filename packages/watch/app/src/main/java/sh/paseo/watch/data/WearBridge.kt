@@ -1,6 +1,5 @@
 package sh.paseo.watch.data
 
-import android.net.Uri
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -49,9 +48,13 @@ object WearBridge {
    */
   const val TRANSCRIPT_PATH_PREFIX = "/paseo/transcript"
 
-  /** DataClient path for one agent's transcript. */
+  /**
+   * DataClient path for one agent's transcript. Server ids are `srv_` + base64url
+   * and agent ids are UUIDs, so both segments are already URI-safe. The phone's
+   * `Uri.encode` therefore produces this same path.
+   */
   fun transcriptPath(serverId: String, agentId: String): String =
-    "$TRANSCRIPT_PATH_PREFIX/${Uri.encode(serverId)}/${Uri.encode(agentId)}"
+    "$TRANSCRIPT_PATH_PREFIX/$serverId/$agentId"
 
   /**
    * DataClient path prefix for per-project icons: `/paseo/icon/<Uri.encode(projectKey)>`.
