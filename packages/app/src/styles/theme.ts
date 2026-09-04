@@ -187,6 +187,14 @@ const darkStatusColors = {
 // at hue 250, clear of
 // identity-colors' blue at 256.6 so a blue host badge and a working dot on the same row do not
 // read as related.
+//
+// Dark success is the one deliberate break from "all four move together": L=0.84 rather than
+// 0.72. Green against red is the pair red-green color vision deficiency collapses, and at the
+// band lightness the two differ mostly in hue, which is the channel that is missing. Lightness
+// is the channel that is left, so success is held far enough above danger that the two separate
+// without it. It is the only hue that moves; do not "fix" the set by raising the others to
+// match, and keep the light band where it is — brightening green there costs contrast against a
+// near-white surface instead of buying separation.
 const lightStatusDotColors = {
   // L=0.62, chroma 90% of gamut max
   statusDotSuccess: "#299f51",
@@ -196,8 +204,8 @@ const lightStatusDotColors = {
 };
 
 const darkStatusDotColors = {
-  // L=0.72, chroma 90% of gamut max
-  statusDotSuccess: "#35c264",
+  // L=0.72, chroma 90% of gamut max, except success — see below
+  statusDotSuccess: "#43ef7d", // L=0.84
   statusDotDanger: "#f7796d",
   statusDotWarning: "#db932e",
   statusDotRunning: "#5caaf6",
