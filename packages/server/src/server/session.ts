@@ -8779,7 +8779,8 @@ export class Session {
       });
       let deliveryStatus: "queued" | undefined;
       const send = async () => {
-        if (msg.sourceAgentId) {
+        // The agent-message queue only steers or interrupts; a reject is decided by the prompt path.
+        if (msg.sourceAgentId && msg.activeTurnBehavior !== "reject") {
           const receipt = this.agentMessages.enqueue({
             recipientId: agentId,
             messageId: msg.messageId,

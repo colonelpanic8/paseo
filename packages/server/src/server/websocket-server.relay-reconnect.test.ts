@@ -1151,6 +1151,7 @@ describe("relay external socket reconnect behavior", () => {
 
     expect(serverInfo.features?.stableProjectIdentity).toBe(true);
     expect(serverInfo.features?.canonicalSubmittedPrompts).toBe(true);
+    expect(serverInfo.features?.activeTurnReject).toBe(true);
     expect(serverInfo.features?.providersSnapshotCwd).toBe(true);
     expect(serverInfo.features?.hopliteProvider).toBe(false);
     expect(serverInfo.features?.pluginLogs).toBe(true);
