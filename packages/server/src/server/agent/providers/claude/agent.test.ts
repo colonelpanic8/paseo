@@ -381,11 +381,15 @@ describe("convertClaudeHistoryEntry", () => {
   test("passes assistant content blocks through to the mapper", () => {
     const entry = {
       type: "assistant",
+      uuid: "assistant-with-tools",
+      effort: "high",
       message: {
         role: "assistant",
+        model: "claude-opus-4-6-20260101",
         content: [
           { type: "thinking", thinking: "Let me reason about this..." },
           { type: "text", text: "Here is my answer." },
+          { type: "tool_use", id: "tool-1", name: "Read", input: { file_path: "auth.ts" } },
         ],
       },
     };
@@ -393,10 +397,35 @@ describe("convertClaudeHistoryEntry", () => {
     const mappedTimeline = [
       { type: "reasoning", text: "Let me reason about this..." },
       { type: "assistant_message", text: "Here is my answer." },
+      {
+        type: "tool_call",
+        callId: "tool-1",
+        name: "Read",
+        status: "running",
+        error: null,
+        detail: { type: "unknown" },
+      },
     ];
     const mapBlocks = vi.fn().mockReturnValue(mappedTimeline);
 
-    expect(convertClaudeHistoryEntry(entry, mapBlocks)).toEqual(mappedTimeline);
+    expect(convertClaudeHistoryEntry(entry, mapBlocks)).toEqual([
+      { type: "reasoning", text: "Let me reason about this..." },
+      {
+        type: "assistant_message",
+        text: "Here is my answer.",
+        messageId: "assistant-with-tools",
+        model: "claude-opus-4-6",
+        thinkingOptionId: "high",
+      },
+      {
+        type: "tool_call",
+        callId: "tool-1",
+        name: "Read",
+        status: "running",
+        error: null,
+        detail: { type: "unknown" },
+      },
+    ]);
     expect(mapBlocks).toHaveBeenCalledWith(entry.message.content);
   });
 
