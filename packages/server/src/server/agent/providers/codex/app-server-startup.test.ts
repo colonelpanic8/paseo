@@ -88,6 +88,41 @@ describe("Codex app-server startup", () => {
     await expect(first).resolves.toBe("first");
   });
 
+  test("releases the queue when a running startup never settles", async () => {
+    vi.useFakeTimers();
+    const firstStarted = deferred();
+    const firstAborted = deferred();
+    const cleanupAllowed = deferred();
+    const secondStart = vi.fn(async () => "second");
+
+    try {
+      const first = runCodexAppServerStartup({
+        timeoutMs: 100,
+        start: async (_attempt, signal) => {
+          firstStarted.resolve();
+          signal.addEventListener("abort", firstAborted.resolve, { once: true });
+          return await new Promise<never>(() => {});
+        },
+        onAbort: async () => await cleanupAllowed.promise,
+      });
+      await firstStarted.promise;
+      const second = runCodexAppServerStartup({ start: secondStart });
+
+      await vi.advanceTimersByTimeAsync(100);
+      await firstAborted.promise;
+      await Promise.resolve();
+      expect(secondStart).not.toHaveBeenCalled();
+
+      cleanupAllowed.resolve();
+
+      await expect(first).rejects.toThrow("startup timed out after 100ms");
+      await expect(second).resolves.toBe("second");
+      expect(secondStart).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("does not retry unrelated startup failures", async () => {
     const starts = vi.fn(async () => {
       throw new Error("Codex binary is not executable");
