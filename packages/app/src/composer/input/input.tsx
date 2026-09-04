@@ -50,6 +50,7 @@ import { useIosHardwareKeyboardSubmit } from "@/hooks/use-ios-hardware-keyboard-
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
+import { listNavigationDataSet } from "@/keyboard/list-search-keys";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -101,6 +102,10 @@ export interface ComposerInputSnapshot {
 
 export interface ComposerKeyPressEvent {
   key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
   preventDefault: () => void;
   input: ComposerInputSnapshot;
 }
@@ -157,6 +162,11 @@ export interface MessageInputProps {
   onSubmitLoadingPress?: () => void;
   /** Intercept key press events before default handling. Return true to prevent default. */
   onKeyPress?: (event: ComposerKeyPressEvent) => boolean;
+  /**
+   * True while an open menu inside the composer (the autocomplete popover) owns
+   * the list-navigation keys, so global Ctrl+N/Ctrl+P stand down for it.
+   */
+  ownsListNavigation?: boolean;
   /** Reports cursor selection updates from the underlying input. */
   onSelectionChange?: (selection: { start: number; end: number }) => void;
   onFocusChange?: (focused: boolean) => void;
@@ -199,6 +209,7 @@ type WebTextInputKeyPressEvent = NativeSyntheticEvent<
     metaKey?: boolean;
     ctrlKey?: boolean;
     shiftKey?: boolean;
+    altKey?: boolean;
     // Web-only: present on DOM KeyboardEvent during IME composition (CJK input).
     isComposing?: boolean;
     keyCode?: number;
@@ -399,16 +410,20 @@ function handleDesktopKeyPressImpl(
 ): void {
   if (isImeComposingKeyboardEvent(event.nativeEvent)) return;
 
+  const { shiftKey, metaKey, ctrlKey, altKey } = event.nativeEvent;
+
   if (ctx.onKeyPressCallback) {
     const handled = ctx.onKeyPressCallback({
       key: event.nativeEvent.key,
+      ctrlKey,
+      metaKey,
+      altKey,
+      shiftKey,
       preventDefault: () => event.preventDefault(),
       input: ctx.input,
     });
     if (handled) return;
   }
-
-  const { shiftKey, metaKey, ctrlKey } = event.nativeEvent;
 
   if (event.nativeEvent.key !== "Enter") return;
   if (!ctx.submitOnEnter) return;
@@ -1074,6 +1089,7 @@ interface ResolvedMessageInputProps {
   onQueue: ((payload: MessagePayload) => void) | undefined;
   onSubmitLoadingPress: (() => void) | undefined;
   onKeyPressCallback: ((event: ComposerKeyPressEvent) => boolean) | undefined;
+  ownsListNavigation: boolean;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
   onFocusChange: ((focused: boolean) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
@@ -1121,6 +1137,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onQueue: props.onQueue,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
+    ownsListNavigation: props.ownsListNavigation ?? false,
     onSelectionChangeCallback: props.onSelectionChange,
     onFocusChange: props.onFocusChange,
     onHeightChange: props.onHeightChange,
@@ -1176,6 +1193,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onQueue,
       onSubmitLoadingPress,
       onKeyPressCallback,
+      ownsListNavigation,
       onSelectionChangeCallback,
       onFocusChange,
       onHeightChange,
@@ -1776,6 +1794,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         ref={rootRef}
         style={styles.container}
         testID="message-input-root"
+        dataSet={listNavigationDataSet(ownsListNavigation)}
         onLayout={handleComposerLayout}
       >
         <MessageInputAutoFocus

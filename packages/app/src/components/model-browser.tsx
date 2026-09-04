@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Check,
   ChevronRight,
+  Layers,
   Pencil,
   Plus,
   Search,
@@ -32,7 +33,7 @@ import {
   type AgentProfilePickerRow as AgentProfilePickerRowModel,
   type AgentProfileSeed,
 } from "@/agent-profiles";
-import type { SheetHeader } from "@/components/adaptive-modal-sheet";
+import type { SheetHeader, SheetSearchKeyPressEvent } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -50,23 +51,39 @@ import {
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
+import { useAppSettings } from "@/hooks/use-settings";
 import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { moveModelHighlight, resolveModelSubmitRow } from "@/components/model-browser-keyboard";
+import {
+  buildAllModelsListItems,
+  countAllModels,
+  type ModelBrowserHeadingStatus,
+  type ModelBrowserListItem,
+} from "@/components/model-browser-rows";
 import {
   groupProfilesByProviderModel,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
+import {
+  LIST_SEARCH_SELECTOR,
+  resolveListSearchKeyAction,
+  type ListSearchKeyEvent,
+} from "@/keyboard/list-search-keys";
 
 const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
 const DESKTOP_PROVIDER_VIEW_BASE_HEIGHT = 80;
 const DESKTOP_MODEL_ROW_HEIGHT = 40;
+const EMPTY_LIST_ITEMS: ModelBrowserListItem[] = [];
+const EMPTY_MODEL_ROWS: ProviderSelectionModelRow[] = [];
 
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedCheck = withUnistyles(Check);
 const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedLayers = withUnistyles(Layers);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
@@ -138,6 +155,10 @@ const foregroundExtraMutedMapping = (theme: Theme) => ({
   color: theme.colors.foregroundExtraMuted,
 });
 
+const foregroundMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+
 const headerSettingsMapping = (disabled: boolean) => (theme: Theme) => ({
   color: disabled ? theme.colors.border : theme.colors.foregroundMuted,
 });
@@ -150,6 +171,7 @@ interface ModelBrowserInput {
   autoFocusSearch?: boolean;
   /** Pinned above the provider list on the root view. `null` hides the section. */
   profiles?: AgentProfilePicker | null;
+  onSelect: (provider: string, modelId: string) => void;
   serverId?: string | null;
 }
 
@@ -159,17 +181,21 @@ export interface ModelBrowserState {
   selectedModel: string;
   profiles: AgentProfilePicker | null;
   view: ModelBrowserView;
+  items: ModelBrowserListItem[];
+  highlightedKey: string | null;
   searchQuery: string;
   isSearchFocused: boolean;
   header: SheetHeader;
   selectedModelLabel: string;
   triggerLabel: string;
   desktopFixedHeight: number | undefined;
-  isProviderView: boolean;
+  isModelListView: boolean;
   prepareToOpen: () => void;
   showAll: () => void;
   reset: () => void;
   drillDown: (providerId: string, providerLabel: string) => void;
+  showAllModels: () => void;
+  handleOverlayKeyDown: (event: KeyboardEvent) => boolean;
 }
 
 interface ModelBrowserProps {
@@ -199,7 +225,10 @@ interface ModelBrowserContentProps extends Omit<ModelBrowserProps, "state" | "sc
   searchQuery: string;
   isSearchFocused: boolean;
   profiles: AgentProfilePicker | null;
+  items: ModelBrowserListItem[];
+  highlightedKey: string | null;
   onDrillDown: (providerId: string, providerLabel: string) => void;
+  onShowAllModels: () => void;
   scrolling: "sheet" | "independent";
   searchAllOnFocus: boolean;
   rootBrowseContent?: React.ReactNode;
@@ -236,7 +265,7 @@ function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { ho
 }
 
 function countModelsInView(view: ModelBrowserView, providers: ProviderSelectorProvider[]): number {
-  if (view.kind === "all") {
+  if (view.kind === "all" || view.kind === "allModels") {
     return getAllProviderModelRows(providers).length;
   }
   const provider = providers.find((entry) => entry.id === view.providerId);
@@ -264,12 +293,16 @@ export function useModelBrowser({
   isLoading,
   autoFocusSearch = isWeb,
   profiles = null,
+  onSelect,
   serverId = null,
 }: ModelBrowserInput): ModelBrowserState {
   const { t } = useTranslation();
+  const { settings } = useAppSettings();
+  const startWithAllModels = settings.modelPickerStartsWithAllModels;
   const [view, setView] = useState<ModelBrowserView>({ kind: "all" });
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [searchResetKey, bumpSearchResetKey] = useReducer((key: number) => key + 1, 0);
   const hasProfiles = (profiles?.rows.length ?? 0) > 0;
 
@@ -280,8 +313,9 @@ export function useModelBrowser({
         selectedProvider,
         selectedModel,
         hasProfiles,
+        startWithAllModels,
       }),
-    [hasProfiles, providers, selectedModel, selectedProvider],
+    [hasProfiles, providers, selectedModel, selectedProvider, startWithAllModels],
   );
 
   const prepareToOpen = useCallback(() => {
@@ -291,6 +325,7 @@ export function useModelBrowser({
   const reset = useCallback(() => {
     setSearchQuery("");
     setIsSearchFocused(false);
+    setHighlightedKey(null);
     bumpSearchResetKey();
   }, []);
 
@@ -307,9 +342,80 @@ export function useModelBrowser({
     [reset],
   );
 
+  const showAllModels = useCallback(() => {
+    setView({ kind: "allModels" });
+    reset();
+  }, [reset]);
+
   const handleSearchQueryChange = useCallback((value: string) => {
     setSearchQuery(value);
+    setHighlightedKey(null);
   }, []);
+
+  const normalizedQuery = useMemo(() => normalizeSearchQuery(searchQuery), [searchQuery]);
+  const items = useMemo(
+    () =>
+      view.kind === "allModels"
+        ? buildAllModelsListItems({ providers, normalizedQuery })
+        : EMPTY_LIST_ITEMS,
+    [normalizedQuery, providers, view.kind],
+  );
+  const keyboardRows = useMemo(() => {
+    if (view.kind === "allModels") {
+      return items.flatMap((item) => (item.kind === "model" ? [item.row] : []));
+    }
+    if (view.kind === "all") {
+      const allView = resolveModelBrowserAllView({ providers, normalizedQuery, isSearchFocused });
+      return allView.kind === "searchResults" ? allView.rows : EMPTY_MODEL_ROWS;
+    }
+    const provider = providers.find((entry) => entry.id === view.providerId);
+    if (!provider) return EMPTY_MODEL_ROWS;
+    return filterAndRankModelRows(getProviderModelRows(provider), normalizedQuery);
+  }, [isSearchFocused, items, normalizedQuery, providers, view]);
+
+  const handleListSearchKey = useCallback(
+    (event: ListSearchKeyEvent): boolean => {
+      const action = resolveListSearchKeyAction(event);
+      if (!action) return false;
+      if (action === "submit") {
+        const row = resolveModelSubmitRow(keyboardRows, highlightedKey);
+        if (!row) return false;
+        onSelect(row.provider, row.modelId);
+        return true;
+      }
+      const nextKey = moveModelHighlight({
+        rows: keyboardRows,
+        highlightedKey,
+        direction: action,
+      });
+      if (!nextKey) return false;
+      setHighlightedKey(nextKey);
+      return true;
+    },
+    [highlightedKey, keyboardRows, onSelect],
+  );
+
+  const handleOverlayKeyDown = useCallback(
+    (event: KeyboardEvent): boolean => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.closest(LIST_SEARCH_SELECTOR)) return false;
+      if (!handleListSearchKey(event)) return false;
+      event.preventDefault();
+      return true;
+    },
+    [handleListSearchKey],
+  );
+
+  const handleSearchKeyPress = useCallback(
+    (event: SheetSearchKeyPressEvent) => {
+      if (handleListSearchKey(event.nativeEvent)) event.preventDefault();
+    },
+    [handleListSearchKey],
+  );
+
+  const handleSearchSubmit = useCallback(() => {
+    handleListSearchKey({ key: "Enter" });
+  }, [handleListSearchKey]);
 
   const singleProviderView = providers.length === 1;
   const header = useMemo<SheetHeader>(() => {
@@ -324,6 +430,26 @@ export function useModelBrowser({
           placeholder: t("modelSelector.searchAllPlaceholder"),
           autoFocus: autoFocusSearch,
           testID: "model-search-all-input",
+          onKeyPress: handleSearchKeyPress,
+          onSubmit: handleSearchSubmit,
+          ownsListNavigation: true,
+        },
+      };
+    }
+    if (view.kind === "allModels") {
+      return {
+        title: t("modelSelector.allModels"),
+        leading: <ThemedLayers size={ICON_SIZE.md} uniProps={foregroundMapping} />,
+        back: { onPress: showAll },
+        search: {
+          onChange: handleSearchQueryChange,
+          resetKey: `all-models:${searchResetKey}`,
+          placeholder: t("modelSelector.searchAllPlaceholder"),
+          autoFocus: isWeb,
+          testID: "model-search-input",
+          onKeyPress: handleSearchKeyPress,
+          onSubmit: handleSearchSubmit,
+          ownsListNavigation: true,
         },
       };
     }
@@ -352,11 +478,16 @@ export function useModelBrowser({
         placeholder: t("modelSelector.searchPlaceholder"),
         autoFocus: autoFocusSearch,
         testID: "model-search-input",
+        onKeyPress: handleSearchKeyPress,
+        onSubmit: handleSearchSubmit,
+        ownsListNavigation: true,
       },
     };
   }, [
     autoFocusSearch,
+    handleSearchKeyPress,
     handleSearchQueryChange,
+    handleSearchSubmit,
     searchResetKey,
     serverId,
     singleProviderView,
@@ -394,17 +525,21 @@ export function useModelBrowser({
     selectedModel,
     profiles,
     view,
+    items,
+    highlightedKey,
     searchQuery,
     isSearchFocused,
     header,
     selectedModelLabel,
     triggerLabel,
     desktopFixedHeight,
-    isProviderView: view.kind === "provider",
+    isModelListView: view.kind !== "all" || normalizedQuery.length > 0,
     prepareToOpen,
     showAll,
     reset,
     drillDown,
+    showAllModels,
+    handleOverlayKeyDown,
   };
 }
 
@@ -520,6 +655,7 @@ function ModelBrowserRow({
   leadingSlot,
   trailingSlot,
   selected = false,
+  highlighted = false,
   selectionIndicator = false,
   tone = "default",
   labelMuted = false,
@@ -532,6 +668,7 @@ function ModelBrowserRow({
   leadingSlot: React.ReactNode;
   trailingSlot?: React.ReactNode;
   selected?: boolean;
+  highlighted?: boolean;
   selectionIndicator?: boolean;
   tone?: ModelBrowserRowTone;
   /** For rows that offer an action rather than name a thing you can pick. */
@@ -546,9 +683,10 @@ function ModelBrowserRow({
       spacing === "model" && styles.browserModelRow,
       Boolean(hovered) &&
         (tone === "elevated" ? styles.browserRowHoveredElevated : styles.browserRowHovered),
+      highlighted && styles.browserRowHighlighted,
       pressed && (tone === "default" ? styles.browserRowPressed : styles.browserRowPressedElevated),
     ],
-    [spacing, tone],
+    [highlighted, spacing, tone],
   );
   const contentStyle = useMemo(
     () => [styles.browserRowText, description && styles.browserRowTextInline],
@@ -653,6 +791,7 @@ function ModelRowProfileAction({
 function ModelRow({
   row,
   isSelected,
+  isHighlighted = false,
   showProviderLabel = false,
   onPress,
   profiledRows,
@@ -662,6 +801,7 @@ function ModelRow({
 }: {
   row: ProviderSelectionModelRow;
   isSelected: boolean;
+  isHighlighted?: boolean;
   showProviderLabel?: boolean;
   onPress: () => void;
   profiledRows: AgentProfilePickerRowModel[];
@@ -765,9 +905,10 @@ function ModelRow({
       styles.browserRow,
       styles.browserModelRow,
       Boolean(hovered) && styles.browserRowHovered,
+      isHighlighted && styles.browserRowHighlighted,
       pressed && styles.browserRowPressed,
     ],
-    [],
+    [isHighlighted],
   );
 
   return (
@@ -811,6 +952,7 @@ function ModelRow({
 function SelectableModelRow({
   row,
   isSelected,
+  isHighlighted,
   showProviderLabel,
   onSelect,
   profiledRows,
@@ -820,6 +962,7 @@ function SelectableModelRow({
 }: {
   row: ProviderSelectionModelRow;
   isSelected: boolean;
+  isHighlighted?: boolean;
   showProviderLabel?: boolean;
   onSelect: (provider: string, modelId: string) => void;
   profiledRows: AgentProfilePickerRowModel[];
@@ -834,6 +977,7 @@ function SelectableModelRow({
     <ModelRow
       row={row}
       isSelected={isSelected}
+      isHighlighted={isHighlighted}
       showProviderLabel={showProviderLabel}
       onPress={handlePress}
       profiledRows={profiledRows}
@@ -942,6 +1086,98 @@ function AgentProfilesPickerContent({
       rows={rows}
       onApplyProfile={onApplyProfile}
       onEditProfiles={onEditProfiles}
+    />
+  );
+}
+
+function headingPressableStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    styles.sectionHeading,
+    Boolean(hovered) && styles.browserRowHovered,
+    pressed && styles.browserRowPressed,
+  ];
+}
+
+function ModelGroupHeading({
+  label,
+  status,
+  providerId,
+  onDrillDown,
+}: {
+  label: string;
+  status?: ModelBrowserHeadingStatus;
+  providerId: string;
+  onDrillDown: (providerId: string, providerLabel: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => {
+    onDrillDown(providerId, label);
+  }, [label, onDrillDown, providerId]);
+  const statusNode = status ? (
+    <Text style={styles.sectionHeadingStatus}>
+      {t(status === "loading" ? "modelSelector.loadingShort" : "modelSelector.error")}
+    </Text>
+  ) : null;
+
+  if (status === "error") {
+    return (
+      <ModelBrowserPressable
+        onPress={handlePress}
+        style={headingPressableStyle}
+        accessibilityLabel={`${label} — ${t("modelSelector.error")}`}
+        testID={`model-group-heading-${providerId}`}
+      >
+        <Text style={styles.sectionHeadingText} numberOfLines={1}>
+          {label}
+        </Text>
+        {statusNode}
+        <ThemedChevronRight size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+      </ModelBrowserPressable>
+    );
+  }
+
+  return (
+    <View style={styles.sectionHeading} accessibilityRole="header">
+      <Text style={styles.sectionHeadingText} numberOfLines={1}>
+        {label}
+      </Text>
+      {statusNode}
+    </View>
+  );
+}
+
+function AllModelsButton({ count, onPress }: { count: number; onPress: () => void }) {
+  const { t } = useTranslation();
+  const leadingSlot = useMemo(
+    () => <ThemedLayers size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />,
+    [],
+  );
+  const trailingSlot = useMemo(
+    () => (
+      <View style={styles.drillDownTrailing}>
+        <Text style={styles.drillDownCount}>
+          {t(count === 1 ? "modelSelector.modelCount" : "modelSelector.modelCountPlural", {
+            count,
+          })}
+        </Text>
+        <ThemedChevronRight size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+      </View>
+    ),
+    [count, t],
+  );
+
+  return (
+    <ModelBrowserRow
+      label={t("modelSelector.allModels")}
+      leadingSlot={leadingSlot}
+      trailingSlot={trailingSlot}
+      tone="drillDown"
+      spacing="provider"
+      onPress={onPress}
+      testID="model-all-models"
     />
   );
 }
@@ -1113,6 +1349,7 @@ function ModelRowList({
   rows,
   selectedProvider,
   selectedModel,
+  highlightedKey,
   onSelect,
   showProviderLabel = false,
   header,
@@ -1125,6 +1362,7 @@ function ModelRowList({
   rows: ProviderSelectionModelRow[];
   selectedProvider: string;
   selectedModel: string;
+  highlightedKey?: string | null;
   onSelect: (provider: string, modelId: string) => void;
   showProviderLabel?: boolean;
   header?: React.ReactElement;
@@ -1140,6 +1378,7 @@ function ModelRowList({
       <SelectableModelRow
         row={item}
         isSelected={item.provider === selectedProvider && item.modelId === selectedModel}
+        isHighlighted={item.favoriteKey === highlightedKey}
         showProviderLabel={showProviderLabel}
         onSelect={onSelect}
         profiledRows={profiledLookup.get(`${item.provider}:${item.modelId}`) ?? []}
@@ -1149,6 +1388,7 @@ function ModelRowList({
       />
     ),
     [
+      highlightedKey,
       onEditProfile,
       onEditProfiles,
       onCreateProfile,
@@ -1185,6 +1425,113 @@ function ModelRowList({
       {header}
       {rows.map((row) => (
         <View key={row.favoriteKey}>{renderItem({ item: row })}</View>
+      ))}
+    </View>
+  );
+}
+
+function AllModelsList({
+  items,
+  selectedProvider,
+  selectedModel,
+  highlightedKey,
+  onSelect,
+  onDrillDown,
+  profiledLookup,
+  onCreateProfile,
+  onEditProfile,
+  onEditProfiles,
+  scrolling,
+}: {
+  items: ModelBrowserListItem[];
+  selectedProvider: string;
+  selectedModel: string;
+  highlightedKey: string | null;
+  onSelect: (provider: string, modelId: string) => void;
+  onDrillDown: (providerId: string, providerLabel: string) => void;
+  profiledLookup: Map<string, AgentProfilePickerRowModel[]>;
+  onCreateProfile?: (seed: AgentProfileSeed) => void;
+  onEditProfile?: (profileId: string) => void;
+  onEditProfiles?: () => void;
+  scrolling: "sheet" | "independent";
+}) {
+  const isCompact = useIsCompactFormFactor();
+  const renderItem = useCallback(
+    ({ item }: { item: ModelBrowserListItem }) => {
+      if (item.kind === "heading") {
+        return (
+          <ModelGroupHeading
+            label={item.label}
+            status={item.status}
+            providerId={item.providerId}
+            onDrillDown={onDrillDown}
+          />
+        );
+      }
+      return (
+        <SelectableModelRow
+          row={item.row}
+          isSelected={item.row.provider === selectedProvider && item.row.modelId === selectedModel}
+          isHighlighted={item.row.favoriteKey === highlightedKey}
+          showProviderLabel={item.showProvider}
+          onSelect={onSelect}
+          profiledRows={profiledLookup.get(`${item.row.provider}:${item.row.modelId}`) ?? []}
+          onCreateProfile={onCreateProfile}
+          onEditProfile={onEditProfile}
+          onEditProfiles={onEditProfiles}
+        />
+      );
+    },
+    [
+      highlightedKey,
+      onCreateProfile,
+      onDrillDown,
+      onEditProfile,
+      onEditProfiles,
+      onSelect,
+      profiledLookup,
+      selectedModel,
+      selectedProvider,
+    ],
+  );
+  const keyExtractor = useCallback((item: ModelBrowserListItem) => item.key, []);
+
+  if (scrolling === "independent") {
+    return (
+      <IndependentScrollBoundary>
+        <FlatList
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          style={styles.virtualizedModelList}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.virtualizedModelListContent}
+          nestedScrollEnabled
+          testID="compact-model-list"
+        />
+      </IndependentScrollBoundary>
+    );
+  }
+
+  if (isCompact && isNative) {
+    return (
+      <BottomSheetFlatList
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        style={styles.virtualizedModelList}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.virtualizedModelListContent}
+      />
+    );
+  }
+
+  return (
+    <View>
+      {items.map((item) => (
+        <View key={item.key}>{renderItem({ item })}</View>
       ))}
     </View>
   );
@@ -1234,6 +1581,7 @@ function ProviderModelBrowserContent({
   profiles,
   selectedProvider,
   selectedModel,
+  highlightedKey,
   normalizedQuery,
   onSelect,
   onApplyProfile,
@@ -1251,6 +1599,7 @@ function ProviderModelBrowserContent({
   profiles: AgentProfilePicker | null;
   selectedProvider: string;
   selectedModel: string;
+  highlightedKey: string | null;
   normalizedQuery: string;
   onSelect: (provider: string, modelId: string) => void;
   onApplyProfile?: (profileId: string) => void;
@@ -1321,6 +1670,7 @@ function ProviderModelBrowserContent({
       rows={visibleRows}
       selectedProvider={selectedProvider}
       selectedModel={selectedModel}
+      highlightedKey={highlightedKey}
       onSelect={onSelect}
       header={profileHeader}
       scrolling={scrolling}
@@ -1340,12 +1690,15 @@ function ModelBrowserContent({
   searchQuery,
   isSearchFocused,
   profiles,
+  items,
+  highlightedKey,
   onSelect,
   onApplyProfile,
   onEditProfiles,
   onCreateProfile,
   onEditProfile,
   onDrillDown,
+  onShowAllModels,
   onRetryProvider,
   isRetryingProvider = false,
   scrolling,
@@ -1377,6 +1730,25 @@ function ModelBrowserContent({
   );
   const hasResults = profiles !== null || providers.length > 0 || rootBrowseContent != null;
 
+  if (view.kind === "allModels") {
+    if (items.length === 0) return <ModelSearchEmptyState />;
+    return (
+      <AllModelsList
+        items={items}
+        selectedProvider={selectedProvider}
+        selectedModel={selectedModel}
+        highlightedKey={highlightedKey}
+        onSelect={onSelect}
+        onDrillDown={onDrillDown}
+        profiledLookup={profiledLookup}
+        onCreateProfile={onCreateProfile}
+        onEditProfile={onEditProfile}
+        onEditProfiles={onEditProfiles}
+        scrolling={scrolling}
+      />
+    );
+  }
+
   if (view.kind === "provider") {
     return (
       <ProviderModelBrowserContent
@@ -1385,6 +1757,7 @@ function ModelBrowserContent({
         profiles={profiles}
         selectedProvider={selectedProvider}
         selectedModel={selectedModel}
+        highlightedKey={highlightedKey}
         normalizedQuery={normalizedQuery}
         onSelect={onSelect}
         onApplyProfile={onApplyProfile}
@@ -1417,6 +1790,7 @@ function ModelBrowserContent({
         rows={allView.rows}
         selectedProvider={selectedProvider}
         selectedModel={selectedModel}
+        highlightedKey={highlightedKey}
         onSelect={onSelect}
         showProviderLabel
         scrolling={scrolling}
@@ -1436,6 +1810,12 @@ function ModelBrowserContent({
           onApplyProfile={onApplyProfile}
           onEditProfiles={onEditProfiles}
         />
+      ) : null}
+      {providers.length > 1 ? (
+        <>
+          <AllModelsButton count={countAllModels(providers)} onPress={onShowAllModels} />
+          <View style={styles.separator} />
+        </>
       ) : null}
       {rootBrowseContent ??
         (providers.length > 0 ? (
@@ -1494,12 +1874,15 @@ export function ModelBrowser({
       searchQuery={state.searchQuery}
       isSearchFocused={state.isSearchFocused}
       profiles={state.profiles}
+      items={state.items}
+      highlightedKey={state.highlightedKey}
       onSelect={onSelect}
       onApplyProfile={onApplyProfile}
       onEditProfiles={onEditProfiles}
       onCreateProfile={onCreateProfile}
       onEditProfile={onEditProfile}
       onDrillDown={state.drillDown}
+      onShowAllModels={state.showAllModels}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
       scrolling={scrolling}
@@ -1545,6 +1928,10 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
+  sectionHeadingStatus: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+  },
   browserRow: {
     flexDirection: "row",
     paddingVertical: theme.spacing[2],
@@ -1559,6 +1946,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   browserRowHoveredElevated: {
     backgroundColor: theme.colors.surface2,
+  },
+  browserRowHighlighted: {
+    backgroundColor: theme.colors.surface3,
   },
   browserRowPressed: {
     backgroundColor: theme.colors.surface1,

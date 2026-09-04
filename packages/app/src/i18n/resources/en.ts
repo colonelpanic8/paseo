@@ -1571,6 +1571,7 @@ export const en = {
     profiles: "Profiles",
     providers: "Providers",
     model: "Model",
+    allModels: "All models",
     editProfiles: "Edit",
     editProfilesLabel: "Edit agent profiles",
     createProfile: "Create profile",
@@ -2148,6 +2149,11 @@ export const en = {
       autoExpandReasoning: {
         label: "Always expand reasoning",
         description: "Show agent thinking and chain-of-thought blocks fully expanded by default",
+      },
+      modelPickerAllModels: {
+        label: "Open model picker on all models",
+        description:
+          "Start the model picker on one searchable list of every model from every provider, instead of the provider list",
       },
       toolCallDetail: {
         label: "Tool call display",

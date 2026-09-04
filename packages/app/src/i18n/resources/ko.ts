@@ -1571,6 +1571,7 @@ export const ko: TranslationResources = {
     profiles: "프로필",
     providers: "제공자",
     model: "모델",
+    allModels: "모든 모델",
     editProfiles: "편집",
     editProfilesLabel: "에이전트 프로필 편집",
     createProfile: "프로필 만들기",
@@ -2060,6 +2061,11 @@ export const ko: TranslationResources = {
       autoExpandReasoning: {
         label: "추론 항상 펼치기",
         description: "에이전트의 사고 및 추론 블록을 기본적으로 모두 펼쳐 표시합니다.",
+      },
+      modelPickerAllModels: {
+        label: "모델 선택기를 모든 모델로 열기",
+        description:
+          "제공자 목록 대신 모든 제공자의 모든 모델을 하나의 검색 가능한 목록으로 모델 선택기를 시작합니다",
       },
       toolCallDetail: {
         label: "도구 호출 표시",
