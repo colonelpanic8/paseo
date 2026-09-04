@@ -33,6 +33,7 @@ import {
   type AgentPermissionResponse,
   type AgentPersistenceHandle,
   type AgentPromptInput,
+  type PromptCacheSample,
   type AgentRunOptions,
   type AgentRunResult,
   type AgentRuntimeInfo,
@@ -910,21 +911,42 @@ function resolveOpenCodeModelLookupKeyFromAssistantMessage(
   return buildOpenCodeModelLookupKey(providerId, modelId);
 }
 
+interface OpenCodeStepFinishUsage {
+  cost?: unknown;
+  tokens?: {
+    input?: unknown;
+    output?: unknown;
+    reasoning?: unknown;
+    total?: unknown;
+    cache?: {
+      read?: unknown;
+      write?: unknown;
+    };
+  };
+}
+
+function toPromptCacheSample(part: OpenCodeStepFinishUsage): PromptCacheSample | undefined {
+  const inputTokens = part.tokens?.input;
+  const cachedInputTokens = part.tokens?.cache?.read;
+  const cacheWriteTokens = part.tokens?.cache?.write;
+  if (
+    typeof inputTokens !== "number" ||
+    typeof cachedInputTokens !== "number" ||
+    typeof cacheWriteTokens !== "number"
+  ) {
+    return undefined;
+  }
+  return {
+    kind: "request",
+    inputTokens,
+    cachedInputTokens,
+    cacheWriteTokens,
+  };
+}
+
 function mergeOpenCodeStepFinishUsage(
   usage: AgentUsage,
-  part: {
-    cost?: unknown;
-    tokens?: {
-      input?: unknown;
-      output?: unknown;
-      reasoning?: unknown;
-      total?: unknown;
-      cache?: {
-        read?: unknown;
-        write?: unknown;
-      };
-    };
-  },
+  part: OpenCodeStepFinishUsage,
   options: { totalCostUsd?: number } = {},
 ): void {
   const inputTokens = readPositiveFiniteNumber(part.tokens?.input);
@@ -2776,6 +2798,7 @@ function appendOpenCodeMessagePartUpdated(
     return;
   }
   if (part.type === "step-finish") {
+    const promptCache = toPromptCacheSample(part);
     const stepCost = readPositiveFiniteNumber(part.cost);
     if (stepCost !== undefined) {
       state.sessionTotalCostUsd = (state.sessionTotalCostUsd ?? 0) + stepCost;
@@ -2788,6 +2811,7 @@ function appendOpenCodeMessagePartUpdated(
         type: "usage_updated",
         provider: "opencode",
         usage: { ...state.accumulatedUsage },
+        ...(promptCache ? { promptCache } : {}),
       });
     }
   }

@@ -5419,6 +5419,12 @@ describe("Codex app-server provider", () => {
     asInternals(session).handleNotification("thread/tokenUsage/updated", {
       tokenUsage: {
         model_context_window: 200000,
+        total: {
+          totalTokens: 175000,
+          inputTokens: 150000,
+          cachedInputTokens: 45000,
+          outputTokens: 25000,
+        },
         last: {
           total_tokens: 50000,
           inputTokens: 30000,
@@ -5441,6 +5447,12 @@ describe("Codex app-server provider", () => {
         outputTokens: 15000,
         contextWindowMaxTokens: 200000,
         contextWindowUsedTokens: 50000,
+      },
+      promptCache: {
+        kind: "cumulative",
+        inputTokens: 105000,
+        cachedInputTokens: 45000,
+        ttlSeconds: 300,
       },
     });
     expect(events.at(-1)).toEqual({
