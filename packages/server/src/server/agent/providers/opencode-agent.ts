@@ -929,18 +929,14 @@ function toPromptCacheSample(part: OpenCodeStepFinishUsage): PromptCacheSample |
   const inputTokens = part.tokens?.input;
   const cachedInputTokens = part.tokens?.cache?.read;
   const cacheWriteTokens = part.tokens?.cache?.write;
-  if (
-    typeof inputTokens !== "number" ||
-    typeof cachedInputTokens !== "number" ||
-    typeof cacheWriteTokens !== "number"
-  ) {
+  if (typeof inputTokens !== "number" || typeof cachedInputTokens !== "number") {
     return undefined;
   }
   return {
     kind: "request",
     inputTokens,
     cachedInputTokens,
-    cacheWriteTokens,
+    ...(typeof cacheWriteTokens === "number" ? { cacheWriteTokens } : {}),
   };
 }
 

@@ -719,6 +719,49 @@ describe("translateOpenCodeEvent", () => {
     });
   });
 
+  it("preserves prompt cache reads when OpenCode omits cache writes", () => {
+    const state = createState();
+
+    const events = translateOpenCodeEvent(
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "step-finish-without-write",
+            sessionID: "session-1",
+            messageID: "message-usage-1",
+            type: "step-finish",
+            reason: "stop",
+            tokens: {
+              input: 30_000,
+              output: 12_000,
+              cache: { read: 2_000 },
+            },
+          },
+        },
+      },
+      state,
+    );
+
+    expect(events).toEqual([
+      {
+        type: "usage_updated",
+        provider: "opencode",
+        usage: {
+          contextWindowUsedTokens: 44_000,
+          cachedInputTokens: 2_000,
+          inputTokens: 30_000,
+          outputTokens: 12_000,
+        },
+        promptCache: {
+          kind: "request",
+          inputTokens: 30_000,
+          cachedInputTokens: 2_000,
+        },
+      },
+    ]);
+  });
+
   it("reports totalCostUsd as cumulative session cost across turns", () => {
     const state = createState();
     state.accumulatedUsage.contextWindowMaxTokens = 400_000;
