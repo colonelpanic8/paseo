@@ -4034,6 +4034,7 @@ function WorkspaceScreenContent({
     navigateToTabId,
     handleCloseTabById,
     handleCopyResumeCommand,
+    handleCopyConversation,
     handleCopyAgentId,
     handleCopyTerminalId,
     handleCopyFilePath,
