@@ -9,7 +9,7 @@ import {
   type DraftCommandConfig,
 } from "./use-agent-commands-query";
 import { orderAutocompleteOptions } from "@/components/ui/autocomplete-utils";
-import { useAutocomplete, type AutocompleteKeyPressEvent } from "./use-autocomplete";
+import { useAutocomplete, type AutocompleteKeyEvent } from "./use-autocomplete";
 import { useSessionStore } from "@/stores/session-store";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { CLIENT_SLASH_COMMANDS, type ClientSlashCommand } from "@/client-slash-commands";
@@ -45,7 +45,7 @@ interface UseAgentAutocompleteInput {
   sigils: ComposerSigils;
 }
 
-interface AgentAutocompleteKeyPressEvent extends AutocompleteKeyPressEvent {
+interface AgentAutocompleteKeyPressEvent extends AutocompleteKeyEvent {
   input: AgentAutocompleteInputSnapshot;
 }
 
@@ -590,12 +590,15 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   );
 
   const selectOptionFromKeyPress = useCallback(
-    (option: AutocompleteOption, event?: AgentAutocompleteKeyPressEvent) =>
+    (option: AgentAutocompleteOption, event?: AgentAutocompleteKeyPressEvent) =>
       onSelectOption(option, event?.input),
     [onSelectOption],
   );
 
-  const { selectedIndex, onKeyPress: onAutocompleteKeyPress } = useAutocomplete({
+  const { selectedIndex, onKeyPress: onAutocompleteKeyPress } = useAutocomplete<
+    AgentAutocompleteOption,
+    AgentAutocompleteKeyPressEvent
+  >({
     isVisible,
     options,
     query: mode === "command" ? commandFilterQuery : fileFilterQuery,
