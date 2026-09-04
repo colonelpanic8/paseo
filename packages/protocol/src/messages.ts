@@ -290,6 +290,7 @@ import type {
   AgentProviderNotice,
   ToolCallDetail,
   ToolCallTimelineItem,
+  AgentPromptCacheStatus,
   AgentUsage,
   JsonValue,
 } from "./agent-types.js";
@@ -432,6 +433,19 @@ const AgentUsageSchema: z.ZodType<AgentUsage> = z.object({
   totalCostUsd: z.number().optional(),
   contextWindowMaxTokens: z.number().optional(),
   contextWindowUsedTokens: z.number().optional(),
+});
+
+const AgentPromptCacheTokensSchema = z.object({
+  inputTokens: z.number(),
+  cachedInputTokens: z.number(),
+  cacheWriteTokens: z.number().optional(),
+});
+
+const AgentPromptCacheStatusSchema: z.ZodType<AgentPromptCacheStatus> = z.object({
+  observedAt: z.string(),
+  ttlSeconds: z.number().optional(),
+  lastRequest: AgentPromptCacheTokensSchema,
+  session: AgentPromptCacheTokensSchema.extend({ requestCount: z.number() }),
 });
 
 const McpStdioServerConfigSchema = z.object({
@@ -872,6 +886,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   persistence: AgentPersistenceHandleSchema.nullable(),
   runtimeInfo: AgentRuntimeInfoSchema.optional(),
   lastUsage: AgentUsageSchema.optional(),
+  promptCache: AgentPromptCacheStatusSchema.optional(),
   lastError: z.string().optional(),
   title: z.string().nullable(),
   labels: z.record(z.string(), z.string()).default({}),
