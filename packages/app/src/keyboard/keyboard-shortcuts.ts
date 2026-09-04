@@ -904,6 +904,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "sidebar-toggle-left-mac-cmd-b",
     action: "sidebar.toggle.left",
     combo: "Cmd+B",
+    repeat: false,
     when: { mac: true },
     help: {
       id: "toggle-left-sidebar",
@@ -915,6 +916,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "sidebar-toggle-left-ctrl-period-non-mac",
     action: "sidebar.toggle.left",
     combo: "Ctrl+B",
+    repeat: false,
     when: { mac: false, commandCenter: false, terminal: false },
     help: {
       id: "toggle-left-sidebar",
@@ -926,6 +928,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "sidebar-toggle-right-cmd-e-mac",
     action: "sidebar.toggle.right",
     combo: "Cmd+E",
+    repeat: false,
     when: { mac: true, commandCenter: false },
     help: {
       id: "toggle-right-sidebar",
@@ -937,6 +940,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "sidebar-toggle-right-ctrl-e-non-mac",
     action: "sidebar.toggle.right",
     combo: "Ctrl+E",
+    repeat: false,
     when: { mac: false, commandCenter: false, terminal: false },
     help: {
       id: "toggle-right-sidebar",
@@ -948,6 +952,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "sidebar-toggle-right-ctrl-backquote",
     action: "sidebar.toggle.right",
     combo: "Ctrl+`",
+    repeat: false,
     when: { commandCenter: false },
   },
 
@@ -956,6 +961,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "sidebar-toggle-both-cmd-period-mac",
     action: "sidebar.toggle.both",
     combo: "Cmd+.",
+    repeat: false,
     when: { mac: true, commandCenter: false },
     help: {
       id: "toggle-both-sidebars",
@@ -967,6 +973,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     id: "sidebar-toggle-both-ctrl-period-non-mac",
     action: "sidebar.toggle.both",
     combo: "Ctrl+.",
+    repeat: false,
     when: { mac: false, commandCenter: false, terminal: false },
     help: {
       id: "toggle-both-sidebars",

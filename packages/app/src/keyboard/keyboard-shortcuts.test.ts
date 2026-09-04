@@ -477,6 +477,11 @@ describe("keyboard-shortcuts", () => {
       context: { isMac: false, focusScope: "terminal" },
     },
     {
+      name: "does not repeat sidebar toggles while the shortcut is held",
+      event: { key: "b", code: "KeyB", ctrlKey: true, repeat: true },
+      context: { isMac: false },
+    },
+    {
       name: "does not route message-input actions when terminal is focused",
       event: { key: "d", code: "KeyD", metaKey: true },
       context: { isMac: true, focusScope: "terminal" },

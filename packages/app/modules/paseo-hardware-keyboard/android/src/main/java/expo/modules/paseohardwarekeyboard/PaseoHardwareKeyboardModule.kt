@@ -132,7 +132,13 @@ object PaseoHardwareKeyboardKeyDispatcher {
     // Matches desktop: Enter sends, Ctrl/Cmd+Enter takes the alternate send
     // (queue while the agent runs), Shift+Enter falls through as a newline.
     // Consume the ones we act on so the text input doesn't also insert one.
-    if (isSubmitEnabled && event.keyCode == KeyEvent.KEYCODE_ENTER && !shiftKey && !altKey) {
+    if (
+      isSubmitEnabled &&
+        event.keyCode == KeyEvent.KEYCODE_ENTER &&
+        event.repeatCount == 0 &&
+        !shiftKey &&
+        !altKey
+    ) {
       if (ctrlKey || metaKey) {
         module.emitHardwareKeyboardSubmit(true)
         return true
