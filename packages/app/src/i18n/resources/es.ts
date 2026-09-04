@@ -220,6 +220,13 @@ export const es: TranslationResources = {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
     historyLoadFailed: "No se pudo cargar el historial del agente",
+    find: {
+      placeholder: "Buscar en la conversación",
+      matchCount: "{{current}}/{{total}}",
+      previous: "Coincidencia anterior",
+      next: "Siguiente coincidencia",
+      close: "Cerrar búsqueda",
+    },
     messageCapped: "Este mensaje fue truncado ({{bytes}} bytes).",
     permission: {
       plan: "Plan",
@@ -2343,6 +2350,7 @@ export const es: TranslationResources = {
         selectHost: "Seleccionar host",
         toggleFastMode: "Alternar modo rápido",
         togglePlanMode: "Alternar modo de planificación",
+        findInConversation: "Buscar en la conversación",
       },
       helpNotes: {
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",

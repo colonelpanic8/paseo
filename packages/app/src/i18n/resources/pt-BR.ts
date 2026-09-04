@@ -220,6 +220,13 @@ export const ptBR: TranslationResources = {
     empty: "Comece a conversar com este agente...",
     scrollToBottom: "Rolar para o fim",
     historyLoadFailed: "Não foi possível carregar o histórico do agente",
+    find: {
+      placeholder: "Buscar na conversa",
+      matchCount: "{{current}}/{{total}}",
+      previous: "Correspondência anterior",
+      next: "Próxima correspondência",
+      close: "Fechar busca",
+    },
     messageCapped: "Esta mensagem foi truncada ({{bytes}} bytes).",
     permission: {
       plan: "Plano",
@@ -2325,6 +2332,7 @@ export const ptBR: TranslationResources = {
         selectHost: "Selecionar host",
         toggleFastMode: "Alternar modo rápido",
         togglePlanMode: "Alternar modo de planejamento",
+        findInConversation: "Buscar na conversa",
       },
       helpNotes: {
         showKeyboardShortcuts:

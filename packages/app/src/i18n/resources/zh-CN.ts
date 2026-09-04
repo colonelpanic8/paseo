@@ -220,6 +220,13 @@ export const zhCN: TranslationResources = {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
     historyLoadFailed: "无法加载智能体历史记录",
+    find: {
+      placeholder: "在会话中查找",
+      matchCount: "{{current}}/{{total}}",
+      previous: "上一个匹配项",
+      next: "下一个匹配项",
+      close: "关闭查找",
+    },
     messageCapped: "此消息已被截断（{{bytes}} 字节）。",
     permission: {
       plan: "Plan",
@@ -2265,6 +2272,7 @@ export const zhCN: TranslationResources = {
         selectHost: "选择主机",
         toggleFastMode: "切换快速模式",
         togglePlanMode: "切换计划模式",
+        findInConversation: "在会话中查找",
       },
       helpNotes: {
         showKeyboardShortcuts: "焦点不在文本输入框或终端内时可用。",
