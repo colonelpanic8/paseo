@@ -1204,6 +1204,15 @@ export const VoiceLiveStartRequestSchema = z.object({
   /** The user's standing instructions for the whole call, passed verbatim. */
   customVoiceInstructions: z.string().optional(),
   /**
+   * Named daemon context profile for this call. Absent lets the daemon choose
+   * its configured default.
+   *
+   * COMPAT(liveVoiceContextProfiles): added in v0.4.0, remove after
+   * 2027-02-18. An older daemon drops the field; the app only sends it after
+   * observing the matching feature flag.
+   */
+  contextProfileId: z.string().optional(),
+  /**
    * Directory to put a new workspace in when the request names no workspace of
    * its own. The client holds it because it is the user's setting, and the
    * daemon drops anything that is not an absolute or `~`-rooted path — a
@@ -3632,9 +3641,20 @@ export const ServerVoiceCapabilitiesSchema = z.object({
   voice: ServerCapabilityStateSchema,
 });
 
+export const ServerLiveVoiceCapabilitiesSchema = z.object({
+  contextProfiles: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+    }),
+  ),
+  defaultContextProfileId: z.string().optional(),
+});
+
 export const ServerCapabilitiesSchema = z
   .object({
     voice: ServerVoiceCapabilitiesSchema.optional(),
+    liveVoice: ServerLiveVoiceCapabilitiesSchema.optional(),
   })
   .passthrough();
 
@@ -3889,6 +3909,8 @@ export const ServerInfoStatusPayloadSchema = z
         liveVoice: z.boolean().optional(),
         // COMPAT(liveVoiceVoiceCatalog): added in v0.2.6, remove after 2027-02-28.
         liveVoiceVoiceCatalog: z.boolean().optional(),
+        // COMPAT(liveVoiceContextProfiles): added in v0.4.0, remove after 2027-02-18.
+        liveVoiceContextProfiles: z.boolean().optional(),
         // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
         // Reports whether newly launched agents receive Paseo's own tools.
         agentPaseoTools: z.boolean().optional(),

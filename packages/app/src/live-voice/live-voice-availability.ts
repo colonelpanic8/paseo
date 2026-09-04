@@ -12,6 +12,7 @@ import {
   useHostRuntimeConnectionStatuses,
 } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import { getLiveVoiceContextProfileHostInfo } from "@/live-voice/live-voice-context-profile-selection";
 
 /**
  * Availability read straight from the stores, for callers that live outside
@@ -78,6 +79,7 @@ export function useLiveVoiceHostAvailability(): LiveVoiceHostAvailability[] {
           // COMPAT(agentPaseoTools): added in v0.2.6. Missing means an older
           // Live Voice daemon whose start response remains authoritative.
           paseoToolsEnabled: serverInfo ? serverInfo.features?.agentPaseoTools !== false : null,
+          contextProfiles: getLiveVoiceContextProfileHostInfo(serverInfo),
         };
       }),
     [connectionStatuses, hosts, serverInfos],

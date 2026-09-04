@@ -1814,6 +1814,7 @@ export const ptBR: TranslationResources = {
     label: "Voz ao vivo",
     menu: {
       hosts: "Host",
+      contextProfiles: "Perfil de contexto",
     },
     actions: {
       start: "Iniciar voz ao vivo",

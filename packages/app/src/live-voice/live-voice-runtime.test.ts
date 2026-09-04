@@ -198,6 +198,15 @@ describe("live voice runtime", () => {
     });
   });
 
+  it("sends the selected context profile with the start request", async () => {
+    await harness.runtime.start(SERVER_ID, { contextProfileId: "full-org" });
+
+    expect(harness.client.startLiveVoice).toHaveBeenCalledWith({
+      negotiation: { kind: "webrtc_sdp", offerSdp: OFFER_SDP },
+      contextProfileId: "full-org",
+    });
+  });
+
   it("sends nothing extra when the prompt configuration is default", async () => {
     harness = createHarness({
       callSettings: {

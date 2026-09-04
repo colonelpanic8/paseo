@@ -20,6 +20,7 @@ describe("live voice messages", () => {
 
     expect(oldServer.features?.liveVoice).toBeUndefined();
     expect(oldServer.features?.liveVoiceVoiceCatalog).toBeUndefined();
+    expect(oldServer.features?.liveVoiceContextProfiles).toBeUndefined();
     expect(oldServer.features?.agentPaseoTools).toBeUndefined();
     expect(
       ServerInfoStatusPayloadSchema.parse({
@@ -55,10 +56,43 @@ describe("live voice messages", () => {
       negotiation: { kind: "webrtc_sdp", offerSdp: "v=0\r\n" },
       disabledPromptComponents: ["recipes", "speech-style"],
       customVoiceInstructions: "Always answer in one sentence.",
+      contextProfileId: "full-org",
     });
 
     expect(parsed.disabledPromptComponents).toEqual(["recipes", "speech-style"]);
     expect(parsed.customVoiceInstructions).toBe("Always answer in one sentence.");
+    expect(parsed.contextProfileId).toBe("full-org");
+  });
+
+  test("parses advertised context profiles and keeps them optional", () => {
+    const current = ServerInfoStatusPayloadSchema.parse({
+      status: "server_info",
+      serverId: "server-new",
+      features: { liveVoiceContextProfiles: true },
+      capabilities: {
+        liveVoice: {
+          contextProfiles: [
+            { id: "full-org", label: "Full org" },
+            { id: "lean", label: "Lean" },
+          ],
+          defaultContextProfileId: "lean",
+        },
+      },
+    });
+    const old = ServerInfoStatusPayloadSchema.parse({
+      status: "server_info",
+      serverId: "server-old",
+      features: { liveVoice: true },
+    });
+
+    expect(current.capabilities?.liveVoice).toEqual({
+      contextProfiles: [
+        { id: "full-org", label: "Full org" },
+        { id: "lean", label: "Lean" },
+      ],
+      defaultContextProfileId: "lean",
+    });
+    expect(old.capabilities?.liveVoice).toBeUndefined();
   });
 
   test("parses a start request carrying a backend model override", () => {

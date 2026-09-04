@@ -39,6 +39,11 @@ import {
   useLiveVoiceLauncherRequested,
 } from "@/live-voice/live-voice-launch";
 import { usePanelStore } from "@/stores/panel-store";
+import {
+  resolveLiveVoiceContextProfileId,
+  type LiveVoiceContextProfileOption,
+} from "@/live-voice/live-voice-context-profile-selection";
+import { useLiveVoiceSettingsStore } from "@/stores/live-voice-settings-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const ThemedAudioLines = withUnistyles(AudioLines);
@@ -87,6 +92,32 @@ function LiveVoiceHostMenuItem({
       testID={`live-voice-menu-host-${host.serverId}`}
     >
       {host.label}
+    </DropdownMenuItem>
+  );
+}
+
+function LiveVoiceContextProfileMenuItem({
+  profile,
+  isSelected,
+  onSelect,
+}: {
+  profile: LiveVoiceContextProfileOption;
+  isSelected: boolean;
+  onSelect: (profileId: string) => void;
+}) {
+  const handleSelect = useCallback(() => {
+    onSelect(profile.id);
+  }, [onSelect, profile.id]);
+
+  return (
+    <DropdownMenuItem
+      selected={isSelected}
+      showSelectedCheck
+      closeOnSelect={false}
+      onSelect={handleSelect}
+      testID={`live-voice-menu-context-profile-${profile.id}`}
+    >
+      {profile.label}
     </DropdownMenuItem>
   );
 }
@@ -186,6 +217,28 @@ function LiveVoiceStartMenuItems({
   const { t } = useTranslation();
   const closeMenu = useDropdownMenuClose();
   const { serverId } = selectedHost;
+  const persistedProfileId = useLiveVoiceSettingsStore(
+    (state) => state.contextProfileIdsByHost[serverId] ?? null,
+  );
+  const setContextProfileForHost = useLiveVoiceSettingsStore(
+    (state) => state.setContextProfileForHost,
+  );
+  const profileHostInfo = selectedHost.contextProfiles ?? {
+    profiles: [],
+    defaultProfileId: null,
+  };
+  const selectedProfileId = resolveLiveVoiceContextProfileId({
+    profiles: profileHostInfo.profiles,
+    persistedProfileId,
+    defaultProfileId: profileHostInfo.defaultProfileId,
+  });
+
+  const handleSelectProfile = useCallback(
+    (profileId: string) => {
+      setContextProfileForHost(serverId, profileId);
+    },
+    [serverId, setContextProfileForHost],
+  );
 
   const handleStart = useCallback(() => {
     if (!liveVoice) {
@@ -195,6 +248,7 @@ function LiveVoiceStartMenuItems({
   }, [closeMenu, liveVoice, serverId]);
 
   const hasHostChoice = hosts.length > 1;
+  const hasProfileChoice = profileHostInfo.profiles.length > 1;
 
   return (
     <>
@@ -207,6 +261,20 @@ function LiveVoiceStartMenuItems({
               host={host}
               isSelected={host.serverId === serverId}
               onSelect={onSelectHost}
+            />
+          ))}
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
+      {hasProfileChoice ? (
+        <>
+          <DropdownMenuLabel>{t("liveVoice.menu.contextProfiles")}</DropdownMenuLabel>
+          {profileHostInfo.profiles.map((profile) => (
+            <LiveVoiceContextProfileMenuItem
+              key={profile.id}
+              profile={profile}
+              isSelected={profile.id === selectedProfileId}
+              onSelect={handleSelectProfile}
             />
           ))}
           <DropdownMenuSeparator />

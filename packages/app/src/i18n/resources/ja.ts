@@ -1799,6 +1799,7 @@ export const ja: TranslationResources = {
     label: "ライブ音声",
     menu: {
       hosts: "ホスト",
+      contextProfiles: "コンテキストプロファイル",
     },
     actions: {
       start: "ライブ音声を開始",

@@ -1955,6 +1955,7 @@ export const ko: TranslationResources = {
     label: "라이브 음성",
     menu: {
       hosts: "호스트",
+      contextProfiles: "컨텍스트 프로필",
     },
     actions: {
       start: "라이브 음성 시작",

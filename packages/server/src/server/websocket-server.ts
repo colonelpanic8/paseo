@@ -42,7 +42,10 @@ import {
 } from "./session.js";
 import { WorkspaceStatusHistory } from "./workspace-status-history.js";
 import { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
-import { LiveVoiceDaemonContextProvider } from "./live-voice/live-voice-daemon-context.js";
+import {
+  LiveVoiceDaemonContextProvider,
+  type LiveVoiceContextProfilesConfig,
+} from "./live-voice/live-voice-daemon-context.js";
 import { resolveLiveVoiceHostProfile } from "./agent/providers/live-voice-host-profiles.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
@@ -170,6 +173,7 @@ interface WebSocketServerConfig {
   daemonStatusRpc?: boolean;
   relayConfig?: boolean;
   startPaused?: boolean;
+  liveVoiceContextProfiles?: LiveVoiceContextProfilesConfig;
 }
 
 type WebSocketRuntimeMetrics = SessionRuntimeMetrics & CheckoutDiffMetrics;
@@ -629,6 +633,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor;
   private readonly liveVoiceToolExecutionAvailable: boolean;
   private readonly liveVoiceAgentNotifier: LiveVoiceAgentNotifier;
+  private readonly liveVoiceContextProfiles: LiveVoiceContextProfilesConfig | undefined;
   private readonly hubRelationships: HubRelationshipManagement | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private connectionLifecycle: "starting" | "accepting" | "stopping" = "accepting";
@@ -703,6 +708,7 @@ export class VoiceAssistantWebSocketServer {
     this.browserToolsBroker = browserToolsBroker ?? null;
     const liveVoiceToolExecution = resolveLiveVoiceToolExecution(liveVoiceToolExecutor);
     this.liveVoiceToolExecutionAvailable = liveVoiceToolExecution.available;
+    this.liveVoiceContextProfiles = wsConfig.liveVoiceContextProfiles;
     this.liveVoiceRouteBroker = liveVoiceRouteBroker ?? new LiveVoiceRouteBroker();
     this.liveVoiceToolExecutor = liveVoiceToolExecution.executor;
     this.liveVoiceAgentNotifier = new LiveVoiceAgentNotifier({
@@ -808,6 +814,7 @@ export class VoiceAssistantWebSocketServer {
         agents: this.agentManager,
         workspaces: this.workspaceRegistry,
         logger: this.logger,
+        contextProfiles: wsConfig.liveVoiceContextProfiles,
       }),
     });
 
@@ -1714,7 +1721,18 @@ export class VoiceAssistantWebSocketServer {
         paseoHome: this.paseoHome,
         worktreesRoot: this.worktreesRoot,
       }),
-      ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
+      capabilities: {
+        ...this.serverCapabilities,
+        liveVoice: {
+          contextProfiles: (this.liveVoiceContextProfiles?.profiles ?? []).map((profile) => ({
+            id: profile.id,
+            label: profile.label,
+          })),
+          ...(this.liveVoiceContextProfiles?.defaultProfileId
+            ? { defaultContextProfileId: this.liveVoiceContextProfiles.defaultProfileId }
+            : {}),
+        },
+      },
       features: {
         // COMPAT(directorySync): added in v0.3.x, remove gate after 2027-02-12.
         directorySync: true,
@@ -1851,6 +1869,8 @@ export class VoiceAssistantWebSocketServer {
         liveVoice: true,
         // COMPAT(liveVoiceVoiceCatalog): added in v0.2.6, remove after 2027-02-28.
         liveVoiceVoiceCatalog: true,
+        // COMPAT(liveVoiceContextProfiles): added in v0.4.0, remove after 2027-02-18.
+        liveVoiceContextProfiles: true,
         // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
         agentPaseoTools: this.agentManager.hasPaseoMcpInjection(),
         // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
