@@ -1,5 +1,7 @@
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
+import { userAttachmentsOnly } from "@/attachments/workspace-attachment-utils";
 
 function isLikelyWindowsPath(path: string): boolean {
   return /^[a-zA-Z]:\//.test(path);
@@ -112,4 +114,33 @@ export async function createNativeForkInWorkspace(input: {
     agentId: forked.forkedAgentId,
     workspaceId: forked.forkedWorkspaceId ?? workspace.id,
   };
+}
+
+/**
+ * A native fork lands on an agent that already exists, so anything the user
+ * typed while staging it is sent as that agent's first message rather than
+ * riding along with a draft submission.
+ *
+ * The fork itself is not retryable — repeating it would branch the session
+ * twice — so a failed send hands the content to the forked agent's own
+ * composer, the way `submitAgentInput` restores it into the composer that
+ * failed. Without that the draft is already cleared and the optimistic row is
+ * rolled back, and the prompt is gone.
+ */
+export async function sendNativeForkPrompt(input: {
+  text: string;
+  attachments: ComposerAttachment[];
+  send: (message: { text: string; attachments: ComposerAttachment[] }) => Promise<void>;
+  restoreDraft: (draft: { text: string; attachments: UserComposerAttachment[] }) => void;
+}): Promise<void> {
+  const text = input.text.trim();
+  if (!text && input.attachments.length === 0) {
+    return;
+  }
+  try {
+    await input.send({ text, attachments: input.attachments });
+  } catch (error) {
+    input.restoreDraft({ text, attachments: userAttachmentsOnly(input.attachments) });
+    throw error;
+  }
 }
