@@ -102,6 +102,7 @@ function pressFindShortcut({
       pathname: "/host/local/workspace/ws-1",
       isMobile: false,
       sidebarShortcutTargets: [],
+      readyWaitingWorkspaceTargets: [],
       navigationActiveWorkspace: null,
       commandCenterOpen: false,
       shortcutsDialogOpen: false,
