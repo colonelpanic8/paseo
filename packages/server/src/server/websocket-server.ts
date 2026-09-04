@@ -792,10 +792,6 @@ export class VoiceAssistantWebSocketServer {
       });
     });
 
-    this.providerUsageService = new ProviderUsageService({
-      logger: this.logger,
-    });
-
     // Daemon-global: a call belongs to the daemon, not to an agent, and each one
     // runs on a hidden host session the coordinator spawns for it.
     this.liveVoiceCoordinator = new LiveVoiceCoordinator({
