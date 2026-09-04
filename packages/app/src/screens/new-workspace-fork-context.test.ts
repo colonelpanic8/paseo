@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import {
+  createNativeForkInWorkspace,
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
@@ -45,5 +46,62 @@ describe("getWorkspaceNamingAttachments", () => {
     } satisfies AgentAttachment;
 
     expect(getWorkspaceNamingAttachments([chatHistory, prContext])).toEqual([prContext]);
+  });
+});
+
+describe("createNativeForkInWorkspace", () => {
+  it("creates an empty destination and imports native history into its remapped cwd", async () => {
+    const createCalls: unknown[] = [];
+    const forkCalls: unknown[] = [];
+
+    const result = await createNativeForkInWorkspace({
+      client: {
+        forkAgentNative: async (agentId, options) => {
+          forkCalls.push({ agentId, options });
+          return {
+            requestId: "request-1",
+            agentId,
+            forkedAgentId: "forked-agent",
+            forkedWorkspaceId: "destination-workspace",
+            error: null,
+          };
+        },
+      },
+      agentId: "source-agent",
+      boundaryMessageId: "assistant-message",
+      sourceCwd: "/repo/packages/app",
+      sourceDirectory: "/repo",
+      ensureWorkspace: async (options) => {
+        createCalls.push(options);
+        return {
+          id: "destination-workspace",
+          workspaceDirectory: "/worktrees/fork",
+        };
+      },
+      failureMessage: "Fork failed",
+    });
+
+    expect(createCalls).toEqual([
+      {
+        cwd: "/repo/packages/app",
+        prompt: "",
+        attachments: [],
+        withInitialAgent: false,
+      },
+    ]);
+    expect(forkCalls).toEqual([
+      {
+        agentId: "source-agent",
+        options: {
+          boundaryMessageId: "assistant-message",
+          workspaceId: "destination-workspace",
+          cwd: "/worktrees/fork/packages/app",
+        },
+      },
+    ]);
+    expect(result).toEqual({
+      agentId: "forked-agent",
+      workspaceId: "destination-workspace",
+    });
   });
 });
