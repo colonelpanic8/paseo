@@ -6592,14 +6592,14 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
         return;
       }
       const isFirstDeltaForItem = prev.length === 0;
-      const timelineItem: AgentTimelineItem = {
-        type: "assistant_message",
+      const timelineItem: AgentTimelineItem = assistantMessageWithQuestions({
         messageId: parsed.itemId,
         text:
           isFirstDeltaForItem && this.pendingAssistantMessageBoundary
             ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
             : parsed.delta,
-      };
+        questions,
+      });
       this.stampActiveTurnAttribution(timelineItem);
       this.emitEvent({
         type: "timeline",
