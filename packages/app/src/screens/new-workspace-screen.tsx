@@ -100,6 +100,7 @@ import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
+  createNativeForkInWorkspace,
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
@@ -2097,12 +2098,36 @@ export function NewWorkspaceScreen({
     ],
   );
 
+  const clearChatDraft = chatDraft.clear;
   const handleSubmitNewWorkspace = useCallback(
     async (payload: MessagePayload) => {
       try {
         setErrorMessage(null);
         await composerState?.persistFormPreferences();
         await updateFormPreferences({ launchTarget });
+        if (forkDraftSetup?.nativeFork) {
+          if (forkDraftSetup.nativeFork.serverId !== selectedServerId) {
+            throw new Error(t("message.actions.forkUnavailable"));
+          }
+          setPendingAction("chat");
+          const forked = await createNativeForkInWorkspace({
+            client: withConnectedClient(),
+            agentId: forkDraftSetup.nativeFork.agentId,
+            boundaryMessageId: forkDraftSetup.nativeFork.boundaryMessageId,
+            sourceCwd: forkDraftSetup.setup.cwd,
+            sourceDirectory: forkDraftSetup.sourceDirectory,
+            ensureWorkspace,
+            failureMessage: t("message.actions.forkFailed"),
+          });
+          useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId: draftId ?? "" });
+          clearChatDraft("sent");
+          navigateToWorkspace({
+            serverId: selectedServerId,
+            workspaceId: forked.workspaceId,
+            target: { kind: "agent", agentId: forked.agentId },
+          });
+          return;
+        }
         if (isEmptyWorkspaceSubmission(payload)) {
           setPendingAction("empty");
           let outcome: SubmitOutcome = "background";
@@ -2133,7 +2158,7 @@ export function NewWorkspaceScreen({
           forkDraftSetup,
           ensureWorkspace,
           serverId: selectedServerId,
-          clearDraft: chatDraft.clear,
+          clearDraft: clearChatDraft,
           draftKey,
           draftId: creationIdentity.draftId,
           draftContextScopeKey,
@@ -2159,7 +2184,7 @@ export function NewWorkspaceScreen({
       composerState,
       draftContextScopeKey,
       creationIdentity,
-      chatDraft.clear,
+      clearChatDraft,
       draftKey,
       ensureWorkspace,
       forkDraftSetup,
