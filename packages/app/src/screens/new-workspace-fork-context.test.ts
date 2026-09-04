@@ -17,6 +17,28 @@ describe("remapDraftCwdToWorkspace", () => {
     ).toBe("D:\\Worktrees\\fork\\packages\\app");
   });
 
+  it("drops the subdirectory when the destination came from a different checkout", () => {
+    expect(
+      remapDraftCwdToWorkspace({
+        cwd: "/repo/packages/app",
+        sourceDirectory: "/repo",
+        destinationSourceDirectory: "/other-repo",
+        workspaceDirectory: "/worktrees/other-fork",
+      }),
+    ).toBe("/worktrees/other-fork");
+  });
+
+  it("keeps the subdirectory when the destination is the same checkout", () => {
+    expect(
+      remapDraftCwdToWorkspace({
+        cwd: "/repo/packages/app",
+        sourceDirectory: "/repo/",
+        destinationSourceDirectory: "/repo",
+        workspaceDirectory: "/worktrees/fork",
+      }),
+    ).toBe("/worktrees/fork/packages/app");
+  });
+
   it("falls back to the workspace root when the cwd is outside the source directory", () => {
     expect(
       remapDraftCwdToWorkspace({
@@ -71,6 +93,9 @@ describe("createNativeForkInWorkspace", () => {
       boundaryMessageId: "assistant-message",
       sourceCwd: "/repo/packages/app",
       sourceDirectory: "/repo",
+      destinationSourceDirectory: "/repo",
+      prompt: "keep going",
+      namingAttachments: [],
       ensureWorkspace: async (options) => {
         createCalls.push(options);
         return {
@@ -84,7 +109,7 @@ describe("createNativeForkInWorkspace", () => {
     expect(createCalls).toEqual([
       {
         cwd: "/repo/packages/app",
-        prompt: "",
+        prompt: "keep going",
         attachments: [],
         withInitialAgent: false,
       },

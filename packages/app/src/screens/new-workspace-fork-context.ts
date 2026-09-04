@@ -15,9 +15,26 @@ export function getWorkspaceNamingAttachments(
   return attachments.filter((attachment) => !isChatHistoryTextAttachment(attachment));
 }
 
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function comparablePaths(left: string, right: string): [string, string] {
+  const compareCaseInsensitively = isLikelyWindowsPath(left) || isLikelyWindowsPath(right);
+  return compareCaseInsensitively ? [left.toLowerCase(), right.toLowerCase()] : [left, right];
+}
+
+/**
+ * Rebase the source agent's cwd onto the destination workspace, keeping the
+ * subdirectory it ran in. `destinationSourceDirectory` is the checkout the
+ * destination was actually created from: when the user retargets the draft at a
+ * different project the old relative suffix means nothing there, so the fork
+ * lands at the workspace root instead of a path that does not exist.
+ */
 export function remapDraftCwdToWorkspace(input: {
   cwd: string;
   sourceDirectory?: string | null;
+  destinationSourceDirectory?: string | null;
   workspaceDirectory: string;
 }): string {
   const cwd = input.cwd.trim();
@@ -26,14 +43,19 @@ export function remapDraftCwdToWorkspace(input: {
   if (!cwd || !sourceDirectory) {
     return workspaceDirectory;
   }
-  const normalizedCwd = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
-  const normalizedSource = sourceDirectory.replace(/\\/g, "/").replace(/\/+$/, "");
-  const compareCaseInsensitively =
-    isLikelyWindowsPath(normalizedCwd) || isLikelyWindowsPath(normalizedSource);
-  const comparableCwd = compareCaseInsensitively ? normalizedCwd.toLowerCase() : normalizedCwd;
-  const comparableSource = compareCaseInsensitively
-    ? normalizedSource.toLowerCase()
-    : normalizedSource;
+  const normalizedCwd = normalizePath(cwd);
+  const normalizedSource = normalizePath(sourceDirectory);
+  const destinationSourceDirectory = input.destinationSourceDirectory?.trim();
+  if (destinationSourceDirectory) {
+    const [comparableDestination, comparableOrigin] = comparablePaths(
+      normalizePath(destinationSourceDirectory),
+      normalizedSource,
+    );
+    if (comparableDestination !== comparableOrigin) {
+      return workspaceDirectory;
+    }
+  }
+  const [comparableCwd, comparableSource] = comparablePaths(normalizedCwd, normalizedSource);
   if (comparableCwd === comparableSource) {
     return workspaceDirectory;
   }
@@ -56,6 +78,9 @@ export async function createNativeForkInWorkspace(input: {
   boundaryMessageId: string;
   sourceCwd: string;
   sourceDirectory?: string | null;
+  destinationSourceDirectory?: string | null;
+  prompt?: string;
+  namingAttachments?: AgentAttachment[];
   ensureWorkspace: (input: {
     cwd: string;
     prompt: string;
@@ -66,8 +91,8 @@ export async function createNativeForkInWorkspace(input: {
 }): Promise<{ agentId: string; workspaceId: string }> {
   const workspace = await input.ensureWorkspace({
     cwd: input.sourceCwd,
-    prompt: "",
-    attachments: [],
+    prompt: input.prompt ?? "",
+    attachments: input.namingAttachments ?? [],
     withInitialAgent: false,
   });
   const forked = await input.client.forkAgentNative(input.agentId, {
@@ -76,6 +101,7 @@ export async function createNativeForkInWorkspace(input: {
     cwd: remapDraftCwdToWorkspace({
       cwd: input.sourceCwd,
       sourceDirectory: input.sourceDirectory,
+      destinationSourceDirectory: input.destinationSourceDirectory,
       workspaceDirectory: workspace.workspaceDirectory,
     }),
   });
