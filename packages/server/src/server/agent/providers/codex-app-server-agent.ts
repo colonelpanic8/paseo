@@ -28,6 +28,7 @@ import {
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
+  type AsyncQuestion,
   type ToolCallTimelineItem,
   type AgentUsage,
   type FetchCatalogOptions,
@@ -166,6 +167,7 @@ const CODEX_TOOL_THREAD_ITEM_TYPES = new Set([
   "webSearch",
   "collabAgentToolCall",
   "subAgentActivity",
+  "sleep",
 ]);
 const CODEX_CONTEXT_COMPACTION_TYPE = "contextCompaction";
 const CODEX_PLAN_IMPLEMENTATION_PROMPT_PREFIX =
@@ -945,6 +947,7 @@ interface CodexModel {
   displayName?: string;
   description?: string;
   isDefault?: boolean;
+  hidden?: boolean;
   model?: string;
   defaultReasoningEffort?: string;
   supportedReasoningEfforts?: CodexReasoningEffortEntry[];
@@ -1420,6 +1423,8 @@ function normalizeCodexThreadItemType(rawType: string | undefined): string | und
       return "collabAgentToolCall";
     case "SubAgentActivity":
       return "subAgentActivity";
+    case "Sleep":
+      return "sleep";
     case "ImageView":
       return "imageView";
     case "ImageGeneration":
@@ -1427,6 +1432,50 @@ function normalizeCodexThreadItemType(rawType: string | undefined): string | und
     default:
       return rawType;
   }
+}
+
+function normalizeCodexAsyncQuestions(item: Record<string, unknown>): AsyncQuestion[] | undefined {
+  if (item.delivery !== "async" || !Array.isArray(item.questions)) {
+    return undefined;
+  }
+  const questions = item.questions.flatMap((value): AsyncQuestion[] => {
+    const question = toObjectRecord(value);
+    const title = nonEmptyString(question?.title);
+    if (!title) {
+      return [];
+    }
+    const options = Array.isArray(question?.options)
+      ? question.options.filter((option): option is string => typeof option === "string")
+      : undefined;
+    return [{ title, ...(options ? { options } : {}) }];
+  });
+  return questions.length > 0 ? questions : undefined;
+}
+
+function mapCodexAgentMessageItem(
+  normalizedItem: Record<string, unknown>,
+): Extract<AgentTimelineItem, { type: "assistant_message" }> {
+  const messageId = nonEmptyString(normalizedItem.id);
+  const questions = normalizeCodexAsyncQuestions(normalizedItem);
+  return {
+    type: "assistant_message",
+    text: typeof normalizedItem.text === "string" ? normalizedItem.text : "",
+    ...(messageId ? { messageId } : {}),
+    ...(questions ? { questions } : {}),
+  };
+}
+
+function assistantMessageWithQuestions(params: {
+  messageId: string;
+  text: string;
+  questions?: AsyncQuestion[];
+}): Extract<AgentTimelineItem, { type: "assistant_message" }> {
+  return {
+    type: "assistant_message",
+    messageId: params.messageId,
+    text: params.text,
+    ...(params.questions ? { questions: params.questions } : {}),
+  };
 }
 
 function normalizeCodexCommandValue(value: unknown): string | string[] | null {
@@ -1975,16 +2024,22 @@ function mapCodexAgentMessage(item: Record<string, unknown>): AgentTimelineItem 
   const question = codexAsyncQuestionToTimeline(item);
   if (question) return question;
   const messageId = nonEmptyString(item.id);
+  const questions = normalizeCodexAsyncQuestions(item);
   return {
     type: "assistant_message",
     text: typeof item.text === "string" ? item.text : "",
     ...(messageId ? { messageId } : {}),
+    ...(questions ? { questions } : {}),
   };
 }
 
 export function threadItemToTimeline(
   item: unknown,
-  options?: { includeUserMessage?: boolean; cwd?: string | null },
+  options?: {
+    includeUserMessage?: boolean;
+    cwd?: string | null;
+    toolStatusOverride?: ToolCallTimelineItem["status"];
+  },
 ): AgentTimelineItem | null {
   const itemRecord = toObjectRecord(item);
   if (!itemRecord) return null;
@@ -2002,7 +2057,10 @@ export function threadItemToTimeline(
     return mapCodexThreadImageItem(normalizedType, normalizedItem);
   }
   if (normalizedType && CODEX_TOOL_THREAD_ITEM_TYPES.has(normalizedType)) {
-    return mapCodexToolCallFromThreadItem(normalizedItem, { cwd });
+    return mapCodexToolCallFromThreadItem(normalizedItem, {
+      cwd,
+      ...(options?.toolStatusOverride ? { statusOverride: options.toolStatusOverride } : {}),
+    });
   }
 
   switch (normalizedType) {
@@ -3460,6 +3518,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private serviceTier: string | null = null;
   private speedModels: CodexModel[] = [];
   private planModeEnabled = false;
+  private contextNotesEnabled = false;
   private historyPending = false;
   private persistedHistory: PersistedTimelineEntry[] = [];
   private loadingPersistedHistory = false;
@@ -3469,6 +3528,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private pendingPermissionHandlers = new Map<string, CodexPendingPermissionHandler>();
   private resolvedPermissionRequests = new Set<string>();
   private pendingAgentMessages = new Map<string, string>();
+  private pendingAgentMessageQuestions = new Map<string, AsyncQuestion[]>();
   private pendingReasoning = new Map<string, string[]>();
   private pendingCommandOutputDeltas = new Map<string, string[]>();
   private pendingFileChangeOutputDeltas = new Map<string, string[]>();
@@ -3499,6 +3559,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private pendingManualCompactionStarts = 0;
   private compactionTriggerByItemId = new Map<string, "auto" | "manual">();
   private pendingRootCompactionItemIds = new Set<string>();
+  private pendingRootSleepItems = new Map<string, ToolCallTimelineItem>();
   private pendingAnonymousRootCompactions = 0;
   // Codex can report one completed compaction through both channels:
   // `thread/compacted` and a completed `contextCompaction` item.
@@ -3553,6 +3614,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (this.config.featureValues?.plan_mode) {
       this.planModeEnabled = true;
     }
+    if (this.config.featureValues?.context_notes) {
+      this.contextNotesEnabled = true;
+    }
 
     if (this.resumeHandle?.sessionId) {
       this.currentThreadId = this.resumeHandle.sessionId;
@@ -3569,6 +3633,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       serviceTiers: this.currentServiceTiers(),
       serviceTier: this.serviceTier ?? "default",
       planModeEnabled: this.planModeEnabled,
+      contextNotesEnabled: this.contextNotesEnabled,
       planModeAvailable: this.hasPlanCollaborationMode(),
     });
   }
@@ -3627,7 +3692,9 @@ export class CodexAppServerAgentSession implements AgentSession {
       client.notify("initialized", {});
 
       this.speedModels =
-        CodexModelListResponseSchema.parse(await client.request("model/list", {})).data ?? [];
+        CodexModelListResponseSchema.parse(
+          await client.request("model/list", { includeHidden: true }),
+        ).data ?? [];
       this.reconcileServiceTier();
       await this.loadResolvedWorkspaceWrite();
       await this.loadCollaborationModes();
@@ -3855,8 +3922,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.config.featureValues = { ...values, service_tier: this.serviceTier ?? "default" };
   }
 
-  private applyFeatureValue(featureId: "plan_mode", value: boolean): void {
+  private applyFeatureValue(featureId: "plan_mode" | "context_notes", value: boolean): void {
     this.config.featureValues = { ...this.config.featureValues, [featureId]: value };
+    if (featureId === "context_notes") {
+      this.contextNotesEnabled = value;
+      this.cachedRuntimeInfo = null;
+      return;
+    }
+
     this.planModeEnabled = value;
     this.refreshResolvedCollaborationMode();
     this.cachedRuntimeInfo = null;
@@ -4647,6 +4720,13 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.applyFeatureValue("plan_mode", Boolean(value));
       return;
     }
+    if (featureId === "context_notes") {
+      if (this.currentThreadId) {
+        throw new Error("Context notes can only be changed before the first message");
+      }
+      this.applyFeatureValue("context_notes", Boolean(value));
+      return;
+    }
     throw new Error(`Unknown Codex feature: ${featureId}`);
   }
 
@@ -5332,6 +5412,12 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (this.deps.customCodexConfig) {
       Object.assign(innerConfig, this.deps.customCodexConfig);
     }
+    if (this.contextNotesEnabled) {
+      innerConfig.features = {
+        ...toObjectRecord(innerConfig.features),
+        context_management: { experimental_mode: true },
+      };
+    }
     if (this.config.mcpServers) {
       const mcpServers: Record<string, CodexMcpServerConfig> = {};
       for (const [name, serverConfig] of Object.entries(this.config.mcpServers)) {
@@ -5957,6 +6043,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (itemId) {
       this.upsertSubAgentChildItem(callId, itemId, timelineItem);
       this.pendingAgentMessages.delete(itemId);
+      this.pendingAgentMessageQuestions.delete(itemId);
       this.pendingReasoning.delete(itemId);
       this.pendingCommandOutputDeltas.delete(itemId);
       this.pendingFileChangeOutputDeltas.delete(itemId);
@@ -6000,20 +6087,24 @@ export class CodexAppServerAgentSession implements AgentSession {
       const prev = this.pendingAgentMessages.get(parsed.itemId) ?? "";
       const text = prev + parsed.delta;
       this.pendingAgentMessages.set(parsed.itemId, text);
+      const questions = this.pendingAgentMessageQuestions.get(parsed.itemId);
       const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
       if (subAgentCallId) {
         if (parsed.threadId) {
-          this.emitProviderSubagentTimeline(parsed.threadId, {
-            type: "assistant_message",
-            messageId: parsed.itemId,
-            text: parsed.delta,
-          });
+          this.emitProviderSubagentTimeline(
+            parsed.threadId,
+            assistantMessageWithQuestions({
+              messageId: parsed.itemId,
+              text: parsed.delta,
+              questions,
+            }),
+          );
         }
-        this.upsertSubAgentChildItem(subAgentCallId, parsed.itemId, {
-          type: "assistant_message",
-          messageId: parsed.itemId,
-          text,
-        });
+        this.upsertSubAgentChildItem(
+          subAgentCallId,
+          parsed.itemId,
+          assistantMessageWithQuestions({ messageId: parsed.itemId, text, questions }),
+        );
         this.emitSubAgentActivityUpdate(subAgentCallId, "running");
         return;
       }
@@ -6021,14 +6112,14 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitEvent({
         type: "timeline",
         provider: CODEX_PROVIDER,
-        item: {
-          type: "assistant_message",
+        item: assistantMessageWithQuestions({
           messageId: parsed.itemId,
           text:
             isFirstDeltaForItem && this.pendingAssistantMessageBoundary
               ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
               : parsed.delta,
-        },
+          questions,
+        }),
       });
       if (isFirstDeltaForItem) {
         this.pendingAssistantMessageBoundary = false;
@@ -6128,6 +6219,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     this.completePendingRootCompactions();
+    this.terminalizePendingRootSleepItems(parsed.status);
     if (parsed.status === "failed") {
       this.emitEvent({
         type: "turn_failed",
@@ -6164,12 +6256,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.emittedExecCommandStartedCallIds.clear();
     this.emittedExecCommandCompletedCallIds.clear();
     this.pendingAgentMessages.clear();
+    this.pendingAgentMessageQuestions.clear();
     this.pendingReasoning.clear();
     this.pendingCommandOutputDeltas.clear();
     this.pendingFileChangeOutputDeltas.clear();
     this.pendingAssistantMessageBoundary = false;
     this.warnedIncompleteEditToolCallIds.clear();
     this.pendingRootCompactionItemIds.clear();
+    this.pendingRootSleepItems.clear();
     this.pendingAnonymousRootCompactions = 0;
     this.unpairedCompactionNotificationCompletions = 0;
     this.unpairedCompactionItemCompletions = 0;
@@ -6283,6 +6377,27 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     this.pendingRootCompactionItemIds.clear();
     this.pendingAnonymousRootCompactions = 0;
+  }
+
+  private terminalizePendingRootSleepItems(turnStatus: string): void {
+    const status = turnStatus === "completed" ? "completed" : "canceled";
+    for (const item of this.pendingRootSleepItems.values()) {
+      this.emitEvent({
+        type: "timeline",
+        provider: CODEX_PROVIDER,
+        item: { ...item, status, error: null },
+      });
+    }
+    this.pendingRootSleepItems.clear();
+  }
+
+  private clearPendingRootSleepItem(
+    normalizedItemType: string | undefined,
+    itemId: string | undefined,
+  ): void {
+    if (normalizedItemType === "sleep" && itemId) {
+      this.pendingRootSleepItems.delete(itemId);
+    }
   }
 
   private createContextCompactionTimelineItem(
@@ -6572,6 +6687,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       typeof parsed.item.type === "string" ? parsed.item.type : undefined,
     );
     const itemId = parsed.item.id;
+    this.clearPendingRootSleepItem(normalizedItemType, itemId);
     if (this.shouldSkipCompletedThreadItem(timelineItem, normalizedItemType, itemId)) {
       this.replayPendingSubAgentNotifications(registeredChildThreadIds);
       return;
@@ -6612,6 +6728,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emittedItemStartedIds.delete(itemId);
       this.pendingCommandOutputDeltas.delete(itemId);
       this.pendingFileChangeOutputDeltas.delete(itemId);
+      this.pendingAgentMessageQuestions.delete(itemId);
     }
     this.replayPendingSubAgentNotifications(registeredChildThreadIds);
   }
@@ -6627,6 +6744,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       const streamedText = this.pendingAgentMessages.get(itemId) ?? "";
       this.pendingAgentMessages.delete(itemId);
       this.emitMissingFinalTextSuffix(timelineItem, streamedText);
+      this.pendingAgentMessageQuestions.delete(itemId);
       return true;
     }
     if (timelineItem.type === "reasoning" && this.pendingReasoning.has(itemId)) {
@@ -6652,12 +6770,15 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): AgentTimelineItem | null {
     if (!timelineItem.text.startsWith(streamedText)) return timelineItem;
     const suffix = timelineItem.text.slice(streamedText.length);
-    if (!suffix) return null;
+    const questions =
+      timelineItem.type === "assistant_message" ? timelineItem.questions : undefined;
+    if (!suffix && !questions) return null;
     return timelineItem.type === "assistant_message"
       ? {
           type: timelineItem.type,
           text: suffix,
           ...(timelineItem.messageId ? { messageId: timelineItem.messageId } : {}),
+          ...(questions ? { questions } : {}),
         }
       : { type: timelineItem.type, text: suffix };
   }
@@ -6683,6 +6804,66 @@ export class CodexAppServerAgentSession implements AgentSession {
         if (!timelineItem.text.startsWith(streamedText)) timelineItem.text = streamedText;
       }
     }
+  }
+
+  private handleStartedAssistantMessage(
+    parsed: Extract<ParsedCodexNotification, { kind: "item_started" }>,
+    timelineItem: Extract<AgentTimelineItem, { type: "assistant_message" }>,
+    childSubAgentCallId: string | null,
+  ): void {
+    if (!timelineItem.questions) {
+      return;
+    }
+    const itemId = parsed.item.id;
+    if (itemId) {
+      this.pendingAgentMessages.set(itemId, timelineItem.text);
+      this.pendingAgentMessageQuestions.set(itemId, timelineItem.questions);
+    }
+    if (childSubAgentCallId) {
+      this.emitStartedProviderSubagentItem(parsed.threadId, timelineItem);
+      if (itemId) {
+        this.upsertSubAgentChildItem(childSubAgentCallId, itemId, timelineItem);
+      }
+      this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
+      return;
+    }
+    if (this.pendingAssistantMessageBoundary) {
+      timelineItem.text = `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${timelineItem.text}`;
+    }
+    this.pendingAssistantMessageBoundary = false;
+    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+  }
+
+  private handleStartedRootToolCall(
+    parsed: Extract<ParsedCodexNotification, { kind: "item_started" }>,
+    timelineItem: ToolCallTimelineItem,
+    registeredChildThreadIds: readonly string[],
+  ): void {
+    const normalizedItemType = normalizeCodexThreadItemType(
+      typeof parsed.item.type === "string" ? parsed.item.type : undefined,
+    );
+    const itemId = parsed.item.id;
+    if (normalizedItemType === "commandExecution") {
+      this.rememberTerminalProcessForItem(parsed.item);
+      const callId = timelineItem.callId || itemId;
+      if (callId && this.emittedExecCommandStartedCallIds.has(callId)) {
+        return;
+      }
+    }
+    if (itemId && this.emittedItemStartedIds.has(itemId)) {
+      return;
+    }
+    this.warnOnIncompleteEditToolCall(timelineItem, "item_started", parsed.item);
+    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    if (itemId) {
+      this.emittedItemStartedIds.add(itemId);
+      if (normalizedItemType === "sleep") {
+        this.pendingRootSleepItems.set(itemId, timelineItem);
+      }
+      this.pendingCommandOutputDeltas.delete(itemId);
+      this.pendingFileChangeOutputDeltas.delete(itemId);
+    }
+    this.replayPendingSubAgentNotifications(registeredChildThreadIds);
   }
 
   private handleItemStartedNotification(
@@ -6717,8 +6898,16 @@ export class CodexAppServerAgentSession implements AgentSession {
     const timelineItem = threadItemToTimeline(parsed.item, {
       includeUserMessage: false,
       cwd: this.config.cwd ?? null,
+      toolStatusOverride: "running",
     });
-    if (!timelineItem || timelineItem.type !== "tool_call") {
+    if (!timelineItem) {
+      return;
+    }
+    if (timelineItem.type === "assistant_message") {
+      this.handleStartedAssistantMessage(parsed, timelineItem, childSubAgentCallId);
+      return;
+    }
+    if (timelineItem.type !== "tool_call") {
       return;
     }
     const registeredChildThreadIds = this.registerSubAgentToolCall({
@@ -6736,28 +6925,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.replayPendingSubAgentNotifications(registeredChildThreadIds);
       return;
     }
-    const normalizedItemType = normalizeCodexThreadItemType(
-      typeof parsed.item.type === "string" ? parsed.item.type : undefined,
-    );
-    const itemId = parsed.item.id;
-    if (normalizedItemType === "commandExecution") {
-      this.rememberTerminalProcessForItem(parsed.item);
-      const callId = timelineItem.callId || itemId;
-      if (callId && this.emittedExecCommandStartedCallIds.has(callId)) {
-        return;
-      }
-    }
-    if (itemId && this.emittedItemStartedIds.has(itemId)) {
-      return;
-    }
-    this.warnOnIncompleteEditToolCall(timelineItem, "item_started", parsed.item);
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    if (itemId) {
-      this.emittedItemStartedIds.add(itemId);
-      this.pendingCommandOutputDeltas.delete(itemId);
-      this.pendingFileChangeOutputDeltas.delete(itemId);
-    }
-    this.replayPendingSubAgentNotifications(registeredChildThreadIds);
+    this.handleStartedRootToolCall(parsed, timelineItem, registeredChildThreadIds);
   }
 
   private handleUserMessageItem(
@@ -7560,6 +7728,7 @@ function buildCodexModelDefinition(
     defaultThinkingOptionId,
     metadata: {
       model: model.model,
+      hidden: model.hidden,
       defaultReasoningEffort: model.defaultReasoningEffort,
       supportedReasoningEfforts: model.supportedReasoningEfforts,
     },
