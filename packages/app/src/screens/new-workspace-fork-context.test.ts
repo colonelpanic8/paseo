@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { ComposerAttachment } from "@/attachments/types";
 import {
   createNativeForkInWorkspace,
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
+  sendNativeForkPrompt,
 } from "./new-workspace-fork-context";
 
 describe("remapDraftCwdToWorkspace", () => {
@@ -128,5 +130,66 @@ describe("createNativeForkInWorkspace", () => {
       agentId: "forked-agent",
       workspaceId: "destination-workspace",
     });
+  });
+});
+
+describe("sendNativeForkPrompt", () => {
+  const imageAttachment = {
+    kind: "image",
+    metadata: {
+      id: "image-1",
+      mimeType: "image/png",
+      storageType: "native-file",
+      storageKey: "/tmp/shot.png",
+      createdAt: 0,
+    },
+  } satisfies ComposerAttachment;
+
+  it("skips the send when nothing was typed", async () => {
+    let sends = 0;
+    await sendNativeForkPrompt({
+      text: "   ",
+      attachments: [],
+      send: async () => {
+        sends += 1;
+      },
+      restoreDraft: () => {
+        throw new Error("must not restore");
+      },
+    });
+    expect(sends).toBe(0);
+  });
+
+  it("hands the prompt to the forked agent's composer when the send fails", async () => {
+    const restored: unknown[] = [];
+    await expect(
+      sendNativeForkPrompt({
+        text: "  keep going  ",
+        attachments: [imageAttachment],
+        send: async () => {
+          throw new Error("host disconnected");
+        },
+        restoreDraft: (draft) => {
+          restored.push(draft);
+        },
+      }),
+    ).rejects.toThrow("host disconnected");
+
+    expect(restored).toEqual([{ text: "keep going", attachments: [imageAttachment] }]);
+  });
+
+  it("leaves no draft behind when the send succeeds", async () => {
+    const sent: unknown[] = [];
+    await sendNativeForkPrompt({
+      text: "  keep going  ",
+      attachments: [imageAttachment],
+      send: async (message) => {
+        sent.push(message);
+      },
+      restoreDraft: () => {
+        throw new Error("must not restore");
+      },
+    });
+    expect(sent).toEqual([{ text: "keep going", attachments: [imageAttachment] }]);
   });
 });
