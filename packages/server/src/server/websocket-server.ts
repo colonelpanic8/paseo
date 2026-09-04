@@ -13,7 +13,11 @@ import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js
 import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
-import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
+import type {
+  DaemonConfigStore,
+  MutableDaemonConfig,
+  ProviderRename,
+} from "./daemon-config-store.js";
 import {
   type ServerInfoStatusPayload,
   type SessionOutboundMessage,
@@ -681,6 +685,7 @@ export class VoiceAssistantWebSocketServer {
     pluginRuntime?: SessionOptions["pluginRuntime"],
     orchestrationSkills?: SessionOptions["orchestrationSkills"],
     workspaceLabelService?: WorkspaceLabelService,
+    providerUsageService?: ProviderUsageService,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -751,14 +756,23 @@ export class VoiceAssistantWebSocketServer {
       this.speech?.onReadinessChange((snapshot) => {
         this.publishSpeechReadiness(snapshot);
       }) ?? null;
+    this.providerUsageService =
+      providerUsageService ?? new ProviderUsageService({ logger: this.logger });
     const unsubscribeProviderConfig = attachMutableProviderConfigOwner({
       store: this.daemonConfigStore,
       providerSnapshotManager: this.providerSnapshotManager,
       updateProviderRegistry: (state) => this.agentManager.updateProviderRegistry(state),
     });
-    const unsubscribeChange = this.daemonConfigStore.onChange((config) => {
+    const unsubscribeChange = this.daemonConfigStore.onChange((config, details) => {
+      // Live agents move first: the registry already knows the new id, and repointing them
+      // before storage means a persistence flush can't write the old id back.
+      for (const rename of details.renamedProviders) {
+        this.agentManager.renameProviderOnLiveAgents(rename.from, rename.to);
+      }
+      this.providerUsageService.updateProviderConfigs(config.providers);
       this.broadcastDaemonConfigChanged(config);
       this.broadcastCapabilitiesUpdate();
+      void this.migrateRenamedProviders(details.renamedProviders, config);
     });
     this.unsubscribeDaemonConfigChange = () => {
       unsubscribeProviderConfig();
@@ -1811,6 +1825,10 @@ export class VoiceAssistantWebSocketServer {
         commitBaseClassification: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: true,
+        // COMPAT(providerConfigReplace): added in v0.2.X, remove after 2027-02-02 when old daemons are unsupported.
+        providerConfigReplace: true,
+        // COMPAT(providerConfigRename): added in v0.2.X, remove after 2027-02-02 when old daemons are unsupported.
+        providerConfigRename: true,
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
         importSessionWorkspaceTarget: true,
         // COMPAT(importSessionSearch): added in v0.7.3, remove gate after 2027-03-02.
@@ -1883,6 +1901,35 @@ export class VoiceAssistantWebSocketServer {
   private broadcastCapabilitiesUpdate(): void {
     for (const connection of new Set(this.sessions.values())) {
       this.sendToConnection(connection, this.createServerInfoMessage(connection.session));
+    }
+  }
+
+  /**
+   * Storage migration is async, so it runs after the config broadcast. Clients get a second
+   * `daemon_config_changed` once records have moved, which is what makes them refetch the
+   * agent list and see the migrated agents under the new provider id.
+   */
+  private async migrateRenamedProviders(
+    renames: readonly ProviderRename[],
+    config: MutableDaemonConfig,
+  ): Promise<void> {
+    if (renames.length === 0) {
+      return;
+    }
+    let migratedAny = false;
+    for (const rename of renames) {
+      try {
+        const migrated = await this.agentStorage.renameProvider(rename.from, rename.to);
+        migratedAny ||= migrated.length > 0;
+      } catch (err) {
+        this.logger.error(
+          { err, fromProviderId: rename.from, toProviderId: rename.to },
+          "Failed to migrate agent records for renamed provider",
+        );
+      }
+    }
+    if (migratedAny) {
+      this.broadcastDaemonConfigChanged(config);
     }
   }
 
