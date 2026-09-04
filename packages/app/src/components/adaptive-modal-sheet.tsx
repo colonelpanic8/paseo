@@ -36,6 +36,7 @@ import {
   getCompactSheetSafeAreaPadding,
 } from "@/components/adaptive-modal-sheet-layout";
 import { listNavigationDataSet } from "@/keyboard/list-search-keys";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { isWeb } from "@/constants/platform";
 import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility";
 import { useInputFocus } from "@/hooks/use-input-focus";
@@ -228,6 +229,9 @@ const styles = StyleSheet.create((theme) => ({
   desktopStaticContent: {
     flexShrink: 1,
     minHeight: 0,
+  },
+  modalGestureRoot: {
+    flex: 1,
   },
   footer: {
     paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
@@ -773,7 +777,14 @@ export function AdaptiveModalSheet({
       onDismiss={notifyNativeModalDismiss}
       hardwareAccelerated
     >
-      {desktopContent}
+      {/*
+       * Modal children mount into a separate native view hierarchy, outside the
+       * app's root GestureHandlerRootView. Gesture handlers inside need their own
+       * root or they never receive touches.
+       */}
+      <GestureHandlerRootView style={styles.modalGestureRoot}>
+        {desktopContent}
+      </GestureHandlerRootView>
     </Modal>
   );
 }
