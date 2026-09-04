@@ -699,6 +699,12 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
   return patch;
 }
 
+function resolveProviderIntrospectionQueue(
+  queue: ProviderIntrospectionQueue | undefined,
+): ProviderIntrospectionQueue {
+  return queue ?? new ProviderIntrospectionQueue();
+}
+
 export class AgentManager {
   private readonly clients = new Map<AgentProvider, AgentClient>();
   private readonly providerIntrospectionQueue: ProviderIntrospectionQueue;
@@ -743,8 +749,9 @@ export class AgentManager {
   private acceptingAgentRegistrations = true;
 
   constructor(options: AgentManagerOptions) {
-    this.providerIntrospectionQueue =
-      options.providerIntrospectionQueue ?? new ProviderIntrospectionQueue();
+    this.providerIntrospectionQueue = resolveProviderIntrospectionQueue(
+      options.providerIntrospectionQueue,
+    );
     this.idFactory = options?.idFactory ?? (() => randomUUID());
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
