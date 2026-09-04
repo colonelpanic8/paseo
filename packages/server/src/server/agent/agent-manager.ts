@@ -58,6 +58,7 @@ import {
   type SeedAgentTimelineOptions,
 } from "./agent-timeline-store.js";
 import type {
+  AgentTimelineCursor,
   AgentTimelineFetchOptions,
   AgentTimelineFetchResult,
   AgentTimelineRow,
@@ -403,6 +404,15 @@ interface ManagedAgentBase {
   lastUserMessageAt: Date | null;
   activeTurnId: string | null;
   activeTurnStartedAt: Date | null;
+  summary?: string | null;
+  summaryUpdatedAt?: Date;
+  summaryCursor?: AgentTimelineCursor;
+  /**
+   * Completed turns recorded since the purpose summary was last written. Persisted
+   * so the summary cadence survives a daemon restart without re-deriving it from
+   * the timeline.
+   */
+  summaryTurnsSinceUpdate?: number;
   lastUsage?: AgentUsage;
   lastError?: string;
   attention: AttentionState;
@@ -1827,6 +1837,10 @@ export class AgentManager {
         historyPrimed: true,
         lastMessageAt: lastMessageAt ? new Date(lastMessageAt) : null,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
+        summary: record.summary ?? null,
+        summaryUpdatedAt: record.summaryUpdatedAt ? new Date(record.summaryUpdatedAt) : undefined,
+        summaryCursor: record.summaryCursor,
+        summaryTurnsSinceUpdate: record.summaryTurnsSinceUpdate,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
         attention: { requiresAttention: false },
@@ -1928,6 +1942,42 @@ export class AgentManager {
     this.touchUpdatedAt(agent);
     await this.persistSnapshot(agent, { title: normalizedTitle });
     this.emitState(agent, { persist: false });
+  }
+
+  async setAgentSummary(
+    agentId: string,
+    summary: string,
+    options?: {
+      expectedPreviousSummary?: string | null;
+      summaryCursor?: AgentTimelineCursor;
+      consumedTurns?: number;
+    },
+  ): Promise<boolean> {
+    const agent = this.requireAgent(agentId);
+    const normalizedSummary = summary.replace(/\s+/g, " ").trim();
+    if (!normalizedSummary) {
+      return false;
+    }
+    if (
+      options &&
+      Object.prototype.hasOwnProperty.call(options, "expectedPreviousSummary") &&
+      (agent.summary ?? null) !== options.expectedPreviousSummary
+    ) {
+      return false;
+    }
+
+    agent.summary = normalizedSummary;
+    agent.summaryUpdatedAt = new Date();
+    agent.summaryCursor = options?.summaryCursor;
+    const pendingTurns = agent.summaryTurnsSinceUpdate ?? 0;
+    agent.summaryTurnsSinceUpdate = Math.max(
+      0,
+      pendingTurns - (options?.consumedTurns ?? pendingTurns),
+    );
+    this.touchUpdatedAt(agent);
+    await this.persistSnapshot(agent);
+    this.emitState(agent, { persist: false });
+    return true;
   }
 
   async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
@@ -3314,6 +3364,7 @@ export class AgentManager {
         config,
         options?.initialTitle ?? null,
       );
+      const existingRecord = await this.registry?.get(resolvedAgentId);
 
       const now = new Date();
       const { durableTimelineHasRows } = await this.initializeAgentTimelineForRegister({
@@ -3328,6 +3379,12 @@ export class AgentManager {
         config,
         now,
         durableTimelineHasRows,
+        summary: existingRecord?.summary ?? null,
+        summaryUpdatedAt: existingRecord?.summaryUpdatedAt
+          ? new Date(existingRecord.summaryUpdatedAt)
+          : undefined,
+        summaryCursor: existingRecord?.summaryCursor,
+        summaryTurnsSinceUpdate: existingRecord?.summaryTurnsSinceUpdate,
         options,
       });
 
@@ -3438,6 +3495,10 @@ export class AgentManager {
     config: AgentSessionConfig;
     now: Date;
     durableTimelineHasRows: boolean;
+    summary: string | null;
+    summaryUpdatedAt?: Date;
+    summaryCursor?: AgentTimelineCursor;
+    summaryTurnsSinceUpdate?: number;
     options:
       | {
           createdAt?: Date;
@@ -3455,7 +3516,18 @@ export class AgentManager {
         }
       | undefined;
   }): ActiveManagedAgent {
-    const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
+    const {
+      resolvedAgentId,
+      session,
+      config,
+      now,
+      durableTimelineHasRows,
+      summary,
+      summaryUpdatedAt,
+      summaryCursor,
+      summaryTurnsSinceUpdate,
+      options,
+    } = params;
     return {
       id: resolvedAgentId,
       provider: config.provider,
@@ -3488,6 +3560,10 @@ export class AgentManager {
       historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
       lastMessageAt: resolveInitialLastMessageAt(options),
       lastUserMessageAt: options?.lastUserMessageAt ?? null,
+      summary,
+      summaryUpdatedAt,
+      summaryCursor,
+      summaryTurnsSinceUpdate,
       lastUsage: options?.lastUsage,
       lastError: options?.lastError,
       attention: resolveInitialAttention(options?.attention),
@@ -4259,6 +4335,13 @@ export class AgentManager {
     // data accumulated during streaming isn't lost when the provider omits
     // it from the completion event.
     agent.lastError = undefined;
+    // Only completed turns count toward the purpose summary cadence; failures and
+    // cancellations produce nothing worth resummarizing.
+    const countsTowardSummary = !agent.internal;
+    if (countsTowardSummary) {
+      agent.summaryTurnsSinceUpdate = (agent.summaryTurnsSinceUpdate ?? 0) + 1;
+    }
+    let emittedState = false;
     if (
       !isForegroundEvent &&
       !agent.activeForegroundTurnId &&
@@ -4267,6 +4350,10 @@ export class AgentManager {
     ) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
       this.emitState(agent);
+      emittedState = true;
+    }
+    if (countsTowardSummary && !emittedState) {
+      this.enqueueBackgroundPersist(agent);
     }
     void this.refreshRuntimeInfo(agent);
   }
