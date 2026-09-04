@@ -1578,7 +1578,13 @@ export class OpenCodeAgentClient implements AgentClient {
     if (!this.bridge || !launchContext) return undefined;
     return this.bridge.bindSession({
       sessionId,
-      env: launchContext.env ?? {},
+      // An undefined value means "unset", which the bridge's env record cannot
+      // express; dropping the key is the same thing over its JSON response.
+      env: Object.fromEntries(
+        Object.entries(launchContext.env ?? {}).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
       tools: launchContext.paseoTools,
     });
   }
