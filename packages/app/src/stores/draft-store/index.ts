@@ -191,7 +191,12 @@ async function runAttachmentGc(): Promise<void> {
   }
 
   try {
-    await garbageCollectAttachments({ referencedIds });
+    await garbageCollectAttachments({
+      referencedIds,
+      // A prompt can be stashed after the snapshot above while the backing
+      // store is still scanning. Recheck stash ownership at deletion time.
+      isReferenced: (attachmentId) => collectPromptStashAttachmentIds().includes(attachmentId),
+    });
   } catch (error) {
     console.warn("[DraftStore] Attachment garbage collection failed", error);
   }
