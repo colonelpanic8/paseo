@@ -372,6 +372,8 @@ export type AgentTimelineItem =
       messageId?: string;
       model?: string;
       thinkingOptionId?: string;
+      /** Asked without pausing the turn; the answer arrives as a later user message. */
+      questions?: Array<{ title: string; options?: string[] }>;
     }
   | { type: "reasoning"; text: string }
   | ToolCallTimelineItem

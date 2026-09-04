@@ -409,6 +409,12 @@ export interface PluginTimelineItem {
   data: JsonValue;
 }
 
+/** A question asked mid-turn without blocking; the answer arrives as a later user message. */
+export interface AsyncQuestion {
+  title: string;
+  options?: string[];
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string; clientMessageId?: string }
   | {
@@ -417,6 +423,7 @@ export type AgentTimelineItem =
       messageId?: string;
       model?: string;
       thinkingOptionId?: string;
+      questions?: AsyncQuestion[];
     }
   | { type: "reasoning"; text: string }
   | ToolCallTimelineItem
