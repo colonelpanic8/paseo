@@ -2,6 +2,7 @@ import { MoreVertical, Pause, Pencil, Play, RotateCw, Trash2 } from "lucide-reac
 import { useCallback, useState, type ReactElement } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useMinuteNow } from "@/hooks/use-minute-tick";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,11 +101,14 @@ function buildMeta(
   state: ScheduleDerivedState,
   serverName: string | undefined,
   singleHost: boolean,
+  now: Date,
 ): string {
   const parts = [
     formatCadence(schedule.cadence),
-    `Created ${formatTimeAgo(new Date(schedule.createdAt))}`,
-    schedule.lastRunAt ? `Last run ${formatTimeAgo(new Date(schedule.lastRunAt))}` : "Never run",
+    `Created ${formatTimeAgo(new Date(schedule.createdAt), now)}`,
+    schedule.lastRunAt
+      ? `Last run ${formatTimeAgo(new Date(schedule.lastRunAt), now)}`
+      : "Never run",
   ];
   if (state === "active") {
     const next = formatNextRun(schedule.nextRunAt);
@@ -160,7 +164,9 @@ export function ScheduleRow({
   const title = resolveScheduleTitle(schedule);
   const productName = scheduleProductName(schedule);
   const badge = stateBadge(state);
-  const meta = buildMeta(schedule, state, serverName, singleHost ?? false);
+  // Keeps the "Created/Last run Xm ago" meta from freezing while the pane sits open.
+  const now = useMinuteNow();
+  const meta = buildMeta(schedule, state, serverName, singleHost ?? false, now);
   const canRun = schedule.target.type === "new-agent" && (state === "active" || state === "paused");
 
   const rowStyle = useCallback(

@@ -1,7 +1,9 @@
 import { memo, useMemo, useCallback, useState, type ReactNode } from "react";
-import { Text, View, type ViewStyle } from "react-native";
+import { type GestureResponderEvent, Pressable, Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
+import { ChevronRight, CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
+import { isWeb } from "@/constants/platform";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import {
@@ -28,18 +30,28 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { StatusRing } from "@/components/status-ring";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
-import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
+import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
+import { ReadyToReviewBadge } from "@/components/sidebar/ready-to-review-badge";
 
+// Matches project-leading-visual's LEADING_SLOT_HEIGHT.
+const PROJECT_LEADING_SLOT_HEIGHT = 20;
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const needsInputColorMapping = (theme: Theme) => ({
   color: theme.colors.surface0,
   fill: getStatusDotColor({ theme, bucket: "needs_input" }) ?? undefined,
 });
 
+const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolder = withUnistyles(Folder);
 const ThemedFolderGit2 = withUnistyles(FolderGit2);
+
+/** Expanded state and toggle for a row's agent tree, wherever the row surfaces it. */
+export interface SidebarWorkspaceRowDisclosure {
+  expanded: boolean;
+  onToggle: () => void;
+}
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -100,6 +112,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   shortcutNumber = null,
   showShortcutBadge = false,
   reserveIdleStatusIndicatorSpace = true,
+  onSubmitRename,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -117,15 +130,13 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge?: boolean;
   /** Keep the empty leading slot when the workspace has no active status. */
   reserveIdleStatusIndicatorSpace?: boolean;
+  onSubmitRename?: (value: string) => Promise<void>;
   children?: ReactNode;
 }) {
   const {
     settings: { workspaceTitleSource },
   } = useAppSettings();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
-  // The workspace carries label names; their colors live in its host's catalog, so the row is
-  // where the two meet — the meta line is handed finished definitions.
-  const labels = useWorkspaceLabelDefinitions(workspace.serverId, workspace.labels);
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
@@ -144,23 +155,40 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             displayName={leadingProjectName}
             projectViewKey={workspace.projectViewKey}
             statusBucket={workspace.statusBucket}
+            readyToReview={workspace.readyToReview}
             backdrop={backdrop}
             loading={isLoading}
             testID={`sidebar-row-project-icon-${workspace.workspaceKey}`}
           />
         ) : (
-          <WorkspaceStatusIndicator
-            bucket={workspace.statusBucket}
-            workspaceKind={workspace.workspaceKind}
-            loading={isLoading}
-            reserveIdleSpace={reserveIdleStatusIndicatorSpace}
-          />
+          <View style={styles.workspaceStatusWithReviewIndicator}>
+            {workspace.readyToReview && workspace.statusBucket === "done" && !isLoading ? (
+              <ReadyToReviewBadge />
+            ) : (
+              <WorkspaceStatusIndicator
+                bucket={workspace.statusBucket}
+                workspaceKind={workspace.workspaceKind}
+                loading={isLoading}
+                reserveIdleSpace={reserveIdleStatusIndicatorSpace}
+              />
+            )}
+            {workspace.readyToReview && workspace.statusBucket !== "done" && !isLoading ? (
+              <View style={styles.readyToReviewBadge}>
+                <ReadyToReviewBadge />
+              </View>
+            ) : null}
+          </View>
         )}
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
-            <Text style={workspaceBranchTextStyle} numberOfLines={1}>
-              {workspaceLabel}
-            </Text>
+            <SidebarWorkspaceInlineTitle
+              displayValue={workspaceLabel}
+              renameValue={workspace.title ?? workspace.name}
+              editable={workspaceTitleSource === "title" && Boolean(onSubmitRename)}
+              onSubmit={onSubmitRename}
+              style={workspaceBranchTextStyle}
+              testID={`sidebar-workspace-title-${workspace.workspaceKey}`}
+            />
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
           </View>
           <WorkspaceMetaRow
@@ -169,7 +197,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             hostBadge={hostBadge ?? null}
             prHint={workspace.prHint}
             serviceSummary={serviceSummary}
-            labels={labels}
           />
         </View>
       </View>
@@ -181,6 +208,74 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     </View>
   );
 });
+
+/**
+ * Trailing-edge agent-tree chevron, shared by both grouping modes. The leading
+ * icon is never touched: identity stays put and the toggle lives at the end of
+ * the row, after the kebab.
+ *
+ * Web only — it is hover-revealed, and hover does not exist on native. Native
+ * reaches the tree through the row menu (project mode) and the swipe underlay
+ * (status mode) instead.
+ *
+ * Presses are stopped here so the surrounding row Pressable does not also
+ * navigate.
+ */
+export function SidebarWorkspaceAgentTreeToggle({
+  expanded,
+  onToggle,
+  testID,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  testID: string;
+}) {
+  const { t } = useTranslation();
+  const handlePressIn = useCallback((event: GestureResponderEvent) => event.stopPropagation(), []);
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      onToggle();
+    },
+    [onToggle],
+  );
+  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
+
+  return (
+    <Pressable
+      // The row itself is a <button> on web; a nested button is invalid HTML.
+      accessibilityRole={isWeb ? undefined : "button"}
+      accessibilityLabel={
+        expanded ? t("sidebar.workspace.agentTree.hide") : t("sidebar.workspace.agentTree.show")
+      }
+      accessibilityState={accessibilityState}
+      hitSlop={4}
+      onPressIn={handlePressIn}
+      onPress={handlePress}
+      style={styles.agentTreeToggle}
+      testID={testID}
+    >
+      <View
+        style={
+          expanded
+            ? [styles.agentTreeChevron, styles.agentTreeChevronExpanded]
+            : styles.agentTreeChevron
+        }
+      >
+        <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Holds the chevron's width whether or not it is showing, so hover-revealing it
+ * never reflows the row. Only rendered for rows that have a tree to open, so a
+ * row without agents gives up no width at all.
+ */
+export function SidebarWorkspaceAgentTreeToggleSlot({ children }: { children: ReactNode }) {
+  return <View style={styles.agentTreeToggleSlot}>{children}</View>;
+}
 
 function WorkspaceStatusIndicator({
   bucket,
@@ -221,23 +316,13 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "attention") {
-    return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-attention">
-        <View style={styles.standaloneStatusDot} />
-      </View>
-    );
-  }
-
-  if (bucket === "done") {
+  if (bucket === "done" || bucket === "snoozed") {
     // An idle row still gets a dot rather than an empty slot. Nested rows are marked as
     // workspaces by indentation alone, and with nothing in the leading slot the rail has no
     // edge to read against — a workspace carrying its own glyph starts looking like a project
     // header. The dot is muted to half opacity so it holds the rail without reporting status.
     return reserveIdleSpace ? (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done">
-        <View style={styles.idleStatusDot} />
-      </View>
+      <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`} />
     ) : null;
   }
 
@@ -267,9 +352,8 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
       return styles.statusDotFailed;
     case "running":
       return styles.statusDotRunning;
-    case "attention":
-      return styles.statusDotAttention;
     case "done":
+    case "snoozed":
       return null;
   }
 }
@@ -479,6 +563,19 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  workspaceStatusWithReviewIndicator: {
+    position: "relative",
+    width: theme.iconSize.md,
+    height: 20,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readyToReviewBadge: {
+    position: "absolute",
+    right: -3,
+    bottom: -2,
+  },
   statusDotOverlay: {
     position: "absolute",
     right: 0,
@@ -487,6 +584,28 @@ const styles = StyleSheet.create((theme) => ({
     height: STATUS_INDICATOR_DOT_SIZE,
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
+  },
+  agentTreeChevron: {
+    width: theme.iconSize.sm,
+    height: theme.iconSize.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  agentTreeChevronExpanded: {
+    transform: [{ rotate: "90deg" }],
+  },
+  agentTreeToggle: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Matches the chevron's own footprint so reserving the slot and filling it are
+  // the same width.
+  agentTreeToggleSlot: {
+    width: theme.iconSize.sm,
+    minHeight: PROJECT_LEADING_SLOT_HEIGHT,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
   standaloneStatusDot: {
     width: STATUS_INDICATOR_FILLED_DOT_SIZE,
@@ -528,10 +647,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusDotRunning: {
     backgroundColor: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
-    borderColor: theme.colors.surface0,
-  },
-  statusDotAttention: {
-    backgroundColor: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
     borderColor: theme.colors.surface0,
   },
 }));

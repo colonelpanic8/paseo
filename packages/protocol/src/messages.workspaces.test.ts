@@ -712,6 +712,74 @@ describe("workspace message schemas", () => {
     ).toBe(statusEnteredAt);
   });
 
+  test("carries workspace snooze status and stays optional for old daemons", () => {
+    const baseWorkspace = {
+      id: "ws-snooze",
+      projectId: "proj",
+      projectDisplayName: "repo",
+      projectRootPath: "/repo",
+      workspaceDirectory: "/repo",
+      projectKind: "git",
+      workspaceKind: "worktree",
+      name: "feature",
+      status: "done",
+      activityAt: null,
+      scripts: [],
+    } as const;
+    expect(WorkspaceDescriptorPayloadSchema.parse(baseWorkspace).snoozeStatus).toBeUndefined();
+
+    const snoozeStatus = {
+      snoozedAt: "2026-05-12T10:00:00.000Z",
+      snoozedUntil: "2026-05-13T10:00:00.000Z",
+    };
+    expect(
+      WorkspaceDescriptorPayloadSchema.parse({ ...baseWorkspace, snoozeStatus }).snoozeStatus,
+    ).toEqual(snoozeStatus);
+    expect(
+      WorkspaceDescriptorPayloadSchema.parse({ ...baseWorkspace, snoozeStatus: null }).snoozeStatus,
+    ).toBeNull();
+  });
+
+  test("parses workspace.snooze.set request and response", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "workspace.snooze.set.request",
+        workspaceId: "ws-snooze",
+        snoozedUntil: "2026-05-13T10:00:00.000Z",
+        requestId: "req-snooze",
+      }),
+    ).toEqual({
+      type: "workspace.snooze.set.request",
+      workspaceId: "ws-snooze",
+      snoozedUntil: "2026-05-13T10:00:00.000Z",
+      requestId: "req-snooze",
+    });
+
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "workspace.snooze.set.request",
+        workspaceId: "ws-snooze",
+        snoozedUntil: null,
+        requestId: "req-wake",
+      }).type,
+    ).toBe("workspace.snooze.set.request");
+
+    const response = SessionOutboundMessageSchema.parse({
+      type: "workspace.snooze.set.response",
+      payload: {
+        requestId: "req-snooze",
+        workspaceId: "ws-snooze",
+        accepted: true,
+        snoozeStatus: {
+          snoozedAt: "2026-05-12T10:00:00.000Z",
+          snoozedUntil: "2026-05-13T10:00:00.000Z",
+        },
+        error: null,
+      },
+    });
+    expect(response.type).toBe("workspace.snooze.set.response");
+  });
+
   test("preserves explicit statusEnteredAt: null for empty workspaces", () => {
     // The server emits `statusEnteredAt: null` for workspaces with no
     // contributing agents (the "done with no agents" case). The client must

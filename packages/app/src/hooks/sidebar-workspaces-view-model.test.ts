@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
-import { buildWorkspaceAgentActivityIndex } from "@/utils/workspace-agent-activity";
+import {
+  buildWorkspaceAgentActivityIndex,
+  type WorkspaceAgentActivity,
+} from "@/utils/workspace-agent-activity";
 import {
   appendMissingOrderKeys,
   applyStoredOrdering,
@@ -10,8 +13,10 @@ import {
   buildSidebarProjectsFromStructure,
   computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
+  deriveProjectStatus,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   shouldShowSidebarHostLabels,
   type ProjectStatusSession,
   type SidebarProjectEntry,
@@ -31,6 +36,7 @@ function workspaceWithForge(forge: string | undefined, prUrl: string): Workspace
     title: null,
     status: "done",
     statusEnteredAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     scripts: [],
@@ -86,6 +92,18 @@ describe("createSidebarWorkspaceEntry workspace directory label", () => {
     const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
 
     expect(entry.workspaceDirectoryLabel).toBe("~/external/feature");
+  });
+});
+
+describe("createSidebarWorkspaceEntry ready to review", () => {
+  it("keeps attention in Done and exposes it as an annotation", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.status = "attention";
+
+    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
+
+    expect(entry.statusBucket).toBe("done");
+    expect(entry.readyToReview).toBe(true);
   });
 });
 
@@ -148,6 +166,8 @@ function workspace(input: {
   projectDisplayName: string;
   status?: WorkspaceDescriptor["status"];
   statusEnteredAt?: Date | null;
+  snoozeStatus?: WorkspaceDescriptor["snoozeStatus"];
+  activityAt?: Date | null;
 }): WorkspaceDescriptor {
   return {
     id: input.id,
@@ -160,6 +180,8 @@ function workspace(input: {
     name: input.name,
     status: input.status ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
+    snoozeStatus: input.snoozeStatus ?? null,
+    activityAt: input.activityAt ?? null,
     archivingAt: null,
     diffStat: null,
     scripts: [],
@@ -481,6 +503,165 @@ describe("shared sidebar workspace model", () => {
   });
 });
 
+describe("snoozed workspace status", () => {
+  const NOW_MS = Date.parse("2026-06-01T10:00:00.000Z");
+  const SNOOZED_AT = "2026-06-01T09:00:00.000Z";
+  const SNOOZED_UNTIL = "2026-06-01T12:00:00.000Z";
+  const SNOOZE_STATUS = { snoozedAt: SNOOZED_AT, snoozedUntil: SNOOZED_UNTIL };
+
+  function entryWith(input: {
+    workspaceStatus?: WorkspaceDescriptor["status"];
+    statusEnteredAt?: Date | null;
+    activityAt?: Date | null;
+    snoozeStatus?: WorkspaceDescriptor["snoozeStatus"];
+    activity?: Map<string, WorkspaceAgentActivity>;
+    nowMs?: number;
+  }) {
+    return createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: workspace({
+        id: "ws-1",
+        name: "feature",
+        projectId: "proj",
+        projectDisplayName: "proj",
+        status: input.workspaceStatus ?? "done",
+        statusEnteredAt: input.statusEnteredAt ?? null,
+        activityAt: input.activityAt ?? null,
+        snoozeStatus: input.snoozeStatus === undefined ? SNOOZE_STATUS : input.snoozeStatus,
+      }),
+      workspaceAgentActivity: input.activity ?? new Map(),
+      nowMs: input.nowMs ?? NOW_MS,
+    });
+  }
+
+  it("moves a snoozed workspace into the snoozed bucket with snooze timestamps", () => {
+    const entry = entryWith({});
+    expect(entry.statusBucket).toBe("snoozed");
+    expect(entry.statusEnteredAt).toEqual(new Date(SNOOZED_AT));
+    expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+  });
+
+  it("suppresses running and done while snoozed", () => {
+    for (const status of ["running", "done"] as const) {
+      const entry = entryWith({
+        workspaceStatus: status,
+        statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
+      });
+      expect(entry.statusBucket).toBe("snoozed");
+      expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+      expect(entry.readyToReview).toBe(false);
+    }
+  });
+
+  it("suppresses attention-ish states that predate the snooze", () => {
+    for (const status of ["needs_input", "failed", "attention"] as const) {
+      const entry = entryWith({
+        workspaceStatus: status,
+        statusEnteredAt: new Date("2026-06-01T08:00:00.000Z"),
+      });
+      expect(entry.statusBucket).toBe("snoozed");
+      expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+      expect(entry.readyToReview).toBe(false);
+    }
+  });
+
+  it("breaks out for attention-ish states entered after the snooze", () => {
+    for (const status of ["needs_input", "failed", "attention"] as const) {
+      const entry = entryWith({
+        workspaceStatus: status,
+        statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
+        activityAt: new Date("2026-06-01T09:30:00.000Z"),
+      });
+      expect(entry.statusBucket).toBe(status === "attention" ? "done" : status);
+      expect(entry.readyToReview).toBe(status === "attention");
+      expect(entry.snoozeWakeAt).toBeNull();
+    }
+  });
+
+  // A daemon restart rebuilds the in-memory status history, restamping
+  // enteredAt from agent timestamps the restart itself touches. activityAt is
+  // anchored to persisted message times, so a restamped enteredAt without
+  // matching new activity must not break the snooze.
+  it("stays snoozed when enteredAt was restamped but nothing new happened", () => {
+    for (const status of ["needs_input", "failed", "attention"] as const) {
+      const entry = entryWith({
+        workspaceStatus: status,
+        statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
+        activityAt: new Date("2026-06-01T08:30:00.000Z"),
+      });
+      expect(entry.statusBucket).toBe("snoozed");
+      expect(entry.snoozeWakeAt).toEqual(new Date(SNOOZED_UNTIL));
+      expect(entry.readyToReview).toBe(false);
+    }
+  });
+
+  it("stays snoozed when the workspace has no recorded activity", () => {
+    const entry = entryWith({
+      workspaceStatus: "needs_input",
+      statusEnteredAt: new Date("2026-06-01T09:30:00.000Z"),
+      activityAt: null,
+    });
+    expect(entry.statusBucket).toBe("snoozed");
+  });
+
+  it("breaks out for new attention derived from agent activity", () => {
+    const entry = entryWith({
+      activityAt: new Date("2026-06-01T09:45:00.000Z"),
+      activity: new Map([
+        [
+          "ws-1",
+          {
+            agentId: "agent-1",
+            status: "attention" as const,
+            enteredAt: new Date("2026-06-01T09:45:00.000Z"),
+            lastUserMessageAt: null,
+            providers: [],
+            readyToReview: true,
+          },
+        ],
+      ]),
+    });
+    expect(entry.statusBucket).toBe("done");
+    expect(entry.readyToReview).toBe(true);
+    expect(entry.snoozeWakeAt).toBeNull();
+  });
+
+  it("keeps suppressing agent activity that predates the snooze", () => {
+    const entry = entryWith({
+      activity: new Map([
+        [
+          "ws-1",
+          {
+            agentId: "agent-1",
+            status: "attention" as const,
+            enteredAt: new Date("2026-06-01T08:45:00.000Z"),
+            lastUserMessageAt: null,
+            providers: [],
+            readyToReview: true,
+          },
+        ],
+      ]),
+    });
+    expect(entry.statusBucket).toBe("snoozed");
+    expect(entry.readyToReview).toBe(false);
+  });
+
+  it("falls back to the underlying status once the snooze expires", () => {
+    const entry = entryWith({
+      workspaceStatus: "running",
+      nowMs: Date.parse(SNOOZED_UNTIL),
+    });
+    expect(entry.statusBucket).toBe("running");
+    expect(entry.snoozeWakeAt).toBeNull();
+  });
+
+  it("is unaffected when the workspace carries no snoozeStatus", () => {
+    const entry = entryWith({ workspaceStatus: "running", snoozeStatus: null });
+    expect(entry.statusBucket).toBe("running");
+    expect(entry.snoozeWakeAt).toBeNull();
+  });
+});
+
 describe("shouldShowSidebarHostLabels", () => {
   it("is false with no visible projects", () => {
     expect(shouldShowSidebarHostLabels([])).toBe(false);
@@ -668,7 +849,6 @@ describe("deriveSidebarLoadingState", () => {
     ).toEqual({ isLoading: false, isInitialLoad: false, isRevalidating: false });
   });
 });
-
 function workspacePlacement(input: {
   serverId?: string;
   workspaceId: string;
@@ -839,7 +1019,7 @@ describe("deriveProjectStatusBucket", () => {
     ).toBe("failed");
   });
 
-  it("keeps a project on attention when only one workspace awaits review", () => {
+  it("keeps a project in done when only one workspace awaits review", () => {
     expect(
       deriveProjectStatusBucket({
         workspaces: [
@@ -852,7 +1032,26 @@ describe("deriveProjectStatusBucket", () => {
           }),
         },
       }),
-    ).toBe("attention");
+    ).toBe("done");
+  });
+
+  it("carries ready to review independently from a running project status", () => {
+    expect(
+      deriveProjectStatus({
+        workspaces: [
+          workspacePlacement({ workspaceId: "ws-1" }),
+          workspacePlacement({ workspaceId: "ws-2" }),
+        ],
+        sessions: {
+          srv: sessionWith({
+            workspaces: [
+              projectWorkspace("ws-1", "running"),
+              projectWorkspace("ws-2", "attention"),
+            ],
+          }),
+        },
+      }),
+    ).toEqual({ statusBucket: "running", readyToReview: true });
   });
 
   it("aggregates across the hosts a project spans", () => {
@@ -937,5 +1136,45 @@ describe("deriveProjectStatusBucket", () => {
         },
       }),
     ).toBe("done");
+  });
+});
+
+describe("resolveSidebarServerIds", () => {
+  const allServerIds = ["alpha", "beta", "gamma"];
+
+  it("shows every host when no filter is set", () => {
+    expect(
+      resolveSidebarServerIds({ allServerIds, hostFilters: [], hostRegistryLoaded: true }),
+    ).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  it("narrows to the filtered hosts, preserving registry order", () => {
+    expect(
+      resolveSidebarServerIds({
+        allServerIds,
+        hostFilters: ["gamma", "alpha"],
+        hostRegistryLoaded: true,
+      }),
+    ).toEqual(["alpha", "gamma"]);
+  });
+
+  it("falls back to every host once the registry settles with no surviving filter", () => {
+    expect(
+      resolveSidebarServerIds({
+        allServerIds,
+        hostFilters: ["deleted-host"],
+        hostRegistryLoaded: true,
+      }),
+    ).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  it("stays empty while the registry is still loading so hosts do not flash in", () => {
+    expect(
+      resolveSidebarServerIds({
+        allServerIds,
+        hostFilters: ["deleted-host"],
+        hostRegistryLoaded: false,
+      }),
+    ).toEqual([]);
   });
 });

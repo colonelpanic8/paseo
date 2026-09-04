@@ -14,6 +14,7 @@ export interface SeedWorkspaceDescriptor {
   workspaceDirectory: string;
   diffStat: { additions: number; deletions: number } | null;
   labels?: string[];
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
 }
 
 interface SeedProjectDescriptor {
@@ -51,6 +52,10 @@ export interface SeedDaemonClient {
     assigned: boolean;
   }): Promise<unknown>;
   listProjects(): Promise<{ projects: SeedProjectDescriptor[] }>;
+  setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }>;
   createWorkspace(input: {
     source:
       | { kind: "directory"; path: string; projectId?: string }

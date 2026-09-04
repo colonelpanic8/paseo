@@ -2008,12 +2008,41 @@ export class HostRuntimeStore {
     serverId: string,
     apply: (host: HostProfile) => HostProfile,
   ): Promise<void> {
-    const updatedAt = new Date().toISOString();
-    const next = this.hosts.map((host) =>
-      host.serverId === serverId ? { ...apply(host), updatedAt } : host,
-    );
-    await this.persistHosts(next);
-    this.setHostsAndSync(next);
+    // Rebased over concurrent host-list changes rather than applied to a snapshot:
+    // reconnects can rewrite serverIds mid-write (ID reconciliation), so the target is
+    // re-found by connection id and the mutation retried until it lands on a stable list.
+    let targetConnectionIds: readonly string[] | null = null;
+    let wroteSupersededSnapshot = false;
+    while (true) {
+      const baseHosts = this.hosts;
+      const target = baseHosts.find(
+        (host) =>
+          host.serverId === serverId ||
+          targetConnectionIds?.some((connectionId) =>
+            host.connections.some((connection) => connection.id === connectionId),
+          ) === true,
+      );
+      if (!target) {
+        // A concurrent removal won. Any snapshot we already wrote still contains the
+        // removed host, so rewrite the current list before giving up or it comes back.
+        if (wroteSupersededSnapshot) {
+          await this.persistHosts(baseHosts);
+        }
+        throw new Error(`Host ${serverId} no longer exists.`);
+      }
+      targetConnectionIds ??= target.connections.map((connection) => connection.id);
+      const updatedAt = new Date().toISOString();
+      const next = baseHosts.map((host) =>
+        host === target ? { ...apply(host), updatedAt } : host,
+      );
+      await this.persistHosts(next);
+      if (this.hosts !== baseHosts) {
+        wroteSupersededSnapshot = true;
+        continue;
+      }
+      this.setHostsAndSync(next);
+      return;
+    }
   }
 
   async removeHost(serverId: string): Promise<void> {
