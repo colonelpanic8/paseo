@@ -363,7 +363,8 @@ export class DaemonConfigStore {
     });
     this.relayEnabledMutable = options.relayEnabledMutable ?? true;
     this.reloadSource = options.reloadSource;
-    this.startupPersisted = options.startupPersisted ?? loadPersistedConfig(paseoHome, this.logger);
+    this.startupPersisted =
+      options.startupPersisted ?? loadConfigStack(paseoHome, this.logger).effective;
     this.lastKnownPersisted = this.startupPersisted;
   }
 
@@ -456,7 +457,7 @@ export class DaemonConfigStore {
       throw new Error("Daemon config reload is unavailable for this daemon instance");
     }
 
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    const persisted = loadConfigStack(this.paseoHome, this.logger).effective;
     const resolved = this.reloadSource.resolve(persisted);
     // Plugin source changes require the plugin lifecycle operation or a daemon
     // restart. The global switch is independently reloadable.

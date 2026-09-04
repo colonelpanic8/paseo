@@ -8,7 +8,9 @@ import {
   loadPersistedConfig,
   resolveDaemonLogPath,
   resolvePaseoHome,
+  resolvePaseoPaths,
   spawnProcess,
+  type PaseoPaths,
 } from "@getpaseo/server";
 import treeKill from "tree-kill";
 import { tryConnectToDaemon } from "../../utils/client.js";
@@ -527,6 +529,10 @@ function getErrorMessage(error: unknown): string {
 
 export function resolveLocalPaseoHome(home?: string): string {
   return resolvePaseoHome(envWithHome(home));
+}
+
+export function resolveLocalPaseoPaths(home?: string): PaseoPaths {
+  return resolvePaseoPaths(envWithHome(home));
 }
 
 export function resolveTcpHostFromListen(listen: string): string | null {

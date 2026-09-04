@@ -10,6 +10,7 @@ import {
   ProviderOverridesSchema,
 } from "./agent/provider-launch-config.js";
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
+import { resolvePaseoPaths, type PaseoPaths } from "./paseo-paths.js";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 import {
   AgentProfileSchema,
@@ -398,8 +399,15 @@ interface LoggerLike {
   info(...args: unknown[]): void;
 }
 
-function getConfigPath(paseoHome: string): string {
-  return path.resolve(paseoHome, CONFIG_FILENAME);
+function resolveConfigRoot(paseoHome: string, paths: PaseoPaths): string {
+  return paths.home === path.resolve(paseoHome) ? paths.config : paseoHome;
+}
+
+export function resolvePersistedConfigPath(
+  paseoHome: string,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): string {
+  return path.join(resolveConfigRoot(paseoHome, paths), CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
@@ -616,9 +624,13 @@ function initializeRootConfig(configPath: string, logger?: LoggerLike): void {
   }
 }
 
-export function loadConfigStack(paseoHome: string, logger?: LoggerLike): ConfigStack {
+export function loadConfigStack(
+  paseoHome: string,
+  logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): ConfigStack {
   const log = getLogger(logger);
-  const requestedRootPath = getConfigPath(paseoHome);
+  const requestedRootPath = resolvePersistedConfigPath(paseoHome, paths);
   if (!existsSync(requestedRootPath)) initializeRootConfig(requestedRootPath, log);
 
   const loaded = loadLayer({
@@ -651,8 +663,12 @@ export function loadConfigStack(paseoHome: string, logger?: LoggerLike): ConfigS
   };
 }
 
-export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
-  return loadConfigStack(paseoHome, logger).effective;
+export function loadPersistedConfig(
+  paseoHome: string,
+  logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
+): PersistedConfig {
+  return loadConfigStack(paseoHome, logger, paths).effective;
 }
 
 function deepDiff(
@@ -793,11 +809,12 @@ export function savePersistedConfig(
   paseoHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
+  paths: PaseoPaths = resolvePaseoPaths(),
 ): void {
-  const configPath = getConfigPath(paseoHome);
+  const configPath = resolvePersistedConfigPath(paseoHome, paths);
   if (!existsSync(configPath)) {
     writeConfigFile(configPath, validateConfigToSave(config), getLogger(logger));
     return;
   }
-  saveConfigStack(loadConfigStack(paseoHome, logger), config, logger);
+  saveConfigStack(loadConfigStack(paseoHome, logger, paths), config, logger);
 }

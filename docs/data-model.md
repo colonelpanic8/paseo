@@ -32,7 +32,10 @@ checkout from `mainRepoRoot`, then restores the relative path from `worktreeRoot
 
 Paseo uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
 
-All server-side stores live under `$PASEO_HOME` (defaults to `~/.paseo`).
+Server-side data stores live under Paseo's data root. Existing installs and explicit
+`PASEO_HOME` configurations use the historical flat root. Fresh Linux installs use
+`$XDG_DATA_HOME/paseo` (default `~/.local/share/paseo`) for data and
+`$XDG_CONFIG_HOME/paseo/config.json` (default `~/.config/paseo/config.json`) for daemon config.
 
 ## Store Surface Rules
 
@@ -43,8 +46,9 @@ Store APIs own persistence atomicity and should not make services coordinate raw
 ## Directory layout
 
 ```
-$PASEO_HOME/
-├── config.json                          # Daemon configuration
+Paseo data root/
+├── .xdg-layout                         # Pins XDG layout selection across restarts (XDG only)
+├── config.json                          # Daemon configuration (flat layout only)
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
 ├── paseo.pid                            # Daemon PID lock file
@@ -592,13 +596,16 @@ These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the dae
 
 ### Settings files (desktop)
 
-On Electron desktop, preferences live in two files in the Electron `userData` directory
-(`~/.config/Paseo/` on Linux, `~/Library/Application Support/Paseo/` on macOS):
+On Electron desktop, preferences live in two files:
 
-| File                 | Layer                            | Written by                                                                 |
-| -------------------- | -------------------------------- | -------------------------------------------------------------------------- |
-| `settings-seed.json` | Read-only defaults, bottom layer | Nobody. The app only reads it, so a dotfiles repo can symlink it directly. |
-| `settings.json`      | Writable overrides, on top of it | The Electron main process, on behalf of the settings UI.                   |
+| File                 | Location                                                                                  | Layer                            | Written by                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------- |
+| `settings-seed.json` | `$XDG_CONFIG_HOME/paseo/` on Linux; Electron `userData` on macOS and Windows              | Read-only defaults, bottom layer | Nobody. The app only reads it, so a dotfiles repo can symlink it directly. |
+| `settings.json`      | Electron `userData` (`~/.config/Paseo/` on Linux, `~/Library/Application Support/Paseo/`) | Writable overrides, on top of it | The Electron main process, on behalf of the settings UI.                   |
+
+`PASEO_SETTINGS_SEED_FILE` overrides the seed path on every platform. On Linux, an existing seed
+in Electron `userData` takes precedence over the XDG path so upgrades keep their current layout;
+remove that legacy file to opt into the XDG location.
 
 Both hold the same field names and value shapes, so a value copied from `settings.json` into
 `settings-seed.json` needs no translation.
