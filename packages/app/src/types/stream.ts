@@ -916,6 +916,14 @@ function markThoughtReady(item: ThoughtItem): ThoughtItem {
   };
 }
 
+function hasAssistantQuestions(questions: AssistantQuestion[] | undefined): boolean {
+  return Boolean(questions?.length);
+}
+
+function hasAssistantDisplayContent(hasText: boolean, hasQuestions: boolean): boolean {
+  return hasText || hasQuestions;
+}
+
 export function handoffCreatedAgentUserMessageToStream(params: {
   tail: StreamItem[];
   head: StreamItem[];
@@ -968,7 +976,8 @@ function appendAssistantMessage(
   questions?: AssistantQuestion[],
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!chunk) {
+  const hasQuestions = hasAssistantQuestions(questions);
+  if (!hasAssistantDisplayContent(Boolean(chunk), hasQuestions)) {
     return state;
   }
   const questionsPatch = questions ? { questions } : undefined;
@@ -1008,7 +1017,7 @@ function appendAssistantMessage(
     return [...state.slice(0, -2), updated, last];
   }
 
-  if (!hasContent) {
+  if (!hasAssistantDisplayContent(hasContent, hasQuestions)) {
     return state;
   }
 

@@ -37,6 +37,9 @@ interface OptionPillProps {
   onSelect: (questionIndex: number, optionIndex: number) => void;
 }
 
+const CHECKED_ACCESSIBILITY_STATE = { checked: true } as const;
+const UNCHECKED_ACCESSIBILITY_STATE = { checked: false } as const;
+
 function OptionPill({
   questionIndex,
   optionIndex,
@@ -58,7 +61,7 @@ function OptionPill({
     ],
     [disabled, selected],
   );
-  const accessibilityState = useMemo(() => ({ checked: selected }), [selected]);
+  const accessibilityState = selected ? CHECKED_ACCESSIBILITY_STATE : UNCHECKED_ACCESSIBILITY_STATE;
 
   return (
     <Pressable
