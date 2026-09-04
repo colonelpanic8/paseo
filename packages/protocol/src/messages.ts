@@ -2054,6 +2054,8 @@ export const AgentForkNativeRequestMessageSchema = z.object({
   boundaryMessageId: z.string().optional(),
   /** Omit to place the fork in the source agent's workspace. */
   workspaceId: z.string().optional(),
+  /** Working directory for the imported fork inside the destination workspace. */
+  cwd: z.string().optional(),
   requestId: z.string(),
 });
 
