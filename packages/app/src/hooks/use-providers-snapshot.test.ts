@@ -5,11 +5,11 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import { compactProviderSnapshot } from "@getpaseo/protocol/provider-snapshot-codec";
 import type { CachedProviderSnapshot, ProviderSnapshotCache } from "@/data/provider-snapshot-cache";
+import { reconcileProvidersSnapshot } from "@/data/providers-snapshot";
 import { draftAgentCommandsQueryKey } from "@/hooks/agent-commands-query";
 import { applyProvidersSnapshotUpdate, type ProvidersSnapshotUpdate } from "@/data/push-router";
 import {
   fetchProvidersSnapshot,
-  fetchProvidersSnapshotForQuery,
   providersSnapshotQueryKey,
   refreshAndApplyProvidersSnapshot,
   selectorOpenRefetchDecision,
@@ -210,7 +210,21 @@ describe("fetchProvidersSnapshot", () => {
   });
 });
 
-describe("fetchProvidersSnapshotForQuery", () => {
+async function fetchSnapshotIntoQuery(
+  input: Parameters<typeof fetchProvidersSnapshot>[0] & { queryClient: QueryClient },
+) {
+  const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
+  await input.queryClient.fetchQuery({
+    queryKey,
+    structuralSharing: reconcileProvidersSnapshot,
+    queryFn: () => fetchProvidersSnapshot(input),
+  });
+  const snapshot = input.queryClient.getQueryData<GetProvidersSnapshotResult>(queryKey);
+  if (!snapshot) throw new Error("Snapshot did not reach the query cache");
+  return snapshot;
+}
+
+describe("fetchSnapshotIntoQuery", () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -233,7 +247,7 @@ describe("fetchProvidersSnapshotForQuery", () => {
       },
     };
 
-    const snapshot = await fetchProvidersSnapshotForQuery({
+    const snapshot = await fetchSnapshotIntoQuery({
       client,
       queryClient,
       serverId,
@@ -253,7 +267,7 @@ describe("fetchProvidersSnapshotForQuery", () => {
     });
     const client = createClient({ snapshots: [providersSnapshot([codexEntry("loading")])] });
 
-    const snapshot = await fetchProvidersSnapshotForQuery({
+    const snapshot = await fetchSnapshotIntoQuery({
       client,
       queryClient,
       serverId,
@@ -274,7 +288,7 @@ describe("fetchProvidersSnapshotForQuery", () => {
       snapshots: [providersSnapshot([codexEntry("ready", [readyCodexModel])])],
     });
 
-    const snapshot = await fetchProvidersSnapshotForQuery({
+    const snapshot = await fetchSnapshotIntoQuery({
       client,
       queryClient,
       serverId,
@@ -283,6 +297,121 @@ describe("fetchProvidersSnapshotForQuery", () => {
     });
 
     expect(snapshot.entries).toEqual([codexEntry("ready", [readyCodexModel])]);
+  });
+});
+
+describe("snapshot fetch and push ordering", () => {
+  it.each([0, 1])(
+    "keeps ready models when a loading fetch finishes after a push (%i ms later)",
+    async (pushDelay) => {
+      const queryClient = new QueryClient();
+      const queryKey = providersSnapshotQueryKey(serverId, "/repo-a");
+      const writing = Promise.withResolvers<void>();
+      const releaseWrite = Promise.withResolvers<void>();
+      const loading = providersSnapshot([codexEntry("loading")]);
+      const cache: ProviderSnapshotCache = {
+        async read() {
+          return null;
+        },
+        async write() {
+          writing.resolve();
+          await releaseWrite.promise;
+        },
+      };
+      const client = createClient({
+        snapshots: [
+          {
+            ...loading,
+            compactSnapshot: compactProviderSnapshot(loading.entries),
+            snapshotHash: "loading-hash",
+          },
+        ],
+      });
+      const fetching = queryClient.fetchQuery({
+        queryKey,
+        structuralSharing: reconcileProvidersSnapshot,
+        queryFn: () => fetchProvidersSnapshot({ client, serverId, cwd: "/repo-a", cache }),
+      });
+      await writing.promise;
+      applyProvidersSnapshotUpdate({
+        serverId,
+        queryClient,
+        message: {
+          type: "providers_snapshot_update",
+          payload: {
+            cwd: "/repo-a",
+            entries: [codexEntry("ready", [readyCodexModel])],
+            generatedAt: new Date(Date.parse(loading.generatedAt) + pushDelay).toISOString(),
+          },
+        },
+      });
+      releaseWrite.resolve();
+      await fetching;
+      expect(queryClient.getQueryData<GetProvidersSnapshotResult>(queryKey)?.entries).toEqual([
+        codexEntry("ready", [readyCodexModel]),
+      ]);
+      queryClient.clear();
+    },
+  );
+});
+
+describe("snapshot cache commit ordering", () => {
+  it("keeps a push delivered after the query function returns", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = providersSnapshotQueryKey(serverId, "/repo-a");
+    const loading = providersSnapshot([codexEntry("loading")]);
+    const client = createClient({ snapshots: [loading] });
+    await queryClient.fetchQuery({
+      queryKey,
+      structuralSharing: reconcileProvidersSnapshot,
+      queryFn: async () => {
+        const response = await fetchProvidersSnapshot({
+          client,
+          serverId,
+          cwd: "/repo-a",
+          cache: createCache(),
+        });
+        queueMicrotask(() =>
+          applyProvidersSnapshotUpdate({
+            serverId,
+            queryClient,
+            message: {
+              type: "providers_snapshot_update",
+              payload: {
+                cwd: "/repo-a",
+                entries: [codexEntry("ready", [readyCodexModel])],
+                generatedAt: response.generatedAt,
+              },
+            },
+          }),
+        );
+        return response;
+      },
+    });
+    expect(queryClient.getQueryData<GetProvidersSnapshotResult>(queryKey)?.entries).toEqual([
+      codexEntry("ready", [readyCodexModel]),
+    ]);
+    queryClient.clear();
+  });
+
+  it("accepts a newer fetch after a cached push", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = providersSnapshotQueryKey(serverId, "/repo-a");
+    const previous = providersSnapshot([codexEntry("loading")]);
+    queryClient.setQueryData(queryKey, { ...previous, requestId: "providers_snapshot_update" });
+    const ready = {
+      ...providersSnapshot([codexEntry("ready", [readyCodexModel])]),
+      generatedAt: "2026-01-02T00:00:00.000Z",
+    };
+    const client = createClient({ snapshots: [ready] });
+    await queryClient.fetchQuery({
+      queryKey,
+      structuralSharing: reconcileProvidersSnapshot,
+      queryFn: () =>
+        fetchProvidersSnapshot({ client, serverId, cwd: "/repo-a", cache: createCache() }),
+    });
+    expect(queryClient.getQueryData(queryKey)).toEqual(ready);
+    queryClient.clear();
   });
 });
 

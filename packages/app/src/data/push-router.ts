@@ -10,11 +10,10 @@ import { daemonConfigQueryKey } from "@/data/daemon-config";
 import { daemonPairingOfferQueryKey } from "@/data/daemon-pairing";
 import { providerSnapshotCache, type ProviderSnapshotCache } from "@/data/provider-snapshot-cache";
 import {
-  mergePushedProvidersSnapshot,
   normalizeProvidersSnapshotCwd,
+  reconcileProvidersSnapshot,
   providersSnapshotQueryKey,
   providersSnapshotQueryRoot,
-  type ProvidersSnapshotQueryData,
 } from "@/data/providers-snapshot";
 
 type ProvidersSnapshotUpdateMessage = Extract<
@@ -197,13 +196,13 @@ export function applyProvidersSnapshotUpdate(input: {
     return;
   }
   const queryKey = providersSnapshotQueryKey(input.serverId, input.message.payload.cwd);
-  const pushed = {
+  const snapshot = {
     entries: input.message.payload.entries,
     generatedAt: input.message.payload.generatedAt,
     requestId: "providers_snapshot_update",
   };
-  input.queryClient.setQueryData<ProvidersSnapshotQueryData>(queryKey, (current) =>
-    mergePushedProvidersSnapshot(current, pushed),
+  input.queryClient.setQueryData<typeof snapshot>(queryKey, (current) =>
+    reconcileProvidersSnapshot(current, snapshot),
   );
   const { compactSnapshot, snapshotHash } = input.message.payload;
   if (compactSnapshot && snapshotHash) {
