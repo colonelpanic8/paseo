@@ -72,7 +72,7 @@ import {
   type ForegroundTurnWaiter,
   type PendingForegroundRun,
 } from "./agent-run-state.js";
-import { invokeNativeForkCapability } from "./fork/native-fork.js";
+import { invokeNativeForkCapability, resolveNativeForkMessageId } from "./fork/native-fork.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
@@ -2998,18 +2998,10 @@ export class AgentManager {
       throw new Error("Cannot fork an agent that does not belong to a workspace");
     }
 
-    const submittedRow = this.timelineStore
-      .getRows(agentId)
-      .find(
-        (row) =>
-          row.item.type === "user_message" &&
-          row.item.messageId === input.messageId &&
-          row.item.clientMessageId === input.messageId,
-      );
-    if (submittedRow && !submittedRow.providerMessageId) {
-      throw new Error("Cannot fork before the provider acknowledges the submitted prompt");
-    }
-    const providerMessageId = submittedRow?.providerMessageId ?? input.messageId;
+    const providerMessageId = resolveNativeForkMessageId(
+      this.timelineStore.getRows(agentId),
+      input.messageId,
+    );
 
     this.logger.info(
       { agentId, provider: agent.provider, messageId: input.messageId },
