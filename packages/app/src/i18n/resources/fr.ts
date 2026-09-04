@@ -1813,6 +1813,163 @@ export const fr: TranslationResources = {
       copied: "Copié",
     },
   },
+  audioSession: {
+    busy: {
+      voiceMode: "Le mode vocal utilise le micro. Arrêtez-le d'abord.",
+      dictation: "La dictée utilise le micro. Arrêtez-la d'abord.",
+      liveVoice: "La voix en direct utilise le micro. Arrêtez-la d'abord.",
+      unknown: "Le micro est occupé. Arrêtez d'abord l'autre fonction audio.",
+    },
+  },
+  liveVoice: {
+    label: "Voix en direct",
+    menu: {
+      hosts: "Hôte",
+    },
+    actions: {
+      start: "Démarrer la voix en direct",
+      unavailable: "Voix en direct indisponible",
+      stop: "Arrêter la voix en direct",
+      mute: "Couper le micro",
+      unmute: "Réactiver le micro",
+      enableAudio: "Touchez pour activer l'audio",
+      showTranscript: "Afficher la transcription",
+      hideTranscript: "Masquer la transcription",
+      dismiss: "Ignorer",
+    },
+    unavailable: {
+      platform: "La voix en direct n’est pas prise en charge sur cet appareil.",
+      noHosts: "Ajoutez un hôte pour utiliser la voix en direct.",
+      connecting: "Connexion aux hôtes. La voix en direct apparaîtra lorsqu’un hôte sera prêt.",
+      offline: "Aucun hôte n’est en ligne. Connectez-en un pour utiliser la voix en direct.",
+      upgrade: "Les hôtes connectés n’annoncent pas la voix en direct. Mettez à jour leurs démons.",
+      toolsDisabled:
+        "Activez les outils Paseo dans les réglages de cet hôte pour utiliser la voix en direct.",
+    },
+    settings: {
+      title: "Voix en direct",
+      voice: {
+        label: "Voix",
+        description: "Utilisée pour les nouveaux appels. Un appel actif conserve sa voix actuelle.",
+        default: "Par défaut",
+      },
+      dispatch: {
+        hostLabel: "Hôte Dispatch",
+        description: "Choisissez l’hôte des requêtes ponctuelles depuis votre montre.",
+        chooseHost: "Choisir un hôte",
+        noHosts: "Aucun hôte disponible",
+        agentLabel: "Agent Dispatch",
+        agentHint: "Les requêtes dictées sur la montre sont envoyées à cet agent.",
+        notSet: "Non défini",
+        clear: "Non défini",
+        noAgents: "Aucun agent sur cet hôte",
+      },
+      backendModel: {
+        label: "Modèle d’actions",
+        description:
+          "Exécute les actions de l’appel en arrière-plan. Le modèle par défaut est rapide et économique ; choisissez-en un plus puissant si les actions demandent plus de jugement.",
+        default: "Par défaut (rapide)",
+      },
+      backendThinking: {
+        label: "Réflexion des actions",
+        description: "Profondeur de raisonnement du modèle d’actions.",
+        default: "Par défaut",
+      },
+      agentReports: {
+        label: "Signaler l’activité des agents",
+        description:
+          "Pendant un appel, soyez averti quand une session d’agent se termine, échoue ou demande une permission — y compris celles lancées en dehors de l’appel, sur n’importe quel hôte connecté.",
+      },
+      agentReportGuidance: {
+        label: "Quand interrompre",
+        description: "Transmis tel quel à l’agent vocal. Laissez vide pour qu’il décide.",
+        placeholder: "Ne m’interrompez que pour les demandes de permission et les échecs.",
+      },
+      promptComponents: {
+        "canonical-tools": {
+          label: "Aide-mémoire des outils",
+          description:
+            "Donne à l’assistant les noms exacts des outils pour éviter des tours de découverte.",
+        },
+        "delegation-brevity": {
+          label: "Délégations brèves",
+          description:
+            "Garde les prompts aux sessions d’agent courts — pas de code ni de listes d’étapes dictés.",
+        },
+        "cross-host-reach": {
+          label: "Vision multi-machines",
+          description:
+            "Apprend à l’assistant quelles lectures couvrent toutes les machines en un seul appel.",
+        },
+        recipes: {
+          label: "Recettes",
+          description:
+            "Les chemins les plus courts connus pour les demandes courantes, comme archiver par nom.",
+        },
+        "speech-style": {
+          label: "Style de parole",
+          description: "Phrases parlées, agir avant de raconter et vocabulaire Paseo.",
+        },
+      },
+      customInstructions: {
+        label: "Instructions permanentes",
+        description: "Transmises telles quelles à l’agent vocal, à chaque appel.",
+        placeholder: "Réponds toujours en une phrase sauf si j’en demande plus.",
+      },
+      defaultWorkspaceDirectory: {
+        label: "Répertoire d'espace de travail par défaut",
+        description:
+          "Où sont créés les nouveaux espaces de travail quand une demande n'en désigne aucun. Laissez vide et l'agent vocal demandera.",
+        placeholder: "~/Projects",
+      },
+    },
+    diagnostics: {
+      title: "Voix en direct",
+      statusTitle: "État",
+      noHosts: "Aucun hôte configuré.",
+      hostSummary: "{{version}} · {{support}}",
+      unknownVersion: "Version inconnue",
+      supported: "Voix en direct prise en charge",
+      unsupported: "Voix en direct non prise en charge",
+      supportUnknown: "Prise en charge de la voix en direct inconnue",
+      connection: {
+        idle: "Inactif",
+        connecting: "Connexion",
+        online: "En ligne",
+        offline: "Hors ligne",
+        error: "Erreur",
+      },
+    },
+    status: {
+      connecting: "Connexion...",
+      live: "En direct",
+      audioBlocked: "Audio bloqué",
+      stopping: "Arrêt...",
+      ended: "Appel terminé",
+      error: "Échec",
+    },
+    transcript: {
+      empty: "Rien n'a encore été dit.",
+      user: "Vous :",
+      assistant: "Agent :",
+    },
+    errors: {
+      busy: "Un appel vocal en direct est déjà actif sur cet hôte.",
+      unsupported: "Cet hôte ne prend pas en charge la voix en direct.",
+      startFailed: "Impossible de démarrer la voix en direct.",
+      micBusy: "Le micro est utilisé par une autre fonction.",
+      notConnected: "Cet hôte n'est pas connecté.",
+      alreadyActive: "Un appel vocal en direct est déjà en cours.",
+      stopping: "L'appel vocal en direct précédent est encore en cours d'arrêt.",
+      micDenied:
+        "L'accès au micro est bloqué. Autorisez Paseo à utiliser votre micro, puis réessayez.",
+      micUnavailable:
+        "Aucun micro utilisable n'a été trouvé. Connectez-en un ou sélectionnez-en un dans les réglages audio de l'appareil, puis réessayez.",
+      backgroundUnavailable: "L'audio en arrière-plan n'a pas pu démarrer.",
+      iceTimeout: "La connexion n'a pas pu être négociée à temps.",
+      connectionLost: "La connexion vocale en direct a été perdue.",
+    },
+  },
   realtimeVoice: {
     actions: {
       mute: "Couper la voix en temps réel",
@@ -2020,6 +2177,7 @@ export const fr: TranslationResources = {
     groupInfo: "À propos de{{title}}",
     sections: {
       general: "Général",
+      voice: "Voix en direct",
       appearance: "Apparence",
       layout: en.settings.sections.layout,
       editor: "Éditeur",
@@ -2349,6 +2507,8 @@ export const fr: TranslationResources = {
         sendMessage: "Envoyer un message",
         queueMessage: "Message de file d'attente",
         muteUnmuteVoiceMode: "Mode vocal/unmutemuet",
+        muteUnmuteLiveVoice: "Couper/réactiver la voix en direct",
+        holdInvertLiveVoiceMute: "Maintenir pour inverser la coupure de la voix en direct",
         switchProject: "Changer de projet",
         toggleWorkspaceIsolation: "Basculer l'isolation de l'espace de travail",
         selectHost: "Sélectionner l'hôte",
@@ -2357,6 +2517,8 @@ export const fr: TranslationResources = {
         findInConversation: "Rechercher dans la conversation",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute:
+          "Appuyer pour parler si le micro est coupé, appuyer pour couper s’il est actif.",
         showKeyboardShortcuts:
           "Disponible lorsque le focus n’est pas dans un champ de texte ou un terminal.",
       },

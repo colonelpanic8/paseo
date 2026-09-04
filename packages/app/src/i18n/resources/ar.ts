@@ -1763,6 +1763,157 @@ export const ar: TranslationResources = {
       copied: "منقول",
     },
   },
+  audioSession: {
+    busy: {
+      voiceMode: "وضع الصوت يستخدم الميكروفون. أوقفه أولاً.",
+      dictation: "الإملاء يستخدم الميكروفون. أوقفه أولاً.",
+      liveVoice: "الصوت المباشر يستخدم الميكروفون. أوقفه أولاً.",
+      unknown: "الميكروفون مستخدم. أوقف ميزة الصوت الأخرى أولاً.",
+    },
+  },
+  liveVoice: {
+    label: "صوت مباشر",
+    menu: {
+      hosts: "المضيف",
+    },
+    actions: {
+      start: "بدء الصوت المباشر",
+      unavailable: "الصوت المباشر غير متاح",
+      stop: "إيقاف الصوت المباشر",
+      mute: "كتم الميكروفون",
+      unmute: "إلغاء كتم الميكروفون",
+      enableAudio: "اضغط لتشغيل الصوت",
+      showTranscript: "عرض النص",
+      hideTranscript: "إخفاء النص",
+      dismiss: "تجاهل",
+    },
+    unavailable: {
+      platform: "الصوت المباشر غير مدعوم على هذا الجهاز.",
+      noHosts: "أضف مضيفًا لاستخدام الصوت المباشر.",
+      connecting: "جارٍ الاتصال بالمضيفين. سيظهر الصوت المباشر عندما يصبح أحدهم جاهزًا.",
+      offline: "لا يوجد مضيف متصل. اتصل بمضيف لاستخدام الصوت المباشر.",
+      upgrade: "المضيفون المتصلون لا يعلنون دعم الصوت المباشر. حدّث برامجهم الخدمية.",
+      toolsDisabled: "فعّل أدوات Paseo في إعدادات هذا المضيف لاستخدام الصوت المباشر.",
+    },
+    settings: {
+      title: "الصوت المباشر",
+      voice: {
+        label: "الصوت",
+        description: "يُستخدم للمكالمات الجديدة. تحتفظ المكالمة النشطة بصوتها الحالي.",
+        default: "الافتراضي",
+      },
+      dispatch: {
+        hostLabel: "مضيف الإرسال",
+        description: "اختر المضيف للمطالبات الصوتية لمرة واحدة من ساعتك.",
+        chooseHost: "اختر مضيفًا",
+        noHosts: "لا توجد مضيفات متاحة",
+        agentLabel: "وكيل الإرسال",
+        agentHint: "تُرسل مطالبات الساعة المنطوقة إلى هذا الوكيل.",
+        notSet: "غير معيّن",
+        clear: "غير معيّن",
+        noAgents: "لا توجد وكلاء على هذا المضيف",
+      },
+      backendModel: {
+        label: "نموذج الإجراءات",
+        description:
+          "ينفّذ إجراءات المكالمة في الخلفية. الافتراضي سريع ورخيص؛ اختر نموذجًا أقوى إذا احتاجت الإجراءات إلى حكم أدق.",
+        default: "الافتراضي (سريع)",
+      },
+      backendThinking: {
+        label: "تفكير الإجراءات",
+        description: "عمق الاستدلال لنموذج الإجراءات.",
+        default: "الافتراضي",
+      },
+      agentReports: {
+        label: "الإبلاغ عن نشاط الوكلاء",
+        description:
+          "أثناء المكالمة، اعرف متى تنتهي أي جلسة وكيل أو تفشل أو تطلب إذنًا — بما في ذلك الجلسات التي بدأتها خارج المكالمة، على أي مضيف متصل.",
+      },
+      agentReportGuidance: {
+        label: "متى تقاطعني",
+        description: "يُنقل إلى الوكيل الصوتي كما هو. اتركه فارغًا ليقرر بنفسه.",
+        placeholder: "قاطعني فقط لطلبات الإذن والإخفاقات.",
+      },
+      promptComponents: {
+        "canonical-tools": {
+          label: "دليل الأدوات السريع",
+          description: "يمنح المساعد أسماء الأدوات الدقيقة ليتجاوز جولات الاستكشاف.",
+        },
+        "delegation-brevity": {
+          label: "تفويضات موجزة",
+          description: "تبقي المطالبات لجلسات الوكلاء قصيرة — بلا إملاء شيفرة أو قوائم خطوات.",
+        },
+        "cross-host-reach": {
+          label: "الوعي عبر الأجهزة",
+          description: "يعلّم المساعد أي القراءات تغطي كل الأجهزة في استدعاء واحد.",
+        },
+        recipes: {
+          label: "وصفات",
+          description: "أقصر المسارات المعروفة للطلبات الشائعة، مثل الأرشفة بالاسم.",
+        },
+        "speech-style": {
+          label: "أسلوب الكلام",
+          description: "جمل منطوقة، التنفيذ قبل السرد، ومفردات Paseo.",
+        },
+      },
+      customInstructions: {
+        label: "تعليمات دائمة",
+        description: "تُنقل إلى الوكيل الصوتي كما هي في كل مكالمة.",
+        placeholder: "أجب دائمًا بجملة واحدة ما لم أطلب المزيد.",
+      },
+      defaultWorkspaceDirectory: {
+        label: "دليل مساحة العمل الافتراضي",
+        description:
+          "المكان الذي تُنشأ فيه مساحات العمل الجديدة عندما لا يكون للطلب مساحة واضحة. اتركه فارغًا ليسأل الوكيل الصوتي.",
+        placeholder: "~/Projects",
+      },
+    },
+    diagnostics: {
+      title: "صوت مباشر",
+      statusTitle: "الحالة",
+      noHosts: "لا توجد مضيفات مهيأة.",
+      hostSummary: "{{version}} · {{support}}",
+      unknownVersion: "الإصدار غير معروف",
+      supported: "الصوت المباشر مدعوم",
+      unsupported: "الصوت المباشر غير مدعوم",
+      supportUnknown: "دعم الصوت المباشر غير معروف",
+      connection: {
+        idle: "خامل",
+        connecting: "جارٍ الاتصال",
+        online: "متصل",
+        offline: "غير متصل",
+        error: "خطأ",
+      },
+    },
+    status: {
+      connecting: "جارٍ الاتصال...",
+      live: "مباشر",
+      audioBlocked: "الصوت محجوب",
+      stopping: "جارٍ الإيقاف...",
+      ended: "انتهت المكالمة",
+      error: "فشل",
+    },
+    transcript: {
+      empty: "لا يوجد كلام بعد.",
+      user: "أنت:",
+      assistant: "الوكيل:",
+    },
+    errors: {
+      busy: "هناك مكالمة صوت مباشر نشطة بالفعل على هذا المضيف.",
+      unsupported: "هذا المضيف لا يدعم الصوت المباشر.",
+      startFailed: "تعذّر بدء الصوت المباشر.",
+      micBusy: "الميكروفون مستخدم من ميزة أخرى.",
+      notConnected: "هذا المضيف غير متصل.",
+      alreadyActive: "هناك مكالمة صوت مباشر قائمة بالفعل.",
+      stopping: "مكالمة الصوت المباشر السابقة لا تزال تتوقف.",
+      micDenied: "تم حظر الوصول إلى الميكروفون. اسمح لـ Paseo باستخدامه، ثم أعد المحاولة.",
+      micUnavailable:
+        "لم يتم العثور على ميكروفون صالح للاستخدام. وصّل ميكروفونًا أو حدده في إعدادات الصوت بالجهاز، ثم أعد المحاولة.",
+      backgroundUnavailable: "تعذّر تشغيل الصوت في الخلفية.",
+      iceTimeout: "تعذّر التفاوض على الاتصال في الوقت المناسب.",
+      connectionLost: "انقطع اتصال الصوت المباشر.",
+    },
+  },
   realtimeVoice: {
     actions: {
       mute: "كتم صوت الوقت الحقيقي",
@@ -1969,6 +2120,7 @@ export const ar: TranslationResources = {
     groupInfo: "حول{{title}}",
     sections: {
       general: "عام",
+      voice: "الصوت المباشر",
       appearance: "مظهر",
       layout: en.settings.sections.layout,
       editor: "المحرر",
@@ -2294,6 +2446,8 @@ export const ar: TranslationResources = {
         sendMessage: "أرسل رسالة",
         queueMessage: "رسالة قائمة الانتظار",
         muteUnmuteVoiceMode: "كتم وضع الصوت /unmute",
+        muteUnmuteLiveVoice: "كتم/إلغاء كتم الصوت المباشر",
+        holdInvertLiveVoiceMute: "اضغط مع الاستمرار لعكس كتم الصوت المباشر",
         switchProject: "تبديل المشروع",
         toggleWorkspaceIsolation: "تبديل عزل مساحة العمل",
         selectHost: "تحديد المضيف",
@@ -2302,6 +2456,7 @@ export const ar: TranslationResources = {
         findInConversation: "البحث في المحادثة",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute: "اضغط للتحدث أثناء الكتم، واضغط للكتم أثناء البث.",
         showKeyboardShortcuts: "متاح عندما لا يكون التركيز في حقل نص أو محطة طرفية.",
       },
     },
