@@ -726,14 +726,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [context.capabilities, agentId, client, pendingClientMessageIds, resolvedServerId],
     );
 
-    // A question row flips to answered only on remount, so read it through a stable event
-    // rather than making every assistant row re-render when a user message lands.
     const unansweredQuestionItemIds = useMemo(
       () => collectUnansweredQuestionItemIds(effectiveStreamItems, effectiveStreamHead ?? []),
       [effectiveStreamHead, effectiveStreamItems],
     );
-    const isQuestionAnsweredInTimeline = useStableEvent(
+    const isQuestionAnsweredInTimeline = useCallback(
       (itemId: string) => !unansweredQuestionItemIds.has(itemId),
+      [unansweredQuestionItemIds],
     );
 
     // The agent asked without pausing its turn, so the answer steers the live turn instead of
