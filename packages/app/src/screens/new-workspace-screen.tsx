@@ -58,7 +58,12 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { normalizeWorkspaceDescriptor, useSessionStore } from "@/stores/session-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
-import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
+import {
+  buildDraftStoreKey,
+  buildNewWorkspaceDraftKey,
+  generateDraftId,
+} from "@/stores/draft-keys";
+import { useDraftStore } from "@/stores/draft-store";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { isActiveCreateFlowForDraft, useCreateFlowStore } from "@/stores/create-flow-store";
 import {
@@ -97,6 +102,7 @@ import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-works
 import {
   createNativeForkInWorkspace,
   getWorkspaceNamingAttachments,
+  sendNativeForkPrompt,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
 import {
@@ -845,34 +851,6 @@ async function createMultiplicityWorkspace(input: {
     : normalizedWorkspace;
   input.mergeWorkspaces(input.serverId, [workspaceForInitialMerge]);
   return normalizedWorkspace;
-}
-
-/**
- * A native fork lands on an agent that already exists, so anything the user
- * typed while staging it has to be sent as that agent's first message instead
- * of riding along with a draft submission.
- */
-async function sendNativeForkPrompt(input: {
-  client: Parameters<typeof dispatchComposerAgentMessage>[0]["client"];
-  serverId: string;
-  agentId: string;
-  payload: MessagePayload;
-  supportsForgeSearch: boolean;
-}): Promise<void> {
-  if (isEmptyWorkspaceSubmission(input.payload)) {
-    return;
-  }
-  await dispatchComposerAgentMessage({
-    client: input.client,
-    agentId: input.agentId,
-    text: input.payload.text.trim(),
-    attachments: input.payload.attachments,
-    attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
-      supportsForgeAttachments: input.supportsForgeSearch,
-    }),
-    encodeImages,
-    submission: createMessageSubmissionWriter(input.serverId),
-  });
 }
 
 interface CreateChatAgentInput {
@@ -2109,13 +2087,31 @@ export function NewWorkspaceScreen({
             target: { kind: "agent", agentId: forked.agentId },
           });
           // The fork exists and the user is looking at it, so a failed first
-          // send is that agent's problem to report, not this screen's.
+          // send reports on that agent — which is also where the unsent content
+          // is restored — instead of failing this screen back into a re-fork.
           await sendNativeForkPrompt({
-            client: forkClient,
-            serverId: selectedServerId,
-            agentId: forked.agentId,
-            payload,
-            supportsForgeSearch,
+            text: payload.text,
+            attachments: payload.attachments,
+            send: ({ text, attachments }) =>
+              dispatchComposerAgentMessage({
+                client: forkClient,
+                agentId: forked.agentId,
+                text,
+                attachments,
+                attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
+                  supportsForgeAttachments: supportsForgeSearch,
+                }),
+                encodeImages,
+                submission: createMessageSubmissionWriter(selectedServerId),
+              }),
+            restoreDraft: (draft) =>
+              useDraftStore.getState().saveDraftInput({
+                draftKey: buildDraftStoreKey({
+                  serverId: selectedServerId,
+                  agentId: forked.agentId,
+                }),
+                draft,
+              }),
           }).catch((error) => {
             toast.error(toErrorMessage(error));
           });
