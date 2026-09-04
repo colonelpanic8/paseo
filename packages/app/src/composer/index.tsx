@@ -115,11 +115,12 @@ import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useHostFeature } from "@/runtime/host-features";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentPromptCacheStatus } from "@getpaseo/protocol/agent-types";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { ActiveTurnBehavior, ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -290,7 +291,7 @@ interface RenderContextWindowMeterArgs {
   pending: boolean;
   glyphSize: number;
   promptCache: AgentPromptCacheStatus | null;
-  onPingPromptCache: () => Promise<void>;
+  onPingPromptCache?: () => Promise<void>;
   pingDisabled: boolean;
 }
 
@@ -1299,6 +1300,7 @@ function ComposerContentImpl({
   const { t } = useTranslation();
   const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
+  const supportsActiveTurnReject = useHostFeature(serverId, "activeTurnReject");
   const isConnected = useHostRuntimeIsConnected(serverId);
   const agentDirectoryStatus = useHostRuntimeAgentDirectoryStatus(serverId);
   const toast = useToast();
@@ -1495,7 +1497,7 @@ function ComposerContentImpl({
         agentId: string,
         text: string,
         attachments: ComposerAttachment[],
-        activeTurnBehavior: "interrupt" | "steer",
+        activeTurnBehavior: ActiveTurnBehavior,
       ) => Promise<void>)
     | null
   >(null);
@@ -1577,7 +1579,7 @@ function ComposerContentImpl({
       targetAgentId: string,
       text: string,
       sendAttachments: ComposerAttachment[],
-      activeTurnBehavior: "interrupt" | "steer",
+      activeTurnBehavior: ActiveTurnBehavior,
     ) => {
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -1622,7 +1624,7 @@ function ComposerContentImpl({
       targetAgentId,
       PROMPT_CACHE_PING_MESSAGE,
       PROMPT_CACHE_PING_ATTACHMENTS,
-      "steer",
+      "reject",
     );
   }, [serverId, t]);
 
@@ -2120,7 +2122,7 @@ function ComposerContentImpl({
         pending: contextWindowPending,
         glyphSize: contextWindowMeterGlyphSize,
         promptCache: agentState.promptCache,
-        onPingPromptCache: handlePromptCachePing,
+        onPingPromptCache: supportsActiveTurnReject ? handlePromptCachePing : undefined,
         pingDisabled: isAgentRunning,
       }),
     [
@@ -2133,6 +2135,7 @@ function ComposerContentImpl({
       contextWindowMeterGlyphSize,
       agentState.promptCache,
       handlePromptCachePing,
+      supportsActiveTurnReject,
       isAgentRunning,
     ],
   );
