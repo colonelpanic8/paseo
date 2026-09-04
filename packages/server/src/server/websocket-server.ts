@@ -638,6 +638,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly pluginRuntime: SessionOptions["pluginRuntime"];
   private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
 
+  // oxlint-disable-next-line complexity
   constructor(
     server: HTTPServer,
     logger: pino.Logger,

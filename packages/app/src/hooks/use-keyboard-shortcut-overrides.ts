@@ -6,7 +6,6 @@ import {
   createShortcutOverrideStore,
   type ShortcutOverrideStore,
 } from "@/keyboard/shortcut-override-store";
-import { layeredSettingsStorage } from "@/storage/settings-seed";
 import { readValidatedJson } from "@/storage/validated-storage";
 
 const STORAGE_KEY = "@paseo:keyboard-shortcut-overrides";

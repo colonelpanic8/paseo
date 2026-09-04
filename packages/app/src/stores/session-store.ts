@@ -694,25 +694,8 @@ function createInitialSessionState(
   };
 }
 
-function areServerCapabilitiesEqual(
-  current: ServerCapabilities | undefined,
-  next: ServerCapabilities | undefined,
-): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
-}
-
-function areServerInfoFeaturesEqual(
-  current: ServerInfoStatusPayload["features"] | undefined,
-  next: ServerInfoStatusPayload["features"] | undefined,
-): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
-}
-
-function areServerInfoBuildsEqual(
-  current: BuildInfo | undefined,
-  next: BuildInfo | undefined,
-): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
+function normalizeServerInfoString(value: string | null | undefined): string | null {
+  return value?.trim() || null;
 }
 
 function isSessionServerInfoUnchanged(input: {
@@ -736,18 +719,27 @@ function isSessionServerInfoUnchanged(input: {
     nextCapabilities,
     nextFeatures,
   } = input;
-  const prevHostname = currentServerInfo?.hostname?.trim() || null;
-  const prevVersion = currentServerInfo?.version?.trim() || null;
-  const prevWorktreesRoot = currentServerInfo?.worktreesRoot?.trim() || null;
   return (
-    currentServerInfo?.serverId === input.nextServerId &&
-    prevHostname === nextHostname &&
-    prevVersion === nextVersion &&
-    areServerInfoBuildsEqual(currentServerInfo?.build, nextBuild) &&
-    currentServerInfo?.desktopManaged === nextDesktopManaged &&
-    prevWorktreesRoot === nextWorktreesRoot &&
-    areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
-    areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
+    JSON.stringify({
+      serverId: currentServerInfo?.serverId,
+      hostname: normalizeServerInfoString(currentServerInfo?.hostname),
+      version: normalizeServerInfoString(currentServerInfo?.version),
+      build: currentServerInfo?.build ?? null,
+      desktopManaged: currentServerInfo?.desktopManaged,
+      worktreesRoot: normalizeServerInfoString(currentServerInfo?.worktreesRoot),
+      capabilities: currentServerInfo?.capabilities ?? null,
+      features: currentServerInfo?.features ?? null,
+    }) ===
+    JSON.stringify({
+      serverId: input.nextServerId,
+      hostname: nextHostname,
+      version: nextVersion,
+      build: nextBuild ?? null,
+      desktopManaged: nextDesktopManaged,
+      worktreesRoot: nextWorktreesRoot,
+      capabilities: nextCapabilities ?? null,
+      features: nextFeatures ?? null,
+    })
   );
 }
 

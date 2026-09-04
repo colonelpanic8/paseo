@@ -1,6 +1,5 @@
 import { layeredSettingsStorage } from "@/storage/settings-seed";
 import { readValidatedJson } from "@/storage/validated-storage";
-import { layeredSettingsStorage } from "@/storage/settings-seed";
 import {
   FormPreferencesSchema,
   StoredFormPreferencesSchema,

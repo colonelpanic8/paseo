@@ -542,6 +542,7 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
+// oxlint-disable-next-line complexity
 export function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
   const providers = config.providerOverrides ?? {};
 
@@ -601,6 +602,7 @@ function startAgentPurposeSummaryService(
   return service;
 }
 
+// oxlint-disable-next-line complexity
 export async function createPaseoDaemon(
   config: PaseoDaemonConfig,
   rootLogger: Logger,

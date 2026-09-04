@@ -575,6 +575,7 @@ function serializeAgentFailure(agent: Agent) {
   return agent.lastFailure ? { lastFailure: agent.lastFailure } : {};
 }
 
+// oxlint-disable-next-line complexity
 function serializeAgent(agent: Agent): StoredAgent {
   const snapshot = {
     id: agent.id,

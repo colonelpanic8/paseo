@@ -4026,7 +4026,9 @@ describe("HostRuntimeStore managed host bootstrap", () => {
         .map((host) => host.label)
         .sort(),
     ).toEqual(["Mac mini", "Ryzen"]);
-    expect(Object.fromEntries(store.getHosts().map((host) => [host.label, host.appearance.color]))).toEqual({
+    expect(
+      Object.fromEntries(store.getHosts().map((host) => [host.label, host.appearance.color])),
+    ).toEqual({
       "Mac mini": "violet",
       Ryzen: "blue",
     });
