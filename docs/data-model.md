@@ -214,8 +214,8 @@ result. Normal config patches persist only the requested fields, so launch overr
 defaults never leak into the file. Startup-only fields remain compared with the daemon's launch
 snapshot so a mixed edit can apply its live subset and still name the paths that require restart.
 
-Client-side preferences layer the same way through the desktop settings seed — see
-[Settings seed (desktop)](#settings-seed-desktop).
+Client-side preferences layer the same way through the desktop settings files — see
+[Settings files (desktop)](#settings-files-desktop).
 
 ```
 {
@@ -590,40 +590,64 @@ These small files are not validated as full Zod schemas but are persisted under 
 
 These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the daemon filesystem.
 
-### Settings seed (desktop)
+### Settings files (desktop)
 
-On Electron desktop, `settings-seed.json` in the Electron `userData` directory (`~/.config/Paseo/`
-on Linux, `~/Library/Application Support/Paseo/` on macOS) supplies read-only defaults under the
-locally persisted settings. The app never writes it, so a dotfiles repo can symlink it directly.
+On Electron desktop, preferences live in two files in the Electron `userData` directory
+(`~/.config/Paseo/` on Linux, `~/Library/Application Support/Paseo/` on macOS):
+
+| File                 | Layer                            | Written by                                                                 |
+| -------------------- | -------------------------------- | -------------------------------------------------------------------------- |
+| `settings-seed.json` | Read-only defaults, bottom layer | Nobody. The app only reads it, so a dotfiles repo can symlink it directly. |
+| `settings.json`      | Writable overrides, on top of it | The Electron main process, on behalf of the settings UI.                   |
+
+Both hold the same field names and value shapes, so a value copied from `settings.json` into
+`settings-seed.json` needs no translation.
 
 ```json
 {
+  "version": 1,
   "app": {
     "appSettings": { "theme": "dark" },
     "keyboardShortcutOverrides": { "<binding-id>": "<combo>" },
     "preferredEditor": "zed",
     "changesPreferences": { "layout": "split" },
     "createAgentPreferences": { "provider": "claude" }
-  },
-  "desktop": {
-    "releaseChannel": "stable",
-    "daemon": { "manageBuiltInDaemon": true, "keepRunningAfterQuit": false }
   }
 }
 ```
 
-The `app` section seeds the AsyncStorage preference stores. Layering is opt-in per storage key —
-the registry in `packages/app/src/storage/settings-seed/registry.ts` maps the five seed fields
-above to their storage keys, and every other key (caches, drafts, layout state, client identity,
-the daemon registry) passes through untouched. The `desktop` section seeds `desktop-settings.json`
-the same way.
+The seed adds a `desktop` section — `releaseChannel` and `daemon.manageBuiltInDaemon` /
+`daemon.keepRunningAfterQuit` — that seeds `desktop-settings.json` the same way. `settings.json`
+has no `desktop` section and no `path`.
 
-Reads merge the seed under the local value; local wins per field. Saves follow the daemon-config
-rule: persist only the difference from the seed, so a value set back to the seed's drops out of
-local storage and later dotfiles edits keep applying. Removing a seed-provided value — resetting a
-seeded keyboard shortcut, clearing a seeded editor — fails with the seed file path; change it in
-that file instead. With no seed file, and always on iOS, Android, and plain web, behavior is
-unchanged.
+Layering is opt-in per storage key. The registry in
+`packages/app/src/storage/settings-seed/registry.ts` maps the five `app` fields above to their
+storage keys; every other key (caches, drafts, layout state, client identity, the daemon registry)
+passes straight through to AsyncStorage, on desktop as everywhere else.
+
+Reads merge the seed under the local value; local wins per field. Saves persist only the
+difference from the seed, following the daemon-config rule, so a value set back to the seed's
+drops out of `settings.json` and later dotfiles edits keep applying. Removing a seed-provided
+value — resetting a seeded keyboard shortcut, clearing a seeded editor — fails with the seed file
+path; change it in that file instead.
+
+The point of the writable file is that desktop preferences are editable and source-controllable.
+AsyncStorage on Electron is `window.localStorage`, which is opaque LevelDB records under
+`<userData>/Local Storage/leveldb`. So the registered keys move to a file the user can read,
+diff, and check in.
+
+- **Migration is once, and its trigger is the file's absence.** On first run with no
+  `settings.json`, the renderer copies the registered keys' current localStorage values into the
+  file. The legacy localStorage values stay where they are and are ignored from then on; the file
+  is authoritative, and its existence ends the migration forever.
+- **An unreadable `settings.json` fails loudly**, naming the path, the same as the seed. There is
+  no fallback to localStorage — running on stale shadow copies of the user's settings is worse
+  than not starting.
+- **External edits apply on reload.** The main process re-reads on every get, and the renderer
+  fetches the document once per page load.
+
+On iOS, Android, and plain browser web there is no seed and no settings file: every key persists
+to AsyncStorage exactly as before.
 
 ### Keying convention: directory-backed vs workspace-owned
 

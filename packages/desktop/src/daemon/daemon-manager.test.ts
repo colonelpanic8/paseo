@@ -75,6 +75,11 @@ vi.mock("../settings/desktop-settings-electron.js", () => ({
     patch: vi.fn(),
     migrateLegacyRendererSettings: vi.fn(),
   }),
+  getClientSettingsStore: () => ({
+    get: vi.fn(),
+    setField: vi.fn(),
+    initialize: vi.fn(),
+  }),
   loadDesktopSettingsSeed: async () => null,
 }));
 
