@@ -15,6 +15,8 @@
 export const POINTER_HANDLE_WIDTH = 10;
 export const TOUCH_HANDLE_WIDTH = 24;
 export const TOUCH_HANDLE_HEIGHT = 88;
+export const TOUCH_HANDLE_IDLE_GRIP_OPACITY = 0.16;
+export const TOUCH_HANDLE_ACTIVE_GRIP_OPACITY = 0.3;
 
 /**
  * A finger resting on the grip drifts before it commits. Requiring horizontal
@@ -54,4 +56,8 @@ export function resolveSidebarResizeHandleGeometry(
     width: TOUCH_HANDLE_WIDTH,
     height: TOUCH_HANDLE_HEIGHT,
   };
+}
+
+export function resolveSidebarResizeGripOpacity(pressed: boolean): number {
+  return pressed ? TOUCH_HANDLE_ACTIVE_GRIP_OPACITY : TOUCH_HANDLE_IDLE_GRIP_OPACITY;
 }
