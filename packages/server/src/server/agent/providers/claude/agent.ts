@@ -112,6 +112,7 @@ import {
   type AgentPersistenceHandle,
   type AgentProviderNotice,
   type AgentPromptInput,
+  type PromptCacheSample,
   type AgentRunOptions,
   type AgentRunResult,
   type AgentSession,
@@ -1910,6 +1911,36 @@ function mergeStreamDeltaInputUsage(
   };
 }
 
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function toClaudePromptCacheSample(event: Record<string, unknown>): PromptCacheSample | undefined {
+  const usage = toObjectRecord(toObjectRecord(event.message)?.usage);
+  if (!usage) {
+    return undefined;
+  }
+  const inputTokens = usage.input_tokens;
+  const cacheWriteTokens = usage.cache_creation_input_tokens;
+  const cachedInputTokens = usage.cache_read_input_tokens;
+  if (!isNonNegativeFiniteNumber(inputTokens)) {
+    return undefined;
+  }
+  if (!isNonNegativeFiniteNumber(cacheWriteTokens)) {
+    return undefined;
+  }
+  if (!isNonNegativeFiniteNumber(cachedInputTokens)) {
+    return undefined;
+  }
+  return {
+    kind: "request",
+    inputTokens,
+    cachedInputTokens,
+    cacheWriteTokens,
+    ttlSeconds: 300,
+  };
+}
+
 function readStreamRequestOutputTokens(event: Record<string, unknown>): number | undefined {
   const outputTokens = toObjectRecord(event.usage)?.output_tokens;
   if (typeof outputTokens !== "number" || !Number.isFinite(outputTokens) || outputTokens < 0) {
@@ -2020,6 +2051,7 @@ class ClaudeContextUsageState {
       return null;
     }
     const eventType = readTrimmedString(streamEvent.type);
+    let promptCache: PromptCacheSample | undefined;
     if (eventType === "message_start") {
       const inputUsage = readStreamRequestInputUsage(streamEvent);
       if (!inputUsage) {
@@ -2027,6 +2059,7 @@ class ClaudeContextUsageState {
       }
       this.streamRequestInputUsage = inputUsage;
       this.streamRequestOutputTokens = 0;
+      promptCache = toClaudePromptCacheSample(streamEvent);
     } else if (eventType === "message_delta") {
       const outputTokens = readStreamRequestOutputTokens(streamEvent);
       if (typeof outputTokens !== "number") {
@@ -2047,7 +2080,7 @@ class ClaudeContextUsageState {
     if (usedTokens === undefined) {
       return null;
     }
-    return this.createUsageUpdatedEvent(usedTokens);
+    return this.createUsageUpdatedEvent(usedTokens, promptCache);
   }
 
   buildResultUsage(message: SDKResultMessage, modelUsage: unknown): AgentUsage | undefined {
@@ -2097,7 +2130,10 @@ class ClaudeContextUsageState {
     return usedTokens > 0 ? usedTokens : undefined;
   }
 
-  private createUsageUpdatedEvent(contextWindowUsedTokens: number): AgentStreamEvent {
+  private createUsageUpdatedEvent(
+    contextWindowUsedTokens: number,
+    promptCache?: PromptCacheSample,
+  ): AgentStreamEvent {
     const usage: AgentUsage = {
       contextWindowUsedTokens,
     };
@@ -2108,6 +2144,7 @@ class ClaudeContextUsageState {
       type: "usage_updated",
       provider: "claude",
       usage,
+      ...(promptCache ? { promptCache } : {}),
     };
   }
 
