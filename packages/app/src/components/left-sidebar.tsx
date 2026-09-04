@@ -611,7 +611,7 @@ function MobileSidebar({
         )}
 
         <SidebarFooter
-          active={dragGestureHostPresented}
+          active={active}
           theme={theme}
           handleOpenProject={handleOpenProject}
           handleImportSession={handleImportSession}
