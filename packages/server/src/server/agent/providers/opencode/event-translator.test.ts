@@ -660,7 +660,7 @@ describe("translateOpenCodeEvent", () => {
     ]);
   });
 
-  it("emits usage_updated after step-finish parts", () => {
+  it("emits usage and prompt cache figures after step-finish parts", () => {
     const state = createState();
     state.accumulatedUsage.contextWindowMaxTokens = 400_000;
 
@@ -702,6 +702,12 @@ describe("translateOpenCodeEvent", () => {
           inputTokens: 30_000,
           outputTokens: 12_000,
           totalCostUsd: 0.25,
+        },
+        promptCache: {
+          kind: "request",
+          inputTokens: 30_000,
+          cachedInputTokens: 2_000,
+          cacheWriteTokens: 1_000,
         },
       },
     ]);
@@ -754,6 +760,12 @@ describe("translateOpenCodeEvent", () => {
         usage: expect.objectContaining({
           totalCostUsd: 0.75,
         }),
+        promptCache: {
+          kind: "request",
+          inputTokens: 30_000,
+          cachedInputTokens: 2_000,
+          cacheWriteTokens: 1_000,
+        },
       },
     ]);
     expect(state.sessionTotalCostUsd).toBe(0.75);
