@@ -1,6 +1,5 @@
 import { cancel, confirm, intro, isCancel, log, note, outro, spinner } from "@clack/prompts";
 import { Command, Option } from "commander";
-import path from "node:path";
 import { loadPersistedConfig, savePersistedConfig, type PersistedConfig } from "@getpaseo/server";
 import {
   resolveLocalDaemonLogPath,
