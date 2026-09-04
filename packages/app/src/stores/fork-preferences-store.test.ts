@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { resolveForkFidelity } from "./fork-preferences-store";
+import { resolveForkFidelity, resolveForkFidelityForTarget } from "./fork-preferences-store";
 
 describe("resolveForkFidelity", () => {
   test("keeps a native preference when the provider can branch", () => {
@@ -15,5 +15,17 @@ describe("resolveForkFidelity", () => {
 
   test("never upgrades an explicit summary preference", () => {
     expect(resolveForkFidelity({ preferred: "summary", canForkNatively: true })).toBe("summary");
+  });
+});
+
+describe("resolveForkFidelityForTarget", () => {
+  test("uses the summary flow when the destination workspace does not exist yet", () => {
+    expect(
+      resolveForkFidelityForTarget({
+        preferred: "native",
+        canForkNatively: true,
+        target: "workspace",
+      }),
+    ).toBe("summary");
   });
 });
