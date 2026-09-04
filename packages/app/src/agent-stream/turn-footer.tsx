@@ -52,6 +52,7 @@ export const TurnFooter = memo(function TurnFooter({
   host,
   strategy,
   supportsTimelineCursor,
+  canForkNatively,
   onForkAssistantTurn,
   onForkInFlightTurn,
 }: {
@@ -64,6 +65,7 @@ export const TurnFooter = memo(function TurnFooter({
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
   supportsTimelineCursor: boolean;
+  canForkNatively?: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
   onForkInFlightTurn?: InFlightTurnForkHandler;
 }) {
@@ -88,6 +90,7 @@ export const TurnFooter = memo(function TurnFooter({
       timing={host.timing}
       startIndex={host.startIndex}
       supportsTimelineCursor={supportsTimelineCursor}
+      canForkNatively={canForkNatively}
       onForkAssistantTurn={onForkAssistantTurn}
       formatTurnMeta={formatTurnMeta}
     />
@@ -100,6 +103,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   timing,
   startIndex,
   supportsTimelineCursor,
+  canForkNatively,
   onForkAssistantTurn,
   formatTurnMeta,
 }: {
@@ -108,6 +112,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   timing?: TurnTiming;
   startIndex: number;
   supportsTimelineCursor: boolean;
+  canForkNatively?: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
   formatTurnMeta?: (attribution: TurnAttribution) => string | null;
 }) {
@@ -119,6 +124,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         timing={timing}
         startIndex={startIndex}
         supportsTimelineCursor={supportsTimelineCursor}
+        canForkNatively={canForkNatively}
         onForkAssistantTurn={onForkAssistantTurn}
         formatTurnMeta={formatTurnMeta}
       />
@@ -192,6 +198,7 @@ function CompletedTurnFooter({
   timing,
   startIndex,
   supportsTimelineCursor,
+  canForkNatively,
   onForkAssistantTurn,
   formatTurnMeta,
 }: {
@@ -200,6 +207,7 @@ function CompletedTurnFooter({
   timing?: TurnTiming;
   startIndex: number;
   supportsTimelineCursor: boolean;
+  canForkNatively?: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
   formatTurnMeta?: (attribution: TurnAttribution) => string | null;
 }) {
@@ -242,6 +250,7 @@ function CompletedTurnFooter({
         completedAt={timing?.completedAt}
         durationMs={timing?.durationMs}
         meta={meta}
+        canForkNatively={canForkNatively}
         onFork={boundary && onForkAssistantTurn ? handleFork : undefined}
       />
     </View>
