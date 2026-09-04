@@ -748,6 +748,8 @@ export interface AgentForkNativeOptions {
   boundaryMessageId: string;
   /** Defaults to the source agent's workspace. */
   workspaceId?: string;
+  /** Defaults to the source agent's working directory. */
+  cwd?: string;
   requestId?: string;
 }
 
@@ -3514,6 +3516,7 @@ export class DaemonClient {
       requestId: resolvedRequestId,
       boundaryMessageId: options.boundaryMessageId,
       ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
+      ...(options.cwd ? { cwd: options.cwd } : {}),
     });
 
     const payload = await this.sendRequest({

@@ -46,15 +46,3 @@ export function resolveForkFidelity(input: {
 }): AssistantForkFidelity {
   return input.preferred === "native" && input.canForkNatively ? "native" : "summary";
 }
-
-/** A native fork can only be assigned after its destination workspace exists. */
-export function resolveForkFidelityForTarget(input: {
-  preferred: AssistantForkFidelity;
-  canForkNatively: boolean;
-  target: "tab" | "workspace";
-}): AssistantForkFidelity {
-  if (input.target === "workspace") {
-    return "summary";
-  }
-  return resolveForkFidelity(input);
-}

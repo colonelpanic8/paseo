@@ -11,10 +11,7 @@ import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useHostFeature } from "@/runtime/host-features";
 import { generateDraftId } from "@/stores/draft-keys";
-import {
-  resolveForkFidelityForTarget,
-  useForkPreferencesStore,
-} from "@/stores/fork-preferences-store";
+import { resolveForkFidelity, useForkPreferencesStore } from "@/stores/fork-preferences-store";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import {
@@ -152,6 +149,42 @@ async function openNativeFork(input: {
   });
 }
 
+function stageNativeForkInNewWorkspace(input: {
+  router: Router;
+  serverId: string;
+  agentId: string;
+  agent: ForkAgentSource;
+  boundaryMessageId: string;
+  failureMessage: string;
+}): void {
+  const draftId = generateDraftId();
+  const setup = buildForkDraftSetup(input.agent);
+  if (!setup) {
+    throw new Error(input.failureMessage);
+  }
+  const sourceDirectory =
+    input.agent.projectPlacement?.checkout?.cwd?.trim() || input.agent.cwd.trim() || undefined;
+  useWorkspaceDraftSubmissionStore.getState().setDraftSetup({
+    draftId,
+    setup,
+    sourceDirectory,
+    nativeFork: {
+      serverId: input.serverId,
+      agentId: input.agentId,
+      boundaryMessageId: input.boundaryMessageId,
+    },
+  });
+  input.router.push(
+    buildNewWorkspaceRoute({
+      serverId: input.serverId,
+      sourceDirectory,
+      displayName: input.agent.projectPlacement?.projectName,
+      projectId: input.agent.projectPlacement?.projectKey,
+      draftId,
+    }),
+  );
+}
+
 function buildForkDraftTabTarget(
   setup: WorkspaceDraftTabSetup | undefined,
   draftId: string,
@@ -262,13 +295,23 @@ export function useForkAgent(
         const boundaryMessageId = boundary?.boundaryMessageId;
         const useNativeFork =
           Boolean(boundaryMessageId) &&
-          resolveForkFidelityForTarget({
+          resolveForkFidelity({
             preferred: useForkPreferencesStore.getState().fidelity,
             canForkNatively: canForkNatively && supportsAgentForkNative,
-            target,
           }) === "native";
 
         if (useNativeFork && boundaryMessageId) {
+          if (target === "workspace") {
+            stageNativeForkInNewWorkspace({
+              router,
+              serverId,
+              agentId,
+              agent,
+              boundaryMessageId,
+              failureMessage: t("message.actions.forkFailed"),
+            });
+            return;
+          }
           await openNativeFork({
             client,
             serverId,

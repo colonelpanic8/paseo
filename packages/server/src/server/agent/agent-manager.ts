@@ -3313,7 +3313,7 @@ export class AgentManager {
    */
   async forkNative(
     agentId: string,
-    input: { messageId: string; workspaceId?: string },
+    input: { messageId: string; workspaceId?: string; cwd?: string },
   ): Promise<ManagedAgent> {
     const agent = this.requireSessionAgent(agentId);
     const workspaceId = input.workspaceId ?? agent.workspaceId;
@@ -3337,7 +3337,7 @@ export class AgentManager {
       const imported = await this.importProviderSession({
         provider: agent.provider,
         providerHandleId: forked.providerHandleId,
-        cwd: agent.cwd,
+        cwd: input.cwd ?? agent.cwd,
         workspaceId,
       });
       this.logger.info(

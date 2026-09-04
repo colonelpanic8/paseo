@@ -99,6 +99,7 @@ import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
+  createNativeForkInWorkspace,
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
@@ -2108,6 +2109,7 @@ export function NewWorkspaceScreen({
     ],
   );
 
+  const clearChatDraft = chatDraft.clear;
   const handleSubmitNewWorkspace = useCallback(
     async (payload: MessagePayload) => {
       try {
@@ -2215,7 +2217,7 @@ export function NewWorkspaceScreen({
           forkDraftSetup,
           ensureWorkspace,
           serverId: selectedServerId,
-          clearDraft: chatDraft.clear,
+          clearDraft: clearChatDraft,
           draftKey,
           draftId: creationIdentity.draftId,
           draftContextScopeKey,
