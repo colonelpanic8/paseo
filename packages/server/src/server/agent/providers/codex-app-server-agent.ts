@@ -1362,19 +1362,6 @@ function normalizeCodexAsyncQuestions(item: Record<string, unknown>): AsyncQuest
   return questions.length > 0 ? questions : undefined;
 }
 
-function mapCodexAgentMessageItem(
-  normalizedItem: Record<string, unknown>,
-): Extract<AgentTimelineItem, { type: "assistant_message" }> {
-  const messageId = nonEmptyString(normalizedItem.id);
-  const questions = normalizeCodexAsyncQuestions(normalizedItem);
-  return {
-    type: "assistant_message",
-    text: typeof normalizedItem.text === "string" ? normalizedItem.text : "",
-    ...(messageId ? { messageId } : {}),
-    ...(questions ? { questions } : {}),
-  };
-}
-
 function assistantMessageWithQuestions(params: {
   messageId: string;
   text: string;
