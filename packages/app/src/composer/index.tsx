@@ -1518,15 +1518,18 @@ function ComposerContentImpl({
     if (!sendAgentMessageRef.current) {
       throw new Error(t("workspace.terminal.hostDisconnected"));
     }
-    // The button is disabled while the agent runs; steer rather than interrupt so a
-    // ping that races a turn start cannot cancel real work.
+    const targetAgentId = agentIdRef.current;
+    const currentSession = useSessionStore.getState().sessions[serverId];
+    if (selectAgentTurnPresentation(currentSession, targetAgentId).isActive) {
+      throw new Error("Agent started running before the prompt cache ping was sent");
+    }
     await sendAgentMessageRef.current(
-      agentIdRef.current,
+      targetAgentId,
       PROMPT_CACHE_PING_MESSAGE,
       PROMPT_CACHE_PING_ATTACHMENTS,
       "steer",
     );
-  }, [t]);
+  }, [serverId, t]);
 
   const hasActiveTurn = useSessionStore(
     (state) => selectAgentTurnPresentation(state.sessions[serverId], agentId).isActive,
