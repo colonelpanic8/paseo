@@ -939,6 +939,44 @@ test("orders a concurrent replacement after a pending accepted steer", async () 
   }
 });
 
+test("reject active-turn behavior leaves the running turn untouched", async () => {
+  const session = new UnsupportedSteeringSession({ provider: "codex", cwd: process.cwd() });
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-reject-active-"));
+  const client = new (class extends TestAgentClient {
+    override async createSession(): Promise<AgentSession> {
+      return session;
+    }
+  })();
+  const manager = new AgentManager({ clients: { codex: client }, logger });
+  let agentId: string | null = null;
+  try {
+    const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    agentId = agent.id;
+    const initial = manager.streamAgent(agent.id, "initial");
+    void (async () => {
+      for await (const _event of initial) {
+      }
+    })();
+    await manager.waitForAgentRunStart(agent.id);
+
+    await expect(
+      startAgentRun(manager, agent.id, "must not replace", logger, {
+        replaceRunning: true,
+        activeTurnBehavior: "reject",
+        runOptions: { clientMessageId: "reject-client" },
+      }),
+    ).rejects.toThrow("already has an active run");
+
+    expect(session.interruptCount).toBe(0);
+    expect(session.startCount).toBe(1);
+  } finally {
+    if (agentId) await manager.closeAgent(agentId).catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("does not replace a newer foreground turn after unavailable steer fallback is admitted", async () => {
   const entered = deferred<void>();
   const release = deferred<void>();
