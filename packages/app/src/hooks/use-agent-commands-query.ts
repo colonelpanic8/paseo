@@ -9,6 +9,14 @@ const DRAFT_COMMANDS_STALE_TIME = Number.POSITIVE_INFINITY;
 const SESSION_COMMANDS_STALE_TIME = 60_000;
 const EMPTY_AGENT_SLASH_COMMANDS: AgentSlashCommand[] = [];
 
+/**
+ * A draft config the daemon could not service — no model resolved yet, provider
+ * snapshot still loading — comes back as an empty list. Caching that forever
+ * leaves the composer with no commands for the rest of the session, so let an
+ * empty result go stale and be retried.
+ */
+const EMPTY_DRAFT_COMMANDS_STALE_TIME = 5_000;
+
 export interface AgentSlashCommand {
   name: string;
   description: string;
@@ -47,6 +55,18 @@ export async function fetchAgentCommands(input: {
   return response.commands as AgentSlashCommand[];
 }
 
+export function resolveCommandsStaleTime(input: {
+  isDraft: boolean;
+  commands: readonly AgentSlashCommand[] | undefined;
+}): number {
+  if (!input.isDraft) {
+    return SESSION_COMMANDS_STALE_TIME;
+  }
+  return (input.commands?.length ?? 0) > 0
+    ? DRAFT_COMMANDS_STALE_TIME
+    : EMPTY_DRAFT_COMMANDS_STALE_TIME;
+}
+
 interface UseAgentCommandsQueryOptions {
   serverId: string;
   agentId: string;
@@ -75,7 +95,11 @@ export function useAgentCommandsQuery({
       return fetchAgentCommands({ client, agentId, draftConfig });
     },
     enabled: queryEnabled && !!client && isConnected && (!!agentId || !!draftConfig),
-    staleTime: draftConfig ? DRAFT_COMMANDS_STALE_TIME : SESSION_COMMANDS_STALE_TIME,
+    staleTime: (commandsQuery) =>
+      resolveCommandsStaleTime({
+        isDraft: Boolean(draftConfig),
+        commands: commandsQuery.state.data,
+      }),
     // Each draft attempt spawns and tears down a provider session, so a broken
     // provider should report once rather than four times.
     retry: draftConfig ? 0 : 3,
