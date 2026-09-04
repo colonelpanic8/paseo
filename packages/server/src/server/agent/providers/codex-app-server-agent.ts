@@ -3466,13 +3466,15 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   private async establishConnection(): Promise<void> {
     let client: CodexAppServerClient | null = null;
+    let startupClient: CodexAppServerClient | null = null;
     try {
       client = await runCodexAppServerStartup({
-        start: async () => {
+        start: async (_attempt, signal) => {
           const child = await this.spawnAppServer();
           const attemptClient = new CodexAppServerClient(child, this.logger, () =>
             this.traceContext(),
           );
+          startupClient = attemptClient;
           if (this.closed) {
             await attemptClient.dispose();
             throw this.createClosedError();
@@ -3486,6 +3488,7 @@ export class CodexAppServerAgentSession implements AgentSession {
           );
           this.registerRequestHandlers();
           try {
+            signal.throwIfAborted();
             await attemptClient.request("initialize", buildCodexAppServerInitializeParams());
             attemptClient.notify("initialized", {});
             return attemptClient;
@@ -3495,8 +3498,13 @@ export class CodexAppServerAgentSession implements AgentSession {
             }
             await disposeFailedCodexStartup(attemptClient, this.logger, error);
             throw error;
+          } finally {
+            if (startupClient === attemptClient) {
+              startupClient = null;
+            }
           }
         },
+        onAbort: async () => await startupClient?.dispose(),
         onRetry: (error, nextAttempt, maxAttempts) => {
           this.logger.warn(
             { err: error, nextAttempt, maxAttempts },
@@ -6975,21 +6983,29 @@ export class CodexAppServerAgentClient implements AgentClient {
   }
 
   private startInitializedAppServer(): Promise<CodexAppServerClientLike> {
+    let startupClient: CodexAppServerClientLike | null = null;
     return runCodexAppServerStartup({
-      start: async () => {
+      start: async (_attempt, signal) => {
         const child = await this.spawnAppServer();
         const client =
           this.deps._createCodexClient?.(child, this.logger, () => ({})) ??
           new CodexAppServerClient(child, this.logger);
+        startupClient = client;
         try {
+          signal.throwIfAborted();
           await client.request("initialize", buildCodexAppServerInitializeParams());
           client.notify("initialized", {});
           return client;
         } catch (error) {
           await disposeFailedCodexStartup(client, this.logger, error);
           throw error;
+        } finally {
+          if (startupClient === client) {
+            startupClient = null;
+          }
         }
       },
+      onAbort: async () => await startupClient?.dispose(),
       onRetry: (error, nextAttempt, maxAttempts) => {
         this.logger.warn(
           { err: error, nextAttempt, maxAttempts },
@@ -7157,14 +7173,15 @@ export class CodexAppServerAgentClient implements AgentClient {
     try {
       client = await runCodexAppServerStartup({
         signal: context?.signal,
-        start: async () => {
+        start: async (_attempt, signal) => {
           await runProviderRefreshActivity(context, "app-server.start", async () => {
             const child = await this.spawnAppServer();
             client = new CodexAppServerClient(child, this.logger);
-            if (context?.signal.aborted) await dispose();
+            if (signal.aborted) await dispose();
           });
           if (!client) throw new Error("Codex app-server did not start");
           try {
+            signal.throwIfAborted();
             await runProviderRefreshActivity(context, "initialize", () =>
               client!.request("initialize", buildCodexAppServerInitializeParams()),
             );
@@ -7177,6 +7194,7 @@ export class CodexAppServerAgentClient implements AgentClient {
             throw error;
           }
         },
+        onAbort: dispose,
         onRetry: (error, nextAttempt, maxAttempts) => {
           this.logger.warn(
             { err: error, nextAttempt, maxAttempts },
