@@ -319,6 +319,7 @@ const CLAUDE_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindFiles: true,
   supportsRewindBoth: true,
   supportsNativeFork: true,
+  hasGlobalCatalog: true,
 };
 
 const DEFAULT_MODES: AgentMode[] = [

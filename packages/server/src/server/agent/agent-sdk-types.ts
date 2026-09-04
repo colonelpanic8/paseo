@@ -195,6 +195,11 @@ export interface AgentCapabilityFlags {
   supportsRewindFiles?: boolean;
   supportsRewindBoth?: boolean;
   supportsNativeFork?: boolean;
+  /**
+   * The catalog does not depend on the working directory. Workspace snapshots
+   * mirror the global entry instead of probing the provider per cwd.
+   */
+  hasGlobalCatalog?: boolean;
 }
 
 export interface AgentPersistenceHandle {

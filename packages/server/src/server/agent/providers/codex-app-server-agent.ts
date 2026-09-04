@@ -279,6 +279,7 @@ const CODEX_APP_SERVER_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindFiles: false,
   supportsRewindBoth: false,
   supportsNativeFork: true,
+  hasGlobalCatalog: true,
 };
 
 const CODEX_MODES: AgentMode[] = [
