@@ -14,6 +14,7 @@ import {
   type ChordState,
   type KeyboardShortcutInput,
   resolveKeyboardShortcut,
+  buildCommandShortcutBindings,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
   isShortcutModifierDown,
@@ -46,6 +47,10 @@ import {
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
+import {
+  useCommandCenterContributions,
+  useCommandCenterShortcutRunner,
+} from "@/command-center/provider";
 
 const HOLD_MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 
@@ -71,10 +76,24 @@ export function useKeyboardShortcuts({
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
-  const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
-  const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
+  const commandCenterSnapshot = useCommandCenterContributions();
+  const runCommandCenterShortcut = useCommandCenterShortcutRunner();
   const isDesktopApp = getIsElectronRuntime();
   const isMac = getShortcutOs() === "mac";
+  const bindings = useMemo(() => {
+    const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
+      contribution.shortcutId ? [contribution.shortcutId] : [],
+    );
+    const effectiveBindings = buildEffectiveBindings(overrides);
+    return [
+      ...effectiveBindings,
+      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings, {
+        isMac,
+        isDesktop: isDesktopApp,
+      }),
+    ];
+  }, [commandCenterSnapshot.contributions, isDesktopApp, isMac, overrides]);
+  const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
     step: 0,
@@ -337,14 +356,21 @@ export function useKeyboardShortcuts({
       // Any new chord supersedes a hold still in effect.
       releaseHeldShortcut();
 
-      const { handled, performed } = routeAndPerformShortcut({
-        action: result.match.action,
-        payload: result.match.payload,
-        domEvent: input.domEvent,
-        browserFocusRestoreElement: input.browserFocusRestoreElement,
-      });
+      // A command-center shortcut runs its contribution directly, so it never
+      // reaches the action router and can never start a hold.
+      const { handled, performed } = result.match.commandShortcutId
+        ? {
+            handled: runCommandCenterShortcut(result.match.commandShortcutId),
+            performed: null,
+          }
+        : routeAndPerformShortcut({
+            action: result.match.action,
+            payload: result.match.payload,
+            domEvent: input.domEvent,
+            browserFocusRestoreElement: input.browserFocusRestoreElement,
+          });
 
-      if (handled && result.match.hold && input.domEvent && performed.kind === "dispatch") {
+      if (handled && result.match.hold && input.domEvent && performed?.kind === "dispatch") {
         const release = holdReleaseAction(performed.action);
         if (release) {
           heldShortcutRef.current = {
@@ -523,6 +549,7 @@ export function useKeyboardShortcuts({
     pathname,
     publishBrowserShortcutPolicy,
     resetModifiers,
+    runCommandCenterShortcut,
     router,
     shortcutsAvailable,
     toggleAgentList,
