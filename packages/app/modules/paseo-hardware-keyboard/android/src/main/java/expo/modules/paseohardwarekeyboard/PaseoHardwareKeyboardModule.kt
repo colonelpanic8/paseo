@@ -135,10 +135,12 @@ object PaseoHardwareKeyboardKeyDispatcher {
     if (
       isSubmitEnabled &&
         event.keyCode == KeyEvent.KEYCODE_ENTER &&
-        event.repeatCount == 0 &&
         !shiftKey &&
         !altKey
     ) {
+      if (event.repeatCount > 0) {
+        return true
+      }
       if (ctrlKey || metaKey) {
         module.emitHardwareKeyboardSubmit(true)
         return true
