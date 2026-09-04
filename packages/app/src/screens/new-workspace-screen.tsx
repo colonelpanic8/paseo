@@ -63,7 +63,12 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { normalizeWorkspaceDescriptor, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
-import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
+import {
+  buildDraftStoreKey,
+  buildNewWorkspaceDraftKey,
+  generateDraftId,
+} from "@/stores/draft-keys";
+import { useDraftStore } from "@/stores/draft-store";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { isActiveCreateFlowForDraft, useCreateFlowStore } from "@/stores/create-flow-store";
 import {
@@ -101,6 +106,7 @@ import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-works
 import {
   createNativeForkInWorkspace,
   getWorkspaceNamingAttachments,
+  sendNativeForkPrompt,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
 import {
@@ -859,34 +865,6 @@ async function createMultiplicityWorkspace(input: {
     : normalizedWorkspace;
   input.mergeWorkspaces(input.serverId, [workspaceForInitialMerge]);
   return { workspace: normalizedWorkspace, agent: payload.agent };
-}
-
-/**
- * A native fork lands on an agent that already exists, so anything the user
- * typed while staging it has to be sent as that agent's first message instead
- * of riding along with a draft submission.
- */
-async function sendNativeForkPrompt(input: {
-  client: Parameters<typeof dispatchComposerAgentMessage>[0]["client"];
-  serverId: string;
-  agentId: string;
-  payload: MessagePayload;
-  supportsForgeSearch: boolean;
-}): Promise<void> {
-  if (isEmptyWorkspaceSubmission(input.payload)) {
-    return;
-  }
-  await dispatchComposerAgentMessage({
-    client: input.client,
-    agentId: input.agentId,
-    text: input.payload.text.trim(),
-    attachments: input.payload.attachments,
-    attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
-      supportsForgeAttachments: input.supportsForgeSearch,
-    }),
-    encodeImages,
-    submission: createMessageSubmissionWriter(input.serverId),
-  });
 }
 
 interface CreateChatAgentInput {
