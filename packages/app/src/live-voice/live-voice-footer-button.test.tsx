@@ -121,6 +121,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: { create: () => ({}) },
   withUnistyles: <T,>(component: T) => component,
+  useUnistyles: () => ({ rt: { breakpoint: "lg" } }),
 }));
 
 vi.mock("lucide-react-native", () => {
@@ -163,7 +164,8 @@ describe("LiveVoiceFooterButton", () => {
   });
 
   function render(): void {
-    act(() => root.render(<LiveVoiceFooterButton />));
+    // `active` arrives from the sidebar footer once that topic is stacked.
+    act(() => root.render(<LiveVoiceFooterButton active />));
   }
 
   function query(testID: string): HTMLElement {
