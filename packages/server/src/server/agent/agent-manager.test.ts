@@ -6339,6 +6339,7 @@ test("applies live autonomous events and preserves usage omitted from completion
       contextWindowMaxTokens: 200_000,
       contextWindowUsedTokens: 175,
     },
+    promptCache: { kind: "request", inputTokens: 10, cachedInputTokens: 165, ttlSeconds: 300 },
     turnId: autonomousTurnId,
   });
   capturedSession!.pushEvent({
@@ -6362,6 +6363,13 @@ test("applies live autonomous events and preserves usage omitted from completion
     contextWindowMaxTokens: 200_000,
     contextWindowUsedTokens: 175,
   });
+  expect(updated?.promptCache).toEqual({
+    observedAt: expect.any(String),
+    ttlSeconds: 300,
+    lastRequest: { inputTokens: 10, cachedInputTokens: 165 },
+    session: { inputTokens: 10, cachedInputTokens: 165, requestCount: 1 },
+  });
+  expect(updated ? toAgentPayload(updated).promptCache : null).toEqual(updated?.promptCache);
   expect(manager.getTimeline(snapshot.id)).toContainEqual({
     type: "assistant_message",
     text: "AUTONOMOUS_PUMP_MESSAGE",

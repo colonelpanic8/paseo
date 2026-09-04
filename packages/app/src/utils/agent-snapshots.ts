@@ -107,6 +107,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     persistence: snapshot.persistence ?? null,
     runtimeInfo: snapshot.runtimeInfo,
     lastUsage: snapshot.lastUsage,
+    promptCache: snapshot.promptCache,
     lastError:
       snapshot.lastFailure?.kind === "authentication_required"
         ? `Sign in required. ${snapshot.lastFailure.message}`

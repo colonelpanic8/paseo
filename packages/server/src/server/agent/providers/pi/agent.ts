@@ -1282,12 +1282,13 @@ export class PiRpcAgentSession implements AgentSession {
     this.usagePoller = new PiUsagePoller({
       scheduler: options.usagePollScheduler,
       readStats: () => this.runtimeSession.getSessionStats(),
-      onUsage: (usage, turnId) => {
+      onUsage: (usage, turnId, promptCache) => {
         this.emit({
           type: "usage_updated",
           provider: this.provider,
           usage,
           ...(turnId === undefined ? {} : { turnId }),
+          ...(promptCache ? { promptCache } : {}),
         });
       },
       onPollError: (error) => {
