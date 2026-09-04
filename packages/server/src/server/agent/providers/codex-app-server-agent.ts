@@ -7124,8 +7124,7 @@ export class CodexAppServerAgentClient implements AgentClient {
       disposePromise ??= client.dispose();
       return disposePromise;
     };
-    const handleAbort = () => void dispose().catch(() => undefined);
-    context?.signal.addEventListener("abort", handleAbort, { once: true });
+    const unregisterAbortCleanup = context?.registerAbortCleanup(dispose);
 
     try {
       await runProviderRefreshActivity(context, "app-server.start", async () => {
@@ -7161,7 +7160,7 @@ export class CodexAppServerAgentClient implements AgentClient {
         }),
       );
     } finally {
-      context?.signal.removeEventListener("abort", handleAbort);
+      unregisterAbortCleanup?.();
       await dispose();
     }
   }
