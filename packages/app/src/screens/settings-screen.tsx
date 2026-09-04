@@ -38,6 +38,7 @@ import {
   Smartphone,
   Sparkles,
   Blocks,
+  ExternalLink,
   PanelsTopLeft,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
@@ -96,6 +97,13 @@ import { isElectronRuntime } from "@/desktop/host";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
+import {
+  formatCommitDate,
+  resolveBuildInfo,
+  resolveClientBuildInfo,
+  type ResolvedBuildInfo,
+} from "@/utils/build-info";
+import { openExternalUrl } from "@/utils/open-external-url";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
@@ -658,8 +666,43 @@ interface AboutSectionProps {
   isDesktopApp: boolean;
 }
 
+/**
+ * The exact commit a build came from, as a link to it on the forge. A release
+ * version alone cannot identify a build — several builds share one version —
+ * so this is the only thing that pins down what is actually running.
+ */
+function BuildStampLink({ build, testID }: { build: ResolvedBuildInfo; testID?: string }) {
+  const { t } = useTranslation();
+  const { theme } = useUnistyles();
+  const handlePress = useCallback(() => {
+    void openExternalUrl(build.commitUrl);
+  }, [build.commitUrl]);
+  const commitDate = formatCommitDate(build.commitDate);
+
+  return (
+    <View style={styles.aboutBuild} testID={testID}>
+      <Pressable
+        onPress={handlePress}
+        accessibilityRole="link"
+        accessibilityLabel={t("settings.about.viewCommit")}
+        style={styles.aboutBuildLink}
+      >
+        <Text style={styles.aboutBuildText}>{build.commit}</Text>
+        <ExternalLink size={12} color={theme.colors.foregroundMuted} />
+      </Pressable>
+      {commitDate ? <Text style={styles.aboutBuildDetail}>{commitDate}</Text> : null}
+      {build.commitMessage ? (
+        <Text style={styles.aboutBuildDetail} numberOfLines={3}>
+          {build.commitMessage}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSectionProps) {
   const { t } = useTranslation();
+  const build = useMemo(() => resolveClientBuildInfo(), []);
   return (
     <>
       <SettingsSection title={t("settings.about.title")}>
@@ -668,6 +711,7 @@ function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSection
             <View style={settingsStyles.rowContent}>
               <Text style={settingsStyles.rowTitle}>{t("settings.about.appVersion")}</Text>
               <Text style={settingsStyles.rowHint}>{t("settings.about.thisDevice")}</Text>
+              {build ? <BuildStampLink build={build} testID="about-app-build" /> : null}
             </View>
             <Text style={styles.aboutValue}>{appVersionText}</Text>
           </View>
@@ -724,6 +768,10 @@ function HostVersionRow({
   const daemonVersion = useSessionStore(
     (state) => state.sessions[host.serverId]?.serverInfo?.version ?? null,
   );
+  const daemonBuild = useSessionStore(
+    (state) => state.sessions[host.serverId]?.serverInfo?.build ?? null,
+  );
+  const build = useMemo(() => resolveBuildInfo(daemonBuild), [daemonBuild]);
 
   const rowStyle = useMemo(
     () => [settingsStyles.row, showBorder && settingsStyles.rowBorder],
@@ -757,6 +805,9 @@ function HostVersionRow({
         </Text>
         {isMismatch ? (
           <Text style={settingsStyles.rowHint}>{t("settings.about.versionDiffers")}</Text>
+        ) : null}
+        {isConnected && build ? (
+          <BuildStampLink build={build} testID={`about-host-build-${host.serverId}`} />
         ) : null}
       </View>
       <Text style={valueStyle}>{valueText}</Text>
@@ -1779,6 +1830,26 @@ const styles = StyleSheet.create((theme) => ({
   aboutValue: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
+  },
+  aboutBuild: {
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
+  aboutBuildLink: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    gap: theme.spacing[1],
+  },
+  aboutBuildText: {
+    color: theme.colors.foregroundMuted,
+    flexShrink: 1,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.xs,
+  },
+  aboutBuildDetail: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   aboutVersionMismatch: {
     color: theme.colors.palette.amber[500],
