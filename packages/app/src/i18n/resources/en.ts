@@ -1828,6 +1828,11 @@ export const en = {
     archiveTooltip: "Archive subagent",
     archiveFinishedAction: "Archive finished subagents",
     archiveFinishedRetry: "Retry ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Native",
+    },
+    rowAccessibilityLabel: "{{label}}, {{ownership}} subagent",
   },
   panels: {
     draft: {
@@ -1935,6 +1940,8 @@ export const en = {
     used: "{{percentage}}% used",
     tokens: "{{used}} / {{max}} tokens",
     sessionCost: "Session cost {{cost}}",
+    model: "Model {{model}}",
+    thinking: "Thinking {{thinking}}",
     accessibility: "Context window {{percentage}}% used",
   },
   review: {

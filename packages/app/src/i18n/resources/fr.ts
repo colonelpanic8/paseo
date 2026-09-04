@@ -1868,6 +1868,11 @@ export const fr: TranslationResources = {
     archiveTooltip: "Sous-agent d'archivage",
     archiveFinishedAction: "Archiver les sous-agents terminés",
     archiveFinishedRetry: "Réessayer ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Natif",
+    },
+    rowAccessibilityLabel: "{{label}}, sous-agent {{ownership}}",
   },
   panels: {
     draft: {
@@ -1976,6 +1981,8 @@ export const fr: TranslationResources = {
     used: "{{percentage}}% utilisé",
     tokens: "Jetons{{used}}/{{max}}",
     sessionCost: "Coût de la séance{{cost}}",
+    model: "Modèle {{model}}",
+    thinking: "Pensée {{thinking}}",
     accessibility: "Fenêtre contextuelle{{percentage}}% utilisé",
   },
   review: {
