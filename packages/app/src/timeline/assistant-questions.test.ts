@@ -44,6 +44,23 @@ describe("readAssistantQuestions", () => {
 });
 
 describe("assistant questions through the stream reducer", () => {
+  it("keeps a question-only assistant message with empty text", () => {
+    const streamed = processAgentStreamEvent({
+      event: makeAssistantEvent("", QUESTIONS),
+      seq: 10,
+      epoch: "epoch-1",
+      currentTail: [],
+      currentHead: [],
+      currentCursor: undefined,
+      timestamp: new Date(2000),
+    });
+
+    const rows = assistantItems([...streamed.tail, ...streamed.head]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.text).toBe("");
+    expect(rows[0]?.questions).toEqual(QUESTIONS);
+  });
+
   it("keeps questions when they arrive on a later chunk of the same message", () => {
     const streamed = processAgentStreamEvent({
       event: makeAssistantEvent("Which "),
