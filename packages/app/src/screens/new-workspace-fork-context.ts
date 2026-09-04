@@ -1,4 +1,5 @@
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 
 function isLikelyWindowsPath(path: string): boolean {
   return /^[a-zA-Z]:\//.test(path);
@@ -47,4 +48,42 @@ export function remapDraftCwdToWorkspace(input: {
   return [workspaceDirectory.replace(/[\\/]+$/, ""), ...relativePath.split("/")]
     .filter(Boolean)
     .join(separator);
+}
+
+export async function createNativeForkInWorkspace(input: {
+  client: Pick<DaemonClient, "forkAgentNative">;
+  agentId: string;
+  boundaryMessageId: string;
+  sourceCwd: string;
+  sourceDirectory?: string | null;
+  ensureWorkspace: (input: {
+    cwd: string;
+    prompt: string;
+    attachments: AgentAttachment[];
+    withInitialAgent: boolean;
+  }) => Promise<{ id: string; workspaceDirectory: string }>;
+  failureMessage: string;
+}): Promise<{ agentId: string; workspaceId: string }> {
+  const workspace = await input.ensureWorkspace({
+    cwd: input.sourceCwd,
+    prompt: "",
+    attachments: [],
+    withInitialAgent: false,
+  });
+  const forked = await input.client.forkAgentNative(input.agentId, {
+    boundaryMessageId: input.boundaryMessageId,
+    workspaceId: workspace.id,
+    cwd: remapDraftCwdToWorkspace({
+      cwd: input.sourceCwd,
+      sourceDirectory: input.sourceDirectory,
+      workspaceDirectory: workspace.workspaceDirectory,
+    }),
+  });
+  if (!forked.forkedAgentId) {
+    throw new Error(input.failureMessage);
+  }
+  return {
+    agentId: forked.forkedAgentId,
+    workspaceId: forked.forkedWorkspaceId ?? workspace.id,
+  };
 }
