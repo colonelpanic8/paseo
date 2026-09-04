@@ -16,6 +16,9 @@ import {
   resolveComposerAttachmentSubmitFormat,
   splitComposerAttachmentsForSubmit,
 } from "@/composer/attachments/submit";
+import { dispatchComposerAgentMessage } from "@/composer/actions";
+import { createMessageSubmissionWriter } from "@/composer/submission/writer";
+import { encodeImages } from "@/utils/encode-images";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -844,10 +847,39 @@ async function createMultiplicityWorkspace(input: {
   return normalizedWorkspace;
 }
 
+/**
+ * A native fork lands on an agent that already exists, so anything the user
+ * typed while staging it has to be sent as that agent's first message instead
+ * of riding along with a draft submission.
+ */
+async function sendNativeForkPrompt(input: {
+  client: Parameters<typeof dispatchComposerAgentMessage>[0]["client"];
+  serverId: string;
+  agentId: string;
+  payload: MessagePayload;
+  supportsForgeSearch: boolean;
+}): Promise<void> {
+  if (isEmptyWorkspaceSubmission(input.payload)) {
+    return;
+  }
+  await dispatchComposerAgentMessage({
+    client: input.client,
+    agentId: input.agentId,
+    text: input.payload.text.trim(),
+    attachments: input.payload.attachments,
+    attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
+      supportsForgeAttachments: input.supportsForgeSearch,
+    }),
+    encodeImages,
+    submission: createMessageSubmissionWriter(input.serverId),
+  });
+}
+
 interface CreateChatAgentInput {
   payload: MessagePayload;
   composerState: ReturnType<typeof useAgentInputDraft>["composerState"];
   forkDraftSetup?: PendingWorkspaceDraftSetup | null;
+  destinationSourceDirectory: string | null;
   ensureWorkspace: (input: {
     cwd: string;
     prompt: string;
@@ -881,6 +913,7 @@ function buildWorkspaceDraftSetupFromComposer(input: {
 
 function buildWorkspaceDraftSetupForCreatedWorkspace(input: {
   forkDraftSetup: PendingWorkspaceDraftSetup | null | undefined;
+  destinationSourceDirectory: string | null;
   workspaceDirectory: string;
   provider: AgentProvider;
   composerState: NewWorkspaceComposerState;
@@ -892,6 +925,7 @@ function buildWorkspaceDraftSetupForCreatedWorkspace(input: {
     cwd: remapDraftCwdToWorkspace({
       cwd: input.forkDraftSetup.setup.cwd,
       sourceDirectory: input.forkDraftSetup.sourceDirectory,
+      destinationSourceDirectory: input.destinationSourceDirectory,
       workspaceDirectory: input.workspaceDirectory,
     }),
     provider: input.provider,
@@ -943,6 +977,7 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<void> {
   });
   const initialSetup = buildWorkspaceDraftSetupForCreatedWorkspace({
     forkDraftSetup: input.forkDraftSetup,
+    destinationSourceDirectory: input.destinationSourceDirectory,
     workspaceDirectory: ensuredWorkspace.workspaceDirectory,
     provider,
     composerState,
@@ -2045,12 +2080,24 @@ export function NewWorkspaceScreen({
             throw new Error(t("message.actions.forkUnavailable"));
           }
           setPendingAction("chat");
+          const forkClient = withConnectedClient();
+          const { attachments: forkNamingAttachments } = splitComposerAttachmentsForSubmit(
+            payload.attachments,
+            {
+              format: resolveComposerAttachmentSubmitFormat({
+                supportsForgeAttachments: supportsForgeSearch,
+              }),
+            },
+          );
           const forked = await createNativeForkInWorkspace({
-            client: withConnectedClient(),
+            client: forkClient,
             agentId: forkDraftSetup.nativeFork.agentId,
             boundaryMessageId: forkDraftSetup.nativeFork.boundaryMessageId,
             sourceCwd: forkDraftSetup.setup.cwd,
             sourceDirectory: forkDraftSetup.sourceDirectory,
+            destinationSourceDirectory: selectedSourceDirectory,
+            prompt: payload.text,
+            namingAttachments: getWorkspaceNamingAttachments(forkNamingAttachments),
             ensureWorkspace,
             failureMessage: t("message.actions.forkFailed"),
           });
@@ -2060,6 +2107,17 @@ export function NewWorkspaceScreen({
             serverId: selectedServerId,
             workspaceId: forked.workspaceId,
             target: { kind: "agent", agentId: forked.agentId },
+          });
+          // The fork exists and the user is looking at it, so a failed first
+          // send is that agent's problem to report, not this screen's.
+          await sendNativeForkPrompt({
+            client: forkClient,
+            serverId: selectedServerId,
+            agentId: forked.agentId,
+            payload,
+            supportsForgeSearch,
+          }).catch((error) => {
+            toast.error(toErrorMessage(error));
           });
           return;
         }
@@ -2080,6 +2138,7 @@ export function NewWorkspaceScreen({
           payload,
           composerState,
           forkDraftSetup,
+          destinationSourceDirectory: selectedSourceDirectory,
           ensureWorkspace,
           serverId: selectedServerId,
           clearDraft: clearChatDraft,
@@ -2105,6 +2164,7 @@ export function NewWorkspaceScreen({
       forkDraftSetup,
       launchTarget,
       selectedServerId,
+      selectedSourceDirectory,
       supportsForgeSearch,
       t,
       toast,
