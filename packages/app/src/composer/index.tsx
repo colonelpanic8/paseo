@@ -268,11 +268,13 @@ function buildRealtimeVoiceButtonStyle(
 function buildAgentStateSelector(serverId: string, agentId: string) {
   return (state: ReturnType<typeof useSessionStore.getState>) => {
     const agent = state.sessions[serverId]?.agents?.get(agentId) ?? null;
+    const usage = agent?.lastUsage;
     return {
       status: agent?.status ?? null,
-      contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
-      contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
-      totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
+      contextWindowMaxTokens: usage?.contextWindowMaxTokens ?? null,
+      contextWindowUsedTokens: usage?.contextWindowUsedTokens ?? null,
+      totalCostUsd: usage?.totalCostUsd ?? null,
+      promptCache: agent?.promptCache ?? null,
       model: agent?.model ?? null,
     };
   };
@@ -969,6 +971,11 @@ interface ComposerProps {
 }
 
 const EMPTY_ARRAY: readonly QueuedMessage[] = [];
+
+// A ping only exists to put a request on the wire before the provider cache lapses, so
+// it asks the agent for the shortest possible reply.
+const PROMPT_CACHE_PING_MESSAGE = "Keep the context warm. Reply with only: OK";
+const PROMPT_CACHE_PING_ATTACHMENTS: ComposerAttachment[] = [];
 const StableMessageInput = memo(MessageInput);
 
 interface ComposerAutocompleteHandle {
@@ -1550,6 +1557,20 @@ function ComposerContentImpl({
     onSubmitMessageRef.current = onSubmitMessage;
   }, [onSubmitMessage]);
 
+  const handlePromptCachePing = useCallback(async () => {
+    if (!sendAgentMessageRef.current) {
+      throw new Error(t("workspace.terminal.hostDisconnected"));
+    }
+    // The button is disabled while the agent runs; steer rather than interrupt so a
+    // ping that races a turn start cannot cancel real work.
+    await sendAgentMessageRef.current(
+      agentIdRef.current,
+      PROMPT_CACHE_PING_MESSAGE,
+      PROMPT_CACHE_PING_ATTACHMENTS,
+      "steer",
+    );
+  }, [t]);
+
   const hasActiveTurn = useSessionStore(
     (state) => selectAgentTurnPresentation(state.sessions[serverId], agentId).isActive,
   );
@@ -2037,6 +2058,9 @@ function ComposerContentImpl({
             usedTokens={agentState.contextWindowUsedTokens}
             totalCostUsd={agentState.totalCostUsd}
             glyphSize={contextWindowMeterGlyphSize}
+            promptCache={agentState.promptCache}
+            onPingPromptCache={handlePromptCachePing}
+            pingDisabled={isAgentRunning}
           />
         </View>
       ) : null,
@@ -2048,6 +2072,9 @@ function ComposerContentImpl({
       agentState.contextWindowUsedTokens,
       agentState.totalCostUsd,
       contextWindowMeterGlyphSize,
+      agentState.promptCache,
+      handlePromptCachePing,
+      isAgentRunning,
     ],
   );
 
