@@ -1,8 +1,12 @@
-import { describe, expect, test } from "vitest";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { describe, expect, test, vi } from "vitest";
 
 import { CodexAppServerAgentClient } from "./codex-app-server-agent.js";
-import { createFakeCodexAppServer } from "./codex/test-utils/fake-app-server.js";
+import { runProviderRefreshWithDeadline } from "../provider-refresh-deadline.js";
+import {
+  createCodexAppServerChildProcess,
+  createFakeCodexAppServer,
+} from "./codex/test-utils/fake-app-server.js";
 import { createTestLogger } from "../../../test-utils/test-logger.js";
 import { asInternals } from "../../test-utils/class-mocks.js";
 
@@ -33,6 +37,31 @@ describe("CodexAppServerAgentClient spawn error handling", () => {
     } finally {
       process.off("uncaughtException", onUncaught);
     }
+  });
+
+  test("fetchCatalog settles when the refresh deadline aborts an unanswered initialize", async () => {
+    const client = new CodexAppServerAgentClient(logger, {
+      command: {
+        mode: "replace",
+        argv: ["/nonexistent/codex-binary-that-does-not-exist"],
+      },
+    });
+    const child = createCodexAppServerChildProcess();
+    const kill = vi.spyOn(child, "kill");
+    Object.assign(client, { spawnAppServer: async () => child });
+
+    await expect(
+      runProviderRefreshWithDeadline({
+        label: "Codex",
+        timeoutMs: 50,
+        operation: (context) =>
+          client.fetchCatalog(
+            { scope: "workspace", cwd: "/tmp/codex-models", force: false },
+            context,
+          ),
+      }),
+    ).rejects.toThrow("Timed out refreshing Codex after 50ms");
+    expect(kill).toHaveBeenCalled();
   });
 
   test("listImportableSessions rejects gracefully when the codex binary does not exist", async () => {
