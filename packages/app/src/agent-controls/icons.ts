@@ -3,6 +3,7 @@ import {
   Bot,
   Brain,
   ListTodo,
+  NotebookPen,
   Settings2,
   Shield,
   ShieldAlert,
@@ -39,6 +40,7 @@ const MODE_ICONS: Record<string, AgentControlIcon> = {
 
 const FEATURE_ICONS: Record<string, AgentControlIcon> = {
   "list-todo": ListTodo,
+  "notebook-pen": NotebookPen,
   "shield-check": ShieldCheck,
   zap: Zap,
 };
