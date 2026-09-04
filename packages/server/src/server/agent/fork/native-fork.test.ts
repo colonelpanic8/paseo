@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 import type { AgentCapabilityFlags, AgentSession } from "../agent-sdk-types.js";
-import { invokeNativeForkCapability, NativeForkCapabilityError } from "./native-fork.js";
+import {
+  invokeNativeForkCapability,
+  NativeForkCapabilityError,
+  resolveNativeForkMessageId,
+} from "./native-fork.js";
 
 function buildSession(input: {
   capabilities?: Partial<AgentCapabilityFlags>;
@@ -67,5 +71,62 @@ describe("invokeNativeForkCapability", () => {
     await expect(invokeNativeForkCapability(session, { messageId: "message-1" })).rejects.toThrow(
       /empty session handle/,
     );
+  });
+});
+
+describe("resolveNativeForkMessageId", () => {
+  test("maps a completed assistant boundary to its provider user message", () => {
+    expect(
+      resolveNativeForkMessageId(
+        [
+          {
+            seq: 1,
+            timestamp: "2026-08-05T00:00:00.000Z",
+            turnId: "turn-1",
+            providerMessageId: "provider-user-1",
+            item: {
+              type: "user_message",
+              text: "question",
+              messageId: "client-user-1",
+              clientMessageId: "client-user-1",
+            },
+          },
+          {
+            seq: 2,
+            timestamp: "2026-08-05T00:00:01.000Z",
+            turnId: "turn-1",
+            item: { type: "assistant_message", text: "answer", messageId: "assistant-1" },
+          },
+        ],
+        "assistant-1",
+      ),
+    ).toBe("provider-user-1");
+  });
+
+  test("rejects an assistant boundary whose user message is not acknowledged", () => {
+    expect(() =>
+      resolveNativeForkMessageId(
+        [
+          {
+            seq: 1,
+            timestamp: "2026-08-05T00:00:00.000Z",
+            turnId: "turn-1",
+            item: {
+              type: "user_message",
+              text: "question",
+              messageId: "client-user-1",
+              clientMessageId: "client-user-1",
+            },
+          },
+          {
+            seq: 2,
+            timestamp: "2026-08-05T00:00:01.000Z",
+            turnId: "turn-1",
+            item: { type: "assistant_message", text: "answer", messageId: "assistant-1" },
+          },
+        ],
+        "assistant-1",
+      ),
+    ).toThrow("Cannot fork before the provider acknowledges the submitted prompt");
   });
 });

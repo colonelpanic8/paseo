@@ -11,7 +11,10 @@ import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useHostFeature } from "@/runtime/host-features";
 import { generateDraftId } from "@/stores/draft-keys";
-import { resolveForkFidelity, useForkPreferencesStore } from "@/stores/fork-preferences-store";
+import {
+  resolveForkFidelityForTarget,
+  useForkPreferencesStore,
+} from "@/stores/fork-preferences-store";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import {
@@ -259,9 +262,10 @@ export function useForkAgent(
         const boundaryMessageId = boundary?.boundaryMessageId;
         const useNativeFork =
           Boolean(boundaryMessageId) &&
-          resolveForkFidelity({
+          resolveForkFidelityForTarget({
             preferred: useForkPreferencesStore.getState().fidelity,
             canForkNatively: canForkNatively && supportsAgentForkNative,
+            target,
           }) === "native";
 
         if (useNativeFork && boundaryMessageId) {
