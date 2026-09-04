@@ -11,9 +11,6 @@ const CODEX_FAST_MODE_SUPPORTED_MODELS = new Set([
   "gpt-5.5",
   "gpt-5.4",
 ]);
-// Catalog speed tiers take precedence; this list covers models when no catalog data is available.
-const CODEX_FAST_MODE_SUPPORTED_MODEL_PREFIXES = ["gpt-5", "gpt-4.1", "o3", "o4-mini"] as const;
-
 export const CODEX_FAST_SPEED_TIER = "fast";
 
 export interface CodexModelServiceTier {
