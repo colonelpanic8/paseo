@@ -6860,6 +6860,9 @@ export async function convertClaudeHistoryEntry(
   }
 
   if (hasToolBlock && normalizedBlocks) {
+    if (entry.type === "assistant") {
+      return mapAssistantHistoryBlocksWithMessageId(entry, normalizedBlocks, mapBlocks);
+    }
     const mapped = await mapBlocks(normalizedBlocks);
     if (entry.type === "user") {
       // tool_result handling (handleToolResult) emits image markdown as an assistant_message
