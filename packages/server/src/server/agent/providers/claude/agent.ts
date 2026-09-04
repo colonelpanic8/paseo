@@ -145,6 +145,7 @@ import { withTimeout } from "../../../../utils/promise-timeout.js";
 import { terminateWithTreeKill } from "../../../../utils/tree-kill.js";
 import { execCommand } from "../../../../utils/spawn.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
+import type { ProcessEnvRecord } from "../../../paseo-env.js";
 
 const fsPromises = promises;
 const CLAUDE_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
@@ -413,7 +414,7 @@ interface ClaudeAgentSessionOptions {
   runtimeSettings?: ProviderRuntimeSettings;
   handle?: AgentPersistenceHandle;
   agentId?: string;
-  launchEnv?: Record<string, string>;
+  launchEnv?: ProcessEnvRecord;
   persistSession?: boolean;
   logger: Logger;
   queryFactory?: ClaudeQueryFactory;
@@ -2082,7 +2083,7 @@ class ClaudeAgentSession implements AgentSession {
   readonly capabilities = CLAUDE_CAPABILITIES;
 
   private readonly config: ClaudeAgentConfig;
-  private readonly launchEnv?: Record<string, string>;
+  private readonly launchEnv?: ProcessEnvRecord;
   private readonly agentId?: string;
   private readonly defaults?: { agents?: Record<string, AgentDefinition> };
   private readonly runtimeSettings?: ProviderRuntimeSettings;
