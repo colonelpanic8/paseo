@@ -617,6 +617,7 @@ export const en = {
       },
       menu: {
         openFor: "Open menu for {{label}}",
+        copyConversation: "Copy conversation",
         copyResumeCommand: "Copy resume command",
         copyAgentId: "Copy agent id",
         copyTerminalId: "Copy terminal id",
@@ -662,6 +663,9 @@ export const en = {
       },
       toasts: {
         copyFailed: "Copy failed",
+        copyingConversation: "Copying conversation...",
+        conversationCopiedLabel: "Conversation",
+        conversationEmpty: "This conversation has no messages to copy",
         agentIdCopiedLabel: "Agent ID",
         terminalIdCopiedLabel: "Terminal ID",
         resumeCommandCopiedLabel: "resume command",
