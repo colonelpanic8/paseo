@@ -139,7 +139,13 @@ async function startAgentRunInner(
   options?: StartAgentRunOptions,
 ): Promise<{ disposition: PromptDispatchDisposition }> {
   const snapshot = agentManager.getAgent(agentId);
-  const steered = await steerOrReplaceActiveRun(agentManager, agentId, prompt, options);
+  if (options?.activeTurnBehavior === "reject" && agentManager.hasInFlightRun(agentId)) {
+    throw new Error(`Agent ${agentId} already has an active run`);
+  }
+  const steered =
+    options?.activeTurnBehavior === "reject"
+      ? null
+      : await steerOrReplaceActiveRun(agentManager, agentId, prompt, options);
   if (steered?.disposition === "steered") {
     options?.onDispatch?.("steered");
     return steered;
