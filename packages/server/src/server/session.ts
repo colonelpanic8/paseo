@@ -7447,6 +7447,7 @@ export class Session {
       const forked = await this.agentManager.forkNative(msg.agentId, {
         messageId: msg.boundaryMessageId,
         workspaceId: msg.workspaceId,
+        cwd: msg.cwd,
       });
       this.emit({
         type: "agent.fork_native.response",
