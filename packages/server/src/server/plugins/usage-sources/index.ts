@@ -24,6 +24,7 @@ interface KnownReport {
 
 /** Owns account identity, ordered logins for each account, and the five-minute fetch cache. */
 export class UsageSourceRegistry {
+  private generation = 0;
   private readonly sources = new Map<string, UsageSource>();
   private readonly known = new Map<string, KnownReport>();
   private readonly cache = new Map<string, { at: number; entry: UsageReportEntry }>();
@@ -42,20 +43,57 @@ export class UsageSourceRegistry {
 
   unregister(id: string): void {
     this.sources.delete(id);
-    for (const key of this.known.keys()) if (key.startsWith(`${id}:`)) this.known.delete(key);
-    for (const key of this.cache.keys()) if (key.startsWith(`${id}:`)) this.cache.delete(key);
+    this.invalidateReports((key) => key.startsWith(`${id}:`));
+  }
+
+  invalidateReports(predicate: (id: string) => boolean): void {
+    this.generation++;
+    for (const map of [this.known, this.cache, this.pending]) {
+      for (const id of map.keys()) if (predicate(id)) map.delete(id);
+    }
+  }
+
+  /**
+   * Runs an account action against freshly discovered logins. Without a report ID the source's
+   * first discovered account is used. Usage is invalidated afterwards, even on failure.
+   */
+  async runReportAction<Result>(
+    sourceId: string,
+    reportId: string | undefined,
+    action: (inputs: unknown[]) => Promise<Result>,
+  ): Promise<Result> {
+    const generation = this.generation;
+    const discovered = await this.discoverReportIds();
+    if (generation !== this.generation) return this.runReportAction(sourceId, reportId, action);
+    const id =
+      reportId ?? discovered.find((candidate) => this.known.get(candidate)?.source.id === sourceId);
+    const report = id && discovered.includes(id) ? this.known.get(id) : undefined;
+    if (!id || !report || report.source.id !== sourceId)
+      throw new Error("This account is no longer available. Refresh usage before retrying.");
+    try {
+      return await action(report.inputs);
+    } finally {
+      this.invalidateReports((candidate) => candidate === id);
+    }
   }
 
   async listReports(
     options: { forceRefresh?: boolean; reportIds?: string[] } = {},
   ): Promise<UsageReportEntry[]> {
-    const ids = options.reportIds ?? (await this.discoverReportIds());
-    return Promise.all(
+    const generation = this.generation;
+    const discovered =
+      !options.reportIds || options.reportIds.some((id) => !this.known.has(id))
+        ? await this.discoverReportIds()
+        : undefined;
+    if (generation !== this.generation) return this.listReports(options);
+    const ids = options.reportIds ?? discovered!;
+    const reports = await Promise.all(
       [...new Set(ids)].flatMap((id) => {
         const known = this.known.get(id);
         return known ? [this.fetchId(id, known, options.forceRefresh)] : [];
       }),
     );
+    return generation === this.generation ? reports : this.listReports(options);
   }
 
   private async discoverReportIds(): Promise<string[]> {
@@ -117,6 +155,7 @@ export class UsageSourceRegistry {
         windows: entry.report.status === "available" ? entry.report.windows : [],
         balances: entry.report.status === "available" ? (entry.report.balances ?? []) : [],
         details: entry.report.status === "available" ? (entry.report.details ?? []) : [],
+        bankedResets: entry.report.status === "available" ? entry.report.bankedResets : undefined,
         error: legacyError(entry.report, this.now()),
       })),
     };
@@ -128,6 +167,7 @@ export class UsageSourceRegistry {
       return Promise.resolve(cached.entry);
     const pending = this.pending.get(id);
     if (pending) return pending;
+    const generation = this.generation;
     const request = (async () => {
       const entry: UsageReportEntry = {
         id,
@@ -138,7 +178,7 @@ export class UsageSourceRegistry {
         fetchedAt: new Date(this.now()).toISOString(),
         report: await this.fetchWithFallback(known),
       };
-      this.writeCache(id, entry);
+      if (generation === this.generation) this.writeCache(id, entry);
       return entry;
     })();
     this.pending.set(id, request);

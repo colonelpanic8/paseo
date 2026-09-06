@@ -4,6 +4,7 @@ import { stat, rm } from "node:fs/promises";
 import type pino from "pino";
 import type { ProviderRegistration } from "@getpaseo/plugin/server/provider";
 import {
+  CodexBankedResetOutcomeSchema,
   PluginIdSchema,
   type PluginLogEntry,
   type PluginListItem,
@@ -146,6 +147,18 @@ export class PluginService {
 
   listUsageReports(options?: { forceRefresh?: boolean; reportIds?: string[] }) {
     return this.usageSources.listReports(options);
+  }
+
+  consumeCodexBankedReset(input: { reportId?: string; creditId: string; idempotencyKey: string }) {
+    return this.usageSources.runReportAction("codex", input.reportId, async (usageInputs) =>
+      CodexBankedResetOutcomeSchema.parse(
+        await this.runtime.invoke("codex-usage-source", "codex.consume_banked_reset", {
+          usageInputs,
+          creditId: input.creditId,
+          idempotencyKey: input.idempotencyKey,
+        }),
+      ),
+    );
   }
 
   listLegacyUsage() {

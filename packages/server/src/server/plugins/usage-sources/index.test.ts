@@ -279,3 +279,84 @@ test("failed fallbacks preserve the final problem", async () => {
     problem: { kind: "rejected", status: 403 },
   });
 });
+
+test("actions use the selected account's ordered logins or the first discovered account", async () => {
+  const registry = new UsageSourceRegistry();
+  let accounts = [
+    { key: "personal", input: { login: "personal" } },
+    { key: "work", input: { login: "work-cli" } },
+    { key: "work", input: { login: "work-opencode" } },
+  ];
+  registry.register(source({ id: "codex", discover: async () => accounts }));
+  const called: unknown[] = [];
+  await registry.runReportAction("codex", undefined, async (inputs) => {
+    called.push(inputs);
+    return "reset";
+  });
+  await registry.runReportAction("codex", "codex:work", async (inputs) => {
+    called.push(inputs);
+    return "reset";
+  });
+  expect(called).toEqual([
+    [{ login: "personal" }],
+    [{ login: "work-cli" }, { login: "work-opencode" }],
+  ]);
+  accounts = [{ key: "personal", input: { login: "personal" } }];
+  await expect(
+    registry.runReportAction("codex", "codex:work", async () => {
+      throw new Error("should not run");
+    }),
+  ).rejects.toThrow("no longer available");
+  registry.register(
+    source({ id: "claude", discover: async () => [{ key: "work", input: { login: "claude" } }] }),
+  );
+  await expect(
+    registry.runReportAction("codex", "claude:work", async () => {
+      throw new Error("should not run");
+    }),
+  ).rejects.toThrow("no longer available");
+});
+
+test("failed actions invalidate both cached and pending usage because a credit may have been spent", async () => {
+  const registry = new UsageSourceRegistry();
+  let usedPct = 100;
+  let finish!: (value: unknown) => void;
+  let began!: () => void;
+  const started = new Promise<void>((resolve) => {
+    began = resolve;
+  });
+  let calls = 0;
+  registry.register(
+    source({
+      id: "codex",
+      discover: async () => [{ key: "default", input: {} }],
+      fetch: async () => {
+        calls++;
+        if (calls === 2) {
+          began();
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        }
+        return { status: "available", windows: [{ id: "weekly", label: "Weekly", usedPct }] };
+      },
+    }),
+  );
+  const usedPctOf = (entries: Awaited<ReturnType<typeof registry.listReports>>) => {
+    const report = entries[0]?.report;
+    return report?.status === "available" ? report.windows[0]?.usedPct : undefined;
+  };
+  await registry.listReports();
+  const pending = registry.listReports({ forceRefresh: true });
+  await started;
+  await expect(
+    registry.runReportAction("codex", undefined, async () => {
+      usedPct = 0;
+      throw new Error("Timed out");
+    }),
+  ).rejects.toThrow("Timed out");
+  expect(usedPctOf(await registry.listReports())).toBe(0);
+  finish({ status: "available", windows: [{ id: "weekly", label: "Weekly", usedPct: 100 }] });
+  expect(usedPctOf(await pending)).toBe(0);
+  expect(usedPctOf(await registry.listReports())).toBe(0);
+});

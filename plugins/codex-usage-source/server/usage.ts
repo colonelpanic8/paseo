@@ -1,3 +1,4 @@
+import { fetchBankedResets } from "./banked-resets.js";
 import { discoverOmp, piAuthPath, readHarness, readJson, type StoreLookup } from "./stores.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -34,6 +35,7 @@ const rateLimitSchema = z.object({
   secondary_window: windowSchema.nullish(),
 });
 const responseSchema = z.object({
+  rate_limit_reset_credits: z.object({ available_count: z.number().int().nonnegative() }).nullish(),
   plan_type: z.string().optional(),
   email: z.string().optional(),
   rate_limit: rateLimitSchema.nullish(),
@@ -205,6 +207,16 @@ export async function fetchUsage(
             },
           ],
     details: [],
+    bankedResets: usage.rate_limit_reset_credits
+      ? await fetchBankedResets(
+          {
+            token: auth.token,
+            accountId: auth.accountId,
+            availableCount: usage.rate_limit_reset_credits.available_count,
+          },
+          fetchApi,
+        )
+      : undefined,
   };
 }
 
