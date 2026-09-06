@@ -1,0 +1,6 @@
+
+> paseo@0.7.2 lint
+> oxlint packages/server/src/services/quota-fetcher/providers/codex.ts packages/server/src/services/quota-fetcher/providers/codex-banked-resets.test.ts packages/app/e2e/browser/provider-usage-settings.spec.ts packages/app/e2e/support/helpers/banked-resets.ts
+
+Found 0 warnings and 0 errors.
+Finished in 243ms on 4 files with 177 rules using 16 threads.
