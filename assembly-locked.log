@@ -1,0 +1,131 @@
+warning: Git tree '/home/imalison/Projects/paseo-assembly' is dirty
+building from base 92442e743517
+seeded 506 tracked rerere pair(s)
+  [ 1/62] pr-2517                  merged 238714e0ad45
+  [ 2/62] pr-2520                  merged bdae463b7dd2
+  [ 3/62] pr-2521                  auto-resolved from tracked rerere pairs
+  [ 3/62] pr-2521                  fixup patches/sidebar-project-view-shortcut-targets.patch: already applied
+  [ 4/62] assembly-fdroid-variant  merged 0c6aa69204fa
+  [ 5/62] personal/sidebar-workflow merged 31c12c5ab92f
+  [ 5/62] personal/sidebar-workflow fixup patches/pr-2564-stack-coherence.patch: applied
+  [ 6/62] model-picker-search      auto-resolved from tracked rerere pairs
+  [ 7/62] pr-2532                  auto-resolved from tracked rerere pairs
+  [ 8/62] pr-2553                  merged 4a4d0120189d
+  [ 9/62] assembly-build-provenance auto-resolved from tracked rerere pairs
+  [ 9/62] assembly-build-provenance fixup patches/desktop-package-version-rec.patch: applied
+  [10/62] monospaced-mobile-styling merged 464a20e65a88
+  [11/62] pr-2628                  auto-resolved from tracked rerere pairs
+  [12/62] assembly-agent-env       merged af119eab4b35
+  [13/62] pr-2629                  auto-resolved from tracked rerere pairs
+  [13/62] pr-2629                  fixup patches/session-search-ready-shortcut-context.patch: applied
+  [14/62] disable-worktree-setup-callout merged 4d499ecd68b4
+  [15/62] pr-2650                  merged c22fde493d28
+  [16/62] pr-2658                  auto-resolved from tracked rerere pairs
+  [17/62] pr-2659                  auto-resolved from tracked rerere pairs
+  [18/62] pr-2660                  auto-resolved from tracked rerere pairs
+  [19/62] watch-live-voice         reconstructing from base 92442e743517 in /home/imalison/Projects/paseo-assembly/.worktrees/derive
+  [19/62] watch-live-voice         parent pr-2655 merged 5d517c8ed923
+  [19/62] watch-live-voice         parent pr-2657 merged 23ae875da5b8
+  [19/62] watch-live-voice         delta: 12 commit(s) of its own after the anchor
+  [19/62] watch-live-voice         replayed bae33494552f (feat(android): route Live Voice audio to a Bluetooth headset)
+  [19/62] watch-live-voice         replayed cf3a0f919d47 (feat(watch): drive Live Voice from the wrist)
+  [19/62] watch-live-voice         replayed 4b195e9decb2 (fix(voice): disambiguate native settings switch)
+  [19/62] watch-live-voice         replayed 56ed8c0a9ba2 (fix(app): keep Live Voice availability current on the watch bridge)
+  [19/62] watch-live-voice         replayed ed486a3c05c9 (fix(app): update watch live voice types)
+  [19/62] watch-live-voice         replayed 72020aa760db (feat(android): support watch Live Voice pocket starts)
+  [19/62] watch-live-voice         replayed 0785d1409db3 (feat(watch): start and route pocket Live Voice calls)
+  [19/62] watch-live-voice         replayed f26c259867bb (fix(wear): expire queued Live Voice starts)
+  [19/62] watch-live-voice         replayed 32057ffa374b (feat(wear): add phone-side dispatch routing)
+  [19/62] watch-live-voice         replayed d5bcff4786ca (feat(watch): add one-shot dispatch mode)
+  [19/62] watch-live-voice         replayed ad7308c36700 (docs(watch): document dispatch verification)
+  [19/62] watch-live-voice         replayed 839c79b9793a (fix(android): drop invalid pocket-start style attributes)
+  [19/62] watch-live-voice         auto-resolved from tracked rerere pairs
+  [19/62] watch-live-voice         fixup patches/agent-payload-complexity.patch: applied
+  [20/62] assembled-npm-deps-hash  applied
+  [21/62] pr-2730                  auto-resolved from tracked rerere pairs
+  [22/62] pr-2772                  merged de4a2323e86e
+  [23/62] pr-2784                  auto-resolved from tracked rerere pairs
+  [24/62] pr-2785                  auto-resolved from tracked rerere pairs
+  [24/62] pr-2785                  fixup patches/pr-2785-usage-service-clobber.patch: applied
+  [25/62] pr-2820                  auto-resolved from tracked rerere pairs
+  [26/62] pr-2843                  auto-resolved from tracked rerere pairs
+  [27/62] pr-2845                  auto-resolved from tracked rerere pairs
+  [28/62] pr-2849                  auto-resolved from tracked rerere pairs
+  [29/62] pr-2872                  merged 7621be102d51
+  [30/62] pr-2873                  auto-resolved from tracked rerere pairs
+  [30/62] pr-2873                  fixup patches/pr-2873-stack-coherence.patch: applied
+  [31/62] pr-2875                  auto-resolved from tracked rerere pairs
+  [32/62] colonelpanic8/client-settings-file-store auto-resolved from tracked rerere pairs
+  [33/62] pr-2883                  auto-resolved from tracked rerere pairs
+  [34/62] pr-2884                  auto-resolved from tracked rerere pairs
+  [35/62] pr-2885                  merged c523a90a8794
+  [36/62] pr-2898                  auto-resolved from tracked rerere pairs
+  [37/62] pr-2900                  auto-resolved from tracked rerere pairs
+  [38/62] pr-2927                  reconstructing from base 92442e743517 in /home/imalison/Projects/paseo-assembly/.worktrees/derive
+  [38/62] pr-2927                  parent pr-3499 merged 9e145516639f
+  [38/62] pr-2927                  delta: 13 commit(s) of its own after the anchor
+  [38/62] pr-2927                  replayed c51338671aa6 (feat(app): hardware keyboard shortcuts on native, mod-key setting, Shift+Enter send)
+  [38/62] pr-2927                  replayed ce0c85a0eeb0 (fix(app): honor key auto-repeat and guard mod-preference hydration race)
+  [38/62] pr-2927                  replayed 9858c5744736 (feat(app): focus composer after keyboard workspace switch on native)
+  [38/62] pr-2927                  replayed 1b88c6d5f0a0 (feat(app): shortcut hints, desktop bindings, and settings on native)
+  [38/62] pr-2927                  replayed 4f8445ac8fe4 (feat(app): make focus-input shortcut always reach the composer on native)
+  [38/62] pr-2927                  replayed adcfeb45b1b7 (feat(app): natural prompt focus on workspace switch, command center Enter on native)
+  [38/62] pr-2927                  replayed 8870e487715f (fix(app): focus picker search on native when a hardware keyboard is attached)
+  [38/62] pr-2927                  replayed 01b10314744b (feat(app): match desktop Enter behavior on native hardware keyboards)
+  [38/62] pr-2927                  replayed 642504d02d1c (fix(app): show the shortcuts settings section on native)
+  [38/62] pr-2927                  replayed 7c2e3ef76b78 (fix(app): focus keyboard-opened search inputs)
+  [38/62] pr-2927                  replayed 35bdad2624c7 (fix(app): adapt native shortcuts to current settings UI)
+  [38/62] pr-2927                  replayed 21946d5cbd25 (Route native list keys before global shortcuts)
+  [38/62] pr-2927                  replayed 9615c79e6b69 (fix(app): adapt native shortcuts to editing inputs)
+  [38/62] pr-2927                  auto-resolved from tracked rerere pairs
+  [38/62] pr-2927                  fixup patches/pr-2927-current-typography.patch: applied
+  [39/62] touch-sidebar-resize     merged 92ca57c478a8
+  [40/62] pr-2954                  auto-resolved from tracked rerere pairs
+  [40/62] pr-2954                  fixup patches/pr-2954-stack-coherence.patch: applied
+  [41/62] assembled-ci-lint-fixes  applied
+  [42/62] pr-2956                  merged a60304f0e561
+  [43/62] pr-2957                  merged d2a097837f44
+  [43/62] pr-2957                  fixup patches/pr-2957-copy-conversation-dependency.patch: applied
+  [44/62] thinking-control-reachability auto-resolved from tracked rerere pairs
+  [45/62] pr-3006                  merged 5509b76433b1
+  [46/62] pr-3087                  merged a017885b001f
+  [47/62] pr-3475                  merged cc10084d2a9b
+  [48/62] pr-3506                  merged c76bcebdfef8
+  [49/62] live-voice-quick-launch  reconstructing from base 92442e743517 in /home/imalison/Projects/paseo-assembly/.worktrees/derive
+  [49/62] live-voice-quick-launch  parent pr-2657 merged 23ae875da5b8
+  [49/62] live-voice-quick-launch  delta: 1 commit(s) of its own after the anchor
+  [49/62] live-voice-quick-launch  replayed 160d82956cde (feat(live-voice): support deep-link quick launch)
+  [49/62] live-voice-quick-launch  merged reconstruction e15dc89253f3
+  [49/62] live-voice-quick-launch  fixup patches/live-voice-quick-launch-current-sidebar.patch: applied
+  [50/62] live-voice-context-files reconstructing from base 92442e743517 in /home/imalison/Projects/paseo-assembly/.worktrees/derive
+  [50/62] live-voice-context-files parent pr-2657 merged 23ae875da5b8
+  [50/62] live-voice-context-files delta: 4 commit(s) of its own after the anchor
+  [50/62] live-voice-context-files replayed 7e76e44a150f (feat(live-voice): load configured context files)
+  [50/62] live-voice-context-files replayed b05ab19b0be7 (feat(live-voice): add named context profiles)
+  [50/62] live-voice-context-files replayed afa6cd7ad621 (feat(app): select live voice context profiles); auto-resolved from tracked rerere pairs
+  [50/62] live-voice-context-files replayed 1e4a303c7eb1 (fix(live-voice): keep host context profiles optional)
+  [50/62] live-voice-context-files auto-resolved from tracked rerere pairs
+  [50/62] live-voice-context-files fixup patches/live-voice-context-profiles-footer-active.patch: applied
+  [51/62] colorblind-status-dots   merged 3f9dbe5c7ca6
+  [52/62] pr-3662                  auto-resolved from tracked rerere pairs
+  [53/62] pr-3882                  merged b157af46b949
+  [54/62] pr-3972                  auto-resolved from tracked rerere pairs
+  [55/62] claude-fable-5-1         merged 8d52677190d7
+  [56/62] pr-4256                  merged 2661f94438af
+  [57/62] pr-4261                  merged d8062bd2995f
+  [58/62] pr-4280                  merged 25814b530f02
+  [59/62] pr-4281                  auto-resolved from tracked rerere pairs
+  [60/62] pr-4304                  auto-resolved from tracked rerere pairs
+  [60/62] pr-4304                  fixup patches/pr-4304-async-question-attribution.patch: applied
+  [61/62] pr-4305                  auto-resolved from tracked rerere pairs
+  [61/62] pr-4305                  fixup patches/pr-4305-register-agent-complexity.patch: applied
+  [62/62] assembly-codex-banked-resets auto-resolved from tracked rerere pairs
+  [62/62] assembly-codex-banked-resets fixup patches/codex-banked-resets-usage-preferences.patch: applied
+  watch-live-voice reconstruction publication to mine:watch-live-voice skipped (--locked)
+  pr-2927 reconstruction publication to mine:keyboard-shortcuts-mobile skipped (--locked)
+
+tree:   9b90079169e07e085732729b8f15a15d1230ad71
+commit: f9a021939242b8fa50a1670fd1242cc5d835e54e
+conflicts this run: 35
+tree UNCHANGED from previous lock -- nothing downstream needs a bump
+verified: reproduced the lock's tree exactly

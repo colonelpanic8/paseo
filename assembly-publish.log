@@ -1,0 +1,10 @@
+scripts/publish-assembly.sh
+starting npm deps hash check in parallel with publish
+checking assembled npm deps hash: sha256-ulsNcv/UrRK4U4CFHix9MFZbrxmNIxB9dOmTsLrDucc=
+  (re-fetching the dependency tree; a cached store path proves nothing here)
+From github.com:colonelpanic8/paseo
+ * branch                assembled  -> FETCH_HEAD
+publishing f9a021939242b8fa50a1670fd1242cc5d835e54e (tree 9b90079169e07e085732729b8f15a15d1230ad71) to mine/assembled
+To github.com:colonelpanic8/paseo
+ + e47a0daae...f9a021939 f9a021939242b8fa50a1670fd1242cc5d835e54e -> assembled (forced update)
+ok: sha256-ulsNcv/UrRK4U4CFHix9MFZbrxmNIxB9dOmTsLrDucc= reproduces the assembled package-lock.json

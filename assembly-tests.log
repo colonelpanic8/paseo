@@ -1,0 +1,9 @@
+
+ RUN  v4.1.6 /home/imalison/Projects/paseo-assembly/.worktrees/build/packages/server
+
+
+ Test Files  2 passed (2)
+      Tests  86 passed (86)
+   Start at  10:55:19
+   Duration  927ms (transform 211ms, setup 45ms, import 320ms, tests 350ms, environment 0ms)
+
