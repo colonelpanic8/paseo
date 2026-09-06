@@ -895,6 +895,18 @@ export class AgentManager {
     return next;
   }
 
+  private touchMessageAt(agent: ManagedAgent, rawTimestamp: string): Date | null {
+    const timestamp = new Date(rawTimestamp);
+    if (Number.isNaN(timestamp.getTime())) {
+      return agent.lastMessageAt;
+    }
+    this.touchUpdatedAt(agent);
+    if (!agent.lastMessageAt || timestamp > agent.lastMessageAt) {
+      agent.lastMessageAt = timestamp;
+    }
+    return agent.lastMessageAt;
+  }
+
   private nextStoredUpdatedAt(record: StoredAgentRecord): string {
     const previousMs = Date.parse(record.updatedAt);
     const nowMs = Date.now();
@@ -1845,7 +1857,7 @@ export class AgentManager {
         unsubscribeSession: null,
         persistence: record.persistence ?? null,
         historyPrimed: true,
-        lastMessageAt: lastMessageAt ? new Date(lastMessageAt) : null,
+        lastMessageAt: record.lastMessageAt ? new Date(record.lastMessageAt) : null,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
@@ -4592,13 +4604,7 @@ export class AgentManager {
       timestamp?: string;
       providerMessageId?: string;
       turnId?: string;
-<<<<<<< HEAD
-||||||| parent of 9937e68b8 (fix: preserve server APIs in sidebar workflow)
-      persist?: boolean;
       trackMessageActivity?: boolean;
-=======
-      trackMessageActivity?: boolean;
->>>>>>> 9937e68b8 (fix: preserve server APIs in sidebar workflow)
     },
   ): AgentTimelineRow {
     item = limitAgentTimelineItemContent(item);
