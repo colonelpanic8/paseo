@@ -390,6 +390,10 @@ function agentPermission(id: string): AgentPermissionRequest {
   return { id, provider: "codex", name: id, kind: "tool", title: id };
 }
 
+function declaredHostColor(input?: Partial<HostProfile>) {
+  return input?.declaredColor ?? null;
+}
+
 function makeHost(input?: Partial<HostProfile>): HostProfile {
   const direct: HostConnection = {
     id: "direct:lan:6767",
@@ -408,6 +412,7 @@ function makeHost(input?: Partial<HostProfile>): HostProfile {
     ...(input?.password ? { password: input.password } : {}),
     label: input?.label ?? "test host",
     appearance: input?.appearance ?? defaultHostAppearance(),
+    declaredColor: declaredHostColor(input),
     lifecycle: input?.lifecycle ?? {},
     connections: input?.connections ?? [direct, relay],
     preferredConnectionId: input?.preferredConnectionId ?? direct.id,
@@ -1874,6 +1879,38 @@ describe("HostRuntimeStore", () => {
       color: "teal",
       badgeDisplay: null,
     });
+
+    store.syncHosts([]);
+  });
+
+  it("caches the color a host declares and persists it without touching the device choice", async () => {
+    const host = makeHost({
+      serverId: "srv_appearance",
+      appearance: { color: "amber", badgeDisplay: null },
+    });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@paseo:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    const hostListChanged = onceHostListMatches(
+      store,
+      () => store.getHosts()[0]?.declaredColor === "sky",
+    );
+    await store.recordDeclaredHostColor("srv_appearance", "sky");
+    await hostListChanged;
+
+    expect(store.getHosts()[0]?.appearance).toEqual({ color: "amber", badgeDisplay: null });
+    const persisted = await storage.getItem("@paseo:daemon-registry");
+    expect(JSON.parse(persisted ?? "[]")[0].declaredColor).toBe("sky");
+
+    const before = store.getHosts()[0];
+    await store.recordDeclaredHostColor("srv_appearance", "sky");
+    expect(store.getHosts()[0]).toBe(before);
 
     store.syncHosts([]);
   });
