@@ -15,6 +15,9 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Buffer } from "buffer";
+import { playAudioWithLease } from "@/audio/leased-playback";
+import { AudioCaptureBusyError } from "@/audio/capture-lifetime";
+import { resolveAudioSessionBusyMessage } from "@/audio/audio-session-busy-message";
 import {
   ArrowLeft,
   Settings,
@@ -100,7 +103,7 @@ import {
 } from "@/live-voice/live-voice-availability";
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
 import { resolveLiveVoiceUnavailableMessage } from "@/live-voice/live-voice-unavailable-message";
-import { useLiveVoiceVoiceOptions } from "@/live-voice/live-voice-voice-catalog";
+import { useLiveVoiceVoiceOptions } from "@/hooks/use-live-voice-voice-options";
 import { useLiveVoiceBackendModelOptions } from "@/live-voice/live-voice-backend-model-catalog";
 import {
   LIVE_VOICE_OPTIONAL_PROMPT_COMPONENTS,
@@ -1607,9 +1610,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
 
     try {
       const bytes = Buffer.from(THINKING_TONE_NATIVE_PCM_BASE64, "base64");
-      await voiceAudioEngine.initialize();
-      voiceAudioEngine.stop();
-      await voiceAudioEngine.play({
+      await playAudioWithLease(voiceAudioEngine, {
         type: "audio/pcm;rate=16000;bits=16",
         size: bytes.byteLength,
         async arrayBuffer() {
@@ -1618,6 +1619,10 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
       });
       setPlaybackTestResult(null);
     } catch (error) {
+      if (error instanceof AudioCaptureBusyError) {
+        setPlaybackTestResult(resolveAudioSessionBusyMessage(error.owner));
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       console.error("[Settings] Playback test failed", error);
       setPlaybackTestResult(t("settings.diagnostics.playbackFailed", { message }));
