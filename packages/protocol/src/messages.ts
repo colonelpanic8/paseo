@@ -17,6 +17,7 @@ export {
 import { TerminalProfileSchema } from "./terminal-profile.js";
 export { TerminalProfileSchema, type TerminalProfile } from "./terminal-profile.js";
 import { z } from "zod";
+import { ASSISTANT_REQUEST_SCHEMAS, ASSISTANT_RESPONSE_SCHEMAS } from "./assistants.js";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
@@ -1085,6 +1086,9 @@ export const VoiceLiveStartRequestSchema = z.object({
   type: z.literal("voice.live.start.request"),
   requestId: z.string(),
   negotiation: VoiceLiveStartNegotiationSchema,
+  // COMPAT(assistantCalls): added in v0.7.2, remove legacy ephemeral calls after 2027-03-06.
+  // Instance configuration overrides voice, instructions, and backend settings below.
+  assistantId: z.string().optional(),
   voice: z.string().optional(),
   /**
    * The client will report agents this call did not start, so the model should
@@ -3346,6 +3350,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterRequestSchema,
   SubscriptionReleaseRequestSchema,
   SessionEventsSetSubscriptionRequestSchema,
+  ...ASSISTANT_REQUEST_SCHEMAS,
   HubExecutionAgentCreateRequestSchema,
   HubExecutionAgentValidateRequestSchema,
   HubExecutionControlRequestSchema,
@@ -3897,6 +3902,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentConfigApply: z.boolean().optional(),
         // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
         liveVoice: z.boolean().optional(),
+        // COMPAT(assistants): added in v0.7.2, optional until daemon floor after 2027-03-06.
+        assistants: z.boolean().optional(),
         // COMPAT(liveVoiceVoiceCatalog): added in v0.2.6, remove after 2027-02-28.
         liveVoiceVoiceCatalog: z.boolean().optional(),
         // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
@@ -6995,6 +7002,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterResponseSchema,
   SubscriptionReleaseResponseSchema,
   SessionEventsSetSubscriptionResponseSchema,
+  ...ASSISTANT_RESPONSE_SCHEMAS,
   HubExecutionAgentCreateResponseSchema,
   HubExecutionAgentValidateResponseSchema,
   HubExecutionControlResponseSchema,
