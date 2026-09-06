@@ -1,11 +1,20 @@
 import type { ListUsageReportsOptions } from "../../plugins/usage-sources/index.js";
 import type pino from "pino";
-import type { ProviderUsage, UsageReportEntry } from "@getpaseo/protocol/messages";
+import type {
+  CodexBankedResetOutcome,
+  ProviderUsage,
+  UsageReportEntry,
+} from "@getpaseo/protocol/messages";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 
 export interface UsageSessionOptions {
   emit(message: SessionOutboundMessage): void;
   runtime?: {
+    consumeCodexBankedReset?(input: {
+      reportId?: string;
+      creditId: string;
+      idempotencyKey: string;
+    }): Promise<CodexBankedResetOutcome>;
     listUsageReports(options: ListUsageReportsOptions): Promise<UsageReportEntry[]>;
     listLegacyUsage(): Promise<{ fetchedAt: string; providers: ProviderUsage[] }>;
   };
@@ -74,4 +83,34 @@ export class UsageSession {
       });
     }
   }
+
+  async handleCodexBankedResetConsumeRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.codex.consume_banked_reset.request" }>,
+  ): Promise<void> {
+    try {
+      const runtime = this.options.runtime;
+      if (!runtime?.consumeCodexBankedReset) throw new Error("Codex reset actions are unavailable");
+      const outcome = await runtime.consumeCodexBankedReset({
+        ...(msg.reportId ? { reportId: msg.reportId } : {}),
+        creditId: msg.creditId,
+        idempotencyKey: msg.idempotencyKey,
+      });
+      this.options.emit({
+        type: "provider.codex.consume_banked_reset.response",
+        payload: { requestId: msg.requestId, outcome },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.options.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Could not use banked reset: ${message}`,
+          code: "codex_banked_reset_failed",
+        },
+      });
+    }
+  }
+
 }
