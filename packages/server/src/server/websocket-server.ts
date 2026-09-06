@@ -122,6 +122,12 @@ import {
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
 
 import type { SecurityMode } from "@getpaseo/relay/e2ee";
+function updateIfChanged<T>(previous: { value: T }, next: T, onChange: () => void): void {
+  if (previous.value === next) return;
+  previous.value = next;
+  onChange();
+}
+
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import type { DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import { DirectorySyncService } from "./directory-sync/index.js";
@@ -803,18 +809,7 @@ export class VoiceAssistantWebSocketServer {
       this.speech?.onReadinessChange((snapshot) => {
         this.publishSpeechReadiness(snapshot);
       }) ?? null;
-    const unsubscribeProviderConfig = attachMutableProviderConfigOwner({
-      store: this.daemonConfigStore,
-      providerSnapshotManager: this.providerSnapshotManager,
-      updateProviderRegistry: (state) => this.agentManager.updateProviderRegistry(state),
-    });
-    const unsubscribeChange = this.daemonConfigStore.onChange((config) => {
-      this.broadcastDaemonConfigChanged(config);
-    });
-    this.unsubscribeDaemonConfigChange = () => {
-      unsubscribeProviderConfig();
-      unsubscribeChange();
-    };
+    this.subscribeDaemonConfigChanges();
 
     const pushLogger = this.logger.child({ module: "push" });
     this.pushNotifications = createPushNotifications({
@@ -834,6 +829,25 @@ export class VoiceAssistantWebSocketServer {
     this.startApplicationSocketLeaseInterval();
 
     this.logger.info("WebSocket server initialized on /ws");
+  }
+
+  private subscribeDaemonConfigChanges(): void {
+    const unsubscribeProviderConfig = attachMutableProviderConfigOwner({
+      store: this.daemonConfigStore,
+      providerSnapshotManager: this.providerSnapshotManager,
+      updateProviderRegistry: (state) => this.agentManager.updateProviderRegistry(state),
+    });
+    const advertisedHostColor = { value: this.daemonConfigStore.get().appearance?.color };
+    const unsubscribeChange = this.daemonConfigStore.onChange((config) => {
+      this.broadcastDaemonConfigChanged(config);
+      updateIfChanged(advertisedHostColor, config.appearance?.color, () =>
+        this.broadcastCapabilitiesUpdate(),
+      );
+    });
+    this.unsubscribeDaemonConfigChange = () => {
+      unsubscribeProviderConfig();
+      unsubscribeChange();
+    };
   }
 
   private assignOptionalServices(params: {
@@ -2006,6 +2020,7 @@ export class VoiceAssistantWebSocketServer {
   }
 
   private buildServerInfoStatusPayload(session: Session): ServerInfoStatusPayload {
+    const hostColor = this.daemonConfigStore.get().appearance?.color;
     return {
       status: "server_info",
       protocolVersion: WS_PROTOCOL_VERSION,
@@ -2017,6 +2032,7 @@ export class VoiceAssistantWebSocketServer {
       // COMPAT(desktopManaged): added in v0.1.X, remove optional parsing after 2027-01-16.
       desktopManaged: this.daemonRuntimeConfig?.desktopManaged === true,
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
+      ...(hostColor ? { appearance: { color: hostColor } } : {}),
       features: {
         connectedHosts: true,
         hostMultiplexing: true,
@@ -2034,6 +2050,8 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(backgroundAgents): added in v0.15.0; remove gate after 2027-05-03.
         backgroundAgents: true,
         workspaceBaseBranch: true,
+        // COMPAT(hostAppearance): added in v0.7.3, remove gate after 2027-09-06.
+        hostAppearance: true,
         // COMPAT(directorySync): added in v0.3.x, remove gate after 2027-02-12.
         directorySync: true,
         // COMPAT(workspaceLabels): added in v0.5.0, remove after 2027-08-14.

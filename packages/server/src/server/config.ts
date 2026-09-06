@@ -543,6 +543,11 @@ function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) 
   };
 }
 
+function resolveHostColor(persisted: PersistedConfig): Pick<PaseoDaemonConfig, "hostColor"> {
+  const color = persisted.daemon?.appearance?.color;
+  return color !== undefined ? { hostColor: color } : {};
+}
+
 function resolveStaticLoadConfigSettings(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
@@ -556,6 +561,7 @@ function resolveStaticLoadConfigSettings(
     browserToolsEnabled: resolveBrowserToolsEnabled(persisted),
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
+    ...resolveHostColor(persisted),
     ...resolveProfileLists(persisted),
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
@@ -587,6 +593,7 @@ export type ResolvedDaemonSettings = Pick<
   | "autoArchiveAfterMerge"
   | "enableTerminalAgentHooks"
   | "appendSystemPrompt"
+  | "hostColor"
   | "terminalProfiles"
   | "agentProfiles"
   | "skillSelection"

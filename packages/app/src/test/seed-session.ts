@@ -48,6 +48,7 @@ export function seedSessionHosts(serverIds: readonly string[]): void {
       serverId,
       label: serverId,
       appearance: defaultHostAppearance(),
+      declaredColor: null,
       lifecycle: {},
       connections: [],
       preferredConnectionId: null,
