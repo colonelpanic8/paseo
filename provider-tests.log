@@ -1,0 +1,9 @@
+
+ RUN  v4.1.7 /home/imalison/.paseo/worktrees/0yll5i1q/young-bird/packages/server
+
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  02:38:07
+   Duration  399ms (transform 109ms, setup 33ms, import 155ms, tests 93ms, environment 0ms)
+

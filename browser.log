@@ -1,0 +1,66 @@
+
+> @getpaseo/app@0.7.2 test:e2e
+> playwright test --project=browser --config ../../.dev/banked-playwright.config.ts e2e/browser/provider-usage-settings.spec.ts --max-failures=1
+
+[metro] Starting project at /home/imalison/.paseo/worktrees/0yll5i1q/young-bird/packages/app
+[metro] Using src/app as the root directory for Expo Router.
+[metro] Experimental Expo Autolinking module resolver is enabled.
+[metro] React Compiler enabled
+[metro] Starting Metro Bundler
+[metro] Waiting on http://localhost:34993
+[metro] Logs for your project will appear below.
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (5084/5084)
+[metro] Web Bundled 4251ms packages/app/index.ts (5084 modules)
+[e2e] Metro warmed on port 34993
+
+Running 7 tests using 1 worker
+
+(node:1336386) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1336386) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 0 daemon started on port 34669, home: /tmp/paseo-e2e-worker-0-3TuzID
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 243ms packages/app/index.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+[metro] Web Bundled 91ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+  ✓  1 [browser] › e2e/browser/provider-usage-settings.spec.ts:8:7 › provider usage settings › renders every provider returned by the daemon usage RPC (7.2s)
+[metro] Web Bundled 207ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 11ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  2 [browser] › e2e/browser/provider-usage-settings.spec.ts:72:7 › provider usage settings › refresh invalidates and refetches usage (6.1s)
+[metro] | (node:1335081) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[metro] | (Use `node --trace-warnings ...` to show where the warning was created)
+[metro] | (node:1335076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[metro] | (Use `node --trace-warnings ...` to show where the warning was created)
+[metro] Web Bundled 773ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 38ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  3 [browser] › e2e/browser/provider-usage-settings.spec.ts:115:7 › provider usage settings › one provider error does not collapse the usage list (7.3s)
+[metro] Web Bundled 248ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 16ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  4 [browser] › e2e/browser/provider-usage-settings.spec.ts:185:5 › banked resets confirm, prevent duplicate submissions, and refresh usage (7.0s)
+[metro] Web Bundled 249ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 6ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  5 [browser] › e2e/browser/provider-usage-settings.spec.ts:237:5 › failed banked resets show an error and retry with the same idempotency key (6.2s)
+[metro] Web Bundled 196ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 9ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  6 [browser] › e2e/browser/provider-usage-settings.spec.ts:272:5 › expired and unsupported resets cannot be used (5.9s)
+[metro] Web Bundled 186ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 12ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  7 [browser] › e2e/browser/provider-usage-settings.spec.ts:293:5 › hosts without the banked reset capability never offer redemption (6.1s)
+[e2e] Worker 0 daemon stopped
+[e2e] Metro stopped
+
+  7 passed (1.3m)

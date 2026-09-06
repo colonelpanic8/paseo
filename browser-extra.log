@@ -1,0 +1,112 @@
+
+> @getpaseo/app@0.7.2 test:e2e
+> playwright test --project=browser --config ../../.dev/banked-playwright.config.ts e2e/browser/provider-usage-settings.spec.ts -g banked resets confirm|failed banked resets|redemption errors stay|narrow screen --max-failures=1
+
+[metro] Starting project at /home/imalison/.paseo/worktrees/0yll5i1q/young-bird/packages/app
+[metro] Using src/app as the root directory for Expo Router.
+[metro] Experimental Expo Autolinking module resolver is enabled.
+[metro] React Compiler enabled
+[metro] Starting Metro Bundler
+[metro] Waiting on http://localhost:37707
+[metro] Logs for your project will appear below.
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 2455ms packages/app/index.ts (5084 modules)
+[e2e] Metro warmed on port 37707
+
+Running 4 tests using 1 worker
+
+(node:1358464) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1358464) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 0 daemon started on port 40643, home: /tmp/paseo-e2e-worker-0-XpusnL
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 194ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 229ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (151 modules)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  1 [browser] › e2e/browser/provider-usage-settings.spec.ts:185:5 › banked resets confirm, prevent duplicate submissions, and refresh usage (8.7s)
+[metro] Web Bundled 388ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 20ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  2 [browser] › e2e/browser/provider-usage-settings.spec.ts:237:5 › failed banked resets show an error and retry with the same idempotency key (9.2s)
+[metro] Web Bundled 205ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 8ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  3 [browser] › e2e/browser/provider-usage-settings.spec.ts:304:5 › redemption errors stay actionable when refreshing usage also fails (6.3s)
+[metro] Web Bundled 188ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 6ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+[e2e] Worker 0 daemon stopped
+  ✘  4 [browser] › e2e/browser/provider-usage-settings.spec.ts:337:5 › banked reset controls fit a narrow screen (15.5s)
+[31mTesting stopped early after 1 maximum allowed failures.[39m
+[e2e] Metro stopped
+
+
+  1) [browser] › e2e/browser/provider-usage-settings.spec.ts:337:5 › banked reset controls fit a narrow screen 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('[data-testid="sidebar-settings"]:visible').first()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for locator('[data-testid="sidebar-settings"]:visible').first()[22m
+
+
+       at ../support/helpers/app.ts:36
+
+      34 |   // Navigate through the real app control so route changes stay aligned with UI behavior.
+      35 |   const settingsButton = page.locator('[data-testid="sidebar-settings"]:visible').first();
+    > 36 |   await expect(settingsButton).toBeVisible();
+         |                                ^
+      37 |   await settingsButton.click();
+      38 |   await expect(page).toHaveURL(/\/settings\/general$/);
+      39 | };
+        at openSettings (/home/imalison/.paseo/worktrees/0yll5i1q/young-bird/packages/app/e2e/support/helpers/app.ts:36:32)
+        at /home/imalison/.paseo/worktrees/0yll5i1q/young-bird/packages/app/e2e/browser/provider-usage-settings.spec.ts:342:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../.dev/banked-browser-results/provider-usage-settings-ba-ee2d0-ontrols-fit-a-narrow-screen-browser/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: browser-console (text/plain) ────────────────────────────────────────────────────
+    [console:info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+    [console:log] Running application "main" with appParams:
+     {rootTag: #root, hydrate: undefined} 
+    Development-level warnings: ON.
+    Performance optimizations: OFF.
+    [co...
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../.dev/banked-browser-results/provider-usage-settings-ba-ee2d0-ontrols-fit-a-narrow-screen-browser/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../.dev/banked-browser-results/provider-usage-settings-ba-ee2d0-ontrols-fit-a-narrow-screen-browser/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../.dev/banked-browser-results/provider-usage-settings-ba-ee2d0-ontrols-fit-a-narrow-screen-browser/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../.dev/banked-browser-results/provider-usage-settings-ba-ee2d0-ontrols-fit-a-narrow-screen-browser/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [browser] › e2e/browser/provider-usage-settings.spec.ts:337:5 › banked reset controls fit a narrow screen 
+  3 passed (1.1m)
+  1 error was not a part of any test, see above for details
+npm error Lifecycle script `test:e2e` failed with error:
+npm error code 1
+npm error path /home/imalison/.paseo/worktrees/0yll5i1q/young-bird/packages/app
+npm error workspace @getpaseo/app@0.7.2
+npm error location /home/imalison/.paseo/worktrees/0yll5i1q/young-bird/packages/app
+npm error command failed
+npm error command sh -c playwright test --project=browser --config ../../.dev/banked-playwright.config.ts e2e/browser/provider-usage-settings.spec.ts -g 'banked resets confirm|failed banked resets|redemption errors stay|narrow screen' --max-failures=1
