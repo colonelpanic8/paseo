@@ -177,6 +177,7 @@ import type {
   AgentProfile,
   AgentSkillSelection,
   FirstAgentContext,
+  IdentityColorName,
   PluginSource,
   TerminalProfile,
 } from "@getpaseo/protocol/messages";
@@ -406,6 +407,7 @@ export interface PaseoDaemonConfig {
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   appendSystemPrompt?: string;
+  hostColor?: IdentityColorName;
   terminalProfiles?: TerminalProfile[];
   agentProfiles?: AgentProfile[];
   skillSelection?: AgentSkillSelection;
@@ -533,6 +535,12 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
+function resolveInitialHostAppearance(
+  config: PaseoDaemonConfig,
+): Pick<MutableDaemonConfig, "appearance"> {
+  return config.hostColor !== undefined ? { appearance: { color: config.hostColor } } : {};
+}
+
 function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
   const providers = config.providerOverrides ?? {};
 
@@ -561,6 +569,7 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
     skills: { selection: config.skillSelection },
+    ...resolveInitialHostAppearance(config),
   };
 
   if (config.terminalProfiles !== undefined) {
