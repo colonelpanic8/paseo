@@ -1083,6 +1083,7 @@ export async function createPaseoDaemon(
     listActiveWorkspaces: listActiveWorkspacesExternal,
     getAutoArchivedChangeRequestUrl: async (workspaceId) =>
       (await workspaceRegistry.get(workspaceId))?.autoArchivedChangeRequestUrl ?? null,
+    workspaceRegistry,
     archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
     markWorkspaceArchiving: markWorkspaceArchivingExternal,
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,

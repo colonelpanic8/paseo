@@ -296,6 +296,8 @@ export type WorkspaceGitSnapshotOptions =
       force: true;
       includeForge?: boolean;
       reason: string;
+      // Require a read started after this request, even if a forced read is running.
+      queueIfBusy?: boolean;
     };
 
 interface WorkspaceGitRefreshRequest {
@@ -2688,7 +2690,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       includeForge: options?.includeForge ?? true,
       reason: options?.reason ?? defaultReason,
       notify,
-      queueIfBusy: false,
+      queueIfBusy: options?.force === true && options.queueIfBusy === true,
       movedRemoteRefs: new Set(),
     };
   }

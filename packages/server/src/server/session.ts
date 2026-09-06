@@ -866,8 +866,11 @@ export class Session {
       getWorkspace: (workspaceId) => this.workspaceRegistry.get(workspaceId),
       getProject: (projectId) => this.projectRegistry.get(projectId),
       isDirectory: (path) => this.filesystem.isDirectory(path),
-      unarchiveWorkspace: async (workspace) => {
-        await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
+      unarchiveWorkspace: async (workspace, prepareDirectory) => {
+        await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(
+          workspace,
+          prepareDirectory,
+        );
       },
     });
     this.checkoutSession = new CheckoutSession({
@@ -5204,13 +5207,21 @@ export class Session {
     if (!workspace) {
       throw new Error(`Recovered workspace record not found: ${workspaceId}`);
     }
+    // The registry mutation already delivered the unarchived record to every
+    // session. Warming git data is best-effort and must not hold the response.
+    void this.publishRecoveredWorkspace(workspace).catch((error) => {
+      this.sessionLogger.warn({ err: error, workspaceId }, "Failed to warm recovered workspace");
+    });
+  }
+
+  private async publishRecoveredWorkspace(workspace: PersistedWorkspaceRecord): Promise<void> {
     if (this.onWorkspaceRecovered) {
       try {
         await this.onWorkspaceRecovered(workspace);
         return;
       } catch (error) {
         this.sessionLogger.warn(
-          { err: error, workspaceId },
+          { err: error, workspaceId: workspace.workspaceId },
           "Failed to publish workspace recovery to active sessions",
         );
       }

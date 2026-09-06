@@ -112,10 +112,13 @@ export interface WorkspaceMutation {
   workspaceId: string;
   workspace: PersistedWorkspaceRecord | null;
   expectsInitialAgent?: boolean;
+  // The upsert cleared archivedAt on an explicit restore.
+  restored?: boolean;
 }
 
 export interface WorkspaceMutationContext {
   expectsInitialAgent?: boolean;
+  restored?: boolean;
 }
 
 export interface WorkspaceArchiveContext {
@@ -560,6 +563,7 @@ export class FileBackedWorkspaceRegistry
       workspaceId: record.workspaceId,
       workspace: record,
       ...(context?.expectsInitialAgent ? { expectsInitialAgent: true } : {}),
+      ...(context?.restored ? { restored: true } : {}),
     });
   }
 
