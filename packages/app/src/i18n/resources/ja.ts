@@ -2291,6 +2291,14 @@ export const ja: TranslationResources = {
             blue: "ブルー",
           },
         },
+        hostColor: {
+          label: "既定の色",
+          hint: "ホストに保存されます。各デバイスは独自の色を選ばない限りこの色を使います。",
+          accessibilityLabel: "既定の色, {{value}}",
+          options: {
+            auto: "自動",
+          },
+        },
         badge: {
           label: "サイドバーのバッジ",
           accessibilityLabel: "サイドバーのバッジ、{{value}}",
