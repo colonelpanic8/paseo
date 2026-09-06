@@ -577,6 +577,19 @@ host selection. The slot owns selection loading, fallback and the error boundary
 its layout. This keeps plugin failures from removing navigation or recovery controls. The
 [sidebar view guide](../public-docs/plugins/sidebar-views.md) owns the author API.
 
+The Codex built-in source can include `bankedResets` in an available report. Its typed
+`codex.consume_banked_reset` RPC receives the account's ordered login inputs, a selected
+credit ID, and an idempotency key, and spends the credit with the first unexpired login.
+The daemon accepts an optional report ID on `provider.codex.consume_banked_reset`,
+rediscovers the account before invocation, and uses the first discovered Codex account for
+older clients that omit it. Redemption requires `daemon.manage`. Credentials stay in the
+plugin runtime.
+
+Confirm before spending a credit, reuse the idempotency key on a user retry, and never
+automatically retry the POST. Invalidate cached and pending usage after every attempt:
+a timeout can occur after the reset was applied. Keep reset-detail failures separate from
+quota-window availability, and honor each credit's plan eligibility.
+
 ## Contribute sidebar items
 
 Sidebar header and footer items are plugin components, not descriptors. The

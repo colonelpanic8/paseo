@@ -15,6 +15,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import type { TFunction } from "i18next";
 import { UsageBalanceBar } from "./balance-bar";
+import { CodexBankedResetManagement } from "./banked-resets";
 import type { UsageDisplay } from "./display";
 import { formatAgo, formatProviderUsageLabel } from "./format";
 import { resolveUsageReport, type UsageRefresh } from "./model";
@@ -141,6 +142,15 @@ export function UsageCard({
             </View>
           ))}
         </View>
+      ) : null}
+
+      {entry.sourceId === "codex" && !compact ? (
+        <CodexBankedResetManagement
+          serverId={serverId}
+          reportId={entry.id}
+          resets={usage.status === "available" ? usage.bankedResets : undefined}
+          onSettled={refresh}
+        />
       ) : null}
 
       {footer || showsFreshnessInline ? (
