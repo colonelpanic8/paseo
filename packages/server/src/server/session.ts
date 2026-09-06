@@ -1,3 +1,4 @@
+import { pruneMissingWorkspaces } from "./session/workspace-pruning.js";
 import type { AgentRequests } from "./agent/requests/index.js";
 import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
@@ -2550,6 +2551,8 @@ export class Session {
         return this.handleWorkspaceGithubSearchRepositoriesRequest(msg);
       case "project.github.clone.request":
         return this.handleProjectGithubCloneRequest(msg);
+      case "workspace.prune.request":
+        return this.handleWorkspacePruneRequest(msg);
       case "archive_workspace_request":
         return this.handleArchiveWorkspaceRequest(msg);
       case "project.remove.request":
@@ -6789,6 +6792,43 @@ export class Session {
       },
       request,
     );
+  }
+
+  private async handleWorkspacePruneRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.prune.request" }>,
+  ): Promise<void> {
+    const payload: Extract<
+      SessionOutboundMessage,
+      { type: "workspace.prune.response" }
+    >["payload"] = {
+      requestId: request.requestId,
+      dryRun: request.dryRun ?? false,
+      workspaces: [],
+      errors: [],
+      error: null,
+    };
+    try {
+      if (request.projectId !== undefined && !(await this.projectRegistry.get(request.projectId))) {
+        throw new Error(`Project not found: ${request.projectId}`);
+      }
+      const result = await pruneMissingWorkspaces(
+        {
+          listWorkspaces: () => this.workspaceRegistry.list(),
+          archiveWorkspace: (workspaceId) => this.archiveWorkspaceRecord(workspaceId),
+        },
+        request,
+      );
+      payload.workspaces = result.workspaces;
+      payload.errors = result.errors;
+      if (!payload.dryRun) {
+        await this.emitWorkspaceUpdatesForWorkspaceIds(
+          result.workspaces.map((workspace) => workspace.workspaceId),
+        );
+      }
+    } catch (error) {
+      payload.error = error instanceof Error ? error.message : "Failed to prune workspaces";
+    }
+    this.emit({ type: "workspace.prune.response", payload });
   }
 
   private async handleArchiveWorkspaceRequest(

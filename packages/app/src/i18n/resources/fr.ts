@@ -1240,6 +1240,18 @@ export const fr: TranslationResources = {
       },
     },
   },
+  workspacePruning: {
+    title: "Nettoyer les espaces de travail manquants",
+    description:
+      "Archivez les espaces de travail dont les dossiers n’existent plus sur {{host}}. L’historique des agents est conservé.",
+    scanning: "Vérification des dossiers des espaces de travail…",
+    archiving: "Archivage des espaces de travail manquants…",
+    missing: "Espaces de travail manquants : {{count}}",
+    archived: "Espaces de travail archivés : {{count}}",
+    archive: "Archiver les espaces de travail manquants",
+    partialFailure: "Certains espaces de travail n’ont pas pu être vérifiés ou archivés.",
+    updateHost: "Mettez à jour cet hôte pour nettoyer les espaces de travail manquants.",
+  },
   newWorkspace: {
     title: "Nouvel espace de travail",
     create: "Créer",

@@ -1218,6 +1218,18 @@ export const ja: TranslationResources = {
       },
     },
   },
+  workspacePruning: {
+    title: "存在しないワークスペースを整理",
+    description:
+      "{{host}} 上にフォルダーが存在しなくなったワークスペースをアーカイブします。エージェントの履歴は保持されます。",
+    scanning: "ワークスペースのフォルダーを確認中…",
+    archiving: "存在しないワークスペースをアーカイブ中…",
+    missing: "存在しないワークスペース: {{count}}",
+    archived: "アーカイブ済みワークスペース: {{count}}",
+    archive: "存在しないワークスペースをアーカイブ",
+    partialFailure: "一部のワークスペースを確認またはアーカイブできませんでした。",
+    updateHost: "存在しないワークスペースを整理するには、このホストを更新してください。",
+  },
   newWorkspace: {
     title: "新しいワークスペース",
     create: "作成",

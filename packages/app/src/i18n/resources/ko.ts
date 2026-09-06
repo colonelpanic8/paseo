@@ -1213,6 +1213,18 @@ export const ko: TranslationResources = {
       },
     },
   },
+  workspacePruning: {
+    title: "존재하지 않는 워크스페이스 정리",
+    description:
+      "{{host}}에서 폴더가 더 이상 존재하지 않는 워크스페이스를 보관합니다. 에이전트 기록은 유지됩니다.",
+    scanning: "워크스페이스 폴더 확인 중…",
+    archiving: "존재하지 않는 워크스페이스 보관 중…",
+    missing: "존재하지 않는 워크스페이스: {{count}}",
+    archived: "보관된 워크스페이스: {{count}}",
+    archive: "존재하지 않는 워크스페이스 보관",
+    partialFailure: "일부 워크스페이스를 확인하거나 보관하지 못했습니다.",
+    updateHost: "존재하지 않는 워크스페이스를 정리하려면 이 호스트를 업데이트하세요.",
+  },
   newWorkspace: {
     title: "새 워크스페이스",
     create: "생성",

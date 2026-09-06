@@ -1231,6 +1231,18 @@ export const ptBR: TranslationResources = {
       },
     },
   },
+  workspacePruning: {
+    title: "Limpar workspaces ausentes",
+    description:
+      "Arquive workspaces cujas pastas não existem mais em {{host}}. O histórico dos agentes é preservado.",
+    scanning: "Verificando as pastas dos workspaces…",
+    archiving: "Arquivando workspaces ausentes…",
+    missing: "Workspaces ausentes: {{count}}",
+    archived: "Workspaces arquivados: {{count}}",
+    archive: "Arquivar workspaces ausentes",
+    partialFailure: "Não foi possível verificar ou arquivar alguns workspaces.",
+    updateHost: "Atualize este host para limpar workspaces ausentes.",
+  },
   newWorkspace: {
     title: "Novo workspace",
     create: "Criar",

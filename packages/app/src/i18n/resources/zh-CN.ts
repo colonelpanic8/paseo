@@ -1195,6 +1195,17 @@ export const zhCN: TranslationResources = {
       },
     },
   },
+  workspacePruning: {
+    title: "清理已不存在的工作区",
+    description: "归档 {{host}} 上文件夹已不存在的工作区。代理历史记录将保留。",
+    scanning: "正在检查工作区文件夹…",
+    archiving: "正在归档已不存在的工作区…",
+    missing: "已不存在的工作区：{{count}}",
+    archived: "已归档的工作区：{{count}}",
+    archive: "归档已不存在的工作区",
+    partialFailure: "部分工作区无法检查或归档。",
+    updateHost: "请更新此主机以清理已不存在的工作区。",
+  },
   newWorkspace: {
     title: "新建 workspace",
     create: "创建",

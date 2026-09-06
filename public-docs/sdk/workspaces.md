@@ -52,6 +52,20 @@ const workspace = await client.workspaces.create({
 
 You can pass `projectId` in either source when you already have one. Most integrations should omit it; the daemon finds or creates the project from the directory.
 
+## Clean up missing workspaces
+
+Preview missing workspace directories, then archive their records:
+
+```ts
+const preview = await client.workspaces.prune({ dryRun: true });
+const result = await client.workspaces.prune();
+```
+
+Both calls return `workspaces` and per-workspace `errors`; `error` reports a
+request failure. Pass `projectId` to limit the operation to one project.
+See [workspace cleanup](/docs/workspaces#cleaning-up-missing-workspaces) for its
+history-preservation and filesystem behavior.
+
 ## Start an agent in a workspace
 
 Create through the workspace handle:

@@ -2540,6 +2540,13 @@ export const ProjectGithubCloneRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspacePruneRequestSchema = z.object({
+  type: z.literal("workspace.prune.request"),
+  requestId: z.string(),
+  projectId: z.string().optional(),
+  dryRun: z.boolean().optional(),
+});
+
 export const ArchiveWorkspaceRequestSchema = z.object({
   type: z.literal("archive_workspace_request"),
   workspaceId: z.string(),
@@ -3178,6 +3185,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceGithubSearchRepositoriesRequestSchema,
   ProjectGithubCloneRequestSchema,
   ArchiveWorkspaceRequestSchema,
+  WorkspacePruneRequestSchema,
   WorkspaceCreateRequestSchema,
   WorkspaceClearAttentionRequestSchema,
   FileExplorerRequestSchema,
@@ -3414,6 +3422,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceLabels: z.boolean().optional(),
         // COMPAT(workspaceSetupRun): added in v0.7.3, remove gate after 2027-09-02.
         workspaceSetupRun: z.boolean().optional(),
+        // COMPAT(workspacePrune): added in v0.7.3, remove gate after 2027-03-06.
+        workspacePrune: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.7.3, remove gate after 2027-09-05.
         workspaceTerminals: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
@@ -4381,6 +4391,19 @@ export const LegacyOpenInEditorResponseMessageSchema = z.object({
   type: z.literal("open_in_editor_response"),
   payload: z.object({
     requestId: z.string(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const WorkspacePruneResponseMessageSchema = z.object({
+  type: z.literal("workspace.prune.response"),
+  payload: z.object({
+    requestId: z.string(),
+    dryRun: z.boolean(),
+    workspaces: z.array(z.object({ workspaceId: z.string(), directory: z.string() })),
+    errors: z.array(
+      z.object({ workspaceId: z.string(), directory: z.string(), error: z.string() }),
+    ),
     error: z.string().nullable(),
   }),
 });
@@ -6484,6 +6507,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LegacyListAvailableEditorsResponseMessageSchema,
   LegacyOpenInEditorResponseMessageSchema,
   ArchiveWorkspaceResponseMessageSchema,
+  WorkspacePruneResponseMessageSchema,
   FetchAgentResponseMessageSchema,
   FetchAgentTimelineResponseMessageSchema,
   AgentTimelineReplacementMessageSchema,

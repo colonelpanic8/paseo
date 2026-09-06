@@ -6,9 +6,19 @@ import { runCreateCommand } from "./create.js";
 import { runLsCommand } from "./ls.js";
 import { runRenameCommand } from "./rename.js";
 import { runSetupCommand } from "./setup.js";
+import { runPruneCommand } from "./prune.js";
 
 export function createWorkspaceCommand(): Command {
   const workspace = new Command("workspace").description("Manage workspaces");
+
+  addJsonAndDaemonHostOptions(
+    workspace
+      .command("prune")
+      .description("Archive workspaces whose directories no longer exist, preserving history")
+      .option("--dry-run", "Preview missing workspaces without archiving them")
+      .option("--project <id>", "Only check workspaces in this project")
+      .allowExcessArguments(false),
+  ).action(withOutput(runPruneCommand));
 
   addJsonAndDaemonHostOptions(
     workspace

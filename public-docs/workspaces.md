@@ -61,6 +61,26 @@ Either way, once the workspace exists you can add more sessions to it. Open a te
 
 Creating an agent and creating a workspace are separate actions. Pass a workspace ID when you want an agent in a specific existing workspace. A bare `paseo run` from a human shell creates a new local workspace; when one agent runs it, Paseo recognizes the caller and creates a subagent in the caller's workspace.
 
+## Cleaning up missing workspaces
+
+If you delete a workspace directory outside Paseo, the daemon archives its workspace
+record at startup or during its five-minute cleanup pass. To run cleanup immediately,
+open the command palette with Ctrl+K (Cmd+K on macOS) and search for **Clean up missing
+workspaces**. Choose a host, review the missing folders, and select **Archive missing
+workspaces**.
+
+You can also use the CLI:
+
+```bash
+paseo workspace prune --dry-run
+paseo workspace prune
+```
+
+Add `--project <id>` to limit cleanup to one project, or `--host <host>` to check
+another daemon. Paths are checked on that host. Cleanup preserves agent history
+and project records, leaves existing directories alone, and reports paths it
+cannot inspect. `--dry-run` lists candidates without changing any records.
+
 ## Worktrees
 
 Every workspace in Paseo is backed by a working directory. When that directory is a git worktree, you get a separate branch and isolated environment for each task.

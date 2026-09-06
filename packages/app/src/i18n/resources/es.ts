@@ -1240,6 +1240,18 @@ export const es: TranslationResources = {
       },
     },
   },
+  workspacePruning: {
+    title: "Limpiar espacios de trabajo inexistentes",
+    description:
+      "Archiva los espacios de trabajo cuyas carpetas ya no existen en {{host}}. Se conserva el historial de los agentes.",
+    scanning: "Comprobando las carpetas de los espacios de trabajo…",
+    archiving: "Archivando espacios de trabajo inexistentes…",
+    missing: "Espacios de trabajo inexistentes: {{count}}",
+    archived: "Espacios de trabajo archivados: {{count}}",
+    archive: "Archivar espacios de trabajo inexistentes",
+    partialFailure: "No se pudieron comprobar o archivar algunos espacios de trabajo.",
+    updateHost: "Actualiza este anfitrión para limpiar los espacios de trabajo inexistentes.",
+  },
   newWorkspace: {
     title: "Nuevo espacio de trabajo",
     create: "Crear",

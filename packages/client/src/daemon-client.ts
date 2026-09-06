@@ -2373,6 +2373,19 @@ export class DaemonClient {
     });
   }
 
+  async pruneWorkspaces(
+    options: { projectId?: string; dryRun?: boolean } = {},
+  ): Promise<Extract<SessionOutboundMessage, { type: "workspace.prune.response" }>["payload"]> {
+    // COMPAT(workspacePrune): added in v0.7.3, remove gate after 2027-03-06.
+    if (!this.getLastServerInfoMessage()?.features?.workspacePrune) {
+      throw new Error("Update the host to prune missing workspaces.");
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "workspace.prune.request", ...options },
+      responseType: "workspace.prune.response",
+    });
+  }
+
   async archiveWorkspace(
     workspaceId: string,
     requestId?: string,

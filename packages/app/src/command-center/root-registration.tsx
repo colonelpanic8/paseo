@@ -3,6 +3,7 @@ import { router, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   CalendarClock,
+  BrushCleaning,
   CircleDashed,
   Folder,
   FolderPlus,
@@ -19,6 +20,8 @@ import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useImportSession } from "@/hooks/use-import-session";
+import { useWorkspacePruning } from "@/hooks/use-workspace-pruning";
+import { getCommandCenterIcon } from "./icon";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
@@ -38,6 +41,7 @@ import { useCommandCenterActions } from "./provider";
 import { buildGroupingContribution } from "./root-contributions";
 
 const ThemedPlus = withUnistyles(Plus, (theme) => ({ color: theme.colors.foregroundMuted }));
+const WorkspacePruningIcon = getCommandCenterIcon(BrushCleaning);
 const ThemedFolderPlus = withUnistyles(FolderPlus, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
@@ -114,6 +118,7 @@ export function CommandCenterRootActions() {
   const shortcutsAvailable = useKeyboardShortcutsAvailable();
   const openAddProject = useOpenAddProject();
   const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
+  const { open: openWorkspacePruning, sheet: workspacePruningSheet } = useWorkspacePruning();
   const settingsRoute = useMemo<Href>(() => buildSettingsRoute(), []);
   const homeRoute = useMemo<Href>(() => buildOpenProjectRoute(), []);
   const sessionsRoute = useMemo<Href>(() => buildSessionsRoute(), []);
@@ -133,6 +138,33 @@ export function CommandCenterRootActions() {
   );
   const actions = useMemo<CommandCenterContribution[]>(() => {
     const availableActions: CommandCenterContribution[] = [
+      {
+        id: "prune-workspaces",
+        group: "actions",
+        groupRank: 0,
+        rank: 9,
+        keywords: [
+          "cleanup",
+          "clean",
+          "prune",
+          "purge",
+          "missing",
+          "deleted",
+          "stale",
+          "workspace",
+        ],
+        visibility: "query",
+        run: () => {
+          clearCommandCenterFocusRestoreElement();
+          openWorkspacePruning();
+        },
+        presentation: {
+          kind: "action",
+          title: t("workspacePruning.title"),
+          sectionTitle: t("shell.commandCenter.actions"),
+          icon: WorkspacePruningIcon,
+        },
+      },
       {
         id: "add-project",
         group: "actions",
@@ -336,6 +368,7 @@ export function CommandCenterRootActions() {
     keyboardActionDispatcher,
     openAddProject,
     openImportSession,
+    openWorkspacePruning,
     overrides,
     schedulesRoute,
     sessionsRoute,
@@ -349,5 +382,10 @@ export function CommandCenterRootActions() {
   ]);
 
   useCommandCenterActions({ sourceId: "root", enabled: true, actions });
-  return importSessionSheet;
+  return (
+    <>
+      {importSessionSheet}
+      {workspacePruningSheet}
+    </>
+  );
 }

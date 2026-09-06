@@ -177,6 +177,7 @@ export interface PaseoProjectActions {
 
 export interface PaseoWorkspaceActions {
   list(options?: PaseoWorkspaceListOptions): Promise<PaseoWorkspaceListResult>;
+  prune: DaemonClient["pruneWorkspaces"];
   ref(workspace: string | PaseoWorkspace): PaseoWorkspaceHandle;
   open(
     input: string | PaseoWorkspaceOpenOptions,
@@ -497,6 +498,7 @@ export function createPaseoApi(daemonClient: DaemonClient): PaseoApi {
     },
     workspaces: {
       list: (options) => daemonClient.fetchWorkspaces(options),
+      prune: (options) => daemonClient.pruneWorkspaces(options),
       ref: (workspace) => createWorkspaceHandle(workspace),
       open: (input, requestId) =>
         openWorkspace(daemonClient, createWorkspaceHandle, input, requestId),

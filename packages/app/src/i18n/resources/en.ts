@@ -1215,6 +1215,18 @@ export const en = {
       },
     },
   },
+  workspacePruning: {
+    title: "Clean up missing workspaces",
+    description:
+      "Archive workspaces whose folders no longer exist on {{host}}. Agent history is preserved.",
+    scanning: "Checking workspace folders…",
+    archiving: "Archiving missing workspaces…",
+    missing: "Missing workspaces: {{count}}",
+    archived: "Archived workspaces: {{count}}",
+    archive: "Archive missing workspaces",
+    partialFailure: "Some workspaces could not be checked or archived.",
+    updateHost: "Update this host to clean up missing workspaces.",
+  },
   newWorkspace: {
     title: "New workspace",
     create: "Create",
