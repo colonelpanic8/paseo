@@ -1167,6 +1167,7 @@ export class Session {
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       listAgentPayloads: () => this.listAgentPayloads(),
+      listAgentActivityAt: () => this.listAgentActivityAt(),
       listProviderSubagentActivity: async () => this.agentManager.listProviderSubagentActivity(),
       listTerminalActivityContributions: () => this.listTerminalActivityContributions(),
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
@@ -2318,6 +2319,7 @@ export class Session {
       this.dispatchWorkspaceStateMessage(msg) ??
       this.dispatchWorkspaceLabelMessage(msg) ??
       this.dispatchWorkspaceSetupMessage(msg) ??
+      this.dispatchWorkspaceMetadataMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg)
     );
   }
@@ -2913,6 +2915,13 @@ export class Session {
         return this.handleArchiveWorkspaceRequest(msg);
       case "project.remove.request":
         return this.handleProjectRemoveRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchWorkspaceMetadataMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
       case "workspace.title.set.request":
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
@@ -3890,12 +3899,14 @@ export class Session {
         if (!workspace.archivedAt) return [];
         const project = activeProjects.get(workspace.projectId);
         if (!project) return [];
-        return [{
-          id: workspace.workspaceId,
-          projectDisplayName: resolveProjectDisplayName(project),
-          name: resolveWorkspaceDisplayName(workspace),
-          archivedAt: workspace.archivedAt,
-        }];
+        return [
+          {
+            id: workspace.workspaceId,
+            projectDisplayName: resolveProjectDisplayName(project),
+            name: resolveWorkspaceDisplayName(workspace),
+            archivedAt: workspace.archivedAt,
+          },
+        ];
       })
       .sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
       .slice(0, 25);
@@ -5309,6 +5320,25 @@ export class Session {
     }
 
     return agents;
+  }
+
+  private async listAgentActivityAt(): Promise<ReadonlyMap<string, string>> {
+    const records = await this.agentStorage.list();
+    const activityAtByAgentId = new Map<string, string>();
+    for (const record of records) {
+      const lastMessageAt = record.lastMessageAt ?? record.lastUserMessageAt;
+      if (lastMessageAt) {
+        activityAtByAgentId.set(record.id, lastMessageAt);
+      }
+    }
+    for (const agent of this.agentManager.listAgents()) {
+      if (agent.lastMessageAt) {
+        activityAtByAgentId.set(agent.id, agent.lastMessageAt.toISOString());
+      } else {
+        activityAtByAgentId.delete(agent.id);
+      }
+    }
+    return activityAtByAgentId;
   }
 
   private async resolveAgentIdentifier(
