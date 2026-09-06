@@ -226,6 +226,11 @@ async function createUnobservedWorkspace(journeyOptions?: {
       },
     },
     getAutoArchivedChangeRequestUrl: async () => null,
+    workspaceRegistry: {
+      get: async () => ({ workspaceId: "workspace-under-test", cwd, archivedAt: null }),
+      update: async () => null,
+      subscribeToMutations: () => () => {},
+    },
     listActiveWorkspaces: async () =>
       active ? [{ workspaceId: "workspace-under-test", cwd, kind: "worktree" }] : [],
   } as unknown as AutoArchiveOnMergeOptions;
