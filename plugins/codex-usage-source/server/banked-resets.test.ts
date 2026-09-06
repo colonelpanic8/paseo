@@ -152,3 +152,51 @@ test("consume failure is surfaced without a second POST", async () => {
   ).rejects.toThrow("Codex banked reset API returned 503");
   expect(fetchApi).toHaveBeenCalledTimes(1);
 });
+
+test.each([
+  new TypeError("Unexpected reset adapter defect"),
+  new SyntaxError("Invalid reset response JSON"),
+])("unexpected reset detail errors propagate: %s", async (error) => {
+  const fetchApi: typeof fetch = async (url) => {
+    if (url.toString().endsWith("/usage")) {
+      return Response.json({ rate_limit_reset_credits: { available_count: 1 } });
+    }
+    throw error;
+  };
+  await expect(fetchUsage(codexLogin, fetchApi)).rejects.toBe(error);
+});
+
+test("invalid reset details propagate the schema error", async () => {
+  const fetchApi: typeof fetch = async (url) => {
+    if (url.toString().endsWith("/usage")) {
+      return Response.json({ rate_limit_reset_credits: { available_count: 1 } });
+    }
+    return Response.json({ available_count: 1, credits: "invalid" });
+  };
+  await expect(fetchUsage(codexLogin, fetchApi)).rejects.toThrow("Invalid input: expected array");
+});
+
+test.each([
+  new TypeError("fetch failed"),
+  new DOMException("Request timed out", "TimeoutError"),
+  new DOMException("Request aborted", "AbortError"),
+])("expected reset transport failures preserve quota: %s", async (error) => {
+  const fetchApi: typeof fetch = async (url) => {
+    if (url.toString().endsWith("/usage")) {
+      return Response.json({
+        rate_limit: { primary_window: { used_percent: 75, limit_window_seconds: 18000 } },
+        rate_limit_reset_credits: { available_count: 1 },
+      });
+    }
+    throw error;
+  };
+  expect(await fetchUsage(codexLogin, fetchApi)).toMatchObject({
+    status: "available",
+    windows: [{ usedPct: 75 }],
+    bankedResets: {
+      availableCount: 1,
+      credits: null,
+      error: "Could not load banked reset details. Refresh usage to try again.",
+    },
+  });
+});

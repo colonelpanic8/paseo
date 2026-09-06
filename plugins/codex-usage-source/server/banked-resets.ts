@@ -75,7 +75,8 @@ export async function fetchBankedResets(
       })),
       error: null,
     };
-  } catch {
+  } catch (error) {
+    if (!(error instanceof CodexResetApiError)) throw error;
     // Reset details must not hide otherwise usable quota data.
     return {
       availableCount: input.availableCount,
@@ -109,7 +110,18 @@ async function callResetApi(
       headers,
       body: input.body,
     },
-  );
+  ).catch((error: unknown) => {
+    if (
+      (error instanceof DOMException &&
+        (error.name === "TimeoutError" || error.name === "AbortError")) ||
+      (error instanceof TypeError && error.message === "fetch failed")
+    ) {
+      throw new CodexResetApiError("Codex request failed. Refresh usage before retrying.", {
+        cause: error,
+      });
+    }
+    throw error;
+  });
   if (response.status === 401 || response.status === 403) {
     throw new CodexResetApiError("Sign in to Codex on this host to manage banked resets.");
   }
