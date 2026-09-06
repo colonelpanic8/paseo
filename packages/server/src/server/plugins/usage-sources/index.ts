@@ -45,6 +45,7 @@ interface AgentReports {
 
 /** Owns account identity, ordered logins for each account, and the five-minute fetch cache. */
 export class UsageSourceRegistry {
+  private generation = 0;
   private readonly sources = new Map<string, UsageSource>();
   private readonly known = new Map<string, KnownReport>();
   private defaults = new Map<string, KnownReport>();
@@ -73,25 +74,58 @@ export class UsageSourceRegistry {
       if ([...mapping.reports.values()].some((report) => report.source.id === id))
         this.byAgent.delete(agentId);
     }
-    for (const key of this.known.keys()) if (key.startsWith(`${id}:`)) this.known.delete(key);
-    for (const key of this.cache.keys()) if (key.startsWith(`${id}:`)) this.cache.delete(key);
+    this.invalidateReports((key) => key.startsWith(`${id}:`));
+  }
+
+  invalidateReports(predicate: (id: string) => boolean): void {
+    this.generation++;
+    for (const map of [this.known, this.cache, this.pending]) {
+      for (const id of map.keys()) if (predicate(id)) map.delete(id);
+    }
+  }
+
+  /**
+   * Runs an account action against freshly discovered logins. Without a report ID the source's
+   * first discovered account is used. Usage is invalidated afterwards, even on failure.
+   */
+  async runReportAction<Result>(
+    sourceId: string,
+    reportId: string | undefined,
+    action: (inputs: unknown[]) => Promise<Result>,
+  ): Promise<Result> {
+    const generation = this.generation;
+    const discovered = await this.discoverReportIds();
+    if (generation !== this.generation) return this.runReportAction(sourceId, reportId, action);
+    const id =
+      reportId ?? discovered.find((candidate) => this.known.get(candidate)?.source.id === sourceId);
+    const report = id && discovered.includes(id) ? this.known.get(id) : undefined;
+    if (!id || !report || report.source.id !== sourceId)
+      throw new Error("This account is no longer available. Refresh usage before retrying.");
+    try {
+      return await action(report.inputs);
+    } finally {
+      this.invalidateReports((candidate) => candidate === id);
+    }
   }
 
   async listReports(options: ListUsageReportsOptions = {}): Promise<UsageReportEntry[]> {
     if (options.agentId !== undefined && options.reportIds !== undefined)
       throw new Error("agentId and reportIds cannot be combined");
+    const generation = this.generation;
     this.pruneAgents();
     let ids: string[];
     if (options.agentId !== undefined) {
       ids = await this.discoverAgent(options.agentId);
     } else if (options.reportIds !== undefined) {
+      if (options.reportIds.some((id) => !this.known.has(id))) await this.discoverReportIds();
       ids = options.reportIds;
     } else {
       this.defaults = await this.discover({ kind: "global" });
       this.mergeKnown();
       ids = [...this.known.keys()];
     }
-    return Promise.all(
+    if (generation !== this.generation) return this.listReports(options);
+    const reports = await Promise.all(
       [...new Set(ids)].flatMap((id) => {
         const known = this.known.get(id);
         if (!known) return [];
@@ -103,6 +137,14 @@ export class UsageSourceRegistry {
         ];
       }),
     );
+    return generation === this.generation ? reports : this.listReports(options);
+  }
+
+  private async discoverReportIds(): Promise<string[]> {
+    this.pruneAgents();
+    this.defaults = await this.discover({ kind: "global" });
+    this.mergeKnown();
+    return [...this.known.keys()];
   }
 
   private pruneAgents(): void {
@@ -208,6 +250,7 @@ export class UsageSourceRegistry {
         windows: entry.report.status === "available" ? entry.report.windows : [],
         balances: entry.report.status === "available" ? (entry.report.balances ?? []) : [],
         details: entry.report.status === "available" ? (entry.report.details ?? []) : [],
+        bankedResets: entry.report.status === "available" ? entry.report.bankedResets : undefined,
         error: legacyError(entry.report, this.now()),
       })),
     };
@@ -219,6 +262,7 @@ export class UsageSourceRegistry {
       return Promise.resolve(cached.entry);
     const pending = this.pending.get(id);
     if (pending) return pending;
+    const generation = this.generation;
     const request = (async () => {
       const entry: UsageReportEntry = {
         id,
@@ -229,7 +273,7 @@ export class UsageSourceRegistry {
         fetchedAt: new Date(this.now()).toISOString(),
         report: await this.fetchBeforeDeadline(known),
       };
-      this.writeCache(id, entry);
+      if (generation === this.generation) this.writeCache(id, entry);
       return entry;
     })();
     this.pending.set(id, request);
