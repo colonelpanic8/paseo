@@ -15,6 +15,7 @@ function makeHost(serverId: string): HostProfile {
     serverId,
     label: serverId,
     appearance: defaultHostAppearance(),
+    declaredColor: null,
     lifecycle: {},
     connections: [],
     preferredConnectionId: null,
@@ -140,6 +141,22 @@ describe("normalizeStoredHostProfile", () => {
     expect(profile?.appearance).toEqual({ color: "none", badgeDisplay: null });
   });
 
+  it("loads the color a host declared and drops one it no longer recognizes", () => {
+    const known = normalizeStoredHostProfile({
+      serverId: "srv_declared",
+      connections: [{ type: "directTcp", endpoint: "localhost:6767" }],
+      declaredColor: "teal",
+    });
+    const unknown = normalizeStoredHostProfile({
+      serverId: "srv_declared",
+      connections: [{ type: "directTcp", endpoint: "localhost:6767" }],
+      declaredColor: "chartreuse",
+    });
+
+    expect(known?.declaredColor).toBe("teal");
+    expect(unknown?.declaredColor).toBeNull();
+  });
+
   it("loads a stored appearance the user chose", () => {
     const profile = normalizeStoredHostProfile({
       serverId: "srv_new",
@@ -219,6 +236,7 @@ describe("upsertHostConnectionInProfiles", () => {
     const existing: HostProfile = {
       ...makeHost("srv_known"),
       appearance: { color: "amber", badgeDisplay: "hidden" },
+      declaredColor: "sky",
       connections: [],
     };
 
@@ -229,6 +247,7 @@ describe("upsertHostConnectionInProfiles", () => {
     });
 
     expect(profile.appearance).toEqual({ color: "amber", badgeDisplay: "hidden" });
+    expect(profile.declaredColor).toBe("sky");
   });
 
   it("replaces a direct connection when its settings change", () => {

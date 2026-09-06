@@ -43,6 +43,7 @@ function profileWith(connections: HostProfile["connections"]): HostProfile {
     serverId: "srv_remote",
     label: "Remote",
     appearance: defaultHostAppearance(),
+    declaredColor: null,
     lifecycle: {},
     connections,
     preferredConnectionId: null,
