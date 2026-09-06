@@ -1144,7 +1144,7 @@ describe("relay external socket reconnect behavior", () => {
     await server.close();
   });
 
-  test("retains a disconnected session while its Live Voice call remains active", async () => {
+  test("bounds reconnect grace even if a stale Live Voice call remains active", async () => {
     const server = createServer();
     const socket = new MockSocket();
     await attachRelayAndHello({
@@ -1159,10 +1159,6 @@ describe("relay external socket reconnect behavior", () => {
     await vi.advanceTimersByTimeAsync(90_000);
 
     expect(session.releaseLiveVoiceSocketResources).toHaveBeenCalledWith(socket);
-    expect(session.cleanup).not.toHaveBeenCalled();
-
-    session.hasActiveLiveVoiceCall.mockReturnValue(false);
-    await vi.advanceTimersByTimeAsync(90_000);
     expect(session.cleanup).toHaveBeenCalledOnce();
 
     await server.close();
