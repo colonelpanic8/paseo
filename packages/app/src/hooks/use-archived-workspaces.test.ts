@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
   archivedWorkspacesQueryKey,
+  beginArchivedWorkspaceRestore,
   beginArchivedWorkspaceTransition,
   holdArchivedWorkspaceOrder,
   mergeArchivedWorkspaces,
+  mergeFetchedArchivedWorkspaces,
+  settleArchivedWorkspaceRestore,
   settleArchivedWorkspaceTransition,
   shouldRefreshArchivedWorkspaces,
   type ArchivedWorkspaceEntry,
@@ -228,6 +231,28 @@ describe("holdArchivedWorkspaceOrder", () => {
 });
 
 describe("archived workspace transitions", () => {
+  it("drops the row on restore and puts it back only when the restore fails", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = archivedWorkspacesQueryKey("a");
+    const kept = entry({
+      serverId: "a",
+      workspaceId: "kept",
+      archivedAt: "2026-03-03T00:00:00.000Z",
+    });
+    const restoring = entry({
+      serverId: "a",
+      workspaceId: "restoring",
+      archivedAt: "2026-03-04T00:00:00.000Z",
+    });
+    queryClient.setQueryData<ArchivedWorkspaceEntry[]>(queryKey, [restoring, kept]);
+
+    await beginArchivedWorkspaceRestore({ queryClient, entry: restoring });
+    expect(queryClient.getQueryData<ArchivedWorkspaceEntry[]>(queryKey)).toEqual([kept]);
+
+    await settleArchivedWorkspaceRestore({ queryClient, entry: restoring, outcome: "failed" });
+    expect(queryClient.getQueryData<ArchivedWorkspaceEntry[]>(queryKey)).toEqual([kept, restoring]);
+  });
+
   it("adds a pending row immediately and settles it after the archive succeeds", async () => {
     const queryClient = new QueryClient();
     const pendingEntry = {
@@ -321,6 +346,69 @@ describe("archived workspace transitions", () => {
         .getQueryData<ArchivedWorkspaceEntry[]>(archivedWorkspacesQueryKey("a"))
         ?.map((item) => item.workspaceKey),
     ).toEqual([second.workspaceKey]);
+  });
+});
+
+describe("restore reconciliation", () => {
+  it("keeps a restoring row hidden when a later refetch returns it", async () => {
+    const queryClient = new QueryClient();
+    const restoring = entry({
+      serverId: "a",
+      workspaceId: "restoring",
+      archivedAt: "2026-03-04T00:00:00Z",
+    });
+    const queryKey = archivedWorkspacesQueryKey("a");
+    queryClient.setQueryData(queryKey, [restoring]);
+    await beginArchivedWorkspaceRestore({ queryClient, entry: restoring });
+    const fetched = await queryClient.fetchQuery({ queryKey, queryFn: async () => [restoring] });
+    const displayed = mergeArchivedWorkspaces(
+      [{ isOnline: true, entries: fetched }],
+      [restoring.workspaceKey],
+    );
+    expect(holdArchivedWorkspaceOrder([restoring.workspaceKey], displayed)).toEqual([]);
+  });
+
+  it("preserves another workspace's pending archive through a restore-triggered refetch", () => {
+    const archiving: ArchivedWorkspaceEntry = {
+      ...entry({ serverId: "a", workspaceId: "archiving", archivedAt: "2026-03-04T00:00:00Z" }),
+      phase: "archiving",
+    };
+    expect(mergeFetchedArchivedWorkspaces([], [archiving])).toEqual([archiving]);
+    expect(
+      mergeFetchedArchivedWorkspaces([{ ...archiving, phase: "archived" }], [archiving]),
+    ).toEqual([archiving]);
+  });
+
+  it("reconciles a failed request after the workspace was restored by another client", async () => {
+    const queryClient = new QueryClient();
+    const restoring = entry({
+      serverId: "a",
+      workspaceId: "restoring",
+      archivedAt: "2026-03-04T00:00:00Z",
+    });
+    const queryKey = archivedWorkspacesQueryKey("a");
+    queryClient.setQueryData(queryKey, [restoring]);
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn: async () => [],
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await beginArchivedWorkspaceRestore({ queryClient, entry: restoring });
+      expect(
+        shouldRefreshArchivedWorkspaces(
+          "upsert",
+          restoring.workspaceId,
+          queryClient.getQueryData(queryKey),
+        ),
+      ).toBe(false);
+      await settleArchivedWorkspaceRestore({ queryClient, entry: restoring, outcome: "failed" });
+      expect(queryClient.getQueryData(queryKey)).toEqual([]);
+    } finally {
+      unsubscribe();
+      queryClient.clear();
+    }
   });
 });
 
