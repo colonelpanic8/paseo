@@ -1,6 +1,21 @@
-import { memo, useCallback, useMemo, useState, type MutableRefObject, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { View, Text, Pressable, ScrollView, type PressableStateCallbackType } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  type GestureResponderEvent,
+  type PressableStateCallbackType,
+} from "react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -60,6 +75,7 @@ import { SidebarStatusRowSnoozeAction } from "@/components/sidebar/sidebar-statu
 import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
+import { SidebarFilterEmptyState } from "@/components/sidebar/empty-states";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import {
   buildStatusLayoutSignature,
@@ -74,6 +90,9 @@ import {
   useSidebarListSettle,
   useSidebarListSettleValue,
 } from "@/components/sidebar/sidebar-motion";
+import { DraggableList, type DraggableRenderItemInfo } from "@/components/draggable-list";
+import type { DraggableListDragHandleProps } from "@/components/draggable-list.types";
+import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import type { GestureType } from "react-native-gesture-handler";
@@ -107,6 +126,8 @@ const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedCircleX = withUnistyles(CircleX);
 const ThemedMoon = withUnistyles(Moon);
+const EMPTY_SHORTCUT_INDEX = new Map<string, number>();
+const statusWorkspaceKeyExtractor = (workspace: SidebarWorkspaceEntry) => workspace.workspaceKey;
 interface StatusWorkspaceListProps {
   groups: StatusGroup[];
   archivedWorkspaces: ArchivedWorkspaceEntry[];
@@ -119,9 +140,12 @@ interface StatusWorkspaceListProps {
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  onPinnedWorkspaceReorder: (workspaces: SidebarWorkspaceEntry[]) => void;
+  sidebarFilterEmpty: boolean;
   /** Compact sidebar drawer-close pan; shared with the scroll and row gestures. */
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   listHeaderComponent?: ReactNode;
+  dragGestureHostActive?: boolean;
 }
 
 export function SidebarStatusWorkspaceList({
@@ -135,8 +159,11 @@ export function SidebarStatusWorkspaceList({
   hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
+  onPinnedWorkspaceReorder,
+  sidebarFilterEmpty,
   parentGestureRef,
   listHeaderComponent,
+  dragGestureHostActive,
 }: StatusWorkspaceListProps) {
   // One clock invalidates every visible status row together. Rows receive the
   // minute explicitly so memoization cannot retain a stale relative label.
@@ -180,7 +207,44 @@ export function SidebarStatusWorkspaceList({
     [parentGestureRef],
   );
 
-  const statusShortcutIndex = showShortcutBadges ? shortcutIndexByWorkspaceKey : new Map();
+  const statusShortcutIndex = showShortcutBadges
+    ? shortcutIndexByWorkspaceKey
+    : EMPTY_SHORTCUT_INDEX;
+  const renderPinnedWorkspace = useCallback(
+    ({
+      item: workspace,
+      drag,
+      isActive,
+      dragHandleProps,
+    }: DraggableRenderItemInfo<SidebarWorkspaceEntry>) => (
+      <StatusWorkspaceRow
+        activityNow={activityNow}
+        workspace={workspace}
+        iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
+        hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
+        shortcutNumber={statusShortcutIndex.get(workspace.workspaceKey) ?? null}
+        showShortcutBadge={showShortcutBadges}
+        canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+        onToggleWorkspacePin={onToggleWorkspacePin}
+        onWorkspacePress={onWorkspacePress}
+        parentGestureRef={parentGestureRef}
+        drag={drag}
+        isDragging={isActive}
+        dragHandleProps={dragHandleProps}
+      />
+    ),
+    [
+      activityNow,
+      hostBadgeByServerId,
+      onToggleWorkspacePin,
+      onWorkspacePress,
+      parentGestureRef,
+      projectIconByProjectViewKey,
+      showShortcutBadges,
+      statusShortcutIndex,
+      supportsPinningByServerId,
+    ],
+  );
   // skipEntering silences row entrances for everything mounting with the list
   // itself (startup, grouping-mode switch); only rows added later animate in.
   const content = (
@@ -191,21 +255,18 @@ export function SidebarStatusWorkspaceList({
             <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
             {pinnedCollapsed ? null : (
               <>
-                {visiblePinnedWorkspaces.map((workspace) => (
-                  <StatusWorkspaceRow
-                    key={workspace.workspaceKey}
-                    activityNow={activityNow}
-                    workspace={workspace}
-                    iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
-                    hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
-                    shortcutNumber={statusShortcutIndex.get(workspace.workspaceKey) ?? null}
-                    showShortcutBadge={showShortcutBadges}
-                    canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-                    onToggleWorkspacePin={onToggleWorkspacePin}
-                    onWorkspacePress={onWorkspacePress}
-                    parentGestureRef={parentGestureRef}
-                  />
-                ))}
+                <DraggableList
+                  testID="sidebar-pinned-list"
+                  data={visiblePinnedWorkspaces}
+                  keyExtractor={statusWorkspaceKeyExtractor}
+                  renderItem={renderPinnedWorkspace}
+                  onDragEnd={onPinnedWorkspaceReorder}
+                  scrollEnabled={false}
+                  useDragHandle
+                  nestable={platformIsNative}
+                  simultaneousGestureRef={parentGestureRef}
+                  gestureHostPresented={dragGestureHostActive}
+                />
                 {canTogglePinnedWorkspaces ? (
                   <Animated.View layout={listSettle} collapsable={false}>
                     <SidebarGroupToggleRow
@@ -224,23 +285,29 @@ export function SidebarStatusWorkspaceList({
             {listHeaderComponent}
           </Animated.View>
         ) : null}
-        <StatusGroupList
-          activityNow={activityNow}
-          limitedGroups={limitedGroups}
-          onToggleGroupExpanded={toggleGroupExpanded}
-          projectIconByProjectViewKey={projectIconByProjectViewKey}
-          shortcutIndex={statusShortcutIndex}
-          showShortcutBadges={showShortcutBadges}
-          onWorkspacePress={onWorkspacePress}
-          hostBadgeByServerId={hostBadgeByServerId}
-          supportsPinningByServerId={supportsPinningByServerId}
-          onToggleWorkspacePin={onToggleWorkspacePin}
-          parentGestureRef={parentGestureRef}
-        />
-        <SidebarArchivedGroup
-          entries={archivedWorkspaces}
-          hostBadgeByServerId={hostBadgeByServerId}
-        />
+        {sidebarFilterEmpty ? (
+          <SidebarFilterEmptyState />
+        ) : (
+          <>
+            <StatusGroupList
+              activityNow={activityNow}
+              limitedGroups={limitedGroups}
+              onToggleGroupExpanded={toggleGroupExpanded}
+              projectIconByProjectViewKey={projectIconByProjectViewKey}
+              shortcutIndex={statusShortcutIndex}
+              showShortcutBadges={showShortcutBadges}
+              onWorkspacePress={onWorkspacePress}
+              hostBadgeByServerId={hostBadgeByServerId}
+              supportsPinningByServerId={supportsPinningByServerId}
+              onToggleWorkspacePin={onToggleWorkspacePin}
+              parentGestureRef={parentGestureRef}
+            />
+            <SidebarArchivedGroup
+              entries={archivedWorkspaces}
+              hostBadgeByServerId={hostBadgeByServerId}
+            />
+          </>
+        )}
       </LayoutAnimationConfig>
     </SidebarListSettleContext>
   );
@@ -486,6 +553,9 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   onWorkspacePress,
   parentGestureRef,
   containerTestID,
+  drag,
+  isDragging = false,
+  dragHandleProps,
 }: {
   activityNow: Date;
   workspace: SidebarWorkspaceEntry;
@@ -499,6 +569,9 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   /** Stamped on the row's outer animated view so tests can scope rows to a status bucket. */
   containerTestID?: string;
+  drag?: () => void;
+  isDragging?: boolean;
+  dragHandleProps?: DraggableListDragHandleProps;
 }) {
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const selected =
@@ -525,6 +598,9 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
       parentGestureRef={parentGestureRef}
       onPress={handlePress}
       containerTestID={containerTestID}
+      drag={drag}
+      isDragging={isDragging}
+      dragHandleProps={dragHandleProps}
     />
   );
 });
@@ -542,6 +618,9 @@ function StatusWorkspaceRowWithMenu({
   parentGestureRef,
   onPress,
   containerTestID,
+  drag,
+  isDragging = false,
+  dragHandleProps,
 }: {
   activityNow: Date;
   workspace: SidebarWorkspaceEntry;
@@ -555,6 +634,9 @@ function StatusWorkspaceRowWithMenu({
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   onPress: () => void;
   containerTestID?: string;
+  drag?: () => void;
+  isDragging?: boolean;
+  dragHandleProps?: DraggableListDragHandleProps;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -702,6 +784,9 @@ function StatusWorkspaceRowWithMenu({
         parentGestureRef={parentGestureRef}
         containerTestID={containerTestID}
         disclosure={disclosure}
+        drag={drag}
+        isDragging={isDragging}
+        dragHandleProps={dragHandleProps}
       />
       {/*
         A flat sibling of the row, not a child of it: the row's animated wrapper
@@ -732,32 +817,7 @@ function StatusWorkspaceRowWithMenu({
   );
 }
 
-function StatusWorkspaceRowInner({
-  activityNow,
-  workspace,
-  iconDataUri,
-  hostBadge,
-  selected,
-  shortcutNumber,
-  showShortcutBadge,
-  onPress,
-  isArchiving,
-  archiveLabel,
-  archiveStatus = "idle",
-  archivePendingLabel,
-  onArchive,
-  onCopyBranchName,
-  onCopyPath,
-  onRename,
-  onSubmitRename,
-  onMarkAsRead,
-  archiveShortcutKeys,
-  isPinned,
-  onTogglePin,
-  parentGestureRef,
-  containerTestID,
-  disclosure,
-}: {
+interface StatusWorkspaceRowInnerProps {
   activityNow: Date;
   workspace: SidebarWorkspaceEntry;
   iconDataUri: string | null;
@@ -782,11 +842,69 @@ function StatusWorkspaceRowInner({
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   containerTestID?: string;
   disclosure: SidebarWorkspaceRowDisclosure | null;
+  drag?: () => void;
+  isDragging?: boolean;
+  dragHandleProps?: DraggableListDragHandleProps;
+}
+
+function StatusWorkspaceRowInner(props: StatusWorkspaceRowInnerProps) {
+  if (props.drag) {
+    return <DraggableStatusWorkspaceRowInner {...props} drag={props.drag} />;
+  }
+  return <StatusWorkspaceRowInnerContent {...props} />;
+}
+
+function DraggableStatusWorkspaceRowInner(
+  props: StatusWorkspaceRowInnerProps & { drag: () => void },
+) {
+  const dragInteraction = useLongPressDragInteraction({
+    drag: props.drag,
+    menuController: null,
+  });
+  return <StatusWorkspaceRowInnerContent {...props} dragInteraction={dragInteraction} />;
+}
+
+function StatusWorkspaceRowInnerContent({
+  activityNow,
+  workspace,
+  iconDataUri,
+  hostBadge,
+  selected,
+  shortcutNumber,
+  showShortcutBadge,
+  onPress,
+  isArchiving,
+  archiveLabel,
+  archiveStatus = "idle",
+  archivePendingLabel,
+  onArchive,
+  onCopyBranchName,
+  onCopyPath,
+  onRename,
+  onSubmitRename,
+  onMarkAsRead,
+  archiveShortcutKeys,
+  isPinned,
+  onTogglePin,
+  parentGestureRef,
+  containerTestID,
+  disclosure,
+  isDragging = false,
+  dragHandleProps,
+  dragInteraction,
+}: StatusWorkspaceRowInnerProps & {
+  dragInteraction?: ReturnType<typeof useLongPressDragInteraction>;
 }) {
   const { t } = useTranslation();
   const agentsLabel = t("sidebar.workspace.agentTree.swipeAction");
   const isTouchPlatform = platformIsNative;
   const [isPressed, setIsPressed] = useState(false);
+  const {
+    role: _dragRole,
+    tabIndex: _dragTabIndex,
+    "aria-roledescription": _dragRoleDescription,
+    ...dragAttributes
+  } = dragHandleProps?.attributes ?? {};
   const archiveCollapse = useArchiveCollapse(isArchiving);
   const listSettle = useSidebarListSettle();
   const kebab = useOpenKebabMenuVisibility(false);
@@ -798,8 +916,28 @@ function StatusWorkspaceRowInner({
   const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
-  const handlePressIn = useCallback(() => setIsPressed(true), []);
-  const handlePressOut = useCallback(() => setIsPressed(false), []);
+  const didLongPressRef = dragInteraction?.didLongPressRef;
+  const startDragPress = dragInteraction?.handlePressIn;
+  const moveDragPress = dragInteraction?.handleTouchMove;
+  const endDragPress = dragInteraction?.handlePressOut;
+  const handlePress = useCallback(() => {
+    if (didLongPressRef?.current) {
+      didLongPressRef.current = false;
+      return;
+    }
+    onPress();
+  }, [didLongPressRef, onPress]);
+  const handlePressIn = useCallback(
+    (event: GestureResponderEvent) => {
+      setIsPressed(true);
+      startDragPress?.(event);
+    },
+    [startDragPress],
+  );
+  const handlePressOut = useCallback(() => {
+    setIsPressed(false);
+    endDragPress?.();
+  }, [endDragPress]);
 
   return (
     <Animated.View
@@ -810,7 +948,7 @@ function StatusWorkspaceRowInner({
       collapsable={false}
       testID={containerTestID}
     >
-      <SidebarWorkspaceRowFrame workspace={workspace}>
+      <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
         {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
           // Touch platforms have no hover, so the kebab is permanent there and the
           // inline archive text button never appears.
@@ -831,7 +969,13 @@ function StatusWorkspaceRowInner({
             isHovered,
           });
           return (
-            <View style={styles.workspaceRowContainer} {...hoverHandlers}>
+            <View
+              {...dragAttributes}
+              {...dragHandleProps?.listeners}
+              ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
+              style={styles.workspaceRowContainer}
+              {...hoverHandlers}
+            >
               <StatusRowSwipeContainer
                 archiveLabel={archiveLabel}
                 onArchive={onArchive}
@@ -867,8 +1011,9 @@ function StatusWorkspaceRowInner({
                   style={workspaceRowStyle}
                   highlightStyle={styles.workspaceRowPressed}
                   onPressIn={handlePressIn}
+                  onTouchMove={moveDragPress}
                   onPressOut={handlePressOut}
-                  onPress={onPress}
+                  onPress={handlePress}
                   testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
                 >
                   <SidebarStatusRowContent
