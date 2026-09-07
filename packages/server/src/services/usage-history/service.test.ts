@@ -2,11 +2,14 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { decodeScanCache } from "./scan-cache.js";
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import {
   LITELLM_RATES_URL,
   UsageHistoryInvalidWindowError,
   UsageHistoryService,
+  UsageHistoryBusyError,
+  type UsageHistoryServiceOptions,
 } from "./service.js";
 
 let home: string;
@@ -55,7 +58,7 @@ function claudeLine(id: number, outputTokens: number, model = "claude-fable-5"):
   })}\n`;
 }
 
-function makeService(options: { fetch?: typeof fetch; now?: () => number } = {}) {
+function makeService(options: Partial<UsageHistoryServiceOptions> = {}) {
   return new UsageHistoryService({
     paseoHome,
     claudeConfigDir,
@@ -63,6 +66,7 @@ function makeService(options: { fetch?: typeof fetch; now?: () => number } = {})
     logger: createTestLogger(),
     fetch: options.fetch ?? (async () => Response.json(RATES_DOCUMENT)),
     now: options.now,
+    getProviderConfigs: options.getProviderConfigs,
   });
 }
 
@@ -100,6 +104,133 @@ describe("UsageHistoryService", () => {
     releaseFetch();
     expect(await first).toEqual(await second);
     expect(fetches).toBe(1);
+  });
+
+  it("bounds distinct requests, serializes scans, and persists the final cache", async () => {
+    await fs.writeFile(transcript, claudeLine(1, 5));
+    let releaseFetch = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    let fetchStarted = () => {};
+    const started = new Promise<void>((resolve) => {
+      fetchStarted = resolve;
+    });
+    let configReads = 0;
+    const service = makeService({
+      getProviderConfigs: () => {
+        configReads += 1;
+        return {};
+      },
+      fetch: async () => {
+        fetchStarted();
+        await blocked;
+        return Response.json(RATES_DOCUMENT);
+      },
+    });
+    const first = service.readSummary(WINDOW);
+    expect(service.readSummary(WINDOW)).toBe(first);
+    const pending = Array.from({ length: 7 }, (_, i) =>
+      service.readSummary({
+        ...WINDOW,
+        untilDay: `2026-08-${String(i + 3).padStart(2, "0")}`,
+      }),
+    );
+    expect(() => service.readSummary({ ...WINDOW, untilDay: "2026-08-10" })).toThrow(
+      UsageHistoryBusyError,
+    );
+    await started;
+    expect(configReads).toBe(1);
+    await fs.appendFile(transcript, claudeLine(2, 7));
+    releaseFetch();
+    await first;
+    const summaries = await Promise.all(pending);
+    expect(configReads).toBe(8);
+    const diskCache = decodeScanCache(
+      JSON.parse(
+        await fs.readFile(path.join(paseoHome, "usage-history", "scan-cache.json"), "utf8"),
+      ),
+    );
+    expect(diskCache.get(transcript)?.records).toHaveLength(2);
+    expect(summaries.every((summary) => totalOutputTokens(summary) === 12)).toBe(true);
+    expect(totalOutputTokens(await makeService().readSummary(WINDOW))).toBe(12);
+    expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(12);
+  });
+
+  it("reads configured accounts, deduplicates shared roots, and follows config changes", async () => {
+    await fs.writeFile(transcript, claudeLine(1, 5));
+    const extraHome = path.join(home, "claude-work");
+    const extraDir = path.join(extraHome, "projects");
+    await fs.mkdir(extraDir, { recursive: true });
+    await fs.writeFile(path.join(extraDir, "work.jsonl"), claudeLine(2, 7));
+    const alias = path.join(home, "alias");
+    await fs.symlink(extraHome, alias, "junction");
+    let providers: ReturnType<NonNullable<UsageHistoryServiceOptions["getProviderConfigs"]>> = {};
+    const service = makeService({ getProviderConfigs: () => providers });
+    expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(5);
+    providers = {
+      work: { extends: "claude", env: { CLAUDE_CONFIG_DIR: extraHome } },
+      alias: { extends: "claude", env: { CLAUDE_CONFIG_DIR: alias } },
+      shared: { extends: "claude" },
+      disabled: { extends: "claude", enabled: false, env: { CLAUDE_CONFIG_DIR: extraHome } },
+    };
+    const summary = await service.readSummary(WINDOW);
+    expect(totalOutputTokens(summary)).toBe(12);
+    expect(summary.sources.filter((source) => source.provider === "claude")).toHaveLength(2);
+    expect(summary.buckets.map((bucket) => bucket.provider)).toEqual(["claude"]);
+    providers = {};
+    expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(5);
+  });
+
+  it("counts two Codex accounts once when an account has multiple configured aliases", async () => {
+    const workHome = path.join(home, "codex-work");
+    for (const [root, id, output] of [
+      [codexHome, "personal", 5],
+      [workHome, "work", 7],
+    ] as const) {
+      const dir = path.join(root, "sessions");
+      await fs.mkdir(dir, { recursive: true });
+      const rows = [
+        { type: "session_meta", payload: { id } },
+        { type: "turn_context", payload: { model: "gpt-5" } },
+        {
+          type: "event_msg",
+          timestamp: "2026-08-01T10:00:00Z",
+          payload: {
+            type: "token_count",
+            info: { last_token_usage: { input_tokens: 10, output_tokens: output } },
+          },
+        },
+      ];
+      await fs.writeFile(
+        path.join(dir, "session.jsonl"),
+        rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+      );
+    }
+    const summary = await makeService({
+      getProviderConfigs: () => ({
+        work: { extends: "codex", env: { CODEX_HOME: workHome } },
+        alias: { extends: "codex", env: { CODEX_HOME: workHome } },
+        personal: { extends: "codex", env: { CODEX_HOME: codexHome } },
+      }),
+    }).readSummary(WINDOW);
+    expect(totalOutputTokens(summary)).toBe(12);
+    expect(summary.sources.filter((source) => source.provider === "codex")).toHaveLength(2);
+    expect(summary.sources.reduce((sum, source) => sum + source.distinctSessions, 0)).toBe(2);
+  });
+
+  it("releases admission after a scan fails", async () => {
+    let fail = true;
+    const service = makeService({
+      getProviderConfigs: () => {
+        if (fail) throw new Error("configuration unavailable");
+        return {};
+      },
+    });
+    await expect(service.readSummary(WINDOW)).rejects.toThrow("configuration unavailable");
+    fail = false;
+    await fs.writeFile(transcript, claudeLine(1, 5));
+    expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(5);
   });
 
   it("forces rate refresh inside the TTL, subject to the 60-second floor", async () => {
@@ -195,6 +326,8 @@ describe("UsageHistoryService", () => {
       { ...WINDOW, sinceDay: "2026-8-01" },
       { ...WINDOW, sinceDay: "2026-02-30" },
       { ...WINDOW, sinceDay: "2026-08-03" },
+      { ...WINDOW, sinceDay: "2026-01-01" },
+      { ...WINDOW, timeZone: "Not/AZone" },
     ]) {
       expect(() => service.readSummary(window)).toThrow(UsageHistoryInvalidWindowError);
     }

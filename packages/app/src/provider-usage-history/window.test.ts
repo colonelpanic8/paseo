@@ -93,11 +93,28 @@ describe("formatters", () => {
 });
 
 describe("formatUsdCompact", () => {
-  it("drops cents and compacts thousands for axis ticks", () => {
+  it("compacts thousands and omits unnecessary decimal places for axis ticks", () => {
     expect(formatUsdCompact(0)).toBe("$0");
     expect(formatUsdCompact(600)).toBe("$600");
     expect(formatUsdCompact(1200)).toBe("$1.2K");
     expect(formatUsdCompact(20000)).toBe("$20K");
     expect(formatUsdCompact(2_500_000)).toBe("$2.5M");
   });
+});
+
+it("distinguishes unknown costs and partial estimates from measured zero cost", () => {
+  expect(formatUsd(0, 1)).toBe("—");
+  expect(formatUsd(2, 1)).toBe("≥$2.00");
+  expect(formatUsd(0, 0)).toBe("$0.00");
+  expect(formatPercent(null)).toBe("—");
+});
+
+it("preserves fractional cost ticks instead of repeating rounded labels", () => {
+  expect([0.5, 1, 1.5, 2].map((value) => formatUsdCompact(value))).toEqual([
+    "$0.5",
+    "$1",
+    "$1.5",
+    "$2",
+  ]);
+  expect(formatUsdCompact(0.00001)).toBe("$0.00001");
 });

@@ -94,6 +94,20 @@ describe("UsageAggregator", () => {
     expect(mixed?.costSource).toBe("modelPriced");
   });
 
+  it("marks partially priced buckets as unpriced and keeps the known subtotal", () => {
+    const bucket = aggregate([
+      record({ model: "unknown", reportedCostUsd: 2 }),
+      record({ model: "unknown" }),
+    ]).buckets[0];
+    expect(bucket?.costSource).toBe("unpriced");
+    expect(bucket?.unpricedRecords).toBe(1);
+    expect(bucket?.costUsd).toBe(2);
+  });
+
+  it("rejects invalid time zones instead of substituting UTC", () => {
+    expect(() => aggregate([record()], "Not/AZone")).toThrow(RangeError);
+  });
+
   it("drops records outside the window and reports whether records contributed", () => {
     const aggregator = new UsageAggregator({
       timeZone: "UTC",
