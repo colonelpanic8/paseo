@@ -117,7 +117,7 @@ export type ModelBrowserScrolling = "sheet" | "independent";
  * context and throw without it. Callers pick `scrolling` from platform or form factor, which is a
  * different question from whether this particular render sits inside a sheet.
  */
-export function resolveModelBrowserScrolling(
+export function scopeModelBrowserScrolling(
   requested: ModelBrowserScrolling,
   insideBottomSheet: boolean,
 ): ModelBrowserScrolling {

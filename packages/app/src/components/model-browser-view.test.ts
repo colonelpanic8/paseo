@@ -8,7 +8,7 @@ import {
   resolveModelBrowserAllView,
   resolveModelBrowserScrolling,
   groupProfilesByProviderModel,
-  resolveModelBrowserScrolling,
+  scopeModelBrowserScrolling,
 } from "./model-browser-view";
 
 function provider(
@@ -236,16 +236,16 @@ describe("model browser all view", () => {
   });
 });
 
-describe("resolveModelBrowserScrolling", () => {
+describe("scopeModelBrowserScrolling", () => {
   it("keeps sheet scrolling inside a bottom sheet", () => {
-    expect(resolveModelBrowserScrolling("sheet", true)).toBe("sheet");
+    expect(scopeModelBrowserScrolling("sheet", true)).toBe("sheet");
   });
 
   it("falls back to independent scrolling outside a bottom sheet", () => {
-    expect(resolveModelBrowserScrolling("sheet", false)).toBe("independent");
+    expect(scopeModelBrowserScrolling("sheet", false)).toBe("independent");
   });
 
   it("never promotes an independent list to a sheet scrollable", () => {
-    expect(resolveModelBrowserScrolling("independent", true)).toBe("independent");
+    expect(scopeModelBrowserScrolling("independent", true)).toBe("independent");
   });
 });
