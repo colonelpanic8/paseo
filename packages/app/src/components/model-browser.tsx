@@ -62,7 +62,7 @@ import {
   resolveModelBrowserScrolling,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
-import { useIsInsideBottomSheet } from "@/components/ui/text-input/bottom-sheet-scope";
+import { useIsInsideBottomSheet } from "@/components/ui/bottom-sheet-scope";
 
 const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
