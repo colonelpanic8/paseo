@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { redirectSystemPath } from "@/app/+native-intent";
 import type {
   LiveVoiceAvailability,
   LiveVoiceHostAvailability,
@@ -181,5 +182,35 @@ describe("resolveLiveVoiceLinkHost", () => {
         },
       }),
     ).toEqual({ kind: "show_launcher" });
+  });
+});
+
+describe("Live Voice native routing", () => {
+  it("boots into the normal app route for a cold Live Voice launch", () => {
+    expect(redirectSystemPath({ path: "paseo://live-voice", initial: true })).toBe("/");
+  });
+
+  it("leaves the current screen in place for a warm Live Voice launch", () => {
+    expect(redirectSystemPath({ path: "paseo://live-voice", initial: false })).toBe("");
+  });
+
+  it.each([true, false])(
+    "keeps the host target available to the action listener (initial=%s)",
+    (initial) => {
+      const path = "paseo://live-voice/?host=host%2Fremote";
+      expect(redirectSystemPath({ path, initial })).toBe(initial ? "/" : "");
+      expect(parseLiveVoiceLink(path)).toEqual({ host: "host/remote" });
+    },
+  );
+
+  it.each([
+    "/settings",
+    "paseo://h/host-a/agent/agent-a",
+    "paseo://live-voice/settings",
+    "https://live-voice",
+    "not a url",
+  ])("preserves unrelated system paths: %s", (path) => {
+    expect(redirectSystemPath({ path, initial: true })).toBe(path);
+    expect(redirectSystemPath({ path, initial: false })).toBe(path);
   });
 });
