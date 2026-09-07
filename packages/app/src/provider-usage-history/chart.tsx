@@ -100,11 +100,12 @@ export function ProviderUsageHistoryChart({
             {selected.bands.map((band) => (
               <Text key={band.provider}>{`  ${providerLabel(band.provider)} ${format(
                 band.value,
+                band.unpricedRecords,
               )}`}</Text>
             ))}
             <Text style={styles.readoutDay}>{`  ${t(
               "settings.usageHistory.chart.total",
-            )} ${format(selected.total)}`}</Text>
+            )} ${format(selected.total, selected.unpricedRecords)}`}</Text>
           </Text>
         )}
       </View>
@@ -140,7 +141,7 @@ export function ProviderUsageHistoryChart({
                 max={scale.max}
                 providerOrder={providerOrder}
                 isSelected={column.day === candidate}
-                label={`${formatDayShort(column.day)} ${format(column.total)}`}
+                label={`${formatDayShort(column.day)} ${format(column.total, column.unpricedRecords)}`}
                 onDispatch={dispatch}
               />
             ))}

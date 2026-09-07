@@ -3,12 +3,14 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { Logger } from "pino";
 import type {
+  MutableDaemonConfig,
   ProviderUsageHistoryPricing,
   ProviderUsageHistoryReadRequestMessage,
   ProviderUsageHistoryReadResponseMessage,
   ProviderUsageHistorySource,
 } from "../../server/messages.js";
 import { writeFileAtomic } from "../../server/atomic-file.js";
+import { expandTilde } from "../../utils/path.js";
 import { UsageAggregator } from "./aggregation.js";
 import { parseRateTable, type RateTable } from "./pricing.js";
 import {
@@ -24,6 +26,9 @@ import type { UsageProvider, UsageRecord } from "./transcripts.js";
 
 export const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
+const MAX_WINDOW_DAYS = 90;
+const MAX_PENDING_SCANS = 8;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
 const RATES_REFRESH_FLOOR_MS = 60 * 1000;
 
@@ -45,6 +50,7 @@ export interface UsageHistoryServiceOptions {
   logger: Logger;
   claudeConfigDir?: string;
   codexHome?: string;
+  getProviderConfigs?: () => MutableDaemonConfig["providers"];
   fetch?: typeof fetch;
   now?: () => number;
 }
@@ -72,6 +78,13 @@ interface ScannedSource {
   message: string | null;
 }
 
+export class UsageHistoryBusyError extends Error {
+  constructor() {
+    super("Usage history scan queue is full; retry later");
+    this.name = "UsageHistoryBusyError";
+  }
+}
+
 export class UsageHistoryInvalidWindowError extends Error {
   constructor(message: string) {
     super(message);
@@ -97,12 +110,23 @@ export function validateUsageHistoryWindow(input: UsageHistoryReadInput): void {
       `sinceDay '${input.sinceDay}' is after untilDay '${input.untilDay}'`,
     );
   }
+  const days = (Date.parse(input.untilDay) - Date.parse(input.sinceDay)) / DAY_MS + 1;
+  if (days > MAX_WINDOW_DAYS) {
+    throw new UsageHistoryInvalidWindowError(`window exceeds ${MAX_WINDOW_DAYS} days`);
+  }
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: input.timeZone }).resolvedOptions();
+  } catch {
+    throw new UsageHistoryInvalidWindowError(`timeZone '${input.timeZone}' is not supported`);
+  }
 }
 
 /** Scans provider-owned transcripts and aggregates API-equivalent usage cost. */
 export class UsageHistoryService {
   private readonly logger: Logger;
-  private readonly sources: readonly TranscriptSource[];
+  private readonly defaultSources: readonly TranscriptSource[];
+  private readonly getProviderConfigs: () => MutableDaemonConfig["providers"];
+  private scanLock: Promise<void> = Promise.resolve();
   private readonly fetchApi: typeof fetch;
   private readonly now: () => number;
   private readonly scanCachePath: string;
@@ -124,7 +148,8 @@ export class UsageHistoryService {
       path.join(homedir(), ".claude");
     const codexHome =
       options.codexHome ?? process.env["CODEX_HOME"] ?? path.join(homedir(), ".codex");
-    this.sources = [
+    this.getProviderConfigs = options.getProviderConfigs ?? (() => ({}));
+    this.defaultSources = [
       { provider: "claude", dir: path.join(claudeConfigDir, "projects") },
       { provider: "codex", dir: path.join(codexHome, "sessions") },
     ];
@@ -141,9 +166,16 @@ export class UsageHistoryService {
     const existing = this.inflightScans.get(key);
     if (existing) return existing;
 
-    const scan = this.scanSummary(input).finally(() => {
-      if (this.inflightScans.get(key) === scan) this.inflightScans.delete(key);
-    });
+    if (this.inflightScans.size >= MAX_PENDING_SCANS) throw new UsageHistoryBusyError();
+    const scan = this.scanLock
+      .then(() => this.scanSummary(input))
+      .finally(() => {
+        if (this.inflightScans.get(key) === scan) this.inflightScans.delete(key);
+      });
+    this.scanLock = scan.then(
+      () => undefined,
+      () => undefined,
+    );
     this.inflightScans.set(key, scan);
     return scan;
   }
@@ -232,11 +264,33 @@ export class UsageHistoryService {
     };
   }
 
+  private transcriptSources(): TranscriptSource[] {
+    const sources = this.defaultSources.map((source) => ({ ...source }));
+    for (const [id, config] of Object.entries(this.getProviderConfigs())) {
+      const provider = config.extends ?? id;
+      if (provider !== "claude" && provider !== "codex") continue;
+      const env = config.env;
+      if (typeof env !== "object" || env === null || Array.isArray(env)) continue;
+      const variable = provider === "claude" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME";
+      const home: unknown = Reflect.get(env, variable);
+      if (typeof home !== "string" || home.length === 0) continue;
+      const subdir = provider === "claude" ? "projects" : "sessions";
+      sources.push({ provider, dir: path.resolve(expandTilde(home), subdir) });
+    }
+    return sources;
+  }
+
   private async collectSources(windowStartMs: number): Promise<readonly ScannedSource[]> {
     const scanned: ScannedSource[] = [];
-    for (const source of this.sources) {
+    const seenRoots = new Set<string>();
+    const seenFiles = new Set<string>();
+    for (const source of this.transcriptSources()) {
       let stats;
       try {
+        source.dir = await fs.realpath(source.dir);
+        const rootKey = `${source.provider}:${source.dir}`;
+        if (seenRoots.has(rootKey)) continue;
+        seenRoots.add(rootKey);
         stats = await fs.stat(source.dir);
       } catch (error) {
         const code = readErrorCode(error);
@@ -276,6 +330,9 @@ export class UsageHistoryService {
 
       const files: ScannedFile[] = [];
       for (const file of transcriptFiles) {
+        const fileKey = `${source.provider}:${file.path}`;
+        if (seenFiles.has(fileKey)) continue;
+        seenFiles.add(fileKey);
         files.push({
           path: file.path,
           records: await this.readFileRecords(file.path, file.size, file.mtimeMs, source.provider),

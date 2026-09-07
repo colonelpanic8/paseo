@@ -10,6 +10,7 @@ import type { ProviderUsageHistoryMetric } from "./types";
 export interface ProviderUsageHistoryChartBand {
   readonly provider: string;
   readonly value: number;
+  readonly unpricedRecords: number;
 }
 
 export interface ProviderUsageHistoryChartColumn {
@@ -17,6 +18,7 @@ export interface ProviderUsageHistoryChartColumn {
   /** In the given provider order, i.e. bottom of the stack first. */
   readonly bands: readonly ProviderUsageHistoryChartBand[];
   readonly total: number;
+  readonly unpricedRecords: number;
 }
 
 export interface ProviderUsageHistoryScale {
@@ -35,10 +37,23 @@ export function buildChartColumns(
   return days.map((day) => {
     const totals = byDay.get(day);
     const bands = providers.map((provider) => {
-      const entry = totals?.byProvider.get(provider) ?? { costUsd: 0, totalTokens: 0 };
-      return { provider, value: metric === "cost" ? entry.costUsd : entry.totalTokens };
+      const entry = totals?.byProvider.get(provider) ?? {
+        costUsd: 0,
+        totalTokens: 0,
+        unpricedRecords: 0,
+      };
+      return {
+        provider,
+        value: metric === "cost" ? entry.costUsd : entry.totalTokens,
+        unpricedRecords: entry.unpricedRecords,
+      };
     });
-    return { day, bands, total: bands.reduce((sum, band) => sum + band.value, 0) };
+    return {
+      day,
+      bands,
+      unpricedRecords: bands.reduce((sum, band) => sum + band.unpricedRecords, 0),
+      total: bands.reduce((sum, band) => sum + band.value, 0),
+    };
   });
 }
 

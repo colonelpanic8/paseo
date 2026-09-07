@@ -744,6 +744,12 @@ export class VoiceAssistantWebSocketServer {
       unsubscribeChange();
     };
 
+    this.usageHistoryService = new UsageHistoryService({
+      paseoHome,
+      logger: this.logger,
+      getProviderConfigs: () => this.daemonConfigStore.get().providers,
+    });
+
     const pushLogger = this.logger.child({ module: "push" });
     this.pushNotifications = createPushNotifications({
       logger: pushLogger,
@@ -755,11 +761,6 @@ export class VoiceAssistantWebSocketServer {
       void this.broadcastAgentAttention(params).catch((err) => {
         this.logger.warn({ err, agentId: params.agentId }, "Failed to broadcast agent attention");
       });
-    });
-
-    this.usageHistoryService = new UsageHistoryService({
-      paseoHome,
-      logger: this.logger,
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);

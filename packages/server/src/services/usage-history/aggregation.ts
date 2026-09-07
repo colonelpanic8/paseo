@@ -4,22 +4,12 @@ import { addTotals, EMPTY_TOTALS, type UsageRecord, type UsageTokenTotals } from
 
 /** `en-CA` yields ISO-ordered date parts without using host-local Date getters. */
 export function makeDayFormatter(timeZone: string): (timestampMs: number) => string {
-  let format: Intl.DateTimeFormat;
-  try {
-    format = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  } catch {
-    format = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  }
+  const format = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
   return (timestampMs) => format.format(new Date(timestampMs));
 }
 
@@ -142,7 +132,7 @@ export class UsageAggregator {
 
 /** The weakest cost provenance in a mixed bucket wins. */
 function resolveCostSource(bucket: MutableBucket): ProviderUsageHistoryBucket["costSource"] {
-  if (bucket.unpricedRecords === bucket.records) return "unpriced";
+  if (bucket.unpricedRecords > 0) return "unpriced";
   if (bucket.providerReportedRecords === bucket.records) return "providerReported";
   return "modelPriced";
 }

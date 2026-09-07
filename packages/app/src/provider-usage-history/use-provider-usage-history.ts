@@ -10,6 +10,7 @@ import type {
   ProviderUsageHistoryView,
   ProviderUsageHistoryWindowDays,
 } from "./types";
+import { usageHistoryView } from "./view";
 import { makeWindow, type ProviderUsageHistoryWindow } from "./window";
 
 // A cold scan walks every transcript in the window, so re-reading on every
@@ -60,14 +61,19 @@ export function useProviderUsageHistory(
         throw new Error(t("settings.usageHistory.clientUnavailable"));
       }
       const usageClient: ProviderUsageHistoryClient = client;
-      return usageClient.readProviderUsageHistory({
-        sinceDay: window.sinceDay,
-        untilDay: window.untilDay,
-        timeZone: window.timeZone,
-        ...(refreshRates ? { refreshRates: true } : {}),
-      });
+      try {
+        return await usageClient.readProviderUsageHistory({
+          sinceDay: window.sinceDay,
+          untilDay: window.untilDay,
+          timeZone: window.timeZone,
+          ...(refreshRates ? { refreshRates: true } : {}),
+        });
+      } catch (error) {
+        console.error("Failed to read provider usage history", { error, serverId, window });
+        throw error;
+      }
     },
-    [client, t, window],
+    [client, serverId, t, window],
   );
 
   const queryFn = useCallback(() => read(false), [read]);
@@ -86,41 +92,23 @@ export function useProviderUsageHistory(
   // refresh is the only place that pays for it.
   const refresh = useCallback(async () => {
     if (!canFetch) return;
-    await queryClient.fetchQuery({
-      queryKey,
-      queryFn: () => read(true),
-      staleTime: 0,
-    });
+    // Query state owns the error presentation, including failed refreshes of cached data.
+    await queryClient
+      .fetchQuery({
+        queryKey,
+        queryFn: () => read(true),
+        staleTime: 0,
+      })
+      .catch(() => undefined);
   }, [canFetch, queryClient, queryKey, read]);
 
-  const view = useMemo<ProviderUsageHistoryView>(() => {
-    if (!serverId || !client || !isConnected) {
-      return { kind: "error", message: t("settings.usageHistory.hostUnavailable") };
-    }
-    if (!isSupported) {
-      return { kind: "unsupported" };
-    }
-    if (query.data) {
-      return { kind: "ready", payload: query.data, isRefreshing: query.isFetching };
-    }
-    if (query.isError) {
-      return {
-        kind: "error",
-        message: query.error instanceof Error ? query.error.message : String(query.error),
-      };
-    }
-    return { kind: "loading" };
-  }, [
-    client,
-    isConnected,
+  const view = usageHistoryView({
+    isConnected: Boolean(serverId && client && isConnected),
     isSupported,
-    query.data,
-    query.error,
-    query.isError,
-    query.isFetching,
-    serverId,
-    t,
-  ]);
+    isError: query.isError,
+    isFetching: query.isFetching,
+    payload: query.data,
+  });
 
   return { view, window, refresh };
 }
