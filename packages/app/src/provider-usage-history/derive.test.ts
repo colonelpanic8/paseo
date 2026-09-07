@@ -187,7 +187,43 @@ describe("deriveProviderUsageHistory", () => {
 
     expect(totals.daily.map((day) => day.day)).toEqual(["2026-09-05", "2026-09-07"]);
     expect(totals.daily[1]?.costUsd).toBe(3);
-    expect(totals.daily[1]?.byProvider.get("codex")).toEqual({ costUsd: 2, totalTokens: 3_000 });
+    expect(totals.daily[1]?.byProvider.get("codex")).toEqual({
+      costUsd: 2,
+      totalTokens: 3_000,
+      unpricedRecords: 0,
+    });
+  });
+
+  it("preserves incomplete pricing through every total and chart readout", () => {
+    const totals = deriveProviderUsageHistory(
+      payload(
+        [
+          bucket({
+            day: "2026-09-07",
+            provider: "claude",
+            model: "unknown",
+            costUsd: 2,
+            records: 2,
+            unpricedRecords: 1,
+            outputTokens: 100,
+            costSource: "unpriced",
+          }),
+        ],
+        [source("claude", 1)],
+      ),
+    );
+    expect(totals.unpricedRecords).toBe(1);
+    expect(totals.costUsd).toBe(2);
+    expect(totals.totalTokens).toBe(100);
+    expect(totals.providers[0]?.unpricedRecords).toBe(1);
+    expect(totals.providers[0]?.costShare).toBeNull();
+    expect(totals.models[0]?.unpricedRecords).toBe(1);
+    expect(totals.models[0]?.costShare).toBeNull();
+    expect(totals.daily[0]?.unpricedRecords).toBe(1);
+    expect(totals.daily[0]?.byProvider.get("claude")?.unpricedRecords).toBe(1);
+    const columns = buildChartColumns(["2026-09-07"], totals.daily, ["claude"], "cost");
+    expect(columns[0]?.unpricedRecords).toBe(1);
+    expect(columns[0]?.bands[0]?.unpricedRecords).toBe(1);
   });
 
   it("reports zero shares for an empty window", () => {
@@ -212,12 +248,12 @@ describe("buildChartColumns", () => {
 
     expect(columns.map((column) => column.total)).toEqual([3, 0, 3]);
     expect(columns[1]?.bands).toEqual([
-      { provider: "claude", value: 0 },
-      { provider: "codex", value: 0 },
+      { provider: "claude", value: 0, unpricedRecords: 0 },
+      { provider: "codex", value: 0, unpricedRecords: 0 },
     ]);
     expect(columns[2]?.bands).toEqual([
-      { provider: "claude", value: 1 },
-      { provider: "codex", value: 2 },
+      { provider: "claude", value: 1, unpricedRecords: 0 },
+      { provider: "codex", value: 2, unpricedRecords: 0 },
     ]);
   });
 
