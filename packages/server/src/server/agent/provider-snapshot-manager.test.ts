@@ -2440,6 +2440,133 @@ describe("provider-owned catalogue identity", () => {
     }
   });
 
+  test("overlapping forced refreshes share one provider load", async () => {
+    let releaseRefresh!: () => void;
+    let refreshStarted!: () => void;
+    const released = new Promise<void>((finish) => {
+      releaseRefresh = finish;
+    });
+    const began = new Promise<void>((finish) => {
+      refreshStarted = finish;
+    });
+    const fetchCatalog = vi.fn(async (_options: FetchCatalogOptions) => {
+      refreshStarted();
+      await released;
+      return {
+        models: [{ provider: "codex", id: "gpt-5.4-mini", label: "GPT 5.4 Mini" }],
+        modes: [] as AgentMode[],
+      };
+    });
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: { ...disabledProviders, codex: { enabled: true } },
+      extraClients: {
+        codex: createExtraClient("codex", {
+          async isAvailable() {
+            return true;
+          },
+          fetchCatalog,
+        }),
+      },
+    });
+    try {
+      const first = manager.refreshSnapshotForCwd({
+        cwd: resolveSnapshotCwd("/a"),
+        providers: ["codex"],
+      });
+      await began;
+      const second = manager.refreshSnapshotForCwd({
+        cwd: resolveSnapshotCwd("/b"),
+        providers: ["codex"],
+      });
+      releaseRefresh();
+      await Promise.all([first, second]);
+
+      expect(fetchCatalog).toHaveBeenCalledTimes(1);
+      for (const cwd of [resolveSnapshotCwd("/a"), resolveSnapshotCwd("/b")]) {
+        expect(await manager.getProvider({ provider: "codex", cwd, wait: false })).toMatchObject({
+          status: "ready",
+          models: [expect.objectContaining({ id: "gpt-5.4-mini" })],
+        });
+      }
+    } finally {
+      releaseRefresh();
+      await manager.shutdown();
+      manager.destroy();
+    }
+  });
+
+  test("forced refreshes share one follow-up to an overlapping warm-up", async () => {
+    let releaseWarmUp!: () => void;
+    let warmUpStarted!: () => void;
+    const released = new Promise<void>((finish) => {
+      releaseWarmUp = finish;
+    });
+    const began = new Promise<void>((finish) => {
+      warmUpStarted = finish;
+    });
+    const fetchCatalog = vi.fn(async (options: FetchCatalogOptions) => {
+      if (!options.force) {
+        warmUpStarted();
+        await released;
+      }
+      return {
+        models: [
+          {
+            provider: "codex",
+            id: options.force ? "gpt-5.4-mini-forced" : "gpt-5.4-mini-warm",
+            label: "GPT 5.4 Mini",
+          },
+        ],
+        modes: [] as AgentMode[],
+      };
+    });
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: { ...disabledProviders, codex: { enabled: true } },
+      extraClients: {
+        codex: createExtraClient("codex", {
+          async isAvailable() {
+            return true;
+          },
+          fetchCatalog,
+        }),
+      },
+    });
+    try {
+      const warmUp = manager.getProvider({
+        provider: "codex",
+        cwd: resolveSnapshotCwd("/a"),
+        wait: true,
+      });
+      await began;
+      const firstForced = manager.refreshSnapshotForCwd({
+        cwd: resolveSnapshotCwd("/a"),
+        providers: ["codex"],
+      });
+      const secondForced = manager.refreshSnapshotForCwd({
+        cwd: resolveSnapshotCwd("/b"),
+        providers: ["codex"],
+      });
+      releaseWarmUp();
+      await Promise.all([warmUp, firstForced, secondForced]);
+
+      expect(fetchCatalog).toHaveBeenCalledTimes(2);
+      expect(fetchCatalog.mock.calls.map(([options]) => options.force)).toEqual([false, true]);
+      for (const cwd of [resolveSnapshotCwd("/a"), resolveSnapshotCwd("/b")]) {
+        expect(await manager.getProvider({ provider: "codex", cwd, wait: false })).toMatchObject({
+          status: "ready",
+          models: [expect.objectContaining({ id: "gpt-5.4-mini-forced" })],
+        });
+      }
+    } finally {
+      releaseWarmUp();
+      await manager.shutdown();
+      manager.destroy();
+    }
+  });
+
+
   test("key lookup failure detaches a view from its previous shared catalogue", async () => {
     let broken = false;
     let calls = 0;
