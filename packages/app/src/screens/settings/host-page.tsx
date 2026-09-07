@@ -52,6 +52,7 @@ import {
 import { ProvidersSection } from "@/screens/settings/providers-section";
 import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
+import { ProviderUsageHistorySection } from "@/provider-usage-history/section";
 import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
@@ -355,6 +356,20 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
   return (
     <View>
       <ProviderUsageSettingsSection view={providerUsageView} onRefresh={handleRefresh} />
+    </View>
+  );
+}
+
+export function HostUsageHistoryPage({ serverId }: { serverId: string }) {
+  const host = useHostProfile(serverId);
+
+  if (!host) {
+    return <HostNotFound />;
+  }
+
+  return (
+    <View>
+      <ProviderUsageHistorySection serverId={serverId} />
     </View>
   );
 }
