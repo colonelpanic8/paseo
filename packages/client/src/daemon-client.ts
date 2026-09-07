@@ -96,6 +96,7 @@ import type {
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
   UsageListReportsResponseMessage,
+  ProviderUsageHistoryReadResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
@@ -563,6 +564,7 @@ type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
 type UsageListReportsPayload = UsageListReportsResponseMessage["payload"];
+type ProviderUsageHistoryReadPayload = ProviderUsageHistoryReadResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
@@ -5317,6 +5319,24 @@ export class DaemonClient {
         forceRefresh: options?.forceRefresh,
         reportIds: options?.reportIds,
       },
+    });
+  }
+
+  async readProviderUsageHistory(
+    input: { sinceDay: string; untilDay: string; timeZone: string; refreshRates?: boolean },
+    options?: { requestId?: string },
+  ): Promise<ProviderUsageHistoryReadPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"provider.usage_history.read.response">({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.usage_history.read.request",
+        sinceDay: input.sinceDay,
+        untilDay: input.untilDay,
+        timeZone: input.timeZone,
+        ...(input.refreshRates === undefined ? {} : { refreshRates: input.refreshRates }),
+      },
+      // A cold scan streams every transcript in the window; 1-2 GB corpora take seconds.
+      timeout: 120000,
     });
   }
 
