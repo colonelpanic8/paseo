@@ -24,6 +24,7 @@ import {
   Network,
   Bot,
   Boxes,
+  ChartColumn,
   Gauge,
   Keyboard,
   Stethoscope,
@@ -109,6 +110,7 @@ import {
   HostSettingsPage,
   HostProvidersPage,
   HostUsagePage,
+  HostUsageHistoryPage,
   HostWorkspacesPage,
   HostTerminalsPage,
 } from "@/screens/settings/host-page";
@@ -196,6 +198,11 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
+  {
+    id: "usage-history",
+    labelKey: "settings.hostSections.usageHistory",
+    icon: ChartColumn,
+  },
   { id: "terminals", labelKey: "settings.hostSections.terminals", icon: SquareTerminal },
   { id: "plugins", labelKey: "settings.hostSections.plugins", icon: Blocks },
 ];
@@ -221,6 +228,8 @@ function renderHostSettingsContent(
       return <HostProvidersPage serverId={view.serverId} />;
     case "usage":
       return <HostUsagePage serverId={view.serverId} />;
+    case "usage-history":
+      return <HostUsageHistoryPage serverId={view.serverId} />;
     case "terminals":
       return <HostTerminalsPage serverId={view.serverId} />;
     case "plugins":
