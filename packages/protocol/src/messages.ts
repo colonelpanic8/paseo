@@ -1746,6 +1746,24 @@ export const ProviderUsageListRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+/**
+ * Historical token/cost usage read from the provider CLIs' own on-disk session
+ * transcripts. Distinct from `provider.usage.list`, which reports live
+ * subscription quota windows.
+ */
+export const ProviderUsageHistoryReadRequestMessageSchema = z.object({
+  type: z.literal("provider.usage_history.read.request"),
+  requestId: z.string(),
+  /** Inclusive first day of the window, `YYYY-MM-DD` in `timeZone`. */
+  sinceDay: z.string(),
+  /** Inclusive last day of the window, `YYYY-MM-DD` in `timeZone`. */
+  untilDay: z.string(),
+  /** IANA zone the daemon buckets days in. */
+  timeZone: z.string(),
+  /** Refetch the model rate table ahead of its TTL before pricing. */
+  refreshRates: z.boolean().optional(),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("resume_agent_request"),
   handle: AgentPersistenceHandleSchema,
@@ -3117,6 +3135,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
+  ProviderUsageHistoryReadRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
@@ -3491,6 +3510,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceFileEditing: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
+        // COMPAT(providerUsageHistory): added in v0.7.3, remove gate after 2027-03-07 once daemon floor >= v0.7.3.
+        providerUsageHistory: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: z.boolean().optional(),
         // COMPAT(agentThinkingUpdate): added in v0.2.4, remove gate after 2027-01-28.
@@ -5971,6 +5992,76 @@ export const ProviderUsageListResponseMessageSchema = z.object({
   }),
 });
 
+export const ProviderUsageHistoryCostSourceSchema = z.enum([
+  "providerReported",
+  "modelPriced",
+  "unpriced",
+]);
+
+/**
+ * `cachedInputTokens` and `cacheCreationTokens` are disjoint from
+ * `uncachedInputTokens`; summing all three gives total input. `reasoningTokens`
+ * is a subset of `outputTokens` and must never be added on top.
+ */
+export const ProviderUsageHistoryTokenTotalsSchema = z.object({
+  uncachedInputTokens: z.number(),
+  cachedInputTokens: z.number(),
+  cacheCreationTokens: z.number(),
+  outputTokens: z.number(),
+  reasoningTokens: z.number(),
+});
+
+/** One `(day, provider, model)` cell. `costUsd` is an API-equivalent estimate, not a bill. */
+export const ProviderUsageHistoryBucketSchema = z.object({
+  day: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  totals: ProviderUsageHistoryTokenTotalsSchema,
+  costUsd: z.number(),
+  cacheSavingsUsd: z.number(),
+  costSource: ProviderUsageHistoryCostSourceSchema,
+  records: z.number(),
+  unpricedRecords: z.number(),
+  sessions: z.number(),
+});
+
+export const ProviderUsageHistorySourceStatusSchema = z.enum(["ok", "missing", "failed"]);
+
+export const ProviderUsageHistorySourceSchema = z.object({
+  provider: z.string(),
+  path: z.string(),
+  status: ProviderUsageHistorySourceStatusSchema,
+  scannedFiles: z.number(),
+  skippedFiles: z.number(),
+  /** Distinct transcript sessions in the window; bucket session counts overcount across days. */
+  distinctSessions: z.number(),
+  message: z.string().nullable(),
+});
+
+export const ProviderUsageHistoryPricingStatusSchema = z.enum(["fresh", "cached", "unavailable"]);
+
+export const ProviderUsageHistoryPricingSchema = z.object({
+  status: ProviderUsageHistoryPricingStatusSchema,
+  source: z.string(),
+  fetchedAt: z.string().nullable(),
+  knownModels: z.number(),
+});
+
+export const ProviderUsageHistoryReadResponseMessageSchema = z.object({
+  type: z.literal("provider.usage_history.read.response"),
+  payload: z.object({
+    requestId: z.string(),
+    readAt: z.string(),
+    timeZone: z.string(),
+    sinceDay: z.string(),
+    untilDay: z.string(),
+    buckets: z.array(ProviderUsageHistoryBucketSchema),
+    sources: z.array(ProviderUsageHistorySourceSchema),
+    pricing: ProviderUsageHistoryPricingSchema,
+    scanDurationMs: z.number(),
+  }),
+});
+
 const AgentSlashCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -6595,6 +6686,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
+  ProviderUsageHistoryReadResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -6772,6 +6864,17 @@ export type RefreshProvidersSnapshotResponseMessage = z.infer<
 export type ProviderDiagnosticResponseMessage = z.infer<
   typeof ProviderDiagnosticResponseMessageSchema
 >;
+export type ProviderUsageHistoryReadRequestMessage = z.infer<
+  typeof ProviderUsageHistoryReadRequestMessageSchema
+>;
+export type ProviderUsageHistoryReadResponseMessage = z.infer<
+  typeof ProviderUsageHistoryReadResponseMessageSchema
+>;
+export type ProviderUsageHistoryCostSource = z.infer<typeof ProviderUsageHistoryCostSourceSchema>;
+export type ProviderUsageHistoryTokenTotals = z.infer<typeof ProviderUsageHistoryTokenTotalsSchema>;
+export type ProviderUsageHistoryBucket = z.infer<typeof ProviderUsageHistoryBucketSchema>;
+export type ProviderUsageHistorySource = z.infer<typeof ProviderUsageHistorySourceSchema>;
+export type ProviderUsageHistoryPricing = z.infer<typeof ProviderUsageHistoryPricingSchema>;
 export type ProviderUsageTone = z.infer<typeof ProviderUsageToneSchema>;
 export type ProviderUsageStatus = z.infer<typeof ProviderUsageStatusSchema>;
 export type ProviderUsage = z.infer<typeof ProviderUsageSchema>;
