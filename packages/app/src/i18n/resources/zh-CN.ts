@@ -1930,6 +1930,9 @@ export const zhCN: TranslationResources = {
       usageHistory: "使用历史",
     },
     usageHistory: {
+      incompleteCosts:
+        "部分活动没有价格。费用和图表柱仅包含已知价格的活动；≥ 表示下限，— 表示费用未知。",
+      readFailed: "请检查主机连接后重试。",
       title: "使用历史",
       info: "从此主机上各 Provider CLI 的会话记录中读取的 token 与费用汇总。费用为按 API 价目表估算的结果，并非账单。",
       refresh: "刷新",

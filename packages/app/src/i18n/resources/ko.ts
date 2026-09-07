@@ -1961,6 +1961,9 @@ export const ko: TranslationResources = {
       usageHistory: "사용 기록",
     },
     usageHistory: {
+      incompleteCosts:
+        "가격을 알 수 없는 활동이 있습니다. 비용과 차트 막대에는 가격이 있는 활동만 포함됩니다. ≥는 최솟값, —는 알 수 없는 비용을 나타냅니다.",
+      readFailed: "호스트 연결을 확인한 후 다시 시도하세요.",
       title: "사용 기록",
       info: "이 호스트의 프로바이더 CLI 세션 기록에서 읽은 토큰 및 비용 합계입니다. 비용은 API 기준 추정치이며 청구서가 아닙니다.",
       refresh: "새로고침",

@@ -2002,6 +2002,9 @@ export const fr: TranslationResources = {
       usageHistory: "Historique d'utilisation",
     },
     usageHistory: {
+      incompleteCosts:
+        "Certaines activités ne sont pas tarifées. Les coûts et les barres incluent uniquement les activités tarifées ; ≥ indique un minimum et — un coût inconnu.",
+      readFailed: "Vérifiez la connexion à l’hôte et réessayez.",
       title: "Historique d'utilisation",
       info: "Totaux de jetons et de coûts lus dans les transcriptions de session des CLI des fournisseurs sur cet hôte. Les coûts sont des estimations équivalentes à l'API, pas une facture.",
       refresh: "Actualiser",

@@ -1996,6 +1996,9 @@ export const en = {
       usageHistory: "Usage history",
     },
     usageHistory: {
+      incompleteCosts:
+        "Some activity has no price. Costs and chart bars include only priced activity; ≥ marks a lower bound and — an unknown cost.",
+      readFailed: "Check the host connection and try again.",
       title: "Usage history",
       info: "Token and cost totals read from the provider CLIs' own session transcripts on this host. Costs are API-equivalent estimates, not a bill.",
       refresh: "Refresh",

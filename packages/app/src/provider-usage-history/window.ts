@@ -20,6 +20,7 @@ const CURRENCY = new Intl.NumberFormat("en-US", {
 });
 
 const INTEGER = new Intl.NumberFormat("en-US");
+const AXIS_NUMBER = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
 
 const DAY_LABEL = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -29,8 +30,10 @@ const DAY_LABEL = new Intl.DateTimeFormat("en-US", {
 
 const DAY_MS = 86_400_000;
 
-export function formatUsd(value: number): string {
-  return CURRENCY.format(value);
+export function formatUsd(value: number, unpricedRecords = 0): string {
+  if (unpricedRecords > 0 && value === 0) return "—";
+  const formatted = CURRENCY.format(value);
+  return unpricedRecords > 0 ? `≥${formatted}` : formatted;
 }
 
 export function formatCount(value: number): string {
@@ -64,20 +67,17 @@ function trimTrailingZeros(value: number): string {
   return String(Number(value.toFixed(significantDigits(Math.abs(value)))));
 }
 
-/**
- * Axis-tick currency: whole dollars below a thousand, then a unit suffix
- * (`$600`, `$1.2K`). Tick values come from `niceScale`, so they never carry
- * cents worth showing.
- */
+/** Compact axis labels retain fractional steps for small cost totals. */
 export function formatUsdCompact(value: number): string {
   const magnitude = Math.abs(value);
   const sign = value < 0 ? "-" : "";
   if (magnitude >= 1e6) return `${sign}$${trimTrailingZeros(magnitude / 1e6)}M`;
   if (magnitude >= 1e3) return `${sign}$${trimTrailingZeros(magnitude / 1e3)}K`;
-  return `${sign}$${INTEGER.format(Math.round(magnitude))}`;
+  return `${sign}$${AXIS_NUMBER.format(magnitude)}`;
 }
 
-export function formatPercent(share: number, digits = 1): string {
+export function formatPercent(share: number | null, digits = 1): string {
+  if (share === null) return "—";
   return `${(share * 100).toFixed(digits)}%`;
 }
 

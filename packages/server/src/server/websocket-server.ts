@@ -725,6 +725,12 @@ export class VoiceAssistantWebSocketServer {
       unsubscribeChange();
     };
 
+    this.usageHistoryService = new UsageHistoryService({
+      paseoHome,
+      logger: this.logger,
+      getProviderConfigs: () => this.daemonConfigStore.get().providers,
+    });
+
     const pushLogger = this.logger.child({ module: "push" });
     this.pushNotifications = createPushNotifications({
       logger: pushLogger,
@@ -739,10 +745,6 @@ export class VoiceAssistantWebSocketServer {
     });
 
     this.providerUsageService = new ProviderUsageService({
-      logger: this.logger,
-    });
-    this.usageHistoryService = new UsageHistoryService({
-      paseoHome,
       logger: this.logger,
     });
 

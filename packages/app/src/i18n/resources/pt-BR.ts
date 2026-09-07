@@ -1983,6 +1983,9 @@ export const ptBR: TranslationResources = {
       usageHistory: "Histórico de uso",
     },
     usageHistory: {
+      incompleteCosts:
+        "Algumas atividades não têm preço. Os custos e as barras incluem apenas atividades com preço; ≥ indica um limite inferior e — um custo desconhecido.",
+      readFailed: "Verifique a conexão com o host e tente novamente.",
       title: "Histórico de uso",
       info: "Totais de tokens e custo lidos das transcrições de sessão das CLIs dos provedores neste host. Os custos são estimativas equivalentes à API, não uma fatura.",
       refresh: "Atualizar",

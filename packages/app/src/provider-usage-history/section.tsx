@@ -182,7 +182,7 @@ function ProviderUsageHistoryBody({
       <Alert
         variant="error"
         title={t("settings.usageHistory.errorTitle")}
-        description={view.message}
+        description={t(view.messageKey)}
       >
         <Button variant="outline" size="sm" onPress={onRetry}>
           {t("common.actions.retry")}
@@ -237,6 +237,9 @@ function SummaryCard({ totals, pricing, metric, sinceDay, untilDay }: SummaryCar
           seriesIndex={totals.providerOrder.indexOf(entry.provider)}
         />
       ))}
+      {totals.unpricedRecords > 0 ? (
+        <Text style={settingsStyles.rowHint}>{t("settings.usageHistory.incompleteCosts")}</Text>
+      ) : null}
       {pricing.status === "unavailable" ? (
         <Text style={settingsStyles.rowHint}>{t("settings.usageHistory.pricingUnavailable")}</Text>
       ) : null}
@@ -272,7 +275,9 @@ function Headline({
   return (
     <View style={styles.headline}>
       <Text style={styles.headlineValue} testID="usage-history-headline">
-        {metric === "cost" ? formatUsd(totals.costUsd) : formatTokens(totals.totalTokens)}
+        {metric === "cost"
+          ? formatUsd(totals.costUsd, totals.unpricedRecords)
+          : formatTokens(totals.totalTokens)}
       </Text>
       <Text style={styles.headlineSubline}>{subline}</Text>
     </View>
@@ -298,7 +303,7 @@ function ProviderRow({
         })
       : t("settings.usageHistory.summary.shareOfTokens", {
           share: formatPercent(share),
-          cost: formatUsd(entry.costUsd),
+          cost: formatUsd(entry.costUsd, entry.unpricedRecords),
         });
 
   return (
@@ -313,7 +318,9 @@ function ProviderRow({
           {sessionsLabel(t, entry.sessions)}
         </Text>
         <Text style={styles.providerValue}>
-          {metric === "cost" ? formatUsd(entry.costUsd) : formatTokens(entry.totalTokens)}
+          {metric === "cost"
+            ? formatUsd(entry.costUsd, entry.unpricedRecords)
+            : formatTokens(entry.totalTokens)}
         </Text>
       </View>
       <Text style={styles.providerDetail} numberOfLines={1}>
@@ -330,7 +337,7 @@ function TotalsGrid({ totals }: { totals: ProviderUsageHistoryTotals }) {
     { key: "cachedInput", value: formatTokens(totals.cachedInputTokens) },
     { key: "uncachedInput", value: formatTokens(totals.uncachedInputTokens) },
     { key: "output", value: formatTokens(totals.outputTokens) },
-    { key: "cacheSavings", value: formatUsd(totals.cacheSavingsUsd) },
+    { key: "cacheSavings", value: formatUsd(totals.cacheSavingsUsd, totals.unpricedRecords) },
   ];
 
   return (
@@ -420,7 +427,7 @@ function ModelTable({ models }: { models: readonly ProviderUsageHistoryModelTota
             </Text>
           </View>
           <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(model.costUsd)}
+            {formatUsd(model.costUsd, model.unpricedRecords)}
           </Text>
           <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
             {formatPercent(model.costShare)}
@@ -472,11 +479,14 @@ function DayTable({
           <Text style={[styles.bodyCell, styles.nameColumn]}>{formatDayShort(row.day)}</Text>
           {activeProviders.map((provider) => (
             <Text key={provider} style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-              {formatUsd(row.byProvider.get(provider)?.costUsd ?? 0)}
+              {formatUsd(
+                row.byProvider.get(provider)?.costUsd ?? 0,
+                row.byProvider.get(provider)?.unpricedRecords ?? 0,
+              )}
             </Text>
           ))}
           <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(row.costUsd)}
+            {formatUsd(row.costUsd, row.unpricedRecords)}
           </Text>
           <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
             {formatTokens(row.totalTokens)}

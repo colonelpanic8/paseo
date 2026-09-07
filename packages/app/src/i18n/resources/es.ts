@@ -1997,6 +1997,9 @@ export const es: TranslationResources = {
       usageHistory: "Historial de uso",
     },
     usageHistory: {
+      incompleteCosts:
+        "Parte de la actividad no tiene precio. Los costes y las barras solo incluyen actividad con precio; ≥ indica un límite inferior y — un coste desconocido.",
+      readFailed: "Comprueba la conexión con el host e inténtalo de nuevo.",
       title: "Historial de uso",
       info: "Totales de tokens y costo leídos de las transcripciones de sesión de las CLI de los proveedores en este host. Los costos son estimaciones equivalentes a la API, no una factura.",
       refresh: "Actualizar",

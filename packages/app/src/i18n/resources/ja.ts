@@ -1969,6 +1969,9 @@ export const ja: TranslationResources = {
       usageHistory: "使用履歴",
     },
     usageHistory: {
+      incompleteCosts:
+        "料金が不明なアクティビティがあります。費用とグラフの棒には料金が判明している分のみを含みます。≥ は下限、— は費用不明を示します。",
+      readFailed: "ホストへの接続を確認して、もう一度お試しください。",
       title: "使用履歴",
       info: "このホスト上のプロバイダー CLI のセッション記録から読み取ったトークンとコストの合計です。コストは API 相当の概算であり、請求額ではありません。",
       refresh: "更新",
