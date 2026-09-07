@@ -619,7 +619,7 @@ function MobileSidebar({
         )}
 
         <SidebarFooter
-          active={dragGestureHostPresented}
+          active={active}
           handleOpenProject={handleOpenProject}
           handleSettings={handleSettings}
           labels={labels}
