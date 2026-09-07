@@ -119,6 +119,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 }));
 
 vi.mock("react-native-unistyles", () => ({
+  useUnistyles: () => ({ rt: { breakpoint: "lg" } }),
   StyleSheet: { create: () => ({}) },
   withUnistyles: <T,>(component: T) => component,
 }));
@@ -163,7 +164,7 @@ describe("LiveVoiceFooterButton", () => {
   });
 
   function render(): void {
-    act(() => root.render(<LiveVoiceFooterButton />));
+    act(() => root.render(<LiveVoiceFooterButton active />));
   }
 
   function query(testID: string): HTMLElement {
