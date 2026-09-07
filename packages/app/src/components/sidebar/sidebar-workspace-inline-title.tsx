@@ -153,7 +153,7 @@ export function SidebarWorkspaceInlineTitle({
         autoFocus
         selectTextOnFocus
         editable={state.kind === "editing"}
-        value={state.draft}
+        initialValue={state.draft}
         onChangeText={handleChangeText}
         onBlur={handleBlur}
         onSubmitEditing={handleSubmitEditing}
