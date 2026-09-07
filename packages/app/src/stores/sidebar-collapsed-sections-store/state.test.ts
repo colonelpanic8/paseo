@@ -8,6 +8,7 @@ import {
   toggleAgentTreeExpanded,
   togglePinnedCollapsed,
   toggleProjectCollapsed,
+  toggleStatusGroupCollapsed,
   toggleWorkspaceGroupCollapsed,
 } from "@/stores/sidebar-collapsed-sections-store/state";
 
@@ -15,6 +16,7 @@ function emptyState(): CollapsedProjectsState {
   return {
     collapsedProjectKeys: new Set(),
     collapsedWorkspaceGroupKeys: new Set(),
+    collapsedStatusGroupKeys: new Set(),
     collapsedPinned: false,
     expandedAgentTreeWorkspaceKeys: new Set(),
   };
@@ -37,6 +39,7 @@ describe("sidebar collapsed projects transitions", () => {
     const state: CollapsedProjectsState = {
       collapsedProjectKeys: new Set(["project-a", "project-b"]),
       collapsedWorkspaceGroupKeys: new Set(["running"]),
+      collapsedStatusGroupKeys: new Set(),
       collapsedPinned: true,
       expandedAgentTreeWorkspaceKeys: new Set(["srv:ws-a"]),
     };
@@ -44,6 +47,7 @@ describe("sidebar collapsed projects transitions", () => {
     expect(serializeCollapsedProjects(state)).toEqual({
       collapsedProjectKeys: ["project-a", "project-b"],
       collapsedWorkspaceGroupKeys: ["running"],
+      collapsedStatusGroupKeys: [],
       collapsedPinned: true,
       expandedAgentTreeWorkspaceKeys: ["srv:ws-a"],
     });
