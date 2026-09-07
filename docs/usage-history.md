@@ -13,7 +13,9 @@ The daemon scans the provider CLIs' own session transcripts on disk, not Paseo's
 
 Reading the CLI's files means usage is complete even for turns that never went through Paseo. It also means the page only knows about providers that keep a transcript with token counts. Copilot, OpenCode, and Pi are absent for that reason, not by policy. Adding one is a new parser in `packages/server/src/services/usage-history/transcripts.ts` plus a directory in `service.ts`.
 
-RPC: `provider.usage_history.read.request` / `.response`, gated on `server_info.features.providerUsageHistory`. Buckets are `(day, provider, model)` in the client's IANA time zone, so a turn lands on the day the user experienced it.
+Configured providers that extend Claude or Codex contribute their `env.CLAUDE_CONFIG_DIR` or `env.CODEX_HOME` too, including disabled accounts with historical activity. Each scan reads the current configuration. Shared and symlinked directories are scanned once. The page groups accounts by CLI family, not account: a shared transcript directory cannot reliably identify which account produced a turn. Removing an account removes its separate directory from subsequent reports; default CLI directories are always included.
+
+RPC: `provider.usage_history.read.request` / `.response`, gated on `server_info.features.providerUsageHistory`. Buckets are `(day, provider, model)` in the client's IANA time zone, so a turn lands on the day the user experienced it. Invalid time zones and windows longer than 90 calendar days are rejected before scanning.
 
 ## Counting rules that are easy to break
 
@@ -22,11 +24,11 @@ RPC: `provider.usage_history.read.request` / `.response`, gated on `server_info.
 - **Codex `token_count` carries deltas in `last_token_usage`** and re-emits an unchanged event on some stream boundaries. Consecutive identical payloads are dropped. `input_tokens` is inclusive of the cached portion.
 - **Codex forked and subagent rollouts open with the parent's history re-stamped to the fork instant.** The parser drops the leading burst until the first event that is more than a second after its predecessor.
 - **Reasoning tokens are a subset of output tokens.** Total processed tokens is uncached input + cached input + cache creation + output. Never add reasoning on top.
-- **Cost is an API-equivalent estimate, not a bill.** Rates come from LiteLLM's `model_prices_and_context_window.json`, priced at the base tier. Models the table does not know are counted in tokens and reported as `unpriced`. `costSource` on a bucket says which case applies.
+- **Cost is an API-equivalent estimate, not a bill.** Rates come from LiteLLM's `model_prices_and_context_window.json`, priced at the base tier. Models the table does not know are counted in tokens and reported as `unpriced`. `unpricedRecords` survives aggregation through the chart and tables. Any unpriced activity makes the estimate incomplete: known costs show a lower bound, wholly unknown costs show “—”, and cost shares are withheld.
 
 ## Cache
 
-`$PASEO_HOME/usage-history/scan-cache.json` memoizes parsed records per file, keyed by `(size, mtime, provider)`, with the byte offset where parsing stopped. Transcripts are append-only, so a file that grew resumes from that offset after a 64-byte guard hash confirms the tail is unchanged; anything else re-parses from byte zero. The cache is per file rather than per day so changing the time zone invalidates nothing. Entries older than 90 days are pruned. A corrupt cache costs one cold scan, never an error.
+`$PASEO_HOME/usage-history/scan-cache.json` memoizes parsed records per file, keyed by `(size, mtime, provider)`, with the byte offset where parsing stopped. Transcripts are append-only, so a file that grew resumes from that offset after a 64-byte guard hash confirms the tail is unchanged; anything else re-parses from byte zero. The cache is per file rather than per day so changing the time zone invalidates nothing. Scans and cache persistence run serially. Identical pending requests share a result; at most eight distinct requests are admitted, with excess requests rejected for retry. Entries older than 90 days are pruned. A corrupt cache costs one cold scan, never an error.
 
 `$PASEO_HOME/usage-history/model-rates.json` is the last fetched rate table. It is refreshed after 24 hours, or on the page's refresh action subject to a 60 second floor. Offline, the page keeps working from the snapshot and reports `pricing.status: "cached"`.
 
