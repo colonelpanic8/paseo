@@ -233,6 +233,7 @@ import {
   type GitHubService,
 } from "../services/github-service.js";
 import type { ForgeService } from "../services/forge-service.js";
+import type { UsageHistoryService } from "../services/usage-history/service.js";
 import {
   resolveWorkspaceRootAgent,
   summarizeFetchWorkspacesEntries,
@@ -527,6 +528,7 @@ export interface SessionOptions {
   tts: Resolvable<TextToSpeechProvider | null>;
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
+  usageHistoryService: UsageHistoryService;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
   serviceProxy?: ServiceProxySubsystem;
@@ -842,6 +844,7 @@ export class Session {
       tts,
       terminalManager,
       providerSnapshotManager,
+      usageHistoryService,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
@@ -1003,6 +1006,7 @@ export class Session {
     this.usageSession = new UsageSession({
       emit: (msg) => this.emit(msg),
       runtime: pluginRuntime,
+      historyService: usageHistoryService,
       logger: this.sessionLogger,
     });
     this.agentConfigSession = new AgentConfigSession({
@@ -3048,6 +3052,8 @@ export class Session {
         return this.usageSession.handleLegacyList(msg);
       case "usage.list_reports.request":
         return this.usageSession.handleListReports(msg);
+      case "provider.usage_history.read.request":
+        return this.usageSession.handleProviderUsageHistoryReadRequest(msg);
       default:
         return undefined;
     }

@@ -92,6 +92,7 @@ import {
   type WebSocketRuntimeCounters,
   type WebSocketRuntimeDiagnosticSnapshot,
 } from "./websocket/runtime-metrics.js";
+import { UsageHistoryService } from "../services/usage-history/service.js";
 import { getProcessMemoryDiagnostics, getProcessUptimeSeconds } from "./process-diagnostics.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
@@ -586,6 +587,7 @@ export class VoiceAssistantWebSocketServer {
   private eventLoopDelayMonitor: ReturnType<typeof monitorEventLoopDelay> | null = null;
   private unsubscribeSpeechReadiness: (() => void) | null = null;
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
+  private readonly usageHistoryService: UsageHistoryService;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly hubRelationships: HubRelationshipManagement | null;
@@ -753,6 +755,11 @@ export class VoiceAssistantWebSocketServer {
       void this.broadcastAgentAttention(params).catch((err) => {
         this.logger.warn({ err, agentId: params.agentId }, "Failed to broadcast agent attention");
       });
+    });
+
+    this.usageHistoryService = new UsageHistoryService({
+      paseoHome,
+      logger: this.logger,
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
@@ -1502,6 +1509,7 @@ export class VoiceAssistantWebSocketServer {
       tts: () => this.speech?.resolveTts() ?? null,
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
+      usageHistoryService: this.usageHistoryService,
       hubExecutionAgents: options.hubExecutionAgents,
       hubRelationships: options.hubRelationships,
       serviceProxy: this.serviceProxy ?? undefined,
@@ -1879,6 +1887,8 @@ export class VoiceAssistantWebSocketServer {
         workspaceFileEditing: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
+        // COMPAT(providerUsageHistory): added in v0.7.3, remove gate after 2027-03-07 once daemon floor >= v0.7.3.
+        providerUsageHistory: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: true,
         // COMPAT(agentThinkingUpdate): added in v0.2.4, remove gate after 2027-01-28.
