@@ -970,6 +970,18 @@ describe("Live Voice runtime assistants", () => {
     });
   });
 
+  it("passes a link's assistant override through to the resolver", async () => {
+    const read = vi.fn((_serverId: string, override?: string | null) =>
+      override === undefined ? ASSISTANT_ID : (override ?? undefined),
+    );
+    const harness = createHarness({ assistant: { read } });
+
+    await harness.runtime.start(SERVER_ID, { assistantId: null });
+
+    expect(read).toHaveBeenCalledWith(SERVER_ID, null);
+    expect(harness.client.startLiveVoice.mock.calls[0]?.[0]).not.toHaveProperty("assistantId");
+  });
+
   it("attaches the selected assistant and leaves its settings to the record", async () => {
     const listVoices = vi.fn(async () => ["juniper"]);
     const harness = createHarness({

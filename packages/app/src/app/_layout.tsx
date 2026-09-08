@@ -69,6 +69,8 @@ import { LiveVoiceProvider } from "@/contexts/live-voice-context";
 import { LiveVoiceStrip } from "@/live-voice/live-voice-strip";
 import { LiveVoiceMuteShortcut } from "@/live-voice/live-voice-mute-shortcut";
 import { LiveVoiceLinkListener } from "@/live-voice/live-voice-link-listener";
+import { DispatchLinkListener } from "@/dispatch/dispatch-link-listener";
+import { DispatchStrip } from "@/dispatch/dispatch-strip";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -597,6 +599,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       {/* In normal flow below the content row: a live call belongs to no screen,
           so its surface docks at the app's edge instead of floating over one. */}
       <LiveVoiceStrip />
+      <DispatchStrip />
       <LiveVoiceMuteShortcut />
       <AppearanceStyleBoundary>
         {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
@@ -696,6 +699,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
           <DesktopWindowControlsSync />
           <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
           <LiveVoiceLinkListener />
+          <DispatchLinkListener />
           <HostSessionManager />
           <FaviconStatusSync />
           {children}

@@ -17,6 +17,7 @@ import {
   type LiveVoiceDaemonClient,
   type LiveVoiceRuntime,
   type LiveVoiceSnapshot,
+  type LiveVoiceStartOptions,
 } from "@/live-voice/live-voice-runtime";
 import { registerLiveVoiceRouteAuthority } from "@/live-voice/live-voice-route-authority";
 import { attachLiveVoiceCues } from "@/live-voice/live-voice-cues";
@@ -48,7 +49,7 @@ const ambientWatchDeps: LiveVoiceAmbientWatchDeps = {
 };
 
 interface LiveVoiceContextValue extends LiveVoiceSnapshot {
-  start: (serverId: string) => Promise<void>;
+  start: (serverId: string, options?: LiveVoiceStartOptions) => Promise<void>;
   stop: () => Promise<void>;
   setMuted: (muted: boolean) => void;
   toggleMute: () => void;
@@ -181,8 +182,11 @@ export function LiveVoiceProvider({ children }: LiveVoiceProviderProps) {
         { read: getLiveVoiceVoice },
         { read: getLiveVoiceCallSettings },
         {
-          read: (serverId) => {
-            const assistantId = getSelectedAssistantId(serverId) ?? undefined;
+          read: (serverId, override) => {
+            const assistantId =
+              override === undefined
+                ? (getSelectedAssistantId(serverId) ?? undefined)
+                : (override ?? undefined);
             if (assistantId && !hostSupportsAssistants(serverId)) {
               throw new LiveVoiceStartError({ code: "unsupported", message: null });
             }

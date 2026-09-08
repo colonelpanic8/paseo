@@ -2003,6 +2003,22 @@ export const ko: TranslationResources = {
       unknown: "마이크가 사용 중입니다. 다른 오디오 기능을 먼저 중지하세요.",
     },
   },
+  dispatch: {
+    label: "Dispatch",
+    listening: "듣는 중…",
+    sending: "보내는 중…",
+    sent: "{{target}}에 보냈습니다",
+    send: "보내기",
+    cancel: "취소",
+    dismiss: "닫기",
+    defaultTarget: "Dispatch 에이전트",
+    errors: {
+      noTarget: "먼저 설정에서 Dispatch 에이전트를 선택하세요.",
+      hostOffline: "Dispatch 에이전트의 호스트가 오프라인입니다.",
+      nothingHeard: "아무것도 들리지 않았습니다.",
+      sendFailed: "Dispatch 에이전트에 연결할 수 없습니다.",
+    },
+  },
   liveVoice: {
     label: "라이브 음성",
     menu: {
@@ -2034,13 +2050,24 @@ export const ko: TranslationResources = {
         description: "새 통화에 사용됩니다. 진행 중인 통화는 현재 목소리를 유지합니다.",
         default: "기본값",
       },
+      quickLaunch: {
+        hostLabel: "바로가기 호스트",
+        description:
+          "paseo://live-voice 바로가기가 통화할 호스트입니다. 자동은 사용 가능한 유일한 호스트를 사용합니다.",
+        auto: "자동",
+        assistantLabel: "바로가기 어시스턴트",
+        assistantHint:
+          "해당 호스트에서 바로가기 통화에 응답할 어시스턴트입니다. 라이브 음성 메뉴의 선택과 같습니다.",
+        none: "어시스턴트 없음",
+      },
       dispatch: {
         hostLabel: "Dispatch 호스트",
-        description: "시계에서 보낸 일회성 프롬프트를 받을 호스트를 선택합니다.",
+        description:
+          "시계나 paseo://dispatch 바로가기에서 보낸 일회성 프롬프트를 받을 호스트를 선택합니다.",
         chooseHost: "호스트 선택",
         noHosts: "사용 가능한 호스트 없음",
         agentLabel: "Dispatch 에이전트",
-        agentHint: "시계에서 말한 프롬프트가 이 에이전트로 전송됩니다.",
+        agentHint: "시계나 바로가기에서 말한 프롬프트가 이 에이전트로 전송됩니다.",
         notSet: "설정 안 함",
         clear: "설정 안 함",
         noAgents: "이 호스트에 에이전트가 없습니다",

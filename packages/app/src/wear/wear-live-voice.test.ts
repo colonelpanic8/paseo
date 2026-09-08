@@ -14,6 +14,7 @@ const NOW = 1_750_000_000_000;
 const IDLE: LiveVoiceSnapshot = {
   phase: "idle",
   serverId: null,
+  assistantId: null,
   liveSessionId: null,
   isMuted: false,
   isAudioBlocked: false,

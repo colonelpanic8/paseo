@@ -1775,6 +1775,22 @@ export const fr: TranslationResources = {
       unknown: "Le micro est occupé. Arrêtez d'abord l'autre fonction audio.",
     },
   },
+  dispatch: {
+    label: "Dispatch",
+    listening: "Écoute…",
+    sending: "Envoi…",
+    sent: "Envoyé à {{target}}",
+    send: "Envoyer",
+    cancel: "Annuler",
+    dismiss: "Fermer",
+    defaultTarget: "votre agent Dispatch",
+    errors: {
+      noTarget: "Choisissez d’abord un agent Dispatch dans les réglages.",
+      hostOffline: "L’hôte de l’agent Dispatch est hors ligne.",
+      nothingHeard: "Rien n’a été entendu.",
+      sendFailed: "Impossible de joindre votre agent Dispatch.",
+    },
+  },
   liveVoice: {
     label: "Voix en direct",
     menu: {
@@ -1807,13 +1823,25 @@ export const fr: TranslationResources = {
         description: "Utilisée pour les nouveaux appels. Un appel actif conserve sa voix actuelle.",
         default: "Par défaut",
       },
+      quickLaunch: {
+        hostLabel: "Hôte du raccourci",
+        description:
+          "L’hôte appelé par un raccourci paseo://live-voice. Automatique utilise le seul hôte éligible.",
+        auto: "Automatique",
+        assistantLabel: "Assistant du raccourci",
+        assistantHint:
+          "Qui répond à un appel par raccourci sur cet hôte. Même sélection que le menu Voix en direct.",
+        none: "Aucun assistant",
+      },
       dispatch: {
         hostLabel: "Hôte Dispatch",
-        description: "Choisissez l’hôte des requêtes ponctuelles depuis votre montre.",
+        description:
+          "Choisissez l’hôte des requêtes ponctuelles depuis votre montre ou un raccourci paseo://dispatch.",
         chooseHost: "Choisir un hôte",
         noHosts: "Aucun hôte disponible",
         agentLabel: "Agent Dispatch",
-        agentHint: "Les requêtes dictées sur la montre sont envoyées à cet agent.",
+        agentHint:
+          "Les requêtes dictées depuis la montre ou un raccourci sont envoyées à cet agent.",
         notSet: "Non défini",
         clear: "Non défini",
         noAgents: "Aucun agent sur cet hôte",

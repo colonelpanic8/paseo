@@ -1771,6 +1771,22 @@ export const es: TranslationResources = {
       unknown: "El micrófono está en uso. Detén primero la otra función de audio.",
     },
   },
+  dispatch: {
+    label: "Dispatch",
+    listening: "Escuchando…",
+    sending: "Enviando…",
+    sent: "Enviado a {{target}}",
+    send: "Enviar",
+    cancel: "Cancelar",
+    dismiss: "Cerrar",
+    defaultTarget: "tu agente de Dispatch",
+    errors: {
+      noTarget: "Elige primero un agente de Dispatch en Ajustes.",
+      hostOffline: "El host del agente de Dispatch está desconectado.",
+      nothingHeard: "No se oyó nada.",
+      sendFailed: "No se pudo contactar con tu agente de Dispatch.",
+    },
+  },
   liveVoice: {
     label: "Voz en directo",
     menu: {
@@ -1803,13 +1819,25 @@ export const es: TranslationResources = {
         description: "Se usa en llamadas nuevas. Una llamada activa conserva su voz actual.",
         default: "Predeterminada",
       },
+      quickLaunch: {
+        hostLabel: "Host del acceso directo",
+        description:
+          "El host al que llama un acceso directo paseo://live-voice. Automático usa el único host disponible.",
+        auto: "Automático",
+        assistantLabel: "Asistente del acceso directo",
+        assistantHint:
+          "Quién responde una llamada por acceso directo en ese host. Es la misma selección del menú de Voz en directo.",
+        none: "Sin asistente",
+      },
       dispatch: {
         hostLabel: "Host de Dispatch",
-        description: "Elige el host para indicaciones únicas desde el reloj.",
+        description:
+          "Elige el host para indicaciones únicas desde el reloj o un acceso directo paseo://dispatch.",
         chooseHost: "Elegir host",
         noHosts: "No hay hosts disponibles",
         agentLabel: "Agente de Dispatch",
-        agentHint: "Las indicaciones habladas del reloj se envían a este agente.",
+        agentHint:
+          "Las indicaciones habladas desde el reloj o un acceso directo se envían a este agente.",
         notSet: "Sin configurar",
         clear: "Sin configurar",
         noAgents: "No hay agentes en este host",

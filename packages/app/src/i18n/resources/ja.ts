@@ -1742,6 +1742,22 @@ export const ja: TranslationResources = {
       unknown: "マイクが使用中です。先に他の音声機能を停止してください。",
     },
   },
+  dispatch: {
+    label: "Dispatch",
+    listening: "聞き取り中…",
+    sending: "送信中…",
+    sent: "{{target}} に送信しました",
+    send: "送信",
+    cancel: "キャンセル",
+    dismiss: "閉じる",
+    defaultTarget: "Dispatch エージェント",
+    errors: {
+      noTarget: "先に設定で Dispatch エージェントを選択してください。",
+      hostOffline: "Dispatch エージェントのホストがオフラインです。",
+      nothingHeard: "何も聞き取れませんでした。",
+      sendFailed: "Dispatch エージェントに接続できませんでした。",
+    },
+  },
   liveVoice: {
     label: "ライブ音声",
     menu: {
@@ -1774,13 +1790,24 @@ export const ja: TranslationResources = {
         description: "新しい通話に使用されます。通話中の音声は変更されません。",
         default: "デフォルト",
       },
+      quickLaunch: {
+        hostLabel: "ショートカットのホスト",
+        description:
+          "paseo://live-voice ショートカットが通話するホストです。「自動」は利用できる唯一のホストを使います。",
+        auto: "自動",
+        assistantLabel: "ショートカットのアシスタント",
+        assistantHint:
+          "そのホストでショートカット通話に応答するアシスタントです。ライブ音声メニューの選択と共通です。",
+        none: "アシスタントなし",
+      },
       dispatch: {
         hostLabel: "Dispatch ホスト",
-        description: "ウォッチからの単発プロンプトを送るホストを選択します。",
+        description:
+          "ウォッチや paseo://dispatch ショートカットからの単発プロンプトを送るホストを選択します。",
         chooseHost: "ホストを選択",
         noHosts: "利用できるホストがありません",
         agentLabel: "Dispatch エージェント",
-        agentHint: "ウォッチで話したプロンプトはこのエージェントに送信されます。",
+        agentHint: "ウォッチやショートカットで話したプロンプトはこのエージェントに送信されます。",
         notSet: "未設定",
         clear: "未設定",
         noAgents: "このホストにエージェントがありません",

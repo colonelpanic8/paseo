@@ -1725,6 +1725,22 @@ export const ar: TranslationResources = {
       unknown: "الميكروفون مستخدم. أوقف ميزة الصوت الأخرى أولاً.",
     },
   },
+  dispatch: {
+    label: "إرسال",
+    listening: "جارٍ الاستماع…",
+    sending: "جارٍ الإرسال…",
+    sent: "أُرسل إلى {{target}}",
+    send: "إرسال",
+    cancel: "إلغاء",
+    dismiss: "إغلاق",
+    defaultTarget: "وكيل الإرسال الخاص بك",
+    errors: {
+      noTarget: "حدّد وكيل إرسال في الإعدادات أولًا.",
+      hostOffline: "مضيف وكيل الإرسال غير متصل.",
+      nothingHeard: "لم أسمع شيئًا.",
+      sendFailed: "تعذّر الوصول إلى وكيل الإرسال.",
+    },
+  },
   liveVoice: {
     label: "صوت مباشر",
     menu: {
@@ -1756,13 +1772,24 @@ export const ar: TranslationResources = {
         description: "يُستخدم للمكالمات الجديدة. تحتفظ المكالمة النشطة بصوتها الحالي.",
         default: "الافتراضي",
       },
+      quickLaunch: {
+        hostLabel: "مضيف الاختصار",
+        description:
+          "المضيف الذي يتصل به اختصار paseo://live-voice. «تلقائي» يستخدم المضيف الوحيد المؤهل.",
+        auto: "تلقائي",
+        assistantLabel: "مساعد الاختصار",
+        assistantHint:
+          "من يجيب على مكالمة الاختصار في هذا المضيف. نفس الاختيار في قائمة الصوت المباشر.",
+        none: "بدون مساعد",
+      },
       dispatch: {
         hostLabel: "مضيف الإرسال",
-        description: "اختر المضيف للمطالبات الصوتية لمرة واحدة من ساعتك.",
+        description:
+          "اختر المضيف للمطالبات الصوتية لمرة واحدة من ساعتك أو من اختصار paseo://dispatch.",
         chooseHost: "اختر مضيفًا",
         noHosts: "لا توجد مضيفات متاحة",
         agentLabel: "وكيل الإرسال",
-        agentHint: "تُرسل مطالبات الساعة المنطوقة إلى هذا الوكيل.",
+        agentHint: "تُرسل المطالبات المنطوقة من الساعة أو من اختصار إلى هذا الوكيل.",
         notSet: "غير معيّن",
         clear: "غير معيّن",
         noAgents: "لا توجد وكلاء على هذا المضيف",

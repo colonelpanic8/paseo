@@ -1757,6 +1757,22 @@ export const ptBR: TranslationResources = {
       unknown: "O microfone está em uso. Pare primeiro o outro recurso de áudio.",
     },
   },
+  dispatch: {
+    label: "Dispatch",
+    listening: "Ouvindo…",
+    sending: "Enviando…",
+    sent: "Enviado para {{target}}",
+    send: "Enviar",
+    cancel: "Cancelar",
+    dismiss: "Fechar",
+    defaultTarget: "seu agente de Dispatch",
+    errors: {
+      noTarget: "Escolha um agente de Dispatch nas Configurações primeiro.",
+      hostOffline: "O host do agente de Dispatch está offline.",
+      nothingHeard: "Não ouvi nada.",
+      sendFailed: "Não foi possível alcançar seu agente de Dispatch.",
+    },
+  },
   liveVoice: {
     label: "Voz ao vivo",
     menu: {
@@ -1789,13 +1805,24 @@ export const ptBR: TranslationResources = {
         description: "Usada em novas chamadas. Uma chamada ativa mantém a voz atual.",
         default: "Padrão",
       },
+      quickLaunch: {
+        hostLabel: "Host do atalho",
+        description:
+          "O host que um atalho paseo://live-voice chama. Automático usa o único host disponível.",
+        auto: "Automático",
+        assistantLabel: "Assistente do atalho",
+        assistantHint:
+          "Quem atende uma chamada por atalho nesse host. É a mesma seleção do menu Voz ao vivo.",
+        none: "Sem assistente",
+      },
       dispatch: {
         hostLabel: "Host do Dispatch",
-        description: "Escolha o host para comandos pontuais enviados pelo relógio.",
+        description:
+          "Escolha o host para comandos pontuais enviados pelo relógio ou por um atalho paseo://dispatch.",
         chooseHost: "Escolher host",
         noHosts: "Nenhum host disponível",
         agentLabel: "Agente do Dispatch",
-        agentHint: "Os comandos falados no relógio são enviados a este agente.",
+        agentHint: "Os comandos falados no relógio ou por um atalho são enviados a este agente.",
         notSet: "Não definido",
         clear: "Não definido",
         noAgents: "Nenhum agente neste host",
