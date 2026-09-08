@@ -484,7 +484,7 @@ function AgentPanelContent({
   const isHostMissing =
     target.kind === "agent"
       ? !resolvedServerId || (!runtimeClient && !hasCachedAgent)
-      : !runtimeClient;
+      : !runtimeClient || hostUnavailable.connectionStatus !== "online";
   if (isHostMissing) {
     return <AgentSessionUnavailableState {...hostUnavailable} />;
   }
