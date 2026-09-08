@@ -4,10 +4,21 @@ const CODEX_APP_SERVER_STARTUP_TIMEOUT_MS = 30_000;
 
 let startupQueue: Promise<void> = Promise.resolve();
 
+interface CodexAppServerStartupTimer {
+  setTimeout(callback: () => void, timeoutMs: number): NodeJS.Timeout;
+  clearTimeout(timer: NodeJS.Timeout): void;
+}
+
+const systemTimer: CodexAppServerStartupTimer = {
+  setTimeout: (callback, timeoutMs) => setTimeout(callback, timeoutMs),
+  clearTimeout: (timer) => clearTimeout(timer),
+};
+
 interface CodexAppServerStartupOptions<T> {
   start: (attempt: number, signal: AbortSignal) => Promise<T>;
   signal?: AbortSignal;
   timeoutMs?: number;
+  timer?: CodexAppServerStartupTimer;
   onAbort?: () => Promise<void>;
   onRetry?: (error: unknown, nextAttempt: number, maxAttempts: number) => void;
 }
@@ -46,7 +57,8 @@ export function runCodexAppServerStartup<T>(options: CodexAppServerStartupOption
     const handleExternalAbort = () => controller.abort(options.signal?.reason);
     options.signal?.addEventListener("abort", handleExternalAbort, { once: true });
     const timeoutMs = options.timeoutMs ?? CODEX_APP_SERVER_STARTUP_TIMEOUT_MS;
-    const timer = setTimeout(() => {
+    const timerPort = options.timer ?? systemTimer;
+    const timer = timerPort.setTimeout(() => {
       controller.abort(new Error(`Codex app-server startup timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
@@ -73,7 +85,7 @@ export function runCodexAppServerStartup<T>(options: CodexAppServerStartupOption
       }
       throw new Error("Codex app-server startup exhausted without a result");
     } finally {
-      clearTimeout(timer);
+      timerPort.clearTimeout(timer);
       options.signal?.removeEventListener("abort", handleExternalAbort);
     }
   }, options.signal);
