@@ -1,0 +1,57 @@
+diff --git a/packages/app/src/screens/settings-screen.tsx b/packages/app/src/screens/settings-screen.tsx
+index 92bf976833..5e5e9be474 100644
+--- a/packages/app/src/screens/settings-screen.tsx
++++ b/packages/app/src/screens/settings-screen.tsx
+@@ -6,8 +6,6 @@ import {
+   ScrollView,
+   Text,
+   View,
+-  type NativeScrollEvent,
+-  type NativeSyntheticEvent,
+   type PressableStateCallbackType,
+ } from "react-native";
+ import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+@@ -273,8 +271,6 @@ function getActiveLocale(language: string | undefined): SupportedLocale {
+ 
+ const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
+ 
+-let desktopSidebarScrollOffset = { x: 0, y: 0 };
+-
+ // ---------------------------------------------------------------------------
+ // Section components
+ // ---------------------------------------------------------------------------
+@@ -1066,19 +1062,6 @@ function SettingsSidebar({
+     () => [{ flex: 1 }, isDesktop ? { paddingTop: insets.top } : null],
+     [insets.top, isDesktop],
+   );
+-  const desktopSidebarScrollRef = useRef<ScrollView>(null);
+-  const handleDesktopSidebarScroll = useCallback(
+-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+-      desktopSidebarScrollOffset = { ...event.nativeEvent.contentOffset };
+-    },
+-    [],
+-  );
+-  const restoreDesktopSidebarScroll = useCallback(() => {
+-    desktopSidebarScrollRef.current?.scrollTo({
+-      ...desktopSidebarScrollOffset,
+-      animated: false,
+-    });
+-  }, []);
+   const selectedSectionId = view.kind === "section" ? view.section : null;
+   let selectedHostSection: HostSectionSlug | null = null;
+   if (view.kind === "host") selectedHostSection = view.section;
+@@ -1174,14 +1157,9 @@ function SettingsSidebar({
+             />
+           </View>
+           <ScrollView
+-            ref={desktopSidebarScrollRef}
+             style={sidebarStyles.scrollBody}
+             showsVerticalScrollIndicator={false}
+             testID="settings-sidebar-scroll-body"
+-            contentOffset={desktopSidebarScrollOffset}
+-            onContentSizeChange={restoreDesktopSidebarScroll}
+-            onScroll={handleDesktopSidebarScroll}
+-            scrollEventThrottle={16}
+           >
+             {sidebarBody}
+           </ScrollView>

@@ -1,0 +1,69 @@
+[metro] Starting project at /home/imalison/Projects/paseo/.worktrees/evidence-3506/packages/app
+[metro] Using src/app as the root directory for Expo Router.
+[metro] Experimental Expo Autolinking module resolver is enabled.
+[metro] React Compiler enabled
+[metro] Starting Metro Bundler
+[metro] Waiting on http://localhost:38245
+[metro] Logs for your project will appear below.
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] | (node:557786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[metro] | (Use `node --trace-warnings ...` to show where the warning was created)
+[metro] Web Bundled 2459ms packages/app/index.ts (5074 modules)
+[e2e] Metro warmed on port 38245
+
+Running 1 test using 1 worker
+
+(node:557984) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:557984) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[metro] Web Bundled 197ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro]  LOG  [web] Logs will appear in the browser console
+[metro] Web Bundled 470ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (12 modules)
+  ✘  1 [browser] › e2e/browser/settings-navigation.spec.ts:164:12 › Settings sidebar scroll persistence › keeps the scroll position across settings route boundaries (15.4s)
+[e2e] Metro stopped
+
+
+  1) [browser] › e2e/browser/settings-navigation.spec.ts:164:12 › Settings sidebar scroll persistence › keeps the scroll position across settings route boundaries 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m377[39m
+    Received: [31m0[39m
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+       at ../support/helpers/settings.ts:218
+
+      216 |   expectedScrollTop: number,
+      217 | ): Promise<void> {
+    > 218 |   await expect
+          |   ^
+      219 |     .poll(() =>
+      220 |       page.getByTestId("settings-sidebar-scroll-body").evaluate((element) => element.scrollTop),
+      221 |     )
+        at expectSettingsSidebarScrollTop (/home/imalison/Projects/paseo/.worktrees/evidence-3506/packages/app/e2e/support/helpers/settings.ts:218:3)
+        at /home/imalison/Projects/paseo/.worktrees/evidence-3506/packages/app/e2e/browser/settings-navigation.spec.ts:174:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../../../tmp/paseo-pr-evidence/3506/before/test-results/settings-navigation-Settin-66f5f-s-settings-route-boundaries-browser/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../../../../../../../tmp/paseo-pr-evidence/3506/before/test-results/settings-navigation-Settin-66f5f-s-settings-route-boundaries-browser/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../../../tmp/paseo-pr-evidence/3506/before/test-results/settings-navigation-Settin-66f5f-s-settings-route-boundaries-browser/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../../../tmp/paseo-pr-evidence/3506/before/test-results/settings-navigation-Settin-66f5f-s-settings-route-boundaries-browser/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../../../tmp/paseo-pr-evidence/3506/before/test-results/settings-navigation-Settin-66f5f-s-settings-route-boundaries-browser/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [browser] › e2e/browser/settings-navigation.spec.ts:164:12 › Settings sidebar scroll persistence › keeps the scroll position across settings route boundaries 
