@@ -2131,6 +2131,7 @@ export const ar: TranslationResources = {
         costSubline: "{{sessions}} · تقدير API",
         shareOfCost: "{{share}} من التكلفة · {{tokens}} رمزًا",
         shareOfTokens: "{{share}} من الرموز · {{cost}}",
+        unreadableProviders: "الإجماليات غير مكتملة: تعذّرت قراءة سجلات {{providers}}",
       },
       chart: {
         titleCost: "التكلفة اليومية",
@@ -2147,10 +2148,12 @@ export const ar: TranslationResources = {
       },
       breakdown: {
         title: "التفصيل",
+        provider: "المزوّد",
         model: "النموذج",
         day: "اليوم",
       },
       table: {
+        provider: "المزوّد",
         model: "النموذج",
         cost: "التكلفة",
         share: "الحصة",
