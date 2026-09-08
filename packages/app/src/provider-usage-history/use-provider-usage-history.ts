@@ -1,23 +1,22 @@
 import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { useFetchQuery } from "@/data/query";
-import { useHostFeature } from "@/runtime/host-features";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import type {
-  ProviderUsageHistoryPayload,
-  ProviderUsageHistoryView,
-  ProviderUsageHistoryWindowDays,
-} from "./types";
-import { usageHistoryView } from "./view";
+import { useFetchQueries } from "@/data/query";
+import { useHostFeatureMap } from "@/runtime/host-features";
+import { getHostRuntimeStore, useHostRuntimeConnectionStatuses } from "@/runtime/host-runtime";
+import type { ProviderUsageHistoryHostInput } from "./merge";
+import type { ProviderUsageHistoryPayload, ProviderUsageHistoryWindowDays } from "./types";
 import { makeWindow, type ProviderUsageHistoryWindow } from "./window";
 
 // A cold scan walks every transcript in the window, so re-reading on every
 // mount would be minutes of work for numbers that move once per session.
 export const PROVIDER_USAGE_HISTORY_STALE_TIME_MS = 5 * 60 * 1000;
 
-type ProviderUsageHistoryClient = Pick<DaemonClient, "readProviderUsageHistory">;
+/** A host the page asks for usage. Named separately so the query fan-out never sees a profile. */
+export interface ProviderUsageHistoryHostRef {
+  readonly serverId: string;
+  readonly name: string;
+}
 
 export function providerUsageHistoryQueryKey(
   serverId: string | null | undefined,
@@ -33,82 +32,104 @@ export function providerUsageHistoryQueryKey(
 }
 
 export interface UseProviderUsageHistoryResult {
-  view: ProviderUsageHistoryView;
+  hosts: readonly ProviderUsageHistoryHostInput[];
   window: ProviderUsageHistoryWindow;
+  isFetching: boolean;
   refresh: () => Promise<void>;
 }
 
+/**
+ * Reads usage history from every given host at once. One query per host, keyed
+ * the way the single-host page keyed it, so switching the host filter reuses
+ * whatever is already cached. A host that is down, too old, or still scanning
+ * reports its state instead of blocking the ones that answered.
+ */
 export function useProviderUsageHistory(
-  serverId: string | null | undefined,
+  hosts: readonly ProviderUsageHistoryHostRef[],
   windowDays: ProviderUsageHistoryWindowDays,
 ): UseProviderUsageHistoryResult {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const client = useHostRuntimeClient(serverId ?? "");
-  const isConnected = useHostRuntimeIsConnected(serverId ?? "");
-  const isSupported = useHostFeature(serverId, "providerUsageHistory");
 
-  const window = useMemo(() => makeWindow(windowDays), [windowDays]);
-  const queryKey = useMemo(
-    () => providerUsageHistoryQueryKey(serverId, window),
-    [serverId, window],
-  );
-  const canFetch = Boolean(serverId && client && isConnected && isSupported);
+  // Aliased: `window` is the global on web.
+  const usageWindow = useMemo(() => makeWindow(windowDays), [windowDays]);
+  const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const connectionStatuses = useHostRuntimeConnectionStatuses(serverIds);
+  const features = useHostFeatureMap(serverIds, "providerUsageHistory");
 
   const read = useCallback(
-    async (refreshRates: boolean): Promise<ProviderUsageHistoryPayload> => {
+    async (serverId: string, refreshRates: boolean): Promise<ProviderUsageHistoryPayload> => {
+      const client = getHostRuntimeStore().getClient(serverId);
       if (!client) {
         throw new Error(t("settings.usageHistory.clientUnavailable"));
       }
-      const usageClient: ProviderUsageHistoryClient = client;
       try {
-        return await usageClient.readProviderUsageHistory({
-          sinceDay: window.sinceDay,
-          untilDay: window.untilDay,
-          timeZone: window.timeZone,
+        return await client.readProviderUsageHistory({
+          sinceDay: usageWindow.sinceDay,
+          untilDay: usageWindow.untilDay,
+          timeZone: usageWindow.timeZone,
           ...(refreshRates ? { refreshRates: true } : {}),
         });
       } catch (error) {
-        console.error("Failed to read provider usage history", { error, serverId, window });
+        console.error("Failed to read provider usage history", { error, serverId, usageWindow });
         throw error;
       }
     },
-    [client, serverId, t, window],
+    [t, usageWindow],
   );
 
-  const queryFn = useCallback(() => read(false), [read]);
+  const fetchableServerIds = useMemo(
+    () =>
+      serverIds.filter(
+        (serverId) =>
+          connectionStatuses.get(serverId) === "online" && features.get(serverId) === true,
+      ),
+    [connectionStatuses, features, serverIds],
+  );
 
-  const query = useFetchQuery({
-    queryKey,
-    queryFn,
-    dataShape: "value",
-    enabled: canFetch,
-    staleTimeMs: PROVIDER_USAGE_HISTORY_STALE_TIME_MS,
-    refetchOnReconnect: false,
-    refetchOnWindowFocus: false,
+  const results = useFetchQueries<ProviderUsageHistoryPayload>(
+    hosts.map((host) => ({
+      queryKey: providerUsageHistoryQueryKey(host.serverId, usageWindow),
+      queryFn: () => read(host.serverId, false),
+      dataShape: "value",
+      enabled: fetchableServerIds.includes(host.serverId),
+      staleTimeMs: PROVIDER_USAGE_HISTORY_STALE_TIME_MS,
+      refetchOnReconnect: false,
+      refetchOnWindowFocus: false,
+    })),
+  );
+
+  const hostStates = hosts.map((host, index): ProviderUsageHistoryHostInput => {
+    const base = { serverId: host.serverId, hostName: host.name };
+    if (connectionStatuses.get(host.serverId) !== "online") return { ...base, status: "offline" };
+    if (features.get(host.serverId) !== true) return { ...base, status: "unsupported" };
+    const result = results[index];
+    if (result?.isError) return { ...base, status: "error" };
+    if (result?.data) return { ...base, status: "ready", payload: result.data };
+    return { ...base, status: "pending" };
   });
 
   // The rate table is fetched from the network by the daemon, so an explicit
   // refresh is the only place that pays for it.
   const refresh = useCallback(async () => {
-    if (!canFetch) return;
-    // Query state owns the error presentation, including failed refreshes of cached data.
-    await queryClient
-      .fetchQuery({
-        queryKey,
-        queryFn: () => read(true),
-        staleTime: 0,
-      })
-      .catch(() => undefined);
-  }, [canFetch, queryClient, queryKey, read]);
+    await Promise.all(
+      fetchableServerIds.map((serverId) =>
+        // Query state owns the error presentation, including failed refreshes of cached data.
+        queryClient
+          .fetchQuery({
+            queryKey: providerUsageHistoryQueryKey(serverId, usageWindow),
+            queryFn: () => read(serverId, true),
+            staleTime: 0,
+          })
+          .catch(() => undefined),
+      ),
+    );
+  }, [fetchableServerIds, queryClient, read, usageWindow]);
 
-  const view = usageHistoryView({
-    isConnected: Boolean(serverId && client && isConnected),
-    isSupported,
-    isError: query.isError,
-    isFetching: query.isFetching,
-    payload: query.data,
-  });
-
-  return { view, window, refresh };
+  return {
+    hosts: hostStates,
+    window: usageWindow,
+    isFetching: results.some((result) => result.isFetching),
+    refresh,
+  };
 }

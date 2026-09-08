@@ -89,7 +89,7 @@ test("shows incomplete costs from real transcripts and refreshes to an empty win
   await page.setViewportSize({ width: 1280, height: 1000 });
   await gotoAppShell(page);
   await openSettings(page);
-  await page.getByTestId("settings-host-section-usage-history").click();
+  await page.getByTestId("settings-section-usage-history").click();
   await expect(page.getByTestId("usage-history-headline")).toHaveText("≥$2.00");
   await expect(page.getByText(/Some activity has no price/)).toBeVisible();
   await expect(page.getByTestId("usage-history-model-usage-test-partial")).toContainText("≥$2.00");
@@ -173,7 +173,7 @@ test.describe("multiple configured providers of one kind", () => {
     await page.setViewportSize({ width: 1280, height: 1100 });
     await gotoAppShell(page);
     await openSettings(page);
-    await page.getByTestId("settings-host-section-usage-history").click();
+    await page.getByTestId("settings-section-usage-history").click();
 
     // Codex splits; Claude has one configured provider and must not.
     await expect(page.getByTestId("usage-history-provider-sub-codex")).toBeVisible();

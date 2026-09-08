@@ -2507,21 +2507,40 @@ export function useHostRuntimeConnectionStatuses(
   serverIds: readonly string[],
 ): ReadonlyMap<string, HostRuntimeConnectionStatus> {
   const store = getHostRuntimeStore();
-  const version = useSyncExternalStore(
+  // The subscribed snapshot is the serialized statuses themselves, not a
+  // version counter that a memo then has to notice. A memo keyed on a value it
+  // never reads is exactly what the React Compiler drops, which left callers
+  // holding the statuses from their first render.
+  const serialized = useSyncExternalStore(
     (onStoreChange) => store.subscribeAll(onStoreChange),
-    () => store.getVersion(),
-    () => store.getVersion(),
+    () => serializeConnectionStatuses(store, serverIds),
+    () => serializeConnectionStatuses(store, serverIds),
   );
 
   return useMemo(() => {
-    // The aggregate version is the reactivity trigger; re-read snapshots on every host tick.
-    void version;
-    const entries: Array<[string, HostRuntimeConnectionStatus]> = serverIds.map((serverId) => [
-      serverId,
-      store.getSnapshot(serverId)?.connectionStatus ?? "connecting",
-    ]);
+    const entries: Array<[string, HostRuntimeConnectionStatus]> =
+      serialized === ""
+        ? []
+        : serialized.split("\n").map((line) => {
+            const separator = line.lastIndexOf("\t");
+            return [
+              line.slice(0, separator),
+              line.slice(separator + 1) as HostRuntimeConnectionStatus,
+            ];
+          });
     return new Map(entries);
-  }, [serverIds, store, version]);
+  }, [serialized]);
+}
+
+function serializeConnectionStatuses(
+  store: HostRuntimeStore,
+  serverIds: readonly string[],
+): string {
+  return serverIds
+    .map(
+      (serverId) => `${serverId}\t${store.getSnapshot(serverId)?.connectionStatus ?? "connecting"}`,
+    )
+    .join("\n");
 }
 
 export function useHostRuntimeLastError(serverId: string): string | null {

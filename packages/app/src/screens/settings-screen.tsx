@@ -110,10 +110,10 @@ import {
   HostSettingsPage,
   HostProvidersPage,
   HostUsagePage,
-  HostUsageHistoryPage,
   HostWorkspacesPage,
   HostTerminalsPage,
 } from "@/screens/settings/host-page";
+import { ProviderUsageHistorySection } from "@/provider-usage-history/section";
 import { resolvePluginIcon } from "@/plugins/icons";
 import { PluginSettingsContent } from "@/plugins/settings";
 import { useInstalledPlugins } from "@/plugins/registry";
@@ -179,6 +179,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     desktopOnly: true,
   },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
+  { id: "usage-history", labelKey: "settings.sections.usageHistory", icon: ChartColumn },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -198,11 +199,6 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
-  {
-    id: "usage-history",
-    labelKey: "settings.hostSections.usageHistory",
-    icon: ChartColumn,
-  },
   { id: "terminals", labelKey: "settings.hostSections.terminals", icon: SquareTerminal },
   { id: "plugins", labelKey: "settings.hostSections.plugins", icon: Blocks },
 ];
@@ -228,8 +224,6 @@ function renderHostSettingsContent(
       return <HostProvidersPage serverId={view.serverId} />;
     case "usage":
       return <HostUsagePage serverId={view.serverId} />;
-    case "usage-history":
-      return <HostUsageHistoryPage serverId={view.serverId} />;
     case "terminals":
       return <HostTerminalsPage serverId={view.serverId} />;
     case "plugins":
@@ -894,6 +888,7 @@ function SidebarSectionButton({
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       onPress={handlePress}
+      testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
@@ -1472,6 +1467,58 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     return null;
   })();
 
+  function renderAppSection(section: SettingsSectionSlug): ReactNode {
+    switch (section) {
+      case "general":
+        return (
+          <>
+            <GeneralSection
+              settings={settings}
+              isDesktopApp={isDesktopApp}
+              handleSendBehaviorChange={handleSendBehaviorChange}
+              handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
+              handleLanguageChange={handleLanguageChange}
+              handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+            />
+            {isDesktopApp ? <BrowserDataSection /> : null}
+          </>
+        );
+      case "appearance":
+        return <AppearanceSection />;
+      case "editor":
+        return isWeb ? <EditorSection /> : null;
+      case "shortcuts":
+        return isDesktopApp ? <KeyboardShortcutsSection /> : null;
+      case "integrations":
+        return isDesktopApp ? <IntegrationsSection /> : null;
+      case "notifications":
+        return isDesktopApp ? <DesktopNotificationsSection /> : null;
+      case "permissions":
+        return isDesktopApp ? <DesktopPermissionsSection /> : null;
+      case "diagnostics":
+        return (
+          <DiagnosticsSection
+            useLegacyTerminalRenderer={settings.useLegacyTerminalRenderer}
+            onUseLegacyTerminalRendererChange={handleUseLegacyTerminalRendererChange}
+            voiceAudioEngine={voiceAudioEngine}
+            isPlaybackTestRunning={isPlaybackTestRunning}
+            playbackTestResult={playbackTestResult}
+            handlePlaybackTest={handlePlaybackTest}
+          />
+        );
+      case "usage-history":
+        return <ProviderUsageHistorySection />;
+      case "about":
+        return (
+          <AboutSection
+            appVersion={appVersion}
+            appVersionText={appVersionText}
+            isDesktopApp={isDesktopApp}
+          />
+        );
+    }
+  }
+
   let content: ReactNode;
   if (view.kind === "section" && view.section === "layout") {
     content = isDesktopApp ? <LayoutSection /> : null;
@@ -1499,53 +1546,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
         );
       }
       if (view.kind === "section") {
-        switch (view.section) {
-          case "general":
-            return (
-              <>
-                <GeneralSection
-                  settings={settings}
-                  isDesktopApp={isDesktopApp}
-                  handleSendBehaviorChange={handleSendBehaviorChange}
-                  handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
-                  handleLanguageChange={handleLanguageChange}
-                  handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
-                />
-                {isDesktopApp ? <BrowserDataSection /> : null}
-              </>
-            );
-          case "appearance":
-            return <AppearanceSection />;
-          case "editor":
-            return isWeb ? <EditorSection /> : null;
-          case "shortcuts":
-            return isDesktopApp ? <KeyboardShortcutsSection /> : null;
-          case "integrations":
-            return isDesktopApp ? <IntegrationsSection /> : null;
-          case "notifications":
-            return isDesktopApp ? <DesktopNotificationsSection /> : null;
-          case "permissions":
-            return isDesktopApp ? <DesktopPermissionsSection /> : null;
-          case "diagnostics":
-            return (
-              <DiagnosticsSection
-                useLegacyTerminalRenderer={settings.useLegacyTerminalRenderer}
-                onUseLegacyTerminalRendererChange={handleUseLegacyTerminalRendererChange}
-                voiceAudioEngine={voiceAudioEngine}
-                isPlaybackTestRunning={isPlaybackTestRunning}
-                playbackTestResult={playbackTestResult}
-                handlePlaybackTest={handlePlaybackTest}
-              />
-            );
-          case "about":
-            return (
-              <AboutSection
-                appVersion={appVersion}
-                appVersionText={appVersionText}
-                isDesktopApp={isDesktopApp}
-              />
-            );
-        }
+        return renderAppSection(view.section);
       }
       return null;
     })();
