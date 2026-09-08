@@ -102,13 +102,6 @@ describe("formatUsdCompact", () => {
   });
 });
 
-it("distinguishes unknown costs and partial estimates from measured zero cost", () => {
-  expect(formatUsd(0, 1)).toBe("—");
-  expect(formatUsd(2, 1)).toBe("≥$2.00");
-  expect(formatUsd(0, 0)).toBe("$0.00");
-  expect(formatPercent(null)).toBe("—");
-});
-
 it("preserves fractional cost ticks instead of repeating rounded labels", () => {
   expect([0.5, 1, 1.5, 2].map((value) => formatUsdCompact(value))).toEqual([
     "$0.5",

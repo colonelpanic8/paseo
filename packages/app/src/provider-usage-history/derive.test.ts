@@ -248,9 +248,11 @@ describe("deriveProviderUsageHistory", () => {
     expect(totals.costUsd).toBe(2);
     expect(totals.totalTokens).toBe(100);
     expect(totals.providers[0]?.unpricedRecords).toBe(1);
-    expect(totals.providers[0]?.costShare).toBeNull();
     expect(totals.models[0]?.unpricedRecords).toBe(1);
-    expect(totals.models[0]?.costShare).toBeNull();
+    // Shares are taken over priced cost, so an unpriced record adds nothing to
+    // either side of the ratio and the summary footnote owns the caveat.
+    expect(totals.providers[0]?.costShare).toBe(1);
+    expect(totals.models[0]?.costShare).toBe(1);
     expect(totals.daily[0]?.unpricedRecords).toBe(1);
     expect(totals.daily[0]?.byProvider.get("claude")?.unpricedRecords).toBe(1);
     const columns = buildChartColumns(["2026-09-07"], totals.daily, ["claude"], "cost");
