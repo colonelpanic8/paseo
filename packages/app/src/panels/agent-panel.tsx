@@ -419,7 +419,7 @@ function DraftPanel() {
     [retargetCurrentTab, serverId],
   );
 
-  if (!runtimeClient) {
+  if (!runtimeClient || hostUnavailable.connectionStatus !== "online") {
     return <AgentSessionUnavailableState {...hostUnavailable} />;
   }
 

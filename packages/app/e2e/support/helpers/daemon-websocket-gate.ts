@@ -258,6 +258,14 @@ function agentUpdateKey(agentId: string, status: string): string {
   return `agent-update:${agentId}:${status}`;
 }
 
+async function closeDroppedSocket(socket: WebSocketRoute): Promise<void> {
+  try {
+    await socket.close({ code: 1008, reason: "Dropped after selected server message." });
+  } catch {
+    // The peer may close first after receiving the selected message.
+  }
+}
+
 function matchesAgentUpdate(message: ClientRequest | null, agentUpdate: HeldAgentUpdate): boolean {
   if (message?.type !== "agent_update") return false;
   const payload = message.payload;
@@ -318,6 +326,8 @@ export async function installDaemonWebSocketGate(page: Page) {
   let blockedConnectionCount = 0;
   let blockedConnectionCountAtDrop = 0;
   const blockedConnectionWaiters = new Set<() => void>();
+  let dropAfterServerMessageType: string | null = null;
+  let resolveDropAfterServerMessage: (() => void) | null = null;
   let latestServer: WebSocketRoute | null = null;
   const directoryStarts: DirectoryRequestStartCounts = {
     subscribed: { agents: 0, workspaces: 0 },
@@ -343,6 +353,11 @@ export async function installDaemonWebSocketGate(page: Page) {
   let heldReadyFileUpdate: (() => void) | null = null;
   let resolveHeldReadyFileUpdate: (() => void) | null = null;
   let heldReadyFileUpdatePromise = Promise.resolve();
+  async function finishDropAfterServerMessage(sockets: WebSocketRoute[]): Promise<void> {
+    await Promise.all(sockets.map(closeDroppedSocket));
+    resolveDropAfterServerMessage?.();
+    resolveDropAfterServerMessage = null;
+  }
   const recordFileUpdate = (message: ServerMessage): void => {
     if (
       message.type !== "fs.file.update" ||
@@ -523,6 +538,16 @@ export async function installDaemonWebSocketGate(page: Page) {
       outboundMessage = forceTimelineReset(outboundMessage, shouldForceTimelineReset);
       if (shouldForceTimelineReset) forceTimelineEpochReset = false;
       recordServerMessage(serverMessage);
+      if (serverMessage?.type === dropAfterServerMessageType) {
+        dropAfterServerMessageType = null;
+        acceptingConnections = false;
+        blockedConnectionCountAtDrop = blockedConnectionCount;
+        ws.send(outboundMessage);
+        const sockets = Array.from(activeSockets);
+        activeSockets.clear();
+        void finishDropAfterServerMessage(sockets);
+        return;
+      }
       if (isTimelineResponse && holdingTimelineAgentId) {
         const payload = (serverMessage as { payload?: { agentId?: unknown } } | null)?.payload;
         if (payload?.agentId === holdingTimelineAgentId) {
@@ -598,6 +623,15 @@ export async function installDaemonWebSocketGate(page: Page) {
           ws.close({ code: 1008, reason: "Dropped by reconnect test." }).catch(() => undefined),
         ),
       );
+    },
+    dropAfterNextServerMessage(type: string): Promise<void> {
+      if (dropAfterServerMessageType) {
+        throw new Error(`Already waiting to drop after ${dropAfterServerMessageType}`);
+      }
+      dropAfterServerMessageType = type;
+      return new Promise<void>((resolve) => {
+        resolveDropAfterServerMessage = resolve;
+      });
     },
     async waitForBlockedConnection(): Promise<void> {
       if (blockedConnectionCount > blockedConnectionCountAtDrop) return;
