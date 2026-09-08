@@ -291,11 +291,9 @@ export function resolveAutocompleteIsVisible(args: {
   canLoadCommands: boolean;
   serverId: string;
   autocompleteCwd: string;
-  isCommandsLoading: boolean;
-  isDraftContext: boolean;
 }): boolean {
   if (args.mode === "command") {
-    return args.canLoadCommands && (args.isDraftContext || !args.isCommandsLoading);
+    return args.canLoadCommands;
   }
   if (args.mode === "file") {
     return Boolean(args.serverId) && args.autocompleteCwd.length > 0;
@@ -456,8 +454,6 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     canLoadCommands,
     serverId,
     autocompleteCwd,
-    isCommandsLoading,
-    isDraftContext,
   });
 
   const fileSuggestionsQuery = useQuery({
