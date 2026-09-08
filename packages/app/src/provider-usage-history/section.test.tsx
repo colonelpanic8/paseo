@@ -20,10 +20,12 @@ interface FakeHost {
   label: string;
   connectionStatus: "online" | "offline";
   supported: boolean;
+  /** Where the host is reached, the way the runtime formats it for display. */
+  endpoint?: string;
   payload?: ProviderUsageHistoryPayload;
 }
 
-const runtime = vi.hoisted(() => ({ hosts: [] as unknown[] }));
+const runtime = vi.hoisted(() => ({ hosts: [] as unknown[], isCompact: false }));
 
 function fakeHosts(): FakeHost[] {
   return runtime.hosts as FakeHost[];
@@ -38,6 +40,13 @@ vi.mock("@/runtime/host-runtime", () => ({
         fakeHosts().find((host) => host.serverId === serverId)?.connectionStatus ?? "offline",
       ]),
     ),
+  useHostRuntimeActiveConnectionLabels: (serverIds: readonly string[]) =>
+    new Map(
+      serverIds.flatMap((serverId) => {
+        const endpoint = fakeHosts().find((host) => host.serverId === serverId)?.endpoint;
+        return endpoint === undefined ? [] : [[serverId, endpoint] as const];
+      }),
+    ),
   getHostRuntimeStore: () => ({
     getClient: (serverId: string) => {
       const host = fakeHosts().find((candidate) => candidate.serverId === serverId);
@@ -46,6 +55,11 @@ vi.mock("@/runtime/host-runtime", () => ({
       return { readProviderUsageHistory: async () => hostPayload } as unknown as DaemonClient;
     },
   }),
+}));
+
+vi.mock("@/constants/layout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/constants/layout")>()),
+  useIsCompactFormFactor: () => runtime.isCompact,
 }));
 
 vi.mock("@/runtime/host-features", () => ({
@@ -77,7 +91,7 @@ function source(overrides: Partial<ProviderUsageHistorySource> = {}): ProviderUs
   };
 }
 
-function bucket(costUsd: number): ProviderUsageHistoryBucket {
+function bucket(costUsd: number, unpricedRecords = 0): ProviderUsageHistoryBucket {
   return {
     day: "2026-09-06",
     provider: "codex",
@@ -93,27 +107,32 @@ function bucket(costUsd: number): ProviderUsageHistoryBucket {
     cacheSavingsUsd: 0,
     costSource: "modelPriced",
     records: 1,
-    unpricedRecords: 0,
+    unpricedRecords,
     sessions: 1,
   };
 }
 
-function payload(costUsd: number, hostId: string): ProviderUsageHistoryPayload {
+function payload(
+  costUsd: number,
+  hostId: string,
+  unpricedRecords = 0,
+): ProviderUsageHistoryPayload {
   return {
     requestId: "req-1",
     readAt: "2026-09-07T12:00:00.000Z",
     timeZone: "UTC",
     sinceDay: "2026-09-05",
     untilDay: "2026-09-07",
-    buckets: [bucket(costUsd)],
+    buckets: [bucket(costUsd, unpricedRecords)],
     sources: [source({ hostId, volumeId: "66306:1" })],
     pricing: { status: "cached", source: "litellm", fetchedAt: null, knownModels: 400 },
     scanDurationMs: 10,
   };
 }
 
-function renderSection(hosts: FakeHost[]): void {
+function renderSection(hosts: FakeHost[], isCompact = false): void {
   runtime.hosts = hosts;
+  runtime.isCompact = isCompact;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const element: ReactElement = (
     <QueryClientProvider client={queryClient}>
@@ -127,6 +146,7 @@ describe("ProviderUsageHistorySection", () => {
   beforeEach(() => {
     vi.stubGlobal("React", React);
     runtime.hosts = [];
+    runtime.isCompact = false;
   });
 
   afterEach(() => {
@@ -177,5 +197,121 @@ describe("ProviderUsageHistorySection", () => {
     renderSection([online("host-a", "ryzen-shine", 3), online("host-b", "jimi-hendnix", 1)]);
     expect((await screen.findByTestId("usage-history-headline")).textContent).toBe("$4.00");
     expect(screen.getByRole("button", { name: "Host" })).toBeDefined();
+  });
+
+  it("tells identically named hosts apart by the endpoint each is reached at", async () => {
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        endpoint: "Local",
+        payload: payload(3, "ryzen-shine"),
+      },
+      {
+        serverId: "host-b",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        endpoint: "100.64.0.2:6767",
+        payload: payload(1, "second-box"),
+      },
+    ]);
+
+    expect((await screen.findByTestId("usage-history-headline")).textContent).toBe("$4.00");
+    expect(screen.getByTestId("usage-history-provider-sub-host-a:codex").textContent).toContain(
+      "Codex · ryzen-shine (Local)",
+    );
+    expect(screen.getByTestId("usage-history-provider-sub-host-b:codex").textContent).toContain(
+      "Codex · ryzen-shine (100.64.0.2:6767)",
+    );
+  });
+
+  it("qualifies a colliding name in the coverage line too", async () => {
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        endpoint: "Local",
+        payload: payload(3, "ryzen-shine"),
+      },
+      {
+        serverId: "host-b",
+        label: "ryzen-shine",
+        connectionStatus: "offline",
+        supported: true,
+        endpoint: "100.64.0.2:6767",
+      },
+    ]);
+
+    await screen.findByTestId("usage-history-headline");
+    expect(screen.getByTestId("usage-history-coverage").textContent).toBe(
+      "ryzen-shine (100.64.0.2:6767) is offline",
+    );
+  });
+
+  it("leaves a host that is the only one of its name unqualified", async () => {
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        endpoint: "Local",
+        payload: payload(3, "ryzen-shine"),
+      },
+      {
+        serverId: "host-b",
+        label: "jay-lenovo",
+        connectionStatus: "offline",
+        supported: true,
+        endpoint: "100.64.0.2:6767",
+      },
+    ]);
+
+    await screen.findByTestId("usage-history-headline");
+    expect(screen.getByTestId("usage-history-coverage").textContent).toBe("jay-lenovo is offline");
+  });
+
+  it("carries the unpriced caveat as one footnote rather than on every figure", async () => {
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        payload: payload(3, "ryzen-shine", 4),
+      },
+    ]);
+
+    expect((await screen.findByTestId("usage-history-headline")).textContent).toBe("$3.00");
+    expect(screen.getAllByTestId("usage-history-unpriced")).toHaveLength(1);
+    expect(screen.getByTestId("usage-history-unpriced").textContent).toBe(
+      "Estimate excludes 4 responses with no known price",
+    );
+  });
+
+  it("keeps the figures and the chart in both the two-column and the stacked layout", async () => {
+    const host: FakeHost = {
+      serverId: "host-a",
+      label: "ryzen-shine",
+      connectionStatus: "online",
+      supported: true,
+      payload: payload(3, "ryzen-shine"),
+    };
+
+    renderSection([host]);
+    await screen.findByTestId("usage-history-headline");
+    expect(screen.getByTestId("usage-history-figures")).toBeDefined();
+    expect(screen.getByTestId("usage-history-chart")).toBeDefined();
+    cleanup();
+
+    renderSection([host], true);
+    await screen.findByTestId("usage-history-headline");
+    expect(screen.getByTestId("usage-history-figures")).toBeDefined();
+    expect(screen.getByTestId("usage-history-chart")).toBeDefined();
   });
 });

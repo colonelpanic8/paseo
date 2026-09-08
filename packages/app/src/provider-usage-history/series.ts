@@ -1,22 +1,19 @@
 import { StyleSheet } from "react-native-unistyles";
+import { providerSeriesColor } from "./providers";
 
 /**
- * Series marks for the chart bars and the summary/table provider dots.
- *
- * `accent` is the active theme's hue and `foregroundMuted` its neutral. Both are
- * already tuned to sit on every surface in light and dark, so the two series
- * stay separable without inventing chart-only colors. A third provider would
- * cycle the pair; the contract ships two.
+ * The series mark next to a provider's name. Same color as that provider's
+ * chart line and its mark in the tables, so one series reads as one series.
  */
-export function seriesFillStyle(index: number) {
-  return index % 2 === 0 ? seriesStyles.primary : seriesStyles.secondary;
+export function seriesFillStyle(provider: string) {
+  return provider === "claude" ? seriesStyles.claude : seriesStyles.neutral;
 }
 
 const seriesStyles = StyleSheet.create((theme) => ({
-  primary: {
-    backgroundColor: theme.colors.accent,
+  claude: {
+    backgroundColor: providerSeriesColor("claude", theme.colors.foreground),
   },
-  secondary: {
-    backgroundColor: theme.colors.foregroundMuted,
+  neutral: {
+    backgroundColor: theme.colors.foreground,
   },
 }));
