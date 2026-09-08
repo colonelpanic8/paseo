@@ -63,14 +63,12 @@ describe("resolveTranscriptHomes", () => {
       {
         provider: "claude",
         providerId: "claude",
-        label: "Claude",
         home: "/defaults/claude",
         dir: path.join("/defaults/claude", "projects"),
       },
       {
         provider: "codex",
         providerId: "codex",
-        label: "Codex",
         home: "/defaults/codex",
         dir: path.join("/defaults/codex", "sessions"),
       },

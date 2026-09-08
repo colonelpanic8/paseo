@@ -305,7 +305,6 @@ describe("UsageHistoryService", () => {
       {
         provider: "claude",
         providerId: "claude",
-        label: "Claude",
         path: path.join(claudeConfigDir, "projects"),
         status: "ok",
         scannedFiles: 1,
@@ -316,7 +315,6 @@ describe("UsageHistoryService", () => {
       {
         provider: "codex",
         providerId: "codex",
-        label: "Codex",
         path: path.join(codexHome, "sessions"),
         status: "missing",
         scannedFiles: 0,
@@ -368,7 +366,6 @@ describe("UsageHistoryService", () => {
       {
         provider: "claude",
         providerId: "claude",
-        label: "Claude",
         status: "ok",
         scannedFiles: 1,
         distinctSessions: 1,
@@ -376,7 +373,6 @@ describe("UsageHistoryService", () => {
       {
         provider: "codex",
         providerId: "codex",
-        label: "Codex",
         status: "missing",
         scannedFiles: 0,
         distinctSessions: 0,
