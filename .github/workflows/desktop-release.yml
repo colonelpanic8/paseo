@@ -197,6 +197,9 @@ jobs:
           STAPLER
           chmod +x "$stapler_bin/xcrun"
           export PATH="$stapler_bin:$PATH"
+          if [[ -z "${CSC_LINK:-}" ]]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+          fi
           build_args=(-- --publish never --mac --${{ matrix.electron_arch }})
           build_args+=("-c.publish.releaseType=$RELEASE_TYPE")
           build_args+=("-c.publish.channel=$RELEASE_CHANNEL")
