@@ -69,6 +69,7 @@ function makeService(
     readProviderOverrides: options.readProviderOverrides ?? (() => options.overrides),
     fetch: options.fetch ?? (async () => Response.json(RATES_DOCUMENT)),
     now: options.now,
+    hostId: options.hostId ?? "test-host",
   });
 }
 
@@ -306,6 +307,8 @@ describe("UsageHistoryService", () => {
         provider: "claude",
         providerId: "claude",
         path: path.join(claudeConfigDir, "projects"),
+        hostId: "test-host",
+        volumeId: expect.stringMatching(/^\d+:\d+$/),
         status: "ok",
         scannedFiles: 1,
         skippedFiles: 0,
@@ -316,6 +319,9 @@ describe("UsageHistoryService", () => {
         provider: "codex",
         providerId: "codex",
         path: path.join(codexHome, "sessions"),
+        hostId: "test-host",
+        // A directory that does not exist has no filesystem identity to report.
+        volumeId: "",
         status: "missing",
         scannedFiles: 0,
         skippedFiles: 0,

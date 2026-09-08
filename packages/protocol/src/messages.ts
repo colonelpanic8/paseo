@@ -6042,6 +6042,16 @@ export const ProviderUsageHistorySourceSchema = z.object({
   /** That provider's configured label, e.g. `Codex (Colonel)`. */
   label: z.string().optional(),
   path: z.string(),
+  /**
+   * Fingerprint of the physical transcript directory, for clients merging
+   * several hosts: `hostId` is the daemon's hostname and `volumeId` is the
+   * directory's `device:inode` (empty when it cannot be read). Two hosts on
+   * one machine, or a shared home, resolve the same directory and would
+   * otherwise be counted twice. Hostname alone is not enough: every Mac in
+   * a fleet resolves `/Users/<user>/.claude`.
+   */
+  hostId: z.string().optional(),
+  volumeId: z.string().optional(),
   status: ProviderUsageHistorySourceStatusSchema,
   scannedFiles: z.number(),
   skippedFiles: z.number(),
