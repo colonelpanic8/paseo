@@ -186,6 +186,21 @@ describe("pruneScanCache", () => {
     expect(cache.size).toBe(1);
   });
 
+  it("prunes under every walked root while leaving an unwalked sibling home alone", () => {
+    const cache = cacheWith([
+      ["/codex/sessions/gone.jsonl", 5000, [record()]],
+      ["/codex-ben/sessions/gone.jsonl", 5000, [record()]],
+      ["/codex-colonel/sessions/kept.jsonl", 5000, [record()]],
+    ]);
+    pruneScanCache(cache, {
+      livePaths: new Set(),
+      walkedRoots: ["/codex/sessions", "/codex-ben/sessions"],
+      windowStartMs: 4000,
+      retentionCutoffMs: 1000,
+    });
+    expect([...cache.keys()]).toEqual(["/codex-colonel/sessions/kept.jsonl"]);
+  });
+
   it("keeps entries for unwalked and prefix-sibling roots", () => {
     const cache = cacheWith([
       ["/codex/sessions/a.jsonl", 5000, [record()]],

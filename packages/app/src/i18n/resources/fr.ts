@@ -2082,6 +2082,8 @@ export const fr: TranslationResources = {
         costSubline: "{{sessions}} · estimation API",
         shareOfCost: "{{share}} du coût · {{tokens}} jetons",
         shareOfTokens: "{{share}} des jetons · {{cost}}",
+        unreadableProviders:
+          "Les totaux sont incomplets : impossible de lire les transcriptions de {{providers}}",
       },
       chart: {
         titleCost: "Coût quotidien",
@@ -2098,10 +2100,12 @@ export const fr: TranslationResources = {
       },
       breakdown: {
         title: "Répartition",
+        provider: "Fournisseur",
         model: "Modèle",
         day: "Jour",
       },
       table: {
+        provider: "Fournisseur",
         model: "Modèle",
         cost: "Coût",
         share: "Part",

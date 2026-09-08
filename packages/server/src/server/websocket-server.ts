@@ -746,7 +746,7 @@ export class VoiceAssistantWebSocketServer {
     this.usageHistoryService = new UsageHistoryService({
       paseoHome,
       logger: this.logger,
-      getProviderConfigs: () => this.daemonConfigStore.get().providers,
+      readProviderOverrides: () => this.daemonConfigStore.get().providers,
     });
 
     const pushLogger = this.logger.child({ module: "push" });
