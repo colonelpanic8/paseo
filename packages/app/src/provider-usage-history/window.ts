@@ -30,10 +30,13 @@ const DAY_LABEL = new Intl.DateTimeFormat("en-US", {
 
 const DAY_MS = 86_400_000;
 
-export function formatUsd(value: number, unpricedRecords = 0): string {
-  if (unpricedRecords > 0 && value === 0) return "—";
-  const formatted = CURRENCY.format(value);
-  return unpricedRecords > 0 ? `≥${formatted}` : formatted;
+/**
+ * Plain currency. Unpriced activity is reported once, in the summary footnote,
+ * rather than by qualifying every figure on the page: a table where each cell
+ * carries a `>=` is unreadable, and the caveat is the same one every time.
+ */
+export function formatUsd(value: number): string {
+  return CURRENCY.format(value);
 }
 
 export function formatCount(value: number): string {
@@ -76,8 +79,8 @@ export function formatUsdCompact(value: number): string {
   return `${sign}$${AXIS_NUMBER.format(magnitude)}`;
 }
 
-export function formatPercent(share: number | null, digits = 1): string {
-  if (share === null) return "—";
+/** Shares are taken over priced cost, so there is no unknown case to render. */
+export function formatPercent(share: number, digits = 1): string {
   return `${(share * 100).toFixed(digits)}%`;
 }
 
