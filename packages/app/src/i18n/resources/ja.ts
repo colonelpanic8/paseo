@@ -2389,6 +2389,8 @@ export const ja: TranslationResources = {
         costSubline: "{{sessions}} · API 概算",
         shareOfCost: "コストの {{share}} · {{tokens}} トークン",
         shareOfTokens: "トークンの {{share}} · {{cost}}",
+        unreadableProviders:
+          "合計は不完全です: {{providers}} のセッション記録を読み取れませんでした",
       },
       chart: {
         titleCost: "日別コスト",
@@ -2405,10 +2407,12 @@ export const ja: TranslationResources = {
       },
       breakdown: {
         title: "内訳",
+        provider: "プロバイダー",
         model: "モデル",
         day: "日",
       },
       table: {
+        provider: "プロバイダー",
         model: "モデル",
         cost: "コスト",
         share: "割合",

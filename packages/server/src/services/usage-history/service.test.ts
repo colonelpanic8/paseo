@@ -58,16 +58,59 @@ function claudeLine(id: number, outputTokens: number, model = "claude-fable-5"):
   })}\n`;
 }
 
-function makeService(options: Partial<UsageHistoryServiceOptions> = {}) {
+function makeService(
+  options: Partial<UsageHistoryServiceOptions> & { overrides?: Record<string, unknown> } = {},
+) {
   return new UsageHistoryService({
     paseoHome,
     claudeConfigDir,
     codexHome,
     logger: createTestLogger(),
+    readProviderOverrides: options.readProviderOverrides ?? (() => options.overrides),
     fetch: options.fetch ?? (async () => Response.json(RATES_DOCUMENT)),
     now: options.now,
-    getProviderConfigs: options.getProviderConfigs,
   });
+}
+
+/** Codex needs a turn context before a token event, and its session id comes from the meta line. */
+async function writeCodexTranscript(
+  providerHome: string,
+  session: string,
+  outputTokens: number,
+): Promise<void> {
+  const dir = path.join(providerHome, "sessions", "2026", "08", "01");
+  await fs.mkdir(dir, { recursive: true });
+  const lines = [
+    { type: "session_meta", timestamp: "2026-08-01T10:00:00Z", payload: { id: session } },
+    {
+      type: "turn_context",
+      timestamp: "2026-08-01T10:00:01Z",
+      payload: { model: "gpt-5-codex" },
+    },
+    {
+      type: "event_msg",
+      timestamp: "2026-08-01T10:00:02Z",
+      payload: {
+        type: "token_count",
+        info: { last_token_usage: { input_tokens: 20, output_tokens: outputTokens } },
+      },
+    },
+  ];
+  await fs.writeFile(
+    path.join(dir, `${session}.jsonl`),
+    lines.map((line) => `${JSON.stringify(line)}\n`).join(""),
+  );
+}
+
+function outputTokensByProviderId(summary: {
+  buckets: readonly { providerId?: string; totals: { outputTokens: number } }[];
+}): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const bucket of summary.buckets) {
+    const key = bucket.providerId ?? "";
+    totals[key] = (totals[key] ?? 0) + bucket.totals.outputTokens;
+  }
+  return totals;
 }
 
 function totalOutputTokens(summary: { buckets: readonly { totals: { outputTokens: number } }[] }) {
@@ -118,7 +161,7 @@ describe("UsageHistoryService", () => {
     });
     let configReads = 0;
     const service = makeService({
-      getProviderConfigs: () => {
+      readProviderOverrides: () => {
         configReads += 1;
         return {};
       },
@@ -157,7 +200,7 @@ describe("UsageHistoryService", () => {
     expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(12);
   });
 
-  it("reads configured accounts, deduplicates shared roots, and follows config changes", async () => {
+  it("re-reads provider configuration each scan and deduplicates a symlinked home", async () => {
     await fs.writeFile(transcript, claudeLine(1, 5));
     const extraHome = path.join(home, "claude-work");
     const extraDir = path.join(extraHome, "projects");
@@ -165,8 +208,8 @@ describe("UsageHistoryService", () => {
     await fs.writeFile(path.join(extraDir, "work.jsonl"), claudeLine(2, 7));
     const alias = path.join(home, "alias");
     await fs.symlink(extraHome, alias, "junction");
-    let providers: ReturnType<NonNullable<UsageHistoryServiceOptions["getProviderConfigs"]>> = {};
-    const service = makeService({ getProviderConfigs: () => providers });
+    let providers: Record<string, unknown> = {};
+    const service = makeService({ readProviderOverrides: () => providers });
     expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(5);
     providers = {
       work: { extends: "claude", env: { CLAUDE_CONFIG_DIR: extraHome } },
@@ -177,52 +220,16 @@ describe("UsageHistoryService", () => {
     const summary = await service.readSummary(WINDOW);
     expect(totalOutputTokens(summary)).toBe(12);
     expect(summary.sources.filter((source) => source.provider === "claude")).toHaveLength(2);
-    expect(summary.buckets.map((bucket) => bucket.provider)).toEqual(["claude"]);
+    expect(summary.buckets.map((bucket) => bucket.provider)).toEqual(["claude", "claude"]);
+    expect(summary.buckets.map((bucket) => bucket.providerId)).toEqual(["claude", "work"]);
     providers = {};
     expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(5);
-  });
-
-  it("counts two Codex accounts once when an account has multiple configured aliases", async () => {
-    const workHome = path.join(home, "codex-work");
-    for (const [root, id, output] of [
-      [codexHome, "personal", 5],
-      [workHome, "work", 7],
-    ] as const) {
-      const dir = path.join(root, "sessions");
-      await fs.mkdir(dir, { recursive: true });
-      const rows = [
-        { type: "session_meta", payload: { id } },
-        { type: "turn_context", payload: { model: "gpt-5" } },
-        {
-          type: "event_msg",
-          timestamp: "2026-08-01T10:00:00Z",
-          payload: {
-            type: "token_count",
-            info: { last_token_usage: { input_tokens: 10, output_tokens: output } },
-          },
-        },
-      ];
-      await fs.writeFile(
-        path.join(dir, "session.jsonl"),
-        rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
-      );
-    }
-    const summary = await makeService({
-      getProviderConfigs: () => ({
-        work: { extends: "codex", env: { CODEX_HOME: workHome } },
-        alias: { extends: "codex", env: { CODEX_HOME: workHome } },
-        personal: { extends: "codex", env: { CODEX_HOME: codexHome } },
-      }),
-    }).readSummary(WINDOW);
-    expect(totalOutputTokens(summary)).toBe(12);
-    expect(summary.sources.filter((source) => source.provider === "codex")).toHaveLength(2);
-    expect(summary.sources.reduce((sum, source) => sum + source.distinctSessions, 0)).toBe(2);
   });
 
   it("releases admission after a scan fails", async () => {
     let fail = true;
     const service = makeService({
-      getProviderConfigs: () => {
+      readProviderOverrides: () => {
         if (fail) throw new Error("configuration unavailable");
         return {};
       },
@@ -297,6 +304,8 @@ describe("UsageHistoryService", () => {
     expect(summary.sources).toEqual([
       {
         provider: "claude",
+        providerId: "claude",
+        label: "Claude",
         path: path.join(claudeConfigDir, "projects"),
         status: "ok",
         scannedFiles: 1,
@@ -306,6 +315,8 @@ describe("UsageHistoryService", () => {
       },
       {
         provider: "codex",
+        providerId: "codex",
+        label: "Codex",
         path: path.join(codexHome, "sessions"),
         status: "missing",
         scannedFiles: 0,
@@ -314,6 +325,183 @@ describe("UsageHistoryService", () => {
         message: "No transcript directory on this environment.",
       },
     ]);
+  });
+
+  it("counts every configured home and attributes its buckets to the owning provider", async () => {
+    await fs.writeFile(transcript, claudeLine(1, 5));
+    const benHome = path.join(home, "codex-ben");
+    const colonelHome = path.join(home, "codex-colonel");
+    await writeCodexTranscript(benHome, "session-ben", 11);
+    await writeCodexTranscript(colonelHome, "session-colonel", 23);
+
+    const summary = await makeService({
+      overrides: {
+        "codex-ben": {
+          extends: "codex",
+          label: "Codex (Ben)",
+          env: { CODEX_HOME: benHome },
+        },
+        "codex-colonel": {
+          extends: "codex",
+          label: "Codex (Colonel)",
+          env: { CODEX_HOME: colonelHome },
+        },
+      },
+    }).readSummary(WINDOW);
+
+    expect(outputTokensByProviderId(summary)).toEqual({
+      claude: 5,
+      "codex-ben": 11,
+      "codex-colonel": 23,
+    });
+    expect(summary.buckets.every((bucket) => bucket.provider !== "codex-ben")).toBe(true);
+    expect(
+      summary.sources.map((source) => ({
+        provider: source.provider,
+        providerId: source.providerId,
+        label: source.label,
+        status: source.status,
+        scannedFiles: source.scannedFiles,
+        distinctSessions: source.distinctSessions,
+      })),
+    ).toEqual([
+      {
+        provider: "claude",
+        providerId: "claude",
+        label: "Claude",
+        status: "ok",
+        scannedFiles: 1,
+        distinctSessions: 1,
+      },
+      {
+        provider: "codex",
+        providerId: "codex",
+        label: "Codex",
+        status: "missing",
+        scannedFiles: 0,
+        distinctSessions: 0,
+      },
+      {
+        provider: "codex",
+        providerId: "codex-ben",
+        label: "Codex (Ben)",
+        status: "ok",
+        scannedFiles: 1,
+        distinctSessions: 1,
+      },
+      {
+        provider: "codex",
+        providerId: "codex-colonel",
+        label: "Codex (Colonel)",
+        status: "ok",
+        scannedFiles: 1,
+        distinctSessions: 1,
+      },
+    ]);
+  });
+
+  it("scans a home shared by two configured providers once", async () => {
+    const sharedHome = path.join(home, "codex-shared");
+    await writeCodexTranscript(sharedHome, "session-shared", 17);
+    const shared = { extends: "codex", env: { CODEX_HOME: sharedHome } };
+
+    const summary = await makeService({
+      overrides: { "codex-one": shared, "codex-two": { ...shared, label: "Two" } },
+    }).readSummary(WINDOW);
+
+    expect(outputTokensByProviderId(summary)).toEqual({ "codex-one": 17 });
+    expect(summary.sources.filter((source) => source.path.startsWith(sharedHome))).toHaveLength(1);
+  });
+
+  it("reports a configured home that does not exist without suppressing the others", async () => {
+    const realHome = path.join(home, "codex-real");
+    await writeCodexTranscript(realHome, "session-real", 9);
+
+    const summary = await makeService({
+      overrides: {
+        "codex-gone": {
+          extends: "codex",
+          label: "Gone",
+          env: { CODEX_HOME: path.join(home, "codex-gone") },
+        },
+        "codex-real": { extends: "codex", label: "Real", env: { CODEX_HOME: realHome } },
+      },
+    }).readSummary(WINDOW);
+
+    expect(summary.sources.find((source) => source.providerId === "codex-gone")).toMatchObject({
+      status: "missing",
+      scannedFiles: 0,
+    });
+    expect(outputTokensByProviderId(summary)).toEqual({ "codex-real": 9 });
+  });
+
+  it("ignores providers that do not extend a transcript-keeping provider", async () => {
+    const copilotHome = path.join(home, "copilot");
+    await writeCodexTranscript(copilotHome, "session-copilot", 13);
+
+    const summary = await makeService({
+      overrides: {
+        "copilot-work": {
+          extends: "copilot",
+          label: "Copilot (Work)",
+          env: { CODEX_HOME: copilotHome },
+        },
+      },
+    }).readSummary(WINDOW);
+
+    expect(summary.sources.map((source) => source.providerId)).toEqual(["claude", "codex"]);
+    expect(outputTokensByProviderId(summary)).toEqual({});
+  });
+
+  it("resolves an extends chain transitively and does not hang on a cycle", async () => {
+    const chainHome = path.join(home, "codex-chain");
+    await writeCodexTranscript(chainHome, "session-chain", 3);
+
+    const summary = await makeService({
+      overrides: {
+        "codex-base": { extends: "codex", label: "Base" },
+        "codex-leaf": {
+          extends: "codex-base",
+          label: "Leaf",
+          env: { CODEX_HOME: chainHome },
+        },
+        "loop-a": { extends: "loop-b", label: "A" },
+        "loop-b": { extends: "loop-a", label: "B" },
+      },
+    }).readSummary(WINDOW);
+
+    expect(summary.sources.map((source) => source.providerId)).toEqual([
+      "claude",
+      "codex",
+      "codex-leaf",
+    ]);
+    expect(outputTokensByProviderId(summary)).toEqual({ "codex-leaf": 3 });
+  });
+
+  it("totals the same as scanning each home on its own", async () => {
+    await fs.writeFile(transcript, claudeLine(1, 5));
+    const benHome = path.join(home, "codex-ben");
+    const colonelHome = path.join(home, "codex-colonel");
+    await writeCodexTranscript(benHome, "session-ben", 11);
+    await writeCodexTranscript(colonelHome, "session-colonel", 23);
+    const ben = { extends: "codex", label: "Ben", env: { CODEX_HOME: benHome } };
+    const colonel = { extends: "codex", label: "Colonel", env: { CODEX_HOME: colonelHome } };
+
+    const combined = await makeService({
+      overrides: { "codex-ben": ben, "codex-colonel": colonel },
+    }).readSummary(WINDOW);
+    const separate = [
+      await makeService().readSummary(WINDOW),
+      await makeService({ overrides: { "codex-ben": ben } }).readSummary(WINDOW),
+      await makeService({ overrides: { "codex-colonel": colonel } }).readSummary(WINDOW),
+    ];
+
+    expect(totalOutputTokens(combined)).toBe(
+      separate.reduce((sum, summary) => sum + totalOutputTokens(summary), 0) -
+        // The default claude home is scanned by every one of the three separate reads.
+        2 * totalOutputTokens(separate[0] ?? { buckets: [] }),
+    );
+    expect(totalOutputTokens(combined)).toBe(5 + 11 + 23);
   });
 
   it("rejects malformed, impossible, and reversed windows before scanning", async () => {
