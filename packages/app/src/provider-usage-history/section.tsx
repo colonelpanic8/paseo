@@ -8,36 +8,55 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { CONTROL_HEIGHTS } from "@/components/ui/control-geometry";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
+import { useHosts } from "@/runtime/host-runtime";
 import { settingsStyles } from "@/styles/settings";
 import type { Theme } from "@/styles/theme";
+import { normalizeHostLabel } from "@/types/host-connection";
 import { ProviderUsageHistoryChart } from "./chart";
 import {
   configuredProvidersByKind,
-  deriveProviderUsageHistory,
   type ProviderUsageHistoryConfiguredTotals,
+  type ProviderUsageHistoryHostTotals,
   type ProviderUsageHistoryModelTotals,
   type ProviderUsageHistoryProviderTotals,
-  type ProviderUsageHistoryTotals,
 } from "./derive";
+import {
+  mergeProviderUsageHistory,
+  type ProviderUsageHistoryHostInput,
+  type ProviderUsageHistoryReport,
+} from "./merge";
 import { providerLabel } from "./providers";
 import { seriesFillStyle } from "./series";
 import type {
   ProviderUsageHistoryMetric,
-  ProviderUsageHistoryPricing,
   ProviderUsageHistoryView,
   ProviderUsageHistoryWindowDays,
 } from "./types";
-import { useProviderUsageHistory } from "./use-provider-usage-history";
+import {
+  useProviderUsageHistory,
+  type ProviderUsageHistoryHostRef,
+} from "./use-provider-usage-history";
+import { usageHistoryView } from "./view";
 import { enumerateDays, formatDayShort, formatPercent, formatTokens, formatUsd } from "./window";
 
 const WINDOW_DAYS: readonly ProviderUsageHistoryWindowDays[] = [7, 30, 90];
-type BreakdownMode = "provider" | "model" | "day";
+type BreakdownMode = "provider" | "host" | "model" | "day";
 
 const SERIES_DOT_SIZE = 8;
 const PROVIDER_MARK_SIZE = 14;
 /** Where a provider row's text starts: dot, gap, mark, gap. Sub-rows share it. */
 const PROVIDER_NAME_RAIL = SERIES_DOT_SIZE + 8 + PROVIDER_MARK_SIZE + 8;
+/** The coverage line is always this tall, so naming a missing host never moves the chart. */
+const COVERAGE_LINE_HEIGHT = 18;
 
 interface ProviderMarkProps {
   provider: string;
@@ -53,12 +72,84 @@ function ProviderMark({ provider, size, color = "" }: ProviderMarkProps) {
 const ThemedProviderMark = withUnistyles(ProviderMark);
 const mutedMarkColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-export function ProviderUsageHistorySection({ serverId }: { serverId: string }) {
+/**
+ * Names every host the totals do not cover, plus every transcript directory two
+ * hosts both reported. One line, so the summary stays a summary.
+ */
+function coverageLine(
+  t: TFunction,
+  hosts: readonly ProviderUsageHistoryHostInput[],
+  duplicates: readonly string[],
+): string {
+  const named = (status: ProviderUsageHistoryHostInput["status"]) =>
+    hosts.filter((host) => host.status === status).map((host) => host.hostName);
+  const parts: string[] = [];
+
+  for (const [status, key] of [
+    ["pending", "scanning"],
+    ["offline", "offline"],
+    ["unsupported", "unsupported"],
+    ["error", "failed"],
+  ] as const) {
+    const names = named(status);
+    if (names.length === 0) continue;
+    parts.push(
+      t(`settings.usageHistory.coverage.${key}`, {
+        hosts: names.join(", "),
+        count: names.length,
+      }),
+    );
+  }
+
+  if (duplicates.length > 0) {
+    parts.push(t("settings.usageHistory.coverage.duplicates", { sources: duplicates.join(", ") }));
+  }
+  return parts.join(" · ");
+}
+
+function hostFilterLabel(
+  t: TFunction,
+  hosts: readonly ProviderUsageHistoryHostRef[],
+  selectedServerIds: readonly string[],
+  isAllSelected: boolean,
+): string {
+  if (isAllSelected) return t("settings.usageHistory.hostFilter.all");
+  if (selectedServerIds.length === 1) {
+    const only = hosts.find((host) => host.serverId === selectedServerIds[0]);
+    if (only) return only.name;
+  }
+  return t("settings.usageHistory.hostFilter.count", { count: selectedServerIds.length });
+}
+
+export function ProviderUsageHistorySection() {
   const { t } = useTranslation();
   const [metric, setMetric] = useState<ProviderUsageHistoryMetric>("cost");
   const [windowDays, setWindowDays] = useState<ProviderUsageHistoryWindowDays>(30);
+  /** `null` is every host, including any host added while the page is open. */
+  const [selection, setSelection] = useState<readonly string[] | null>(null);
+
+  const allHosts = useHosts();
+  const hostRefs = useMemo<ProviderUsageHistoryHostRef[]>(
+    () =>
+      allHosts.map((host) => ({
+        serverId: host.serverId,
+        name: normalizeHostLabel(host.label, host.serverId),
+      })),
+    [allHosts],
+  );
+  const selectedHosts = useMemo(() => {
+    if (selection === null) return hostRefs;
+    const chosen = hostRefs.filter((host) => selection.includes(host.serverId));
+    return chosen.length > 0 ? chosen : hostRefs;
+  }, [hostRefs, selection]);
+
   // Aliased: `window` is the global on web.
-  const { view, window: usageWindow, refresh } = useProviderUsageHistory(serverId, windowDays);
+  const {
+    hosts,
+    window: usageWindow,
+    isFetching,
+    refresh,
+  } = useProviderUsageHistory(selectedHosts, windowDays);
 
   const handleRefresh = useCallback(() => {
     void refresh();
@@ -67,6 +158,20 @@ export function ProviderUsageHistorySection({ serverId }: { serverId: string }) 
     const days = Number.parseInt(value, 10);
     if (days === 7 || days === 30 || days === 90) setWindowDays(days);
   }, []);
+  const handleSelectAllHosts = useCallback(() => setSelection(null), []);
+  const handleToggleHost = useCallback(
+    (serverId: string) => {
+      setSelection((current) => {
+        const base = current ?? hostRefs.map((host) => host.serverId);
+        const next = base.includes(serverId)
+          ? base.filter((id) => id !== serverId)
+          : [...base, serverId];
+        // Emptying the filter, or filling it, is the same request as "all hosts".
+        return next.length === 0 || next.length === hostRefs.length ? null : next;
+      });
+    },
+    [hostRefs],
+  );
 
   const metricOptions = useMemo<SegmentedControlOption<ProviderUsageHistoryMetric>[]>(
     () => [
@@ -84,10 +189,31 @@ export function ProviderUsageHistorySection({ serverId }: { serverId: string }) 
     [t],
   );
 
+  const view = usageHistoryView({ hosts, isFetching });
+  const report = view.kind === "ready" ? mergeProviderUsageHistory(hosts) : null;
+  // Totals and Breakdown are their own sections, so they only exist once there
+  // is something to break down.
+  const activeReport = report !== null && report.daily.length > 0 ? report : null;
+
   const busy = view.kind === "loading" || (view.kind === "ready" && view.isRefreshing);
+  const isMultiHost = hostRefs.length > 1;
+  const selectedServerIds = useMemo(
+    () => selectedHosts.map((host) => host.serverId),
+    [selectedHosts],
+  );
+  const isAllHostsSelected = selectedHosts.length === hostRefs.length;
   const controls = useMemo(
     () => (
       <View style={styles.headerControls}>
+        {isMultiHost ? (
+          <HostFilter
+            hosts={hostRefs}
+            selectedServerIds={selectedServerIds}
+            isAllSelected={isAllHostsSelected}
+            onSelectAll={handleSelectAllHosts}
+            onToggle={handleToggleHost}
+          />
+        ) : null}
         <SegmentedControl
           size="xs"
           options={metricOptions}
@@ -112,15 +238,23 @@ export function ProviderUsageHistorySection({ serverId }: { serverId: string }) 
         />
       </View>
     ),
-    [busy, handleRefresh, handleWindowChange, metric, metricOptions, t, windowDays, windowOptions],
+    [
+      busy,
+      handleRefresh,
+      handleSelectAllHosts,
+      handleToggleHost,
+      handleWindowChange,
+      hostRefs,
+      isAllHostsSelected,
+      isMultiHost,
+      metric,
+      metricOptions,
+      selectedServerIds,
+      t,
+      windowDays,
+      windowOptions,
+    ],
   );
-
-  // Totals and Breakdown are their own sections, so they only exist once there
-  // is something to break down.
-  const report = useMemo(() => {
-    if (view.kind !== "ready" || view.payload.buckets.length === 0) return null;
-    return deriveProviderUsageHistory(view.payload);
-  }, [view]);
 
   return (
     <View>
@@ -132,26 +266,104 @@ export function ProviderUsageHistorySection({ serverId }: { serverId: string }) 
       >
         <ProviderUsageHistoryBody
           view={view}
-          report={report}
+          report={activeReport}
+          hosts={hosts}
+          showCoverage={isMultiHost}
           metric={metric}
           sinceDay={usageWindow.sinceDay}
           untilDay={usageWindow.untilDay}
           onRetry={handleRefresh}
         />
       </SettingsSection>
-      {report === null ? null : (
+      {activeReport === null ? null : (
         <>
-          <TotalsGrid totals={report} />
-          <Breakdown totals={report} />
+          <TotalsGrid totals={activeReport} />
+          <Breakdown totals={activeReport} />
         </>
       )}
     </View>
   );
 }
 
+function HostFilter({
+  hosts,
+  selectedServerIds,
+  isAllSelected,
+  onSelectAll,
+  onToggle,
+}: {
+  hosts: readonly ProviderUsageHistoryHostRef[];
+  selectedServerIds: readonly string[];
+  isAllSelected: boolean;
+  onSelectAll: () => void;
+  onToggle: (serverId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const label = hostFilterLabel(t, hosts, selectedServerIds, isAllSelected);
+
+  return (
+    <DropdownMenu>
+      <DropdownTrigger
+        accessibilityRole="button"
+        accessibilityLabel={`${t("settings.usageHistory.hostFilter.label")}: ${label}`}
+        style={styles.hostFilterTrigger}
+        testID="usage-history-host-filter"
+      >
+        <Text style={styles.hostFilterLabel} numberOfLines={1}>
+          {label}
+        </Text>
+      </DropdownTrigger>
+      <DropdownMenuContent side="bottom" align="end" width={240}>
+        <DropdownMenuItem
+          selected={isAllSelected}
+          showSelectedCheck
+          closeOnSelect={false}
+          onSelect={onSelectAll}
+        >
+          {t("settings.usageHistory.hostFilter.all")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {hosts.map((host) => (
+          <HostFilterItem
+            key={host.serverId}
+            host={host}
+            selected={selectedServerIds.includes(host.serverId)}
+            onToggle={onToggle}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function HostFilterItem({
+  host,
+  selected,
+  onToggle,
+}: {
+  host: ProviderUsageHistoryHostRef;
+  selected: boolean;
+  onToggle: (serverId: string) => void;
+}) {
+  const handleSelect = useCallback(() => onToggle(host.serverId), [host.serverId, onToggle]);
+  return (
+    <DropdownMenuItem
+      selected={selected}
+      showSelectedCheck
+      closeOnSelect={false}
+      onSelect={handleSelect}
+      testID={`usage-history-host-option-${host.serverId}`}
+    >
+      {host.name}
+    </DropdownMenuItem>
+  );
+}
+
 interface ProviderUsageHistoryBodyProps {
   view: ProviderUsageHistoryView;
-  report: ProviderUsageHistoryTotals | null;
+  report: ProviderUsageHistoryReport | null;
+  hosts: readonly ProviderUsageHistoryHostInput[];
+  showCoverage: boolean;
   metric: ProviderUsageHistoryMetric;
   sinceDay: string;
   untilDay: string;
@@ -161,12 +373,22 @@ interface ProviderUsageHistoryBodyProps {
 function ProviderUsageHistoryBody({
   view,
   report,
+  hosts,
+  showCoverage,
   metric,
   sinceDay,
   untilDay,
   onRetry,
 }: ProviderUsageHistoryBodyProps) {
   const { t } = useTranslation();
+
+  if (view.kind === "noHosts") {
+    return (
+      <View style={[settingsStyles.card, styles.emptyCard]}>
+        <Text style={styles.emptyText}>{t("settings.usageHistory.addHost")}</Text>
+      </View>
+    );
+  }
 
   if (view.kind === "loading") {
     return (
@@ -176,10 +398,10 @@ function ProviderUsageHistoryBody({
     );
   }
 
-  if (view.kind === "unsupported") {
+  if (view.kind === "unavailable") {
     return (
       <View style={[settingsStyles.card, styles.emptyCard]}>
-        <Text style={styles.emptyText}>{t("settings.usageHistory.unsupported")}</Text>
+        <Text style={styles.emptyText}>{t(view.messageKey)}</Text>
       </View>
     );
   }
@@ -189,7 +411,7 @@ function ProviderUsageHistoryBody({
       <Alert
         variant="error"
         title={t("settings.usageHistory.errorTitle")}
-        description={t(view.messageKey)}
+        description={t("settings.usageHistory.readFailed")}
       >
         <Button variant="outline" size="sm" onPress={onRetry}>
           {t("common.actions.retry")}
@@ -200,16 +422,24 @@ function ProviderUsageHistoryBody({
 
   if (report === null) {
     return (
-      <View style={[settingsStyles.card, styles.emptyCard]}>
-        <Text style={styles.emptyText}>{t("settings.usageHistory.empty")}</Text>
-      </View>
+      <>
+        <View style={[settingsStyles.card, styles.emptyCard]}>
+          <Text style={styles.emptyText}>{t("settings.usageHistory.empty")}</Text>
+        </View>
+        {showCoverage ? (
+          <Text style={styles.coverage} numberOfLines={2} testID="usage-history-coverage">
+            {coverageLine(t, hosts, [])}
+          </Text>
+        ) : null}
+      </>
     );
   }
 
   return (
     <SummaryCard
       totals={report}
-      pricing={view.payload.pricing}
+      hosts={hosts}
+      showCoverage={showCoverage}
       metric={metric}
       sinceDay={sinceDay}
       untilDay={untilDay}
@@ -218,14 +448,22 @@ function ProviderUsageHistoryBody({
 }
 
 interface SummaryCardProps {
-  totals: ProviderUsageHistoryTotals;
-  pricing: ProviderUsageHistoryPricing;
+  totals: ProviderUsageHistoryReport;
+  hosts: readonly ProviderUsageHistoryHostInput[];
+  showCoverage: boolean;
   metric: ProviderUsageHistoryMetric;
   sinceDay: string;
   untilDay: string;
 }
 
-function SummaryCard({ totals, pricing, metric, sinceDay, untilDay }: SummaryCardProps) {
+function SummaryCard({
+  totals,
+  hosts,
+  showCoverage,
+  metric,
+  sinceDay,
+  untilDay,
+}: SummaryCardProps) {
   const { t } = useTranslation();
   const days = useMemo(() => enumerateDays(sinceDay, untilDay), [sinceDay, untilDay]);
   const activeProviders = useMemo(
@@ -253,6 +491,11 @@ function SummaryCard({ totals, pricing, metric, sinceDay, untilDay }: SummaryCar
           />
         );
       })}
+      {showCoverage ? (
+        <Text style={styles.coverage} numberOfLines={2} testID="usage-history-coverage">
+          {coverageLine(t, hosts, totals.duplicates)}
+        </Text>
+      ) : null}
       {totals.unreadableProviders.length === 0 ? null : (
         <Text style={settingsStyles.rowHint} testID="usage-history-unreadable">
           {t("settings.usageHistory.summary.unreadableProviders", {
@@ -263,7 +506,7 @@ function SummaryCard({ totals, pricing, metric, sinceDay, untilDay }: SummaryCar
       {totals.unpricedRecords > 0 ? (
         <Text style={settingsStyles.rowHint}>{t("settings.usageHistory.incompleteCosts")}</Text>
       ) : null}
-      {pricing.status === "unavailable" ? (
+      {totals.pricingUnavailable ? (
         <Text style={settingsStyles.rowHint}>{t("settings.usageHistory.pricingUnavailable")}</Text>
       ) : null}
       <View style={styles.chartBlock}>
@@ -287,7 +530,7 @@ function Headline({
   totals,
   metric,
 }: {
-  totals: ProviderUsageHistoryTotals;
+  totals: ProviderUsageHistoryReport;
   metric: ProviderUsageHistoryMetric;
 }) {
   const { t } = useTranslation();
@@ -360,9 +603,9 @@ function ProviderRow({
         <View style={styles.providerSubRows}>
           {configured.map((configuredProvider) => (
             <View
-              key={configuredProvider.providerId}
+              key={configuredProvider.id}
               style={styles.providerSubRow}
-              testID={`usage-history-provider-sub-${configuredProvider.providerId}`}
+              testID={`usage-history-provider-sub-${configuredProvider.id}`}
             >
               <Text style={styles.providerSubName} numberOfLines={1}>
                 {configuredProvider.label}
@@ -380,7 +623,7 @@ function ProviderRow({
   );
 }
 
-function TotalsGrid({ totals }: { totals: ProviderUsageHistoryTotals }) {
+function TotalsGrid({ totals }: { totals: ProviderUsageHistoryReport }) {
   const { t } = useTranslation();
   const cells = [
     { key: "processedTokens", value: formatTokens(totals.totalTokens) },
@@ -406,9 +649,10 @@ function TotalsGrid({ totals }: { totals: ProviderUsageHistoryTotals }) {
   );
 }
 
-function Breakdown({ totals }: { totals: ProviderUsageHistoryTotals }) {
+function Breakdown({ totals }: { totals: ProviderUsageHistoryReport }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<BreakdownMode>("model");
+  const hasHostSplit = totals.hosts.length > 1;
   const activeProviders = useMemo(
     () => totals.providers.map((entry) => entry.provider),
     [totals.providers],
@@ -416,30 +660,35 @@ function Breakdown({ totals }: { totals: ProviderUsageHistoryTotals }) {
   const options = useMemo<SegmentedControlOption<BreakdownMode>[]>(
     () => [
       { value: "provider", label: t("settings.usageHistory.breakdown.provider") },
+      ...(hasHostSplit
+        ? [{ value: "host" as const, label: t("settings.usageHistory.breakdown.host") }]
+        : []),
       { value: "model", label: t("settings.usageHistory.breakdown.model") },
       { value: "day", label: t("settings.usageHistory.breakdown.day") },
     ],
-    [t],
+    [hasHostSplit, t],
   );
+  const activeMode = mode === "host" && !hasHostSplit ? "model" : mode;
 
   const trailing = useMemo(
     () => (
       <SegmentedControl
         size="xs"
         options={options}
-        value={mode}
+        value={activeMode}
         onValueChange={setMode}
         testID="usage-history-breakdown"
       />
     ),
-    [mode, options],
+    [activeMode, options],
   );
 
   return (
     <SettingsSection title={t("settings.usageHistory.breakdown.title")} trailing={trailing}>
-      {mode === "provider" ? <ProviderTable providers={totals.configuredProviders} /> : null}
-      {mode === "model" ? <ModelTable models={totals.models} /> : null}
-      {mode === "day" ? <DayTable totals={totals} activeProviders={activeProviders} /> : null}
+      {activeMode === "provider" ? <ProviderTable providers={totals.configuredProviders} /> : null}
+      {activeMode === "host" ? <HostTable hosts={totals.hosts} /> : null}
+      {activeMode === "model" ? <ModelTable models={totals.models} /> : null}
+      {activeMode === "day" ? <DayTable totals={totals} activeProviders={activeProviders} /> : null}
     </SettingsSection>
   );
 }
@@ -469,9 +718,9 @@ function ProviderTable({
       </View>
       {providers.map((entry) => (
         <View
-          key={entry.providerId}
+          key={entry.id}
           style={[styles.tableRow, settingsStyles.rowBorder]}
-          testID={`usage-history-provider-total-${entry.providerId}`}
+          testID={`usage-history-provider-total-${entry.id}`}
         >
           <View style={[styles.nameColumn, styles.nameCell]}>
             <ThemedProviderMark provider={entry.provider} size={12} uniProps={mutedMarkColor} />
@@ -479,6 +728,49 @@ function ProviderTable({
               {entry.label}
             </Text>
           </View>
+          <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
+            {formatUsd(entry.costUsd, entry.unpricedRecords)}
+          </Text>
+          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
+            {formatPercent(entry.costShare)}
+          </Text>
+          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
+            {formatTokens(entry.totalTokens)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function HostTable({ hosts }: { hosts: readonly ProviderUsageHistoryHostTotals[] }) {
+  const { t } = useTranslation();
+
+  return (
+    <View style={settingsStyles.card}>
+      <View style={styles.tableHeader}>
+        <Text style={[styles.headerCell, styles.nameColumn]}>
+          {t("settings.usageHistory.table.host")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.cost")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.share")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.tokens")}
+        </Text>
+      </View>
+      {hosts.map((entry) => (
+        <View
+          key={entry.serverId}
+          style={[styles.tableRow, settingsStyles.rowBorder]}
+          testID={`usage-history-host-total-${entry.serverId}`}
+        >
+          <Text style={[styles.bodyCell, styles.nameColumn]} numberOfLines={1}>
+            {entry.name}
+          </Text>
           <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
             {formatUsd(entry.costUsd, entry.unpricedRecords)}
           </Text>
@@ -544,7 +836,7 @@ function DayTable({
   totals,
   activeProviders,
 }: {
-  totals: ProviderUsageHistoryTotals;
+  totals: ProviderUsageHistoryReport;
   activeProviders: readonly string[];
 }) {
   const { t } = useTranslation();
@@ -600,7 +892,24 @@ const styles = StyleSheet.create((theme) => ({
   headerControls: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    flexShrink: 1,
     gap: theme.spacing[2],
+  },
+  hostFilterTrigger: {
+    minHeight: CONTROL_HEIGHTS.tight,
+    maxWidth: 180,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  hostFilterLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
   },
   summaryCard: {
     padding: theme.spacing[4],
@@ -618,6 +927,12 @@ const styles = StyleSheet.create((theme) => ({
   emptyText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
+  },
+  coverage: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: COVERAGE_LINE_HEIGHT,
+    minHeight: COVERAGE_LINE_HEIGHT,
   },
   headline: {
     gap: theme.spacing[0.5],
