@@ -32,6 +32,15 @@ RPC: `provider.usage_history.read.request` / `.response`, gated on `server_info.
 - **Reasoning tokens are a subset of output tokens.** Total processed tokens is uncached input + cached input + cache creation + output. Never add reasoning on top.
 - **Cost is an API-equivalent estimate, not a bill.** Rates come from LiteLLM's `model_prices_and_context_window.json`, priced at the base tier. Models the table does not know are counted in tokens and reported as `unpriced`. `unpricedRecords` survives aggregation through the chart and tables. Any unpriced activity makes the estimate incomplete: known costs show a lower bound, wholly unknown costs show “—”, and cost shares are withheld.
 
+## Reconciling a total by hand
+
+A hand tally will read high unless it applies the same two filters the scan does, and the difference is large enough to look like a bug. Both were mistaken for missing tokens once:
+
+- **Filter records by day, not files by mtime.** A file is admitted when its mtime is inside the window, then each record is placed on its own local day and dropped if it falls outside. Summing whole admitted files counts pre-window activity that the page correctly excludes; on a corpus reaching well before `sinceDay` that alone is tens of percent.
+- **Dedupe Claude across files, not within one.** Resumed and forked sessions copy history forward, so the same `message.id:requestId` appears in several files and a per-file tally counts it once per file.
+
+`sources[].scannedFiles` counts files that produced at least one record; files admitted by mtime with nothing in the window land in `skippedFiles`. A walk of the directory therefore finds more files than `scannedFiles` reports, which is not a sign of a skipped file. Transcripts are also appended while the scan runs, so two measurements taken minutes apart differ; compare them against the same corpus at the same instant.
+
 ## Cache
 
 `$PASEO_HOME/usage-history/scan-cache.json` memoizes parsed records per file, keyed by `(size, mtime, provider)`, with the byte offset where parsing stopped. Transcripts are append-only, so a file that grew resumes from that offset after a 64-byte guard hash confirms the tail is unchanged; anything else re-parses from byte zero. The cache is per file rather than per day so changing the time zone invalidates nothing. Scans and cache persistence run serially. Identical pending requests share a result; at most eight distinct requests are admitted, with excess requests rejected for retry. Entries older than 90 days are pruned. A corrupt cache costs one cold scan, never an error.
