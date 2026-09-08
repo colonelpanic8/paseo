@@ -19,18 +19,14 @@ const TRANSCRIPT_SUBDIR: Record<UsageProvider, string> = {
   claude: "projects",
   codex: "sessions",
 };
-const DEFAULT_LABEL: Record<UsageProvider, string> = {
-  claude: "Claude",
-  codex: "Codex",
-};
-
 /** One provider-owned transcript directory to scan. */
 export interface TranscriptHome {
   /** Base kind the configured provider resolves to. */
   readonly provider: UsageProvider;
   /** Configured provider id owning the home, e.g. `codex-colonel`. */
   readonly providerId: string;
-  readonly label: string;
+  /** Configured display label. Absent on a built-in, which the client already names. */
+  readonly label?: string;
   /** The provider home, e.g. `~/.codex-colonelpanic8`. */
   readonly home: string;
   /** The transcript directory inside that home. */
@@ -124,7 +120,7 @@ export function resolveTranscriptHomes(
     homes.push({
       provider,
       providerId,
-      label: override?.label ?? DEFAULT_LABEL[provider],
+      label: override?.label,
       home,
       dir: path.join(home, TRANSCRIPT_SUBDIR[provider]),
     });
