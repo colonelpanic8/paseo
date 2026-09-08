@@ -1,0 +1,164 @@
+DMG SHA-256
+ebdbcb020e4273d1d6c70b129f33846882b4e8ab226e8a75ca5addc2118df871  /tmp/paseo-pr-evidence/2885/run-34278532216-arm64-artifact/Paseo-0.5.0-beta.2-arm64.dmg
+
+Main executable architecture
+/tmp/paseo-pr-evidence/2885/run-34278532216-arm64-extracted/Paseo 0.5.0-beta.2-arm64/Paseo.app/Contents/MacOS/Paseo: Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>
+
+Main executable signature
+- path: /tmp/paseo-pr-evidence/2885/run-34278532216-arm64-extracted/Paseo 0.5.0-beta.2-arm64/Paseo.app/Contents/MacOS/Paseo
+  file_size: 52800
+  file_sha256: e61b0ff4b9280b57a2b26433e32b3c52e0cb30874c529fc12cae62bab4dac0c6
+  entity:
+    mach_o:
+      macho_linkedit_start_offset: 32768 / 0x8000
+      macho_signature_start_offset: 33552 / 0x8310
+      macho_signature_end_offset: 34791 / 0x87e7
+      macho_linkedit_end_offset: 52800 / 0xce40
+      macho_end_offset: 52800 / 0xce40
+      linkedit_signature_start_offset: 784 / 0x310
+      linkedit_signature_end_offset: 2023 / 0x7e7
+      linkedit_bytes_after_signature: 18009 / 0x4659
+      signature:
+        superblob_length: 1239 / 0x4d7
+        blob_count: 5
+        blobs:
+        - slot: CodeDirectory (0)
+          magic: fade0c02
+          length: 617
+          sha1: 24078c01b63e370db66a7466a14ddb297e4db51c
+          sha256: c707c6ab42b76769774f8e3d41eb2c3744107858ffa65a12dd06749d679d174f
+        - slot: RequirementSet (2)
+          magic: fade0c01
+          length: 12
+          sha1: 3a75f6db058529148e14dd7ea1b4729cc09ec973
+          sha256: 987920904eab650e75788c054aa0b0524e6a80bfc71aa32df8d237a61743f986
+        - slot: Entitlements (5)
+          magic: fade7171
+          length: 390
+          sha1: f29d575506d27f42ac10421d0d0fe39a2d756ca6
+          sha256: 16008b52a48fd6303b6383d7d57b1df8fd5160a8b70eef2e3954a2d6b8dfef97
+        - slot: DER Entitlements (7)
+          magic: fade7172
+          length: 160
+          sha1: 38f5931d829316e2c1c09cbd6d15e675d0e3daca
+          sha256: 47de49cf2e167c2f2c6acf380da8ed827280a4008f3e53c1d96b28d651252a9e
+        - slot: CMS Signature (65536)
+          magic: fade0b01
+          length: 8
+          sha1: 2a7254313aa41796079bb0e9d0f044345f69f98b
+          sha256: e6c83bc98a10348492c7d4d2378a54572ef29e1a5692ccd02b5e29f4b762d6a0
+        code_directory:
+          version: '0x20400'
+          flags: CodeSignatureFlags(ADHOC)
+          identifier: sh.paseo.desktop
+          digest_type: sha256
+          platform: 0
+          signed_entity_size: 33552
+          executable_segment_flags: ExecutableSegmentFlags(MAIN_BINARY)
+          code_digests_count: 9
+          slot_digests:
+          - 'Info (1): b7bfd80073c0d413102f8d3e6e217e73ef2d5a94209cab4c02ba967e867b059a'
+          - 'RequirementSet (2): 987920904eab650e75788c054aa0b0524e6a80bfc71aa32df8d237a61743f986'
+          - 'Resources (3): 6e357165cf7012d3c1cc50afc357dcfae50f1cc5cd8a27bb5a50c6fcc2db99ff'
+          - 'Application (4): 0000000000000000000000000000000000000000000000000000000000000000'
+          - 'Entitlements (5): 16008b52a48fd6303b6383d7d57b1df8fd5160a8b70eef2e3954a2d6b8dfef97'
+          - 'Rep Specific (6): 0000000000000000000000000000000000000000000000000000000000000000'
+          - 'DER Entitlements (7): 47de49cf2e167c2f2c6acf380da8ed827280a4008f3e53c1d96b28d651252a9e'
+        entitlements_plist:
+        - <?xml version="1.0" encoding="UTF-8"?>
+        - <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        - <plist version="1.0">
+        - <dict>
+        - '  <key>com.apple.security.cs.allow-jit</key>'
+        - '  <true/>'
+        - '  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>'
+        - '  <true/>'
+        - '  <key>com.apple.security.device.audio-input</key>'
+        - '  <true/>'
+        - </dict>
+        - </plist>
+        entitlements_der_plist:
+        - <?xml version="1.0" encoding="UTF-8"?>
+        - <plist version="1.0">
+        - '  <dict>'
+        - '    <key>com.apple.security.cs.allow-jit</key>'
+        - '    <true />'
+        - '    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>'
+        - '    <true />'
+        - '    <key>com.apple.security.device.audio-input</key>'
+        - '    <true />'
+        - '  </dict>'
+        - </plist>
+        cms: null
+
+Electron Framework architecture
+/tmp/paseo-pr-evidence/2885/run-34278532216-arm64-extracted/Paseo 0.5.0-beta.2-arm64/Paseo.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework: Mach-O 64-bit arm64 dynamically linked shared library, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|WEAK_DEFINES|BINDS_TO_WEAK|NO_REEXPORTED_DYLIBS|HAS_TLV_DESCRIPTORS>
+
+Electron Framework signature
+- path: /tmp/paseo-pr-evidence/2885/run-34278532216-arm64-extracted/Paseo 0.5.0-beta.2-arm64/Paseo.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework
+  file_size: 178908896
+  file_sha256: 5e5a070b5ebdd85f203536074030b67767e70ffd782a6c1e4fd422651afd751d
+  entity:
+    mach_o:
+      macho_linkedit_start_offset: 175669248 / 0xa788000
+      macho_signature_start_offset: 177503408 / 0xa947cb0
+      macho_signature_end_offset: 178890892 / 0xaa9a88c
+      macho_linkedit_end_offset: 178908896 / 0xaa9eee0
+      macho_end_offset: 178908896 / 0xaa9eee0
+      linkedit_signature_start_offset: 1834160 / 0x1bfcb0
+      linkedit_signature_end_offset: 3221644 / 0x31288c
+      linkedit_bytes_after_signature: 18004 / 0x4654
+      signature:
+        superblob_length: 1387484 / 0x152bdc
+        blob_count: 4
+        blobs:
+        - slot: CodeDirectory (0)
+          magic: fade0c02
+          length: 1387030
+          sha1: 920014db188b7ecb8eb5329b6bc5bb99d333c5c1
+          sha256: 4562282b8bd9c628af2c284e5179e5985adc30f08517dcb862d05513d09570fa
+        - slot: RequirementSet (2)
+          magic: fade0c01
+          length: 12
+          sha1: 3a75f6db058529148e14dd7ea1b4729cc09ec973
+          sha256: 987920904eab650e75788c054aa0b0524e6a80bfc71aa32df8d237a61743f986
+        - slot: Entitlements (5)
+          magic: fade7171
+          length: 390
+          sha1: f29d575506d27f42ac10421d0d0fe39a2d756ca6
+          sha256: 16008b52a48fd6303b6383d7d57b1df8fd5160a8b70eef2e3954a2d6b8dfef97
+        - slot: CMS Signature (65536)
+          magic: fade0b01
+          length: 8
+          sha1: 2a7254313aa41796079bb0e9d0f044345f69f98b
+          sha256: e6c83bc98a10348492c7d4d2378a54572ef29e1a5692ccd02b5e29f4b762d6a0
+        code_directory:
+          version: '0x20400'
+          flags: CodeSignatureFlags(ADHOC)
+          identifier: com.github.Electron.framework
+          digest_type: sha256
+          platform: 0
+          signed_entity_size: 177503408
+          executable_segment_flags: ExecutableSegmentFlags(0x0)
+          code_digests_count: 43336
+          slot_digests:
+          - 'Info (1): cc0157c4af1e9e685e081d49a2c0fb714f93e554cee9d4d8faef1de8c7b2480e'
+          - 'RequirementSet (2): 987920904eab650e75788c054aa0b0524e6a80bfc71aa32df8d237a61743f986'
+          - 'Resources (3): e6dc899770c79bd46f25ea6c75e2558279079fb675ad701db9d5b87cc5cdd42b'
+          - 'Application (4): 0000000000000000000000000000000000000000000000000000000000000000'
+          - 'Entitlements (5): 16008b52a48fd6303b6383d7d57b1df8fd5160a8b70eef2e3954a2d6b8dfef97'
+        entitlements_plist:
+        - <?xml version="1.0" encoding="UTF-8"?>
+        - <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        - <plist version="1.0">
+        - <dict>
+        - '  <key>com.apple.security.cs.allow-jit</key>'
+        - '  <true/>'
+        - '  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>'
+        - '  <true/>'
+        - '  <key>com.apple.security.device.audio-input</key>'
+        - '  <true/>'
+        - </dict>
+        - </plist>
+        cms: null
+

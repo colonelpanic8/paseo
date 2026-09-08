@@ -1,0 +1,1172 @@
+﻿2026-09-08T21:07:28.4696360Z Current runner version: '2.337.0'
+2026-09-08T21:07:28.4710760Z ##[group]Runner Image Provisioner
+2026-09-08T21:07:28.4711280Z Hosted Compute Agent
+2026-09-08T21:07:28.4711650Z Version: 20260828.587
+2026-09-08T21:07:28.4712060Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-08T21:07:28.4712530Z Build Date: 2026-08-28T16:44:25Z
+2026-09-08T21:07:28.4712960Z Worker ID: {4a6428dc-ab9e-4587-b076-94f74e55dcdd}
+2026-09-08T21:07:28.4713630Z Azure Region: westus
+2026-09-08T21:07:28.4714040Z ##[endgroup]
+2026-09-08T21:07:28.4715450Z ##[group]Operating System
+2026-09-08T21:07:28.4715920Z macOS
+2026-09-08T21:07:28.4716310Z 14.8.9
+2026-09-08T21:07:28.4716640Z 23J631
+2026-09-08T21:07:28.4716990Z ##[endgroup]
+2026-09-08T21:07:28.4717350Z ##[group]Runner Image
+2026-09-08T21:07:28.4717840Z Image: macos-14-arm64
+2026-09-08T21:07:28.4718250Z Version: 20260831.0302.1
+2026-09-08T21:07:28.4719220Z Included Software: https://github.com/actions/runner-images/blob/macos-14-arm64/20260831.0302/images/macos/macos-14-arm64-Readme.md
+2026-09-08T21:07:28.4720280Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-14-arm64%2F20260831.0302
+2026-09-08T21:07:28.4720940Z ##[endgroup]
+2026-09-08T21:07:28.4721940Z ##[group]GITHUB_TOKEN Permissions
+2026-09-08T21:07:28.4723590Z Contents: write
+2026-09-08T21:07:28.4724030Z Metadata: read
+2026-09-08T21:07:28.4724400Z Packages: read
+2026-09-08T21:07:28.4724790Z ##[endgroup]
+2026-09-08T21:07:28.4726400Z Secret source: Actions
+2026-09-08T21:07:28.4727120Z Prepare workflow directory
+2026-09-08T21:07:28.5082790Z Prepare all required actions
+2026-09-08T21:07:28.5119420Z Getting action download info
+2026-09-08T21:07:28.9142200Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-09-08T21:07:29.4225660Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-09-08T21:07:29.5355000Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-09-08T21:07:29.8018980Z Complete job name: publish-macos (macos-14, arm64)
+2026-09-08T21:07:29.8627410Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T21:07:29.8634530Z ##[group]Run actions/checkout@v4
+2026-09-08T21:07:29.8635040Z with:
+2026-09-08T21:07:29.8635370Z   fetch-depth: 0
+2026-09-08T21:07:29.8635740Z   ref: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:29.8639790Z   repository: colonelpanic8/paseo
+2026-09-08T21:07:29.8648250Z   token: ***
+2026-09-08T21:07:29.8649190Z   ssh-strict: true
+2026-09-08T21:07:29.8650130Z   ssh-user: git
+2026-09-08T21:07:29.8651080Z   persist-credentials: true
+2026-09-08T21:07:29.8651970Z   clean: true
+2026-09-08T21:07:29.8652360Z   sparse-checkout-cone-mode: true
+2026-09-08T21:07:29.8652800Z   fetch-tags: false
+2026-09-08T21:07:29.8653190Z   show-progress: true
+2026-09-08T21:07:29.8653530Z   lfs: false
+2026-09-08T21:07:29.8653840Z   submodules: false
+2026-09-08T21:07:29.8654200Z   set-safe-directory: true
+2026-09-08T21:07:29.8654580Z   allow-unsafe-pr-checkout: false
+2026-09-08T21:07:29.8655660Z env:
+2026-09-08T21:07:29.8655990Z   SOURCE_TAG: v0.5.0-beta.2
+2026-09-08T21:07:29.8656430Z   CHECKOUT_REF: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:29.8656970Z   SHOULD_PUBLISH: false
+2026-09-08T21:07:29.8657330Z   ROLLOUT_HOURS: 0
+2026-09-08T21:07:29.8657700Z   DESKTOP_PACKAGE_PATH: packages/desktop
+2026-09-08T21:07:29.8658120Z ##[endgroup]
+2026-09-08T21:07:30.3221520Z Syncing repository: colonelpanic8/paseo
+2026-09-08T21:07:30.3226850Z ##[group]Getting Git version info
+2026-09-08T21:07:30.3229180Z Working directory is '/Users/runner/work/paseo/paseo'
+2026-09-08T21:07:30.3230770Z [command]/opt/homebrew/bin/git version
+2026-09-08T21:07:30.3492730Z git version 2.55.0
+2026-09-08T21:07:30.3514780Z ##[endgroup]
+2026-09-08T21:07:30.3524500Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/d363c707-9a79-4822-9329-3a048f483c1c/.gitconfig'
+2026-09-08T21:07:30.3526610Z Temporarily overriding HOME='/Users/runner/work/_temp/d363c707-9a79-4822-9329-3a048f483c1c' before making global git config changes
+2026-09-08T21:07:30.3528760Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-08T21:07:30.3531060Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/paseo/paseo
+2026-09-08T21:07:30.3655830Z Deleting the contents of '/Users/runner/work/paseo/paseo'
+2026-09-08T21:07:30.3658420Z ##[group]Initializing the repository
+2026-09-08T21:07:30.3662470Z [command]/opt/homebrew/bin/git init /Users/runner/work/paseo/paseo
+2026-09-08T21:07:30.3943890Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-08T21:07:30.3948040Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-08T21:07:30.3952020Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-08T21:07:30.3955250Z hint: call:
+2026-09-08T21:07:30.3957000Z hint:
+2026-09-08T21:07:30.3959160Z hint: 	git config --global init.defaultBranch <name>
+2026-09-08T21:07:30.3961840Z hint:
+2026-09-08T21:07:30.3963180Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-08T21:07:30.3965800Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-08T21:07:30.3967370Z hint:
+2026-09-08T21:07:30.3968170Z hint: 	git branch -m <name>
+2026-09-08T21:07:30.3969090Z hint:
+2026-09-08T21:07:30.3970330Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-08T21:07:30.3972370Z Initialized empty Git repository in /Users/runner/work/paseo/paseo/.git/
+2026-09-08T21:07:30.3976500Z [command]/opt/homebrew/bin/git remote add origin https://github.com/colonelpanic8/paseo
+2026-09-08T21:07:30.4074010Z ##[endgroup]
+2026-09-08T21:07:30.4077500Z ##[group]Disabling automatic garbage collection
+2026-09-08T21:07:30.4081960Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-09-08T21:07:30.4156390Z ##[endgroup]
+2026-09-08T21:07:30.4158000Z ##[group]Setting up auth
+2026-09-08T21:07:30.4167100Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-08T21:07:30.4246000Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-08T21:07:30.5334890Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-08T21:07:30.5454240Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-08T21:07:30.6243040Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-08T21:07:30.6314930Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-08T21:07:30.7944330Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-08T21:07:30.7988290Z ##[endgroup]
+2026-09-08T21:07:30.7992350Z ##[group]Fetching the repository
+2026-09-08T21:07:30.7997520Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-09-08T21:07:41.6830500Z From https://github.com/colonelpanic8/paseo
+2026-09-08T21:07:41.6832070Z  * [new branch]          add-antigraivity-acp-catalog -> origin/add-antigraivity-acp-catalog
+2026-09-08T21:07:41.6833470Z  * [new branch]          add-copy-conversation      -> origin/add-copy-conversation
+2026-09-08T21:07:41.6837560Z  * [new branch]          add-webstorm               -> origin/add-webstorm
+2026-09-08T21:07:41.6838070Z  * [new branch]          add-workspace-purge        -> origin/add-workspace-purge
+2026-09-08T21:07:41.6838550Z  * [new branch]          add/t3code-scrollback      -> origin/add/t3code-scrollback
+2026-09-08T21:07:41.6839110Z  * [new branch]          agent-completion-timestamps -> origin/agent-completion-timestamps
+2026-09-08T21:07:41.6839730Z  * [new branch]          agent-environment-setup    -> origin/agent-environment-setup
+2026-09-08T21:07:41.6840260Z  * [new branch]          agent-hierarchy-tree       -> origin/agent-hierarchy-tree
+2026-09-08T21:07:41.6840800Z  * [new branch]          agent-purpose-summaries    -> origin/agent-purpose-summaries
+2026-09-08T21:07:41.6841290Z  * [new branch]          agent/agent-snooze         -> origin/agent/agent-snooze
+2026-09-08T21:07:41.6841930Z  * [new branch]          agent/configurable-direct-model-shortcuts -> origin/agent/configurable-direct-model-shortcuts
+2026-09-08T21:07:41.6842750Z  * [new branch]          agent/fix-preview-attachment-gc -> origin/agent/fix-preview-attachment-gc
+2026-09-08T21:07:41.6843480Z  * [new branch]          agent/live-voice-completion-notifications -> origin/agent/live-voice-completion-notifications
+2026-09-08T21:07:41.6844140Z  * [new branch]          agent/nix-android          -> origin/agent/nix-android
+2026-09-08T21:07:41.6844690Z  * [new branch]          agent/portable-bash-shebangs -> origin/agent/portable-bash-shebangs
+2026-09-08T21:07:41.6845360Z  * [new branch]          android-chat-load-slowdown-inventory -> origin/android-chat-load-slowdown-inventory
+2026-09-08T21:07:41.6845930Z  * [new branch]          assembled                  -> origin/assembled
+2026-09-08T21:07:41.6846350Z  * [new branch]          assembly-agent-env         -> origin/assembly-agent-env
+2026-09-08T21:07:41.6846930Z  * [new branch]          assembly-backport/mobile-sidebar-unfold-read -> origin/assembly-backport/mobile-sidebar-unfold-read
+2026-09-08T21:07:41.6850140Z  * [new branch]          assembly-build-provenance  -> origin/assembly-build-provenance
+2026-09-08T21:07:41.6850890Z  * [new branch]          assembly-codex-banked-resets -> origin/assembly-codex-banked-resets
+2026-09-08T21:07:41.6851400Z  * [new branch]          assembly-fdroid-variant    -> origin/assembly-fdroid-variant
+2026-09-08T21:07:41.6852010Z  * [new branch]          assembly-sidebar-unarchive -> origin/assembly-sidebar-unarchive
+2026-09-08T21:07:41.6852580Z  * [new branch]          assembly-wear-os           -> origin/assembly-wear-os
+2026-09-08T21:07:41.6853100Z  * [new branch]          assembly-workspace-restore -> origin/assembly-workspace-restore
+2026-09-08T21:07:41.6853670Z  * [new branch]          asset-store-streaming/research -> origin/asset-store-streaming/research
+2026-09-08T21:07:41.6854350Z  * [new branch]          bug/sidebar-resets-after-theme-switch -> origin/bug/sidebar-resets-after-theme-switch
+2026-09-08T21:07:41.6855080Z  * [new branch]          ci-dependency-gating       -> origin/ci-dependency-gating
+2026-09-08T21:07:41.6855700Z  * [new branch]          ci/build-apk-on-github     -> origin/ci/build-apk-on-github
+2026-09-08T21:07:41.6856230Z  * [new branch]          claude-fable-5-1           -> origin/claude-fable-5-1
+2026-09-08T21:07:41.6856700Z  * [new branch]          codex-astra-support        -> origin/codex-astra-support
+2026-09-08T21:07:41.6857150Z  * [new branch]          codex-banked-resets        -> origin/codex-banked-resets
+2026-09-08T21:07:41.6857760Z  * [new branch]          codex/fix-committed-diff-dirty-worktree -> origin/codex/fix-committed-diff-dirty-worktree
+2026-09-08T21:07:41.6858520Z  * [new branch]          codex/fix-new-workspace-current-branch-selection -> origin/codex/fix-new-workspace-current-branch-selection
+2026-09-08T21:07:41.6861570Z  * [new branch]          colonelpanic8/cli-paseo-home-resolution -> origin/colonelpanic8/cli-paseo-home-resolution
+2026-09-08T21:07:41.6863660Z  * [new branch]          colonelpanic8/client-settings-file-store -> origin/colonelpanic8/client-settings-file-store
+2026-09-08T21:07:41.6865990Z  * [new branch]          colonelpanic8/desktop-adhoc-hardened-runtime -> origin/colonelpanic8/desktop-adhoc-hardened-runtime
+2026-09-08T21:07:41.6866760Z  * [new branch]          colonelpanic8/expand-status-sidebar -> origin/colonelpanic8/expand-status-sidebar
+2026-09-08T21:07:41.6867470Z  * [new branch]          colonelpanic8/expand-tilde-config-paths -> origin/colonelpanic8/expand-tilde-config-paths
+2026-09-08T21:07:41.6868160Z  * [new branch]          colonelpanic8/fix-native-transform-origin -> origin/colonelpanic8/fix-native-transform-origin
+2026-09-08T21:07:41.6868960Z  * [new branch]          colonelpanic8/log-path-and-permissions -> origin/colonelpanic8/log-path-and-permissions
+2026-09-08T21:07:41.6869680Z  * [new branch]          colonelpanic8/require-real-workspace-directory -> origin/colonelpanic8/require-real-workspace-directory
+2026-09-08T21:07:41.6870490Z  * [new branch]          colonelpanic8/serialize-draft-provider-sessions -> origin/colonelpanic8/serialize-draft-provider-sessions
+2026-09-08T21:07:41.6871300Z  * [new branch]          colonelpanic8/subagent-param-visibility -> origin/colonelpanic8/subagent-param-visibility
+2026-09-08T21:07:41.6871990Z  * [new branch]          colonelpanic8/worktree-detection-data -> origin/colonelpanic8/worktree-detection-data
+2026-09-08T21:07:41.6872560Z  * [new branch]          colorblind-status-dots     -> origin/colorblind-status-dots
+2026-09-08T21:07:41.6873160Z  * [new branch]          combined-status-sidebar-identity -> origin/combined-status-sidebar-identity
+2026-09-08T21:07:41.6873740Z  * [new branch]          conductor-migration-scout  -> origin/conductor-migration-scout
+2026-09-08T21:07:41.6874220Z  * [new branch]          config-work                -> origin/config-work
+2026-09-08T21:07:41.6874720Z  * [new branch]          configurable-usage-display -> origin/configurable-usage-display
+2026-09-08T21:07:41.6875240Z  * [new branch]          daemon-config-imports      -> origin/daemon-config-imports
+2026-09-08T21:07:41.6876270Z  * [new branch]          debug-mobile-image-add-error -> origin/debug-mobile-image-add-error
+2026-09-08T21:07:41.6876870Z  * [new branch]          dependency-cleanup         -> origin/dependency-cleanup
+2026-09-08T21:07:41.6877370Z  * [new branch]          derive-desktop-managed     -> origin/derive-desktop-managed
+2026-09-08T21:07:41.6877940Z  * [new branch]          desktop-artifacts-0.1.34   -> origin/desktop-artifacts-0.1.34
+2026-09-08T21:07:41.6878490Z  * [new branch]          desktop/wayland-appimage   -> origin/desktop/wayland-appimage
+2026-09-08T21:07:41.6879070Z  * [new branch]          direct-model-effort-shortcuts -> origin/direct-model-effort-shortcuts
+2026-09-08T21:07:41.6882090Z  * [new branch]          disable-worktree-setup-callout -> origin/disable-worktree-setup-callout
+2026-09-08T21:07:41.6882820Z  * [new branch]          dotfile-cli-support        -> origin/dotfile-cli-support
+2026-09-08T21:07:41.6883430Z  * [new branch]          downed-host-model-selection -> origin/downed-host-model-selection
+2026-09-08T21:07:41.6884130Z  * [new branch]          electron-browser-find-rerun-needle -> origin/electron-browser-find-rerun-needle
+2026-09-08T21:07:41.6884720Z  * [new branch]          electron-icon-nix          -> origin/electron-icon-nix
+2026-09-08T21:07:41.6885310Z  * [new branch]          evidence/pr-reopen-2026-09-08 -> origin/evidence/pr-reopen-2026-09-08
+2026-09-08T21:07:41.6885920Z  * [new branch]          expand-status-sidebar      -> origin/expand-status-sidebar
+2026-09-08T21:07:41.6886970Z  * [new branch]          extend-cn-cp-omni-menu     -> origin/extend-cn-cp-omni-menu
+2026-09-08T21:07:41.6887680Z  * [new branch]          feat-paseo-agent-direct    -> origin/feat-paseo-agent-direct
+2026-09-08T21:07:41.6888340Z  * [new branch]          feat-paseo-tool-registry-opencode -> origin/feat-paseo-tool-registry-opencode
+2026-09-08T21:07:41.6888980Z  * [new branch]          feat-sidebar-history-sessions -> origin/feat-sidebar-history-sessions
+2026-09-08T21:07:41.6890000Z  * [new branch]          feat-voice-runtime-on-demand -> origin/feat-voice-runtime-on-demand
+2026-09-08T21:07:41.6890520Z  * [new branch]          feat/daemon-self-update    -> origin/feat/daemon-self-update
+2026-09-08T21:07:41.6891030Z  * [new branch]          feat/doctor-health-check   -> origin/feat/doctor-health-check
+2026-09-08T21:07:41.6891520Z  * [new branch]          feat/markdown-annotations  -> origin/feat/markdown-annotations
+2026-09-08T21:07:41.6892090Z  * [new branch]          feature/agent-steering-followups -> origin/feature/agent-steering-followups
+2026-09-08T21:07:41.6892610Z  * [new branch]          fix-138-number-keys        -> origin/fix-138-number-keys
+2026-09-08T21:07:41.6893140Z  * [new branch]          fix-android-image-paste-logs-fold -> origin/fix-android-image-paste-logs-fold
+2026-09-08T21:07:41.6894550Z  * [new branch]          fix-main-ci                -> origin/fix-main-ci
+2026-09-08T21:07:41.6896230Z  * [new branch]          fix-playwright-desktop-updates-confirm-dialog -> origin/fix-playwright-desktop-updates-confirm-dialog
+2026-09-08T21:07:41.6897000Z  * [new branch]          fix-windows-cli-tty        -> origin/fix-windows-cli-tty
+2026-09-08T21:07:41.6897560Z  * [new branch]          fix/android-mouse-sidebar-selection -> origin/fix/android-mouse-sidebar-selection
+2026-09-08T21:07:41.6898280Z  * [new branch]          fix/android-streaming-chat-gesture -> origin/fix/android-streaming-chat-gesture
+2026-09-08T21:07:41.6899110Z  * [new branch]          fix/ci-flakes-outline-crossing-and-windows-worktree-archive -> origin/fix/ci-flakes-outline-crossing-and-windows-worktree-archive
+2026-09-08T21:07:41.6899870Z  * [new branch]          fix/codex-loaders-freeze   -> origin/fix/codex-loaders-freeze
+2026-09-08T21:07:41.6900480Z  * [new branch]          fix/codex-replay-stale-running -> origin/fix/codex-replay-stale-running
+2026-09-08T21:07:41.6901010Z  * [new branch]          fix/codex-sqlite-init      -> origin/fix/codex-sqlite-init
+2026-09-08T21:07:41.6901870Z  * [new branch]          fix/darwin-nix-app-icon    -> origin/fix/darwin-nix-app-icon
+2026-09-08T21:07:41.6902490Z  * [new branch]          fix/draft-tab-inflight-create -> origin/fix/draft-tab-inflight-create
+2026-09-08T21:07:41.6903080Z  * [new branch]          fix/mobile-sidebar-unfold-read -> origin/fix/mobile-sidebar-unfold-read
+2026-09-08T21:07:41.6903690Z  * [new branch]          fix/model-browser-sheet-scope -> origin/fix/model-browser-sheet-scope
+2026-09-08T21:07:41.6904230Z  * [new branch]          fix/model-lists-host-switch -> origin/fix/model-lists-host-switch
+2026-09-08T21:07:41.6904770Z  * [new branch]          fix/native-project-icon-formats -> origin/fix/native-project-icon-formats
+2026-09-08T21:07:41.6905300Z  * [new branch]          fix/opus-5-always-1m       -> origin/fix/opus-5-always-1m
+2026-09-08T21:07:41.6905980Z  * [new branch]          fix/postinstall-patch-package-enoent -> origin/fix/postinstall-patch-package-enoent
+2026-09-08T21:07:41.6906600Z  * [new branch]          fix/ready-to-review-auto-dismiss -> origin/fix/ready-to-review-auto-dismiss
+2026-09-08T21:07:41.6907780Z  * [new branch]          fix/remove-pairing-offer-startup-log -> origin/fix/remove-pairing-offer-startup-log
+2026-09-08T21:07:41.6908540Z  * [new branch]          fix/settings-sidebar-scroll-preservation -> origin/fix/settings-sidebar-scroll-preservation
+2026-09-08T21:07:41.6909220Z  * [new branch]          fix/shared-provider-catalog -> origin/fix/shared-provider-catalog
+2026-09-08T21:07:41.6909820Z  * [new branch]          fix/timeline-history-image-stability -> origin/fix/timeline-history-image-stability
+2026-09-08T21:07:41.6910530Z  * [new branch]          fix/timeline-tail-page-replaces-painted-rows -> origin/fix/timeline-tail-page-replaces-painted-rows
+2026-09-08T21:07:41.6911210Z  * [new branch]          fix/voice-delegation-paseo-context -> origin/fix/voice-delegation-paseo-context
+2026-09-08T21:07:41.6911800Z  * [new branch]          fork-native-session        -> origin/fork-native-session
+2026-09-08T21:07:41.6913060Z  * [new branch]          gh-readonly-queue/main/pr-873-bf7f8f686b30e7c3d021d1cef6464ca5d98a619e -> origin/gh-readonly-queue/main/pr-873-bf7f8f686b30e7c3d021d1cef6464ca5d98a619e
+2026-09-08T21:07:41.6913960Z  * [new branch]          hissincn/fix/skip-home-directory-prefix-match -> origin/hissincn/fix/skip-home-directory-prefix-match
+2026-09-08T21:07:41.6914570Z  * [new branch]          host-selection-search      -> origin/host-selection-search
+2026-09-08T21:07:41.6915710Z  * [new branch]          host/default-color         -> origin/host/default-color
+2026-09-08T21:07:41.6917610Z  * [new branch]          investigate-claude-agent-sdk-upgrade -> origin/investigate-claude-agent-sdk-upgrade
+2026-09-08T21:07:41.6919110Z  * [new branch]          investigate/portless       -> origin/investigate/portless
+2026-09-08T21:07:41.6920230Z  * [new branch]          issue-1582-root-skip-permissions -> origin/issue-1582-root-skip-permissions
+2026-09-08T21:07:41.6920810Z  * [new branch]          issue-1950-daemon-start    -> origin/issue-1950-daemon-start
+2026-09-08T21:07:41.6921340Z  * [new branch]          keyboard-shortcuts-mobile  -> origin/keyboard-shortcuts-mobile
+2026-09-08T21:07:41.6922550Z  * [new branch]          kongjiadongyuan/codex/orchestration-feature-discovery -> origin/kongjiadongyuan/codex/orchestration-feature-discovery
+2026-09-08T21:07:41.6923250Z  * [new branch]          lenient-config-loading     -> origin/lenient-config-loading
+2026-09-08T21:07:41.6925400Z  * [new branch]          libghostty-integration     -> origin/libghostty-integration
+2026-09-08T21:07:41.6926100Z  * [new branch]          live-voice-context-files   -> origin/live-voice-context-files
+2026-09-08T21:07:41.6927220Z  * [new branch]          live-voice-error-detail    -> origin/live-voice-error-detail
+2026-09-08T21:07:41.6927720Z  * [new branch]          live-voice-quick-launch    -> origin/live-voice-quick-launch
+2026-09-08T21:07:41.6928140Z  * [new branch]          main                       -> origin/main
+2026-09-08T21:07:41.6930310Z  * [new branch]          minute-tick                -> origin/minute-tick
+2026-09-08T21:07:41.6931980Z  * [new branch]          mobile-terminal            -> origin/mobile-terminal
+2026-09-08T21:07:41.6933210Z  * [new branch]          model-picker-search        -> origin/model-picker-search
+2026-09-08T21:07:41.6934490Z  * [new branch]          monospaced-mobile-styling  -> origin/monospaced-mobile-styling
+2026-09-08T21:07:41.6935720Z  * [new branch]          multi-account              -> origin/multi-account
+2026-09-08T21:07:41.6936910Z  * [new branch]          multi-account-provider     -> origin/multi-account-provider
+2026-09-08T21:07:41.6938430Z  * [new branch]          next-ready-thread          -> origin/next-ready-thread
+2026-09-08T21:07:41.6939740Z  * [new branch]          nix-darwin-desktop         -> origin/nix-darwin-desktop
+2026-09-08T21:07:41.6941130Z  * [new branch]          nix-desktop-src-scope      -> origin/nix-desktop-src-scope
+2026-09-08T21:07:41.6942360Z  * [new branch]          nix-shrink-desktop         -> origin/nix-shrink-desktop
+2026-09-08T21:07:41.6943700Z  * [new branch]          ops/relay-cutover-staging  -> origin/ops/relay-cutover-staging
+2026-09-08T21:07:41.6945110Z  * [new branch]          ops/relay-production-bridge -> origin/ops/relay-production-bridge
+2026-09-08T21:07:41.6946520Z  * [new branch]          orchestrate/lazy-diff-rpcs -> origin/orchestrate/lazy-diff-rpcs
+2026-09-08T21:07:41.6947930Z  * [new branch]          paseo-triage-bot-policy    -> origin/paseo-triage-bot-policy
+2026-09-08T21:07:41.6949460Z  * [new branch]          personal/sidebar-workflow  -> origin/personal/sidebar-workflow
+2026-09-08T21:07:41.6951490Z  * [new branch]          postinstall-patch-package  -> origin/postinstall-patch-package
+2026-09-08T21:07:41.6952910Z  * [new branch]          pr-130-nix                 -> origin/pr-130-nix
+2026-09-08T21:07:41.6954050Z  * [new branch]          pr-2517-assets             -> origin/pr-2517-assets
+2026-09-08T21:07:41.6955440Z  * [new branch]          pr-2524-assets             -> origin/pr-2524-assets
+2026-09-08T21:07:41.6956540Z  * [new branch]          pr-2659-screenshots        -> origin/pr-2659-screenshots
+2026-09-08T21:07:41.6957060Z  * [new branch]          pr-2659-screenshots-2      -> origin/pr-2659-screenshots-2
+2026-09-08T21:07:41.6957550Z  * [new branch]          pr-assets-recently-archived -> origin/pr-assets-recently-archived
+2026-09-08T21:07:41.6958850Z  * [new branch]          pr-evidence/workspace-pruning-20260906 -> origin/pr-evidence/workspace-pruning-20260906
+2026-09-08T21:07:41.6959960Z  * [new branch]          pr-status-sidebar-assets   -> origin/pr-status-sidebar-assets
+2026-09-08T21:07:41.6960580Z  * [new branch]          prompt-cache-status        -> origin/prompt-cache-status
+2026-09-08T21:07:41.6961170Z  * [new branch]          prompt-mod-shortcuts       -> origin/prompt-mod-shortcuts
+2026-09-08T21:07:41.6961730Z  * [new branch]          qa/codex-banked-resets-20260906 -> origin/qa/codex-banked-resets-20260906
+2026-09-08T21:07:41.6962840Z  * [new branch]          realtime-voice-actions     -> origin/realtime-voice-actions
+2026-09-08T21:07:41.6963980Z  * [new branch]          realtime-voice-actions-pre-rebase-20260804 -> origin/realtime-voice-actions-pre-rebase-20260804
+2026-09-08T21:07:41.6964730Z  * [new branch]          refactor-app-desktop-tests-triage -> origin/refactor-app-desktop-tests-triage
+2026-09-08T21:07:41.6965520Z  * [new branch]          refactor-app-e2e-clean-specs-with-workspace -> origin/refactor-app-e2e-clean-specs-with-workspace
+2026-09-08T21:07:41.6966140Z  * [new branch]          refactor-test-iter12       -> origin/refactor-test-iter12
+2026-09-08T21:07:41.6966680Z  * [new branch]          refactor/app-composer-actions-module -> origin/refactor/app-composer-actions-module
+2026-09-08T21:07:41.6967210Z  * [new branch]          relay-tailscale            -> origin/relay-tailscale
+2026-09-08T21:07:41.6967660Z  * [new branch]          release-beta-0-1-79-beta-3 -> origin/release-beta-0-1-79-beta-3
+2026-09-08T21:07:41.6968470Z  * [new branch]          release/0.1.29-hotfix      -> origin/release/0.1.29-hotfix
+2026-09-08T21:07:41.6968960Z  * [new branch]          release/v0-2-1-claude-opus-5 -> origin/release/v0-2-1-claude-opus-5
+2026-09-08T21:07:41.6969470Z  * [new branch]          replay/typeaware-on-hotfix -> origin/replay/typeaware-on-hotfix
+2026-09-08T21:07:41.6969990Z  * [new branch]          research/paseo-json-rpc    -> origin/research/paseo-json-rpc
+2026-09-08T21:07:41.6970530Z  * [new branch]          research/storage-db-abstraction -> origin/research/storage-db-abstraction
+2026-09-08T21:07:41.6971100Z  * [new branch]          restore/main-after-hotfix-v0.1.67 -> origin/restore/main-after-hotfix-v0.1.67
+2026-09-08T21:07:41.6971590Z  * [new branch]          session-search             -> origin/session-search
+2026-09-08T21:07:41.6972050Z  * [new branch]          sidebar-recently-archived  -> origin/sidebar-recently-archived
+2026-09-08T21:07:41.6972510Z  * [new branch]          skill-pills-config         -> origin/skill-pills-config
+2026-09-08T21:07:41.6972970Z  * [new branch]          sonnet-5-stable            -> origin/sonnet-5-stable
+2026-09-08T21:07:41.6973430Z  * [new branch]          stable-0.1.103-sonnet-5    -> origin/stable-0.1.103-sonnet-5
+2026-09-08T21:07:41.6973960Z  * [new branch]          status-sidebar-snooze      -> origin/status-sidebar-snooze
+2026-09-08T21:07:41.6974490Z  * [new branch]          storage-terminal-ui-dev    -> origin/storage-terminal-ui-dev
+2026-09-08T21:07:41.6976620Z  * [new branch]          subagent-param-visibility  -> origin/subagent-param-visibility
+2026-09-08T21:07:41.6977970Z  * [new branch]          t3code-4453                -> origin/t3code-4453
+2026-09-08T21:07:41.6979600Z  * [new branch]          t3code-4453-evidence       -> origin/t3code-4453-evidence
+2026-09-08T21:07:41.6980190Z  * [new branch]          test-app-e2e-desktop-updates-spec -> origin/test-app-e2e-desktop-updates-spec
+2026-09-08T21:07:41.6980860Z  * [new branch]          thinking-control-reachability -> origin/thinking-control-reachability
+2026-09-08T21:07:41.6981700Z  * [new branch]          tooltip-problem            -> origin/tooltip-problem
+2026-09-08T21:07:41.6982140Z  * [new branch]          touch-sidebar-resize       -> origin/touch-sidebar-resize
+2026-09-08T21:07:41.6983310Z  * [new branch]          triage-bot-policy-22       -> origin/triage-bot-policy-22
+2026-09-08T21:07:41.6983860Z  * [new branch]          triage-bot-policy-25       -> origin/triage-bot-policy-25
+2026-09-08T21:07:41.6984420Z  * [new branch]          triage-bot-policy-27       -> origin/triage-bot-policy-27
+2026-09-08T21:07:41.6984860Z  * [new branch]          unarchive-threads          -> origin/unarchive-threads
+2026-09-08T21:07:41.6985350Z  * [new branch]          unconditional-host-display -> origin/unconditional-host-display
+2026-09-08T21:07:41.6985880Z  * [new branch]          usage-history              -> origin/usage-history
+2026-09-08T21:07:41.6986330Z  * [new branch]          usage-history-all-hosts    -> origin/usage-history-all-hosts
+2026-09-08T21:07:41.6987850Z  * [new branch]          usage-history-multi-provider-wip -> origin/usage-history-multi-provider-wip
+2026-09-08T21:07:41.6989400Z  * [new branch]          usage-history-screenshots  -> origin/usage-history-screenshots
+2026-09-08T21:07:41.6990960Z  * [new branch]          voice-actions              -> origin/voice-actions
+2026-09-08T21:07:41.6992100Z  * [new branch]          watch-live-voice           -> origin/watch-live-voice
+2026-09-08T21:07:41.6993430Z  * [new branch]          watch-live-voice-pocket-start -> origin/watch-live-voice-pocket-start
+2026-09-08T21:07:41.6994770Z  * [new branch]          workspace-snooze-mcp       -> origin/workspace-snooze-mcp
+2026-09-08T21:07:41.6995370Z  * [new branch]          ws-advisory-bump           -> origin/ws-advisory-bump
+2026-09-08T21:07:41.6996580Z  * [new branch]          xdg-paths                  -> origin/xdg-paths
+2026-09-08T21:07:41.6997820Z  * [new branch]          xdg-settings-seed          -> origin/xdg-settings-seed
+2026-09-08T21:07:41.6998910Z  * [new tag]             android-v0.1.32            -> android-v0.1.32
+2026-09-08T21:07:41.6999370Z  * [new tag]             android-v0.1.37            -> android-v0.1.37
+2026-09-08T21:07:41.6999820Z  * [new tag]             app-v0.1.27                -> app-v0.1.27
+2026-09-08T21:07:41.7000190Z  * [new tag]             app-v0.1.32                -> app-v0.1.32
+2026-09-08T21:07:41.7000600Z  * [new tag]             app-v0.1.33                -> app-v0.1.33
+2026-09-08T21:07:41.7001030Z  * [new tag]             desktop-linux-v0.1.26      -> desktop-linux-v0.1.26
+2026-09-08T21:07:41.7001440Z  * [new tag]             desktop-linux-v0.1.26-r10  -> desktop-linux-v0.1.26-r10
+2026-09-08T21:07:41.7001870Z  * [new tag]             desktop-linux-v0.1.26-r11  -> desktop-linux-v0.1.26-r11
+2026-09-08T21:07:41.7002290Z  * [new tag]             desktop-linux-v0.1.30-r1   -> desktop-linux-v0.1.30-r1
+2026-09-08T21:07:41.7002710Z  * [new tag]             desktop-linux-v0.1.30-r2   -> desktop-linux-v0.1.30-r2
+2026-09-08T21:07:41.7003140Z  * [new tag]             desktop-linux-v0.1.30-r3   -> desktop-linux-v0.1.30-r3
+2026-09-08T21:07:41.7003600Z  * [new tag]             desktop-linux-v0.1.32      -> desktop-linux-v0.1.32
+2026-09-08T21:07:41.7004090Z  * [new tag]             desktop-linux-v0.1.32-r1   -> desktop-linux-v0.1.32-r1
+2026-09-08T21:07:41.7004530Z  * [new tag]             desktop-linux-v0.1.32-r2   -> desktop-linux-v0.1.32-r2
+2026-09-08T21:07:41.7005720Z  * [new tag]             desktop-linux-v0.1.51-rc.1 -> desktop-linux-v0.1.51-rc.1
+2026-09-08T21:07:41.7006180Z  * [new tag]             desktop-macos-v0.1.25      -> desktop-macos-v0.1.25
+2026-09-08T21:07:41.7006640Z  * [new tag]             desktop-macos-v0.1.32      -> desktop-macos-v0.1.32
+2026-09-08T21:07:41.7007100Z  * [new tag]             desktop-macos-v0.1.39      -> desktop-macos-v0.1.39
+2026-09-08T21:07:41.7007500Z  * [new tag]             desktop-v0.1.19            -> desktop-v0.1.19
+2026-09-08T21:07:41.7007880Z  * [new tag]             desktop-v0.1.26            -> desktop-v0.1.26
+2026-09-08T21:07:41.7008840Z  * [new tag]             desktop-v0.1.26-r2         -> desktop-v0.1.26-r2
+2026-09-08T21:07:41.7009340Z  * [new tag]             desktop-v0.1.26-r3         -> desktop-v0.1.26-r3
+2026-09-08T21:07:41.7009800Z  * [new tag]             desktop-v0.1.26-r4         -> desktop-v0.1.26-r4
+2026-09-08T21:07:41.7010270Z  * [new tag]             desktop-v0.1.26-r5         -> desktop-v0.1.26-r5
+2026-09-08T21:07:41.7010680Z  * [new tag]             desktop-v0.1.26-r6         -> desktop-v0.1.26-r6
+2026-09-08T21:07:41.7011200Z  * [new tag]             desktop-v0.1.26-r7         -> desktop-v0.1.26-r7
+2026-09-08T21:07:41.7011600Z  * [new tag]             desktop-v0.1.26-r8         -> desktop-v0.1.26-r8
+2026-09-08T21:07:41.7012030Z  * [new tag]             desktop-v0.1.30-r1         -> desktop-v0.1.30-r1
+2026-09-08T21:07:41.7012410Z  * [new tag]             desktop-v0.1.32            -> desktop-v0.1.32
+2026-09-08T21:07:41.7012800Z  * [new tag]             desktop-v0.1.32-r1         -> desktop-v0.1.32-r1
+2026-09-08T21:07:41.7013180Z  * [new tag]             desktop-v0.1.34            -> desktop-v0.1.34
+2026-09-08T21:07:41.7013580Z  * [new tag]             desktop-v0.1.37            -> desktop-v0.1.37
+2026-09-08T21:07:41.7014300Z  * [new tag]             desktop-windows-v0.1.19    -> desktop-windows-v0.1.19
+2026-09-08T21:07:41.7014770Z  * [new tag]             desktop-windows-v0.1.25    -> desktop-windows-v0.1.25
+2026-09-08T21:07:41.7015220Z  * [new tag]             desktop-windows-v0.1.26    -> desktop-windows-v0.1.26
+2026-09-08T21:07:41.7015900Z  * [new tag]             desktop-windows-v0.1.26-r9 -> desktop-windows-v0.1.26-r9
+2026-09-08T21:07:41.7016360Z  * [new tag]             desktop-windows-v0.1.32    -> desktop-windows-v0.1.32
+2026-09-08T21:07:41.7030050Z  * [new tag]             desktop-windows-v0.1.32-r1 -> desktop-windows-v0.1.32-r1
+2026-09-08T21:07:41.7031070Z  * [new tag]             desktop-windows-v0.1.32-r2 -> desktop-windows-v0.1.32-r2
+2026-09-08T21:07:41.7031870Z  * [new tag]             desktop-windows-v0.1.37    -> desktop-windows-v0.1.37
+2026-09-08T21:07:41.7032330Z  * [new tag]             desktop-windows-v0.1.41-rc.1 -> desktop-windows-v0.1.41-rc.1
+2026-09-08T21:07:41.7032850Z  * [new tag]             desktop-windows-v0.1.65-beta.2 -> desktop-windows-v0.1.65-beta.2
+2026-09-08T21:07:41.7033340Z  * [new tag]             paseo-assembled-1f612db92c44 -> paseo-assembled-1f612db92c44
+2026-09-08T21:07:41.7033870Z  * [new tag]             paseo-assembled-20260801   -> paseo-assembled-20260801
+2026-09-08T21:07:41.7034300Z  * [new tag]             paseo-assembled-20260801-2 -> paseo-assembled-20260801-2
+2026-09-08T21:07:41.7034720Z  * [new tag]             paseo-assembled-20260801-3 -> paseo-assembled-20260801-3
+2026-09-08T21:07:41.7035140Z  * [new tag]             paseo-assembled-20260801-4 -> paseo-assembled-20260801-4
+2026-09-08T21:07:41.7035570Z  * [new tag]             paseo-assembled-56337dee2998 -> paseo-assembled-56337dee2998
+2026-09-08T21:07:41.7036040Z  * [new tag]             paseo-assembled-5861a89cf4df -> paseo-assembled-5861a89cf4df
+2026-09-08T21:07:41.7036490Z  * [new tag]             paseo-assembled-725c06e8f91d -> paseo-assembled-725c06e8f91d
+2026-09-08T21:07:41.7037060Z  * [new tag]             paseo-assembled-86d6fa4092ca -> paseo-assembled-86d6fa4092ca
+2026-09-08T21:07:41.7037550Z  * [new tag]             paseo-assembled-bfff96c2675a -> paseo-assembled-bfff96c2675a
+2026-09-08T21:07:41.7038450Z  * [new tag]             paseo-assembled-f32f9f6f0635 -> paseo-assembled-f32f9f6f0635
+2026-09-08T21:07:41.7038870Z  * [new tag]             v0.1.1                     -> v0.1.1
+2026-09-08T21:07:41.7039190Z  * [new tag]             v0.1.100                   -> v0.1.100
+2026-09-08T21:07:41.7039510Z  * [new tag]             v0.1.101                   -> v0.1.101
+2026-09-08T21:07:41.7039830Z  * [new tag]             v0.1.102                   -> v0.1.102
+2026-09-08T21:07:41.7040730Z  * [new tag]             v0.1.102-beta.1            -> v0.1.102-beta.1
+2026-09-08T21:07:41.7043140Z  * [new tag]             v0.1.102-beta.2            -> v0.1.102-beta.2
+2026-09-08T21:07:41.7044140Z  * [new tag]             v0.1.103                   -> v0.1.103
+2026-09-08T21:07:41.7045050Z  * [new tag]             v0.1.104                   -> v0.1.104
+2026-09-08T21:07:41.7045960Z  * [new tag]             v0.1.104-beta.1            -> v0.1.104-beta.1
+2026-09-08T21:07:41.7046940Z  * [new tag]             v0.1.104-beta.2            -> v0.1.104-beta.2
+2026-09-08T21:07:41.7047910Z  * [new tag]             v0.1.104-beta.3            -> v0.1.104-beta.3
+2026-09-08T21:07:41.7048870Z  * [new tag]             v0.1.104-beta.4            -> v0.1.104-beta.4
+2026-09-08T21:07:41.7049830Z  * [new tag]             v0.1.104-beta.5            -> v0.1.104-beta.5
+2026-09-08T21:07:41.7050760Z  * [new tag]             v0.1.105                   -> v0.1.105
+2026-09-08T21:07:41.7051650Z  * [new tag]             v0.1.106                   -> v0.1.106
+2026-09-08T21:07:41.7052660Z  * [new tag]             v0.1.106-beta.1            -> v0.1.106-beta.1
+2026-09-08T21:07:41.7053630Z  * [new tag]             v0.1.107                   -> v0.1.107
+2026-09-08T21:07:41.7054480Z  * [new tag]             v0.1.108                   -> v0.1.108
+2026-09-08T21:07:41.7055360Z  * [new tag]             v0.1.109                   -> v0.1.109
+2026-09-08T21:07:41.7056220Z  * [new tag]             v0.1.11                    -> v0.1.11
+2026-09-08T21:07:41.7057080Z  * [new tag]             v0.1.110                   -> v0.1.110
+2026-09-08T21:07:41.7057950Z  * [new tag]             v0.1.12                    -> v0.1.12
+2026-09-08T21:07:41.7058810Z  * [new tag]             v0.1.13                    -> v0.1.13
+2026-09-08T21:07:41.7059670Z  * [new tag]             v0.1.14                    -> v0.1.14
+2026-09-08T21:07:41.7060530Z  * [new tag]             v0.1.15                    -> v0.1.15
+2026-09-08T21:07:41.7061390Z  * [new tag]             v0.1.16                    -> v0.1.16
+2026-09-08T21:07:41.7062250Z  * [new tag]             v0.1.17                    -> v0.1.17
+2026-09-08T21:07:41.7063910Z  * [new tag]             v0.1.18                    -> v0.1.18
+2026-09-08T21:07:41.7064910Z  * [new tag]             v0.1.19                    -> v0.1.19
+2026-09-08T21:07:41.7065750Z  * [new tag]             v0.1.2                     -> v0.1.2
+2026-09-08T21:07:41.7066610Z  * [new tag]             v0.1.20                    -> v0.1.20
+2026-09-08T21:07:41.7067660Z  * [new tag]             v0.1.21                    -> v0.1.21
+2026-09-08T21:07:41.7068730Z  * [new tag]             v0.1.24                    -> v0.1.24
+2026-09-08T21:07:41.7069750Z  * [new tag]             v0.1.25                    -> v0.1.25
+2026-09-08T21:07:41.7070630Z  * [new tag]             v0.1.26                    -> v0.1.26
+2026-09-08T21:07:41.7071670Z  * [new tag]             v0.1.27                    -> v0.1.27
+2026-09-08T21:07:41.7072530Z  * [new tag]             v0.1.28                    -> v0.1.28
+2026-09-08T21:07:41.7073400Z  * [new tag]             v0.1.29                    -> v0.1.29
+2026-09-08T21:07:41.7074310Z  * [new tag]             v0.1.3                     -> v0.1.3
+2026-09-08T21:07:41.7075180Z  * [new tag]             v0.1.30                    -> v0.1.30
+2026-09-08T21:07:41.7076040Z  * [new tag]             v0.1.31                    -> v0.1.31
+2026-09-08T21:07:41.7076910Z  * [new tag]             v0.1.32                    -> v0.1.32
+2026-09-08T21:07:41.7077770Z  * [new tag]             v0.1.33                    -> v0.1.33
+2026-09-08T21:07:41.7078620Z  * [new tag]             v0.1.34                    -> v0.1.34
+2026-09-08T21:07:41.7079480Z  * [new tag]             v0.1.35                    -> v0.1.35
+2026-09-08T21:07:41.7080340Z  * [new tag]             v0.1.36                    -> v0.1.36
+2026-09-08T21:07:41.7081200Z  * [new tag]             v0.1.37                    -> v0.1.37
+2026-09-08T21:07:41.7082060Z  * [new tag]             v0.1.38                    -> v0.1.38
+2026-09-08T21:07:41.7082930Z  * [new tag]             v0.1.39                    -> v0.1.39
+2026-09-08T21:07:41.7084960Z  * [new tag]             v0.1.4                     -> v0.1.4
+2026-09-08T21:07:41.7085910Z  * [new tag]             v0.1.40                    -> v0.1.40
+2026-09-08T21:07:41.7086840Z  * [new tag]             v0.1.41                    -> v0.1.41
+2026-09-08T21:07:41.7087750Z  * [new tag]             v0.1.41-rc.1               -> v0.1.41-rc.1
+2026-09-08T21:07:41.7088650Z  * [new tag]             v0.1.42                    -> v0.1.42
+2026-09-08T21:07:41.7089550Z  * [new tag]             v0.1.43                    -> v0.1.43
+2026-09-08T21:07:41.7090470Z  * [new tag]             v0.1.43-rc.1               -> v0.1.43-rc.1
+2026-09-08T21:07:41.7091380Z  * [new tag]             v0.1.44                    -> v0.1.44
+2026-09-08T21:07:41.7092240Z  * [new tag]             v0.1.45                    -> v0.1.45
+2026-09-08T21:07:41.7093100Z  * [new tag]             v0.1.45-rc.1               -> v0.1.45-rc.1
+2026-09-08T21:07:41.7094040Z  * [new tag]             v0.1.45-rc.2               -> v0.1.45-rc.2
+2026-09-08T21:07:41.7095050Z  * [new tag]             v0.1.45-rc.3               -> v0.1.45-rc.3
+2026-09-08T21:07:41.7095980Z  * [new tag]             v0.1.45-rc.4               -> v0.1.45-rc.4
+2026-09-08T21:07:41.7096890Z  * [new tag]             v0.1.46                    -> v0.1.46
+2026-09-08T21:07:41.7097750Z  * [new tag]             v0.1.47                    -> v0.1.47
+2026-09-08T21:07:41.7098630Z  * [new tag]             v0.1.48                    -> v0.1.48
+2026-09-08T21:07:41.7099510Z  * [new tag]             v0.1.49                    -> v0.1.49
+2026-09-08T21:07:41.7100380Z  * [new tag]             v0.1.50                    -> v0.1.50
+2026-09-08T21:07:41.7101240Z  * [new tag]             v0.1.51                    -> v0.1.51
+2026-09-08T21:07:41.7102130Z  * [new tag]             v0.1.51-rc.1               -> v0.1.51-rc.1
+2026-09-08T21:07:41.7103070Z  * [new tag]             v0.1.51-rc.2               -> v0.1.51-rc.2
+2026-09-08T21:07:41.7103970Z  * [new tag]             v0.1.52                    -> v0.1.52
+2026-09-08T21:07:41.7105630Z  * [new tag]             v0.1.53                    -> v0.1.53
+2026-09-08T21:07:41.7106680Z  * [new tag]             v0.1.54                    -> v0.1.54
+2026-09-08T21:07:41.7107560Z  * [new tag]             v0.1.55                    -> v0.1.55
+2026-09-08T21:07:41.7108460Z  * [new tag]             v0.1.55-rc.1               -> v0.1.55-rc.1
+2026-09-08T21:07:41.7109400Z  * [new tag]             v0.1.55-rc.2               -> v0.1.55-rc.2
+2026-09-08T21:07:41.7110290Z  * [new tag]             v0.1.56                    -> v0.1.56
+2026-09-08T21:07:41.7113810Z  * [new tag]             v0.1.56-rc.1               -> v0.1.56-rc.1
+2026-09-08T21:07:41.7115050Z  * [new tag]             v0.1.57                    -> v0.1.57
+2026-09-08T21:07:41.7115970Z  * [new tag]             v0.1.57-rc.1               -> v0.1.57-rc.1
+2026-09-08T21:07:41.7116920Z  * [new tag]             v0.1.58                    -> v0.1.58
+2026-09-08T21:07:41.7117820Z  * [new tag]             v0.1.59                    -> v0.1.59
+2026-09-08T21:07:41.7118870Z  * [new tag]             v0.1.6                     -> v0.1.6
+2026-09-08T21:07:41.7119740Z  * [new tag]             v0.1.60                    -> v0.1.60
+2026-09-08T21:07:41.7120650Z  * [new tag]             v0.1.60-beta.1             -> v0.1.60-beta.1
+2026-09-08T21:07:41.7121620Z  * [new tag]             v0.1.60-beta.2             -> v0.1.60-beta.2
+2026-09-08T21:07:41.7122560Z  * [new tag]             v0.1.60-rc.1               -> v0.1.60-rc.1
+2026-09-08T21:07:41.7123500Z  * [new tag]             v0.1.60-rc.2               -> v0.1.60-rc.2
+2026-09-08T21:07:41.7124430Z  * [new tag]             v0.1.60-rc.3               -> v0.1.60-rc.3
+2026-09-08T21:07:41.7125330Z  * [new tag]             v0.1.61                    -> v0.1.61
+2026-09-08T21:07:41.7126240Z  * [new tag]             v0.1.61-beta.1             -> v0.1.61-beta.1
+2026-09-08T21:07:41.7127150Z  * [new tag]             v0.1.62                    -> v0.1.62
+2026-09-08T21:07:41.7128010Z  * [new tag]             v0.1.63                    -> v0.1.63
+2026-09-08T21:07:41.7130170Z  * [new tag]             v0.1.63-beta.1             -> v0.1.63-beta.1
+2026-09-08T21:07:41.7131140Z  * [new tag]             v0.1.63-beta.2             -> v0.1.63-beta.2
+2026-09-08T21:07:41.7132090Z  * [new tag]             v0.1.63-beta.3             -> v0.1.63-beta.3
+2026-09-08T21:07:41.7133050Z  * [new tag]             v0.1.63-beta.4             -> v0.1.63-beta.4
+2026-09-08T21:07:41.7133980Z  * [new tag]             v0.1.63-beta.5             -> v0.1.63-beta.5
+2026-09-08T21:07:41.7134910Z  * [new tag]             v0.1.64                    -> v0.1.64
+2026-09-08T21:07:41.7135780Z  * [new tag]             v0.1.65                    -> v0.1.65
+2026-09-08T21:07:41.7136690Z  * [new tag]             v0.1.65-beta.1             -> v0.1.65-beta.1
+2026-09-08T21:07:41.7137650Z  * [new tag]             v0.1.65-beta.2             -> v0.1.65-beta.2
+2026-09-08T21:07:41.7138610Z  * [new tag]             v0.1.65-beta.3             -> v0.1.65-beta.3
+2026-09-08T21:07:41.7139590Z  * [new tag]             v0.1.65-beta.4             -> v0.1.65-beta.4
+2026-09-08T21:07:41.7140570Z  * [new tag]             v0.1.65-beta.5             -> v0.1.65-beta.5
+2026-09-08T21:07:41.7141480Z  * [new tag]             v0.1.66                    -> v0.1.66
+2026-09-08T21:07:41.7143090Z  * [new tag]             v0.1.67                    -> v0.1.67
+2026-09-08T21:07:41.7144110Z  * [new tag]             v0.1.68                    -> v0.1.68
+2026-09-08T21:07:41.7144550Z  * [new tag]             v0.1.69                    -> v0.1.69
+2026-09-08T21:07:41.7144910Z  * [new tag]             v0.1.7                     -> v0.1.7
+2026-09-08T21:07:41.7145260Z  * [new tag]             v0.1.70                    -> v0.1.70
+2026-09-08T21:07:41.7145960Z  * [new tag]             v0.1.70-beta.1             -> v0.1.70-beta.1
+2026-09-08T21:07:41.7146670Z  * [new tag]             v0.1.71                    -> v0.1.71
+2026-09-08T21:07:41.7147030Z  * [new tag]             v0.1.72                    -> v0.1.72
+2026-09-08T21:07:41.7148020Z  * [new tag]             v0.1.73                    -> v0.1.73
+2026-09-08T21:07:41.7148350Z  * [new tag]             v0.1.74                    -> v0.1.74
+2026-09-08T21:07:41.7149070Z  * [new tag]             v0.1.75                    -> v0.1.75
+2026-09-08T21:07:41.7149400Z  * [new tag]             v0.1.76                    -> v0.1.76
+2026-09-08T21:07:41.7149720Z  * [new tag]             v0.1.77                    -> v0.1.77
+2026-09-08T21:07:41.7151000Z  * [new tag]             v0.1.78                    -> v0.1.78
+2026-09-08T21:07:41.7151950Z  * [new tag]             v0.1.79                    -> v0.1.79
+2026-09-08T21:07:41.7153040Z  * [new tag]             v0.1.79-beta.1             -> v0.1.79-beta.1
+2026-09-08T21:07:41.7154010Z  * [new tag]             v0.1.79-beta.2             -> v0.1.79-beta.2
+2026-09-08T21:07:41.7154960Z  * [new tag]             v0.1.79-beta.3             -> v0.1.79-beta.3
+2026-09-08T21:07:41.7155870Z  * [new tag]             v0.1.8                     -> v0.1.8
+2026-09-08T21:07:41.7156800Z  * [new tag]             v0.1.80                    -> v0.1.80
+2026-09-08T21:07:41.7157660Z  * [new tag]             v0.1.81                    -> v0.1.81
+2026-09-08T21:07:41.7158530Z  * [new tag]             v0.1.82                    -> v0.1.82
+2026-09-08T21:07:41.7159390Z  * [new tag]             v0.1.83                    -> v0.1.83
+2026-09-08T21:07:41.7160250Z  * [new tag]             v0.1.84                    -> v0.1.84
+2026-09-08T21:07:41.7161120Z  * [new tag]             v0.1.85                    -> v0.1.85
+2026-09-08T21:07:41.7162000Z  * [new tag]             v0.1.86                    -> v0.1.86
+2026-09-08T21:07:41.7162870Z  * [new tag]             v0.1.87                    -> v0.1.87
+2026-09-08T21:07:41.7163750Z  * [new tag]             v0.1.88                    -> v0.1.88
+2026-09-08T21:07:41.7164630Z  * [new tag]             v0.1.89                    -> v0.1.89
+2026-09-08T21:07:41.7165490Z  * [new tag]             v0.1.9                     -> v0.1.9
+2026-09-08T21:07:41.7167300Z  * [new tag]             v0.1.90                    -> v0.1.90
+2026-09-08T21:07:41.7168190Z  * [new tag]             v0.1.90-beta.1             -> v0.1.90-beta.1
+2026-09-08T21:07:41.7169370Z  * [new tag]             v0.1.91                    -> v0.1.91
+2026-09-08T21:07:41.7170290Z  * [new tag]             v0.1.91-beta.1             -> v0.1.91-beta.1
+2026-09-08T21:07:41.7171250Z  * [new tag]             v0.1.91-beta.2             -> v0.1.91-beta.2
+2026-09-08T21:07:41.7172190Z  * [new tag]             v0.1.92                    -> v0.1.92
+2026-09-08T21:07:41.7173040Z  * [new tag]             v0.1.93                    -> v0.1.93
+2026-09-08T21:07:41.7173900Z  * [new tag]             v0.1.94                    -> v0.1.94
+2026-09-08T21:07:41.7174780Z  * [new tag]             v0.1.95                    -> v0.1.95
+2026-09-08T21:07:41.7175640Z  * [new tag]             v0.1.96                    -> v0.1.96
+2026-09-08T21:07:41.7176500Z  * [new tag]             v0.1.97                    -> v0.1.97
+2026-09-08T21:07:41.7177450Z  * [new tag]             v0.1.97-beta.1             -> v0.1.97-beta.1
+2026-09-08T21:07:41.7178390Z  * [new tag]             v0.1.97-beta.2             -> v0.1.97-beta.2
+2026-09-08T21:07:41.7179380Z  * [new tag]             v0.1.97-beta.3             -> v0.1.97-beta.3
+2026-09-08T21:07:41.7180300Z  * [new tag]             v0.1.98                    -> v0.1.98
+2026-09-08T21:07:41.7181150Z  * [new tag]             v0.1.99                    -> v0.1.99
+2026-09-08T21:07:41.7182000Z  * [new tag]             v0.2.0                     -> v0.2.0
+2026-09-08T21:07:41.7182930Z  * [new tag]             v0.2.0-beta.1              -> v0.2.0-beta.1
+2026-09-08T21:07:41.7183910Z  * [new tag]             v0.2.0-beta.2              -> v0.2.0-beta.2
+2026-09-08T21:07:41.7184870Z  * [new tag]             v0.2.0-beta.3              -> v0.2.0-beta.3
+2026-09-08T21:07:41.7185800Z  * [new tag]             v0.2.0-beta.4              -> v0.2.0-beta.4
+2026-09-08T21:07:41.7186750Z  * [new tag]             v0.2.0-rc.1                -> v0.2.0-rc.1
+2026-09-08T21:07:41.7188260Z  * [new tag]             v0.2.1                     -> v0.2.1
+2026-09-08T21:07:41.7189280Z  * [new tag]             v0.2.2                     -> v0.2.2
+2026-09-08T21:07:41.7190130Z  * [new tag]             v0.2.3                     -> v0.2.3
+2026-09-08T21:07:41.7192800Z [command]/opt/homebrew/bin/git rev-parse --verify --quiet b5f9c4913bb74490109365ce0f37d34ccbe699bd^{object}
+2026-09-08T21:07:41.7194350Z b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:41.7196120Z ##[endgroup]
+2026-09-08T21:07:41.7197050Z ##[group]Determining the checkout info
+2026-09-08T21:07:41.7198040Z ##[endgroup]
+2026-09-08T21:07:41.7198690Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-09-08T21:07:41.7200520Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-08T21:07:41.7202700Z ##[group]Checking out the ref
+2026-09-08T21:07:41.7203840Z [command]/opt/homebrew/bin/git checkout --progress --force b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:42.4868280Z HEAD is now at b5f9c4913 fix(ci): omit empty macOS certificate path
+2026-09-08T21:07:42.4884130Z ##[endgroup]
+2026-09-08T21:07:42.4973050Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-09-08T21:07:42.5056520Z b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:42.5297880Z ##[group]Run node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
+2026-09-08T21:07:42.5298450Z [36;1mnode scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"[0m
+2026-09-08T21:07:42.5386920Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-08T21:07:42.5387200Z env:
+2026-09-08T21:07:42.5387360Z   SOURCE_TAG: v0.5.0-beta.2
+2026-09-08T21:07:42.5387600Z   CHECKOUT_REF: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:42.5387840Z   SHOULD_PUBLISH: false
+2026-09-08T21:07:42.5388010Z   ROLLOUT_HOURS: 0
+2026-09-08T21:07:42.5388190Z   DESKTOP_PACKAGE_PATH: packages/desktop
+2026-09-08T21:07:42.5388850Z ##[endgroup]
+2026-09-08T21:07:42.9462360Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T21:07:42.9465320Z ##[group]Run actions/setup-node@v4
+2026-09-08T21:07:42.9465940Z with:
+2026-09-08T21:07:42.9466410Z   node-version: 22
+2026-09-08T21:07:42.9466870Z   cache: npm
+2026-09-08T21:07:42.9467380Z   cache-dependency-path: package-lock.json
+2026-09-08T21:07:42.9468130Z   registry-url: https://npm.pkg.github.com
+2026-09-08T21:07:42.9468930Z   scope: @boudra
+2026-09-08T21:07:42.9469750Z   always-auth: false
+2026-09-08T21:07:42.9470360Z   check-latest: false
+2026-09-08T21:07:42.9476640Z   token: ***
+2026-09-08T21:07:42.9477110Z env:
+2026-09-08T21:07:42.9477520Z   SOURCE_TAG: v0.5.0-beta.2
+2026-09-08T21:07:42.9478230Z   CHECKOUT_REF: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:42.9479040Z   SHOULD_PUBLISH: false
+2026-09-08T21:07:42.9479560Z   ROLLOUT_HOURS: 0
+2026-09-08T21:07:42.9480040Z   DESKTOP_PACKAGE_PATH: packages/desktop
+2026-09-08T21:07:42.9480700Z   RELEASE_TAG: v0.5.0-beta.2
+2026-09-08T21:07:42.9481230Z   RELEASE_VERSION: 0.5.0-beta.2
+2026-09-08T21:07:42.9481780Z   RELEASE_BASE_VERSION: 0.5.0
+2026-09-08T21:07:42.9482340Z   RELEASE_PRERELEASE: beta.2
+2026-09-08T21:07:42.9482870Z   IS_PRERELEASE: true
+2026-09-08T21:07:42.9483360Z   IS_BETA: true
+2026-09-08T21:07:42.9483800Z   RELEASE_TYPE: prerelease
+2026-09-08T21:07:42.9484330Z   RELEASE_CHANNEL: beta
+2026-09-08T21:07:42.9484850Z   DESKTOP_VERSION: 0.5.0-beta.2
+2026-09-08T21:07:42.9485380Z   IS_SMOKE_TAG: false
+2026-09-08T21:07:42.9485880Z ##[endgroup]
+2026-09-08T21:07:43.1135460Z (node:2849) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-08T21:07:43.1137110Z Found in cache @ /Users/runner/hostedtoolcache/node/22.23.2/arm64
+2026-09-08T21:07:43.1138210Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-08T21:07:43.1139560Z ##[group]Environment details
+2026-09-08T21:07:43.8094070Z node: v22.23.2
+2026-09-08T21:07:43.8095020Z npm: 10.9.8
+2026-09-08T21:07:43.8096190Z yarn: 1.22.22
+2026-09-08T21:07:43.8098090Z ##[endgroup]
+2026-09-08T21:07:43.8136430Z [command]/Users/runner/hostedtoolcache/node/22.23.2/arm64/bin/npm config get cache
+2026-09-08T21:07:44.0742120Z /Users/runner/.npm
+2026-09-08T21:07:44.3930320Z npm cache is not found
+2026-09-08T21:07:44.4060260Z ##[group]Run node scripts/npm-retry.mjs ci
+2026-09-08T21:07:44.4061100Z [36;1mnode scripts/npm-retry.mjs ci[0m
+2026-09-08T21:07:44.4130950Z shell: /bin/bash -e {0}
+2026-09-08T21:07:44.4131220Z env:
+2026-09-08T21:07:44.4131380Z   SOURCE_TAG: v0.5.0-beta.2
+2026-09-08T21:07:44.4131620Z   CHECKOUT_REF: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:07:44.4131880Z   SHOULD_PUBLISH: false
+2026-09-08T21:07:44.4132100Z   ROLLOUT_HOURS: 0
+2026-09-08T21:07:44.4132300Z   DESKTOP_PACKAGE_PATH: packages/desktop
+2026-09-08T21:07:44.4132540Z   RELEASE_TAG: v0.5.0-beta.2
+2026-09-08T21:07:44.4132760Z   RELEASE_VERSION: 0.5.0-beta.2
+2026-09-08T21:07:44.4132960Z   RELEASE_BASE_VERSION: 0.5.0
+2026-09-08T21:07:44.4133170Z   RELEASE_PRERELEASE: beta.2
+2026-09-08T21:07:44.4133370Z   IS_PRERELEASE: true
+2026-09-08T21:07:44.4133560Z   IS_BETA: true
+2026-09-08T21:07:44.4133720Z   RELEASE_TYPE: prerelease
+2026-09-08T21:07:44.4133900Z   RELEASE_CHANNEL: beta
+2026-09-08T21:07:44.4134120Z   DESKTOP_VERSION: 0.5.0-beta.2
+2026-09-08T21:07:44.4134320Z   IS_SMOKE_TAG: false
+2026-09-08T21:07:44.4134540Z   NPM_CONFIG_USERCONFIG: /Users/runner/work/_temp/.npmrc
+2026-09-08T21:07:44.4136890Z   NODE_AUTH_TOKEN: ***
+2026-09-08T21:07:44.4137070Z ##[endgroup]
+2026-09-08T21:07:50.9864050Z npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-09-08T21:07:52.9971330Z npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+2026-09-08T21:07:53.0105280Z npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+2026-09-08T21:07:53.8668130Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-09-08T21:07:54.5521780Z npm warn deprecated tar@6.2.1: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:07:56.0639790Z npm warn deprecated domexception@4.0.0: Use your platform's native DOMException instead
+2026-09-08T21:07:57.0035520Z npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+2026-09-08T21:07:59.0112480Z npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+2026-09-08T21:07:59.0265500Z npm warn deprecated @oclif/screen@3.0.8: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+2026-09-08T21:07:59.5160150Z npm warn deprecated @xmldom/xmldom@0.7.13: this version is no longer supported, please update to at least 0.8.*
+2026-09-08T21:08:05.7123950Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:08:06.1712170Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:08:06.1718690Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:08:06.5686830Z npm warn deprecated glob@6.0.4: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:08:06.5691460Z npm warn deprecated rimraf@2.4.5: Rimraf versions prior to v4 are no longer supported
+2026-09-08T21:08:06.8988840Z npm warn deprecated whatwg-encoding@2.0.0: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-09-08T21:08:07.0797980Z npm warn deprecated whatwg-encoding@2.0.0: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-09-08T21:08:09.2770170Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:08:10.7362720Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:08:10.7365110Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:08:17.4122040Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-09-08T21:09:28.7237650Z 
+2026-09-08T21:09:28.7241440Z > paseo@0.5.0-beta.2 postinstall
+2026-09-08T21:09:28.7242180Z > node scripts/postinstall-patches.mjs
+2026-09-08T21:09:28.7242400Z 
+2026-09-08T21:09:29.0584930Z patch-package 8.0.1
+2026-09-08T21:09:29.0597730Z Applying patches...
+2026-09-08T21:09:29.0757450Z @mattermost/react-native-paste-input@2.0.1 ✔
+2026-09-08T21:09:29.0848210Z react-native-draggable-flatlist@4.0.3 ✔
+2026-09-08T21:09:29.0930260Z react-native-gesture-handler@2.28.0 ✔
+2026-09-08T21:09:29.0967200Z react-native-markdown-display@7.0.2 ✔
+2026-09-08T21:09:29.2074790Z patch-package 8.0.1
+2026-09-08T21:09:29.2076560Z Applying patches...
+2026-09-08T21:09:29.2154610Z @opencode-ai/sdk@1.14.46 ✔
+2026-09-08T21:09:29.2206590Z 
+2026-09-08T21:09:29.2208610Z > paseo@0.5.0-beta.2 prepare
+2026-09-08T21:09:29.2209880Z > lefthook install --force
+2026-09-08T21:09:29.2210410Z 
+2026-09-08T21:09:29.4154350Z sync hooks: ✔️ (pre-commit)
+2026-09-08T21:09:29.4505050Z 
+2026-09-08T21:09:29.4506750Z added 2695 packages, and audited 2707 packages in 2m
+2026-09-08T21:09:29.4507210Z 
+2026-09-08T21:09:29.4507720Z 498 packages are looking for funding
+2026-09-08T21:09:29.4508250Z   run `npm fund` for details
+2026-09-08T21:09:29.8453570Z 
+2026-09-08T21:09:29.8455310Z 101 vulnerabilities (8 low, 44 moderate, 42 high, 7 critical)
+2026-09-08T21:09:29.8456440Z 
+2026-09-08T21:09:29.8457940Z To address issues that do not require attention, run:
+2026-09-08T21:09:29.8479310Z   npm audit fix
+2026-09-08T21:09:29.8479730Z 
+2026-09-08T21:09:29.8481720Z To address all issues possible (including breaking changes), run:
+2026-09-08T21:09:29.8506310Z   npm audit fix --force
+2026-09-08T21:09:29.8506730Z 
+2026-09-08T21:09:29.8510430Z Some issues need review, and may require choosing
+2026-09-08T21:09:29.8517380Z a different dependency.
+2026-09-08T21:09:29.8517680Z 
+2026-09-08T21:09:29.8518040Z Run `npm audit` for details.
+2026-09-08T21:09:30.0075730Z ##[group]Run node <<'NODE'
+2026-09-08T21:09:30.0076210Z [36;1mnode <<'NODE'[0m
+2026-09-08T21:09:30.0076970Z [36;1mconst fs = require('node:fs');[0m
+2026-09-08T21:09:30.0105540Z [36;1mconst path = require('node:path');[0m
+2026-09-08T21:09:30.0105940Z [36;1m[0m
+2026-09-08T21:09:30.0106190Z [36;1mconst version = process.env.DESKTOP_VERSION;[0m
+2026-09-08T21:09:30.0106580Z [36;1mif (!version) throw new Error('DESKTOP_VERSION env var is missing');[0m
+2026-09-08T21:09:30.0106900Z [36;1m[0m
+2026-09-08T21:09:30.0107200Z [36;1mconst packageJsonPath = path.join(process.env.DESKTOP_PACKAGE_PATH, 'package.json');[0m
+2026-09-08T21:09:30.0107940Z [36;1mconst packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));[0m
+2026-09-08T21:09:30.0108440Z [36;1mpackageJson.version = version;[0m
+2026-09-08T21:09:30.0108890Z [36;1mfs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);[0m
+2026-09-08T21:09:30.0109320Z [36;1mNODE[0m
+2026-09-08T21:09:30.1691250Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-08T21:09:30.1691650Z env:
+2026-09-08T21:09:30.1691880Z   SOURCE_TAG: v0.5.0-beta.2
+2026-09-08T21:09:30.1692250Z   CHECKOUT_REF: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:09:30.1692560Z   SHOULD_PUBLISH: false
+2026-09-08T21:09:30.1692860Z   ROLLOUT_HOURS: 0
+2026-09-08T21:09:30.1693030Z   DESKTOP_PACKAGE_PATH: packages/desktop
+2026-09-08T21:09:30.1693440Z   RELEASE_TAG: v0.5.0-beta.2
+2026-09-08T21:09:30.1693760Z   RELEASE_VERSION: 0.5.0-beta.2
+2026-09-08T21:09:30.1694000Z   RELEASE_BASE_VERSION: 0.5.0
+2026-09-08T21:09:30.1694320Z   RELEASE_PRERELEASE: beta.2
+2026-09-08T21:09:30.1694560Z   IS_PRERELEASE: true
+2026-09-08T21:09:30.1694720Z   IS_BETA: true
+2026-09-08T21:09:30.1694930Z   RELEASE_TYPE: prerelease
+2026-09-08T21:09:30.1695180Z   RELEASE_CHANNEL: beta
+2026-09-08T21:09:30.1695430Z   DESKTOP_VERSION: 0.5.0-beta.2
+2026-09-08T21:09:30.1700000Z   IS_SMOKE_TAG: false
+2026-09-08T21:09:30.1700240Z   NPM_CONFIG_USERCONFIG: /Users/runner/work/_temp/.npmrc
+2026-09-08T21:09:30.1700670Z   NODE_AUTH_TOKEN: XXXXX-XXXXX-XXXXX-XXXXX
+2026-09-08T21:09:30.1700940Z ##[endgroup]
+2026-09-08T21:09:30.2764160Z ##[group]Run set -euo pipefail
+2026-09-08T21:09:30.2764440Z [36;1mset -euo pipefail[0m
+2026-09-08T21:09:30.2764690Z [36;1mif [[ -z "${CSC_LINK:-}" ]]; then[0m
+2026-09-08T21:09:30.2764940Z [36;1m  unset CSC_LINK CSC_KEY_PASSWORD[0m
+2026-09-08T21:09:30.2765260Z [36;1mfi[0m
+2026-09-08T21:09:30.2765480Z [36;1mbuild_args=(-- --publish never --mac --arm64)[0m
+2026-09-08T21:09:30.2765860Z [36;1mbuild_args+=("-c.publish.releaseType=$RELEASE_TYPE")[0m
+2026-09-08T21:09:30.2766330Z [36;1mbuild_args+=("-c.publish.channel=$RELEASE_CHANNEL")[0m
+2026-09-08T21:09:30.2766640Z [36;1mnpm run build:desktop "${build_args[@]}"[0m
+2026-09-08T21:09:30.2823590Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-08T21:09:30.2824020Z env:
+2026-09-08T21:09:30.2824270Z   SOURCE_TAG: v0.5.0-beta.2
+2026-09-08T21:09:30.2824610Z   CHECKOUT_REF: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:09:30.2824930Z   SHOULD_PUBLISH: false
+2026-09-08T21:09:30.2825240Z   ROLLOUT_HOURS: 0
+2026-09-08T21:09:30.2825590Z   DESKTOP_PACKAGE_PATH: packages/desktop
+2026-09-08T21:09:30.2825900Z   RELEASE_TAG: v0.5.0-beta.2
+2026-09-08T21:09:30.2826150Z   RELEASE_VERSION: 0.5.0-beta.2
+2026-09-08T21:09:30.2826460Z   RELEASE_BASE_VERSION: 0.5.0
+2026-09-08T21:09:30.2826710Z   RELEASE_PRERELEASE: beta.2
+2026-09-08T21:09:30.2826980Z   IS_PRERELEASE: true
+2026-09-08T21:09:30.2827280Z   IS_BETA: true
+2026-09-08T21:09:30.2827520Z   RELEASE_TYPE: prerelease
+2026-09-08T21:09:30.2827850Z   RELEASE_CHANNEL: beta
+2026-09-08T21:09:30.2828170Z   DESKTOP_VERSION: 0.5.0-beta.2
+2026-09-08T21:09:30.2828450Z   IS_SMOKE_TAG: false
+2026-09-08T21:09:30.2828790Z   NPM_CONFIG_USERCONFIG: /Users/runner/work/_temp/.npmrc
+2026-09-08T21:09:30.2829170Z   NODE_AUTH_TOKEN: XXXXX-XXXXX-XXXXX-XXXXX
+2026-09-08T21:09:30.2832480Z   GH_TOKEN: ***
+2026-09-08T21:09:30.2832690Z   EP_GH_IGNORE_TIME: true
+2026-09-08T21:09:30.2833020Z   CSC_LINK: 
+2026-09-08T21:09:30.2833320Z   CSC_KEY_PASSWORD: 
+2026-09-08T21:09:30.2833560Z   APPLE_ID: 
+2026-09-08T21:09:30.2833880Z   APPLE_APP_SPECIFIC_PASSWORD: 
+2026-09-08T21:09:30.2834200Z   APPLE_TEAM_ID: 
+2026-09-08T21:09:30.2834520Z   PASEO_DESKTOP_SMOKE: 1
+2026-09-08T21:09:30.2834870Z   PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: /Users/runner/work/_temp/desktop-smoke
+2026-09-08T21:09:30.2835300Z ##[endgroup]
+2026-09-08T21:09:30.6330450Z 
+2026-09-08T21:09:30.6331600Z > paseo@0.5.0-beta.2 build:desktop
+2026-09-08T21:09:30.6335250Z > npm run build:app-deps:clean && cd packages/app && cross-env PASEO_WEB_PLATFORM=electron npx expo export --platform web && cd ../.. && npm run build --workspace=@getpaseo/desktop -- --publish never --mac --arm64 -c.publish.releaseType=prerelease -c.publish.channel=beta
+2026-09-08T21:09:30.6336620Z 
+2026-09-08T21:09:30.8173230Z 
+2026-09-08T21:09:30.8174390Z > paseo@0.5.0-beta.2 build:app-deps:clean
+2026-09-08T21:09:30.8176980Z > npm run build:highlight:clean && npm run build:client:clean && npm run build:plugin:clean && npm run build --workspace=@getpaseo/expo-two-way-audio
+2026-09-08T21:09:30.8279970Z 
+2026-09-08T21:09:30.9810260Z 
+2026-09-08T21:09:30.9810800Z > paseo@0.5.0-beta.2 build:highlight:clean
+2026-09-08T21:09:30.9811390Z > npm run build:clean --workspace=@getpaseo/highlight
+2026-09-08T21:09:30.9811700Z 
+2026-09-08T21:09:31.1256070Z 
+2026-09-08T21:09:31.1256680Z > @getpaseo/highlight@0.5.0-beta.2 build:clean
+2026-09-08T21:09:31.1257340Z > npm run clean && npm run build
+2026-09-08T21:09:31.1257580Z 
+2026-09-08T21:09:31.2659900Z 
+2026-09-08T21:09:31.2660440Z > @getpaseo/highlight@0.5.0-beta.2 clean
+2026-09-08T21:09:31.2661280Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:09:31.2661570Z 
+2026-09-08T21:09:31.4691090Z 
+2026-09-08T21:09:31.4692370Z > @getpaseo/highlight@0.5.0-beta.2 build
+2026-09-08T21:09:31.4694690Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:09:31.4695170Z 
+2026-09-08T21:09:33.2923570Z 
+2026-09-08T21:09:33.2925580Z > paseo@0.5.0-beta.2 build:client:clean
+2026-09-08T21:09:33.2927820Z > npm run build:protocol:clean && npm run build:clean --workspace=@getpaseo/client
+2026-09-08T21:09:33.2928250Z 
+2026-09-08T21:09:33.4379250Z 
+2026-09-08T21:09:33.4380470Z > paseo@0.5.0-beta.2 build:protocol:clean
+2026-09-08T21:09:33.4380920Z > npm run build:clean --workspace=@getpaseo/protocol
+2026-09-08T21:09:33.4381310Z 
+2026-09-08T21:09:33.5712940Z 
+2026-09-08T21:09:33.5715060Z > @getpaseo/protocol@0.5.0-beta.2 build:clean
+2026-09-08T21:09:33.5715530Z > npm run clean && npm run build
+2026-09-08T21:09:33.5715700Z 
+2026-09-08T21:09:33.7142550Z 
+2026-09-08T21:09:33.7143790Z > @getpaseo/protocol@0.5.0-beta.2 clean
+2026-09-08T21:09:33.7145430Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:09:33.7145830Z 
+2026-09-08T21:09:33.9548980Z 
+2026-09-08T21:09:33.9549750Z > @getpaseo/protocol@0.5.0-beta.2 prebuild
+2026-09-08T21:09:33.9550190Z > npm run generate:validators
+2026-09-08T21:09:33.9550330Z 
+2026-09-08T21:09:34.1845290Z 
+2026-09-08T21:09:34.1846370Z > @getpaseo/protocol@0.5.0-beta.2 generate:validators
+2026-09-08T21:09:34.1847570Z > node scripts/generate-validation-aot.mjs
+2026-09-08T21:09:34.1848070Z 
+2026-09-08T21:09:35.9667380Z generated src/generated/validation/ws-outbound.aot.ts from codegen/ws-outbound.compile.ts (WSOutboundMessageSchema)
+2026-09-08T21:09:35.9817130Z 
+2026-09-08T21:09:35.9827930Z > @getpaseo/protocol@0.5.0-beta.2 build
+2026-09-08T21:09:35.9829480Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:09:35.9830230Z 
+2026-09-08T21:09:45.0080310Z 
+2026-09-08T21:09:45.0098320Z > @getpaseo/client@0.5.0-beta.2 build:clean
+2026-09-08T21:09:45.0099110Z > npm run clean && npm run build
+2026-09-08T21:09:45.0110890Z 
+2026-09-08T21:09:45.1944910Z 
+2026-09-08T21:09:45.1970030Z > @getpaseo/client@0.5.0-beta.2 clean
+2026-09-08T21:09:45.1971300Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:09:45.1971950Z 
+2026-09-08T21:09:45.4552880Z 
+2026-09-08T21:09:45.4553750Z > @getpaseo/client@0.5.0-beta.2 build
+2026-09-08T21:09:45.4577590Z > npm run build --workspace=@getpaseo/protocol && tsc -p tsconfig.json --incremental false
+2026-09-08T21:09:45.4581910Z 
+2026-09-08T21:09:45.7559910Z 
+2026-09-08T21:09:45.7661100Z > @getpaseo/protocol@0.5.0-beta.2 prebuild
+2026-09-08T21:09:45.7789320Z > npm run generate:validators
+2026-09-08T21:09:45.7790530Z 
+2026-09-08T21:09:46.0587910Z 
+2026-09-08T21:09:46.0589260Z > @getpaseo/protocol@0.5.0-beta.2 generate:validators
+2026-09-08T21:09:46.0590660Z > node scripts/generate-validation-aot.mjs
+2026-09-08T21:09:46.0591540Z 
+2026-09-08T21:09:46.5577150Z generated src/generated/validation/ws-outbound.aot.ts from codegen/ws-outbound.compile.ts (WSOutboundMessageSchema)
+2026-09-08T21:09:46.5712900Z 
+2026-09-08T21:09:46.5716860Z > @getpaseo/protocol@0.5.0-beta.2 build
+2026-09-08T21:09:46.5755880Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:09:46.5770840Z 
+2026-09-08T21:10:00.2789560Z 
+2026-09-08T21:10:00.2790190Z > paseo@0.5.0-beta.2 build:plugin:clean
+2026-09-08T21:10:00.2790940Z > npm run build:clean --workspace=@getpaseo/plugin
+2026-09-08T21:10:00.2791270Z 
+2026-09-08T21:10:00.3989340Z 
+2026-09-08T21:10:00.4090860Z > @getpaseo/plugin@0.5.0-beta.2 build:clean
+2026-09-08T21:10:00.4192040Z > npm run clean && npm run build
+2026-09-08T21:10:00.4292770Z 
+2026-09-08T21:10:00.5669370Z 
+2026-09-08T21:10:00.5771080Z > @getpaseo/plugin@0.5.0-beta.2 clean
+2026-09-08T21:10:00.5871310Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:10:00.5973060Z 
+2026-09-08T21:10:00.8321250Z 
+2026-09-08T21:10:00.8422270Z > @getpaseo/plugin@0.5.0-beta.2 build
+2026-09-08T21:10:00.8522500Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:10:00.8623880Z 
+2026-09-08T21:10:02.6563440Z 
+2026-09-08T21:10:02.6664830Z > @getpaseo/expo-two-way-audio@0.5.0-beta.2 build
+2026-09-08T21:10:02.6719820Z > tsc
+2026-09-08T21:10:02.6722350Z 
+2026-09-08T21:10:05.1813760Z Using src/app as the root directory for Expo Router.
+2026-09-08T21:10:05.7074440Z Experimental Expo Autolinking module resolver is enabled.
+2026-09-08T21:10:05.7096540Z React Compiler enabled
+2026-09-08T21:10:07.0573020Z Starting Metro Bundler
+2026-09-08T21:10:11.4427360Z Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+2026-09-08T21:10:14.9445430Z Web packages/app/index.ts ▓▓▓▓▓░░░░░░░░░░░ 36.7% (118/235)
+2026-09-08T21:10:18.5495740Z Web packages/app/index.ts ▓▓▓▓▓░░░░░░░░░░░ 36.7% (239/398)
+2026-09-08T21:10:22.0554810Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% (410/787)
+2026-09-08T21:10:25.5498150Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% (487/981)
+2026-09-08T21:10:29.0514340Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% ( 572/1168)
+2026-09-08T21:10:32.6116480Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% ( 783/1345)
+2026-09-08T21:10:36.1527610Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% ( 844/3058)
+2026-09-08T21:10:39.7045840Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% ( 947/3211)
+2026-09-08T21:10:43.2598460Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% (1038/3292)
+2026-09-08T21:10:46.7816490Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% (1139/3338)
+2026-09-08T21:10:50.2898570Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% (1425/3498)
+2026-09-08T21:10:53.8116380Z Web packages/app/index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.3% (1765/3498)
+2026-09-08T21:10:57.3054970Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓░░░░░░░░ 54.2% (2576/3498)
+2026-09-08T21:11:00.8961170Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 75.1% (3079/3579)
+2026-09-08T21:11:04.4012500Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 75.4% (3184/3675)
+2026-09-08T21:11:07.9358950Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79.0% (3346/3766)
+2026-09-08T21:11:11.4858810Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 82.5% (3599/3964)
+2026-09-08T21:11:14.9908740Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 83.3% (3718/4097)
+2026-09-08T21:11:18.4933950Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 83.5% (3770/4125)
+2026-09-08T21:11:21.9966270Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 86.6% (3910/4208)
+2026-09-08T21:11:25.4972400Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 89.3% (4002/4236)
+2026-09-08T21:11:29.0070210Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92.7% (4096/4270)
+2026-09-08T21:11:32.5084640Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92.7% (4151/4372)
+2026-09-08T21:11:36.0107910Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92.7% (4268/4485)
+2026-09-08T21:11:39.5120470Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92.7% (4303/4520)
+2026-09-08T21:11:43.0616880Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 93.1% (4484/4647)
+2026-09-08T21:11:46.5716360Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 93.8% (4522/4669)
+2026-09-08T21:11:47.0639460Z | Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+2026-09-08T21:11:47.0969720Z |   npx update-browserslist-db@latest
+2026-09-08T21:11:47.0987610Z |   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+2026-09-08T21:11:50.0657940Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.4% (4666/4778)
+2026-09-08T21:11:53.6600680Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.8% (4677/4779)
+2026-09-08T21:11:58.2644550Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.8% (4678/4779)
+2026-09-08T21:11:58.4688740Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.9% (4679/4779)
+2026-09-08T21:12:01.9642010Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.6% (4765/4827)
+2026-09-08T21:12:05.4995460Z Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (4866/4888)
+2026-09-08T21:12:08.8795270Z Web Bundled 117399ms packages/app/index.ts (4921 modules)
+2026-09-08T21:12:09.5251110Z 
+2026-09-08T21:12:09.5586820Z › Assets (25):
+2026-09-08T21:12:09.5706840Z ../../node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.0a328cd9c1afd0afe8e3b1ec5165b1b4.png (653 B)
+2026-09-08T21:12:09.5816700Z ../../node_modules/@react-navigation/elements/lib/module/assets/back-icon.35ba0eaec5a4f5ed12ca16fabeae451d.png (207 B)
+2026-09-08T21:12:09.5934840Z ../../node_modules/@react-navigation/elements/lib/module/assets/clear-icon.c94f6478e7ae0cdd9f15de1fcb9e5e55.png (4 variations | 425 B)
+2026-09-08T21:12:09.6039190Z ../../node_modules/@react-navigation/elements/lib/module/assets/close-icon.808e1b1b9b53114ec2838071a7e6daa7.png (4 variations | 235 B)
+2026-09-08T21:12:09.6175430Z ../../node_modules/@react-navigation/elements/lib/module/assets/search-icon.286d67d3f74808a60a78d3ebf1a5fb57.png (928 B)
+2026-09-08T21:12:09.6178740Z ../../node_modules/expo-router/assets/arrow_down.017bc6ba3fc25503e5eb5e53826d48a8.png (9.46 kB)
+2026-09-08T21:12:09.6181060Z ../../node_modules/expo-router/assets/error.d1ea1496f9057eb392d5bbf3732a61b7.png (469 B)
+2026-09-08T21:12:09.6183330Z ../../node_modules/expo-router/assets/file.19eeb73b9593a38f8e9f418337fc7d10.png (138 B)
+2026-09-08T21:12:09.6186030Z ../../node_modules/expo-router/assets/forward.d8b800c443b8972542883e0b9de2bdc6.png (188 B)
+2026-09-08T21:12:09.6189720Z ../../node_modules/expo-router/assets/pkg.ab19f4cbc543357183a20571f68380a3.png (364 B)
+2026-09-08T21:12:09.6192110Z ../../node_modules/expo-router/assets/sitemap.412dd9275b6b48ad28f5e3d81bb1f626.png (465 B)
+2026-09-08T21:12:09.6194980Z ../../node_modules/expo-router/assets/unmatched.20e71bdf79e3a97bf55fd9e164041578.png (4.75 kB)
+2026-09-08T21:12:09.6196900Z assets/images/favicon-dark-attention.882b3a27dcb2073e9e31b334f9ed9728.png (2.17 kB)
+2026-09-08T21:12:09.6198560Z assets/images/favicon-dark-running.8112342ff0d39e047a7f8d4fad9402f3.png (2.15 kB)
+2026-09-08T21:12:09.6199440Z assets/images/favicon-dark.8005ed36ac07a5a7c60de25780897bd4.png (1.73 kB)
+2026-09-08T21:12:09.6200250Z assets/images/favicon-light-attention.882b3a27dcb2073e9e31b334f9ed9728.png (2.17 kB)
+2026-09-08T21:12:09.6201100Z assets/images/favicon-light-running.8112342ff0d39e047a7f8d4fad9402f3.png (2.15 kB)
+2026-09-08T21:12:09.6202080Z assets/images/favicon-light.8005ed36ac07a5a7c60de25780897bd4.png (1.73 kB)
+2026-09-08T21:12:09.6202830Z assets/images/notification-icon.3bf81d33ddbf380606bdd248ba83e158.png (2.34 kB)
+2026-09-08T21:12:09.6203250Z 
+2026-09-08T21:12:09.6203670Z › web bundles (6):
+2026-09-08T21:12:09.6205720Z _expo/static/css/xterm-3bb1704bf6cb0876640973dc0244b4cb.css (4.21 kB)
+2026-09-08T21:12:09.6210430Z _expo/static/js/web/desktop-attachment-bridge-53bbd668d29a3cb3744e8f8dcf0c95a1.js (644 B)
+2026-09-08T21:12:09.6211760Z _expo/static/js/web/desktop-attachment-store-184d8026bb2ae0936cbfd6a6f4266c29.js (2.87 kB)
+2026-09-08T21:12:09.6212810Z _expo/static/js/web/index-8d3c593c4be7913bef0c60d7c72bd8e0.js (20.3 MB)
+2026-09-08T21:12:09.6214250Z _expo/static/js/web/indexeddb-attachment-store-6be352608d12557a110bb1a295902d07.js (3.23 kB)
+2026-09-08T21:12:09.6215390Z _expo/static/js/web/native-file-attachment-store-3ba3ad3ffd31647d503f148abf8fdbb3.js (4.26 kB)
+2026-09-08T21:12:09.6215860Z 
+2026-09-08T21:12:09.6216140Z › Files (3):
+2026-09-08T21:12:09.6216450Z favicon.ico (14.5 kB)
+2026-09-08T21:12:09.6216870Z index.html (2.93 kB)
+2026-09-08T21:12:09.6217230Z metadata.json (49 B)
+2026-09-08T21:12:09.6217530Z 
+2026-09-08T21:12:09.6217720Z Exported: dist
+2026-09-08T21:12:13.5909830Z 
+2026-09-08T21:12:13.5912310Z > @getpaseo/desktop@0.5.0-beta.2 build
+2026-09-08T21:12:13.5915840Z > npm --prefix ../.. run build:server:clean && npm run build:main && electron-builder --config electron-builder.config.cjs --publish never --mac --arm64 -c.publish.releaseType=prerelease -c.publish.channel=beta
+2026-09-08T21:12:13.5916810Z 
+2026-09-08T21:12:13.8585170Z 
+2026-09-08T21:12:13.8686700Z > paseo@0.5.0-beta.2 build:server:clean
+2026-09-08T21:12:13.8788110Z > npm run build:server-deps:clean && npm run build:clean --workspace=@getpaseo/server && npm run build:clean --workspace=@getpaseo/cli
+2026-09-08T21:12:13.8836870Z 
+2026-09-08T21:12:14.1254830Z 
+2026-09-08T21:12:14.1357170Z > paseo@0.5.0-beta.2 build:server-deps:clean
+2026-09-08T21:12:14.1458370Z > npm run build:client:clean && npm run build:highlight:clean && npm run build:plugin:clean && npm run build:relay:clean
+2026-09-08T21:12:14.1558580Z 
+2026-09-08T21:12:14.3696770Z 
+2026-09-08T21:12:14.3728010Z > paseo@0.5.0-beta.2 build:client:clean
+2026-09-08T21:12:14.3760860Z > npm run build:protocol:clean && npm run build:clean --workspace=@getpaseo/client
+2026-09-08T21:12:14.3792340Z 
+2026-09-08T21:12:14.5669300Z 
+2026-09-08T21:12:14.5690050Z > paseo@0.5.0-beta.2 build:protocol:clean
+2026-09-08T21:12:14.5694810Z > npm run build:clean --workspace=@getpaseo/protocol
+2026-09-08T21:12:14.5695970Z 
+2026-09-08T21:12:14.7772270Z 
+2026-09-08T21:12:14.7873910Z > @getpaseo/protocol@0.5.0-beta.2 build:clean
+2026-09-08T21:12:14.7976830Z > npm run clean && npm run build
+2026-09-08T21:12:14.8078200Z 
+2026-09-08T21:12:15.0799900Z 
+2026-09-08T21:12:15.0901170Z > @getpaseo/protocol@0.5.0-beta.2 clean
+2026-09-08T21:12:15.1002820Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:12:15.1102920Z 
+2026-09-08T21:12:15.4494370Z 
+2026-09-08T21:12:15.4595460Z > @getpaseo/protocol@0.5.0-beta.2 prebuild
+2026-09-08T21:12:15.4696210Z > npm run generate:validators
+2026-09-08T21:12:15.4796990Z 
+2026-09-08T21:12:15.7427470Z 
+2026-09-08T21:12:15.7529050Z > @getpaseo/protocol@0.5.0-beta.2 generate:validators
+2026-09-08T21:12:15.7628710Z > node scripts/generate-validation-aot.mjs
+2026-09-08T21:12:15.7645510Z 
+2026-09-08T21:12:16.5512610Z generated src/generated/validation/ws-outbound.aot.ts from codegen/ws-outbound.compile.ts (WSOutboundMessageSchema)
+2026-09-08T21:12:16.5623330Z 
+2026-09-08T21:12:16.5635280Z > @getpaseo/protocol@0.5.0-beta.2 build
+2026-09-08T21:12:16.5637590Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:12:16.5638650Z 
+2026-09-08T21:12:27.6763300Z 
+2026-09-08T21:12:27.6766060Z > @getpaseo/client@0.5.0-beta.2 build:clean
+2026-09-08T21:12:27.6767520Z > npm run clean && npm run build
+2026-09-08T21:12:27.6768160Z 
+2026-09-08T21:12:27.8615260Z 
+2026-09-08T21:12:27.8693150Z > @getpaseo/client@0.5.0-beta.2 clean
+2026-09-08T21:12:27.8695930Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:12:27.8697490Z 
+2026-09-08T21:12:28.0958110Z 
+2026-09-08T21:12:28.1059820Z > @getpaseo/client@0.5.0-beta.2 build
+2026-09-08T21:12:28.1160690Z > npm run build --workspace=@getpaseo/protocol && tsc -p tsconfig.json --incremental false
+2026-09-08T21:12:28.1262810Z 
+2026-09-08T21:12:28.4524790Z 
+2026-09-08T21:12:28.4627480Z > @getpaseo/protocol@0.5.0-beta.2 prebuild
+2026-09-08T21:12:28.4726940Z > npm run generate:validators
+2026-09-08T21:12:28.4827980Z 
+2026-09-08T21:12:28.8033140Z 
+2026-09-08T21:12:28.8134730Z > @getpaseo/protocol@0.5.0-beta.2 generate:validators
+2026-09-08T21:12:28.8236110Z > node scripts/generate-validation-aot.mjs
+2026-09-08T21:12:28.8336890Z 
+2026-09-08T21:12:29.3312800Z generated src/generated/validation/ws-outbound.aot.ts from codegen/ws-outbound.compile.ts (WSOutboundMessageSchema)
+2026-09-08T21:12:29.3400980Z 
+2026-09-08T21:12:29.3409300Z > @getpaseo/protocol@0.5.0-beta.2 build
+2026-09-08T21:12:29.3411870Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:12:29.3412880Z 
+2026-09-08T21:12:42.8598070Z 
+2026-09-08T21:12:42.8616100Z > paseo@0.5.0-beta.2 build:highlight:clean
+2026-09-08T21:12:42.8622070Z > npm run build:clean --workspace=@getpaseo/highlight
+2026-09-08T21:12:42.8629430Z 
+2026-09-08T21:12:43.0661190Z 
+2026-09-08T21:12:43.0690550Z > @getpaseo/highlight@0.5.0-beta.2 build:clean
+2026-09-08T21:12:43.0691810Z > npm run clean && npm run build
+2026-09-08T21:12:43.0697270Z 
+2026-09-08T21:12:43.2445060Z 
+2026-09-08T21:12:43.2445880Z > @getpaseo/highlight@0.5.0-beta.2 clean
+2026-09-08T21:12:43.2446560Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:12:43.2447000Z 
+2026-09-08T21:12:43.4628300Z 
+2026-09-08T21:12:43.4629710Z > @getpaseo/highlight@0.5.0-beta.2 build
+2026-09-08T21:12:43.4630840Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:12:43.4631280Z 
+2026-09-08T21:12:45.0521830Z 
+2026-09-08T21:12:45.0524130Z > paseo@0.5.0-beta.2 build:plugin:clean
+2026-09-08T21:12:45.0524980Z > npm run build:clean --workspace=@getpaseo/plugin
+2026-09-08T21:12:45.0525220Z 
+2026-09-08T21:12:45.2819400Z 
+2026-09-08T21:12:45.2820140Z > @getpaseo/plugin@0.5.0-beta.2 build:clean
+2026-09-08T21:12:45.2820730Z > npm run clean && npm run build
+2026-09-08T21:12:45.2821100Z 
+2026-09-08T21:12:45.5177500Z 
+2026-09-08T21:12:45.5179380Z > @getpaseo/plugin@0.5.0-beta.2 clean
+2026-09-08T21:12:45.5181450Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:12:45.5182160Z 
+2026-09-08T21:12:45.7331420Z 
+2026-09-08T21:12:45.7433140Z > @getpaseo/plugin@0.5.0-beta.2 build
+2026-09-08T21:12:45.7535040Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:12:45.7635810Z 
+2026-09-08T21:12:47.4864160Z 
+2026-09-08T21:12:47.4965840Z > paseo@0.5.0-beta.2 build:relay:clean
+2026-09-08T21:12:47.5065910Z > npm run build:clean --workspace=@getpaseo/relay
+2026-09-08T21:12:47.5166990Z 
+2026-09-08T21:12:47.7781580Z 
+2026-09-08T21:12:47.7883050Z > @getpaseo/relay@0.5.0-beta.2 build:clean
+2026-09-08T21:12:47.7949000Z > npm run clean && npm run build
+2026-09-08T21:12:47.7950230Z 
+2026-09-08T21:12:48.0840320Z 
+2026-09-08T21:12:48.0941670Z > @getpaseo/relay@0.5.0-beta.2 clean
+2026-09-08T21:12:48.1041750Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:12:48.1111120Z 
+2026-09-08T21:12:48.3638720Z 
+2026-09-08T21:12:48.3740860Z > @getpaseo/relay@0.5.0-beta.2 build
+2026-09-08T21:12:48.3840460Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:12:48.3941680Z 
+2026-09-08T21:12:50.2869540Z 
+2026-09-08T21:12:50.2870980Z > @getpaseo/server@0.5.0-beta.2 build:clean
+2026-09-08T21:12:50.2872360Z > npm run clean && npm run build
+2026-09-08T21:12:50.2873090Z 
+2026-09-08T21:12:50.4401870Z 
+2026-09-08T21:12:50.4603990Z > @getpaseo/server@0.5.0-beta.2 clean
+2026-09-08T21:12:50.4605790Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:12:50.4606970Z 
+2026-09-08T21:12:50.7387310Z 
+2026-09-08T21:12:50.7388100Z > @getpaseo/server@0.5.0-beta.2 build
+2026-09-08T21:12:50.7389090Z > npm run build:lib && npm run build:scripts
+2026-09-08T21:12:50.7389360Z 
+2026-09-08T21:12:50.9222600Z 
+2026-09-08T21:12:50.9323590Z > @getpaseo/server@0.5.0-beta.2 build:lib
+2026-09-08T21:12:50.9428310Z > tsc -p tsconfig.server.json --incremental false && node -e "const fs=require('node:fs'); fs.mkdirSync('dist/server/server/speech/providers/local/sherpa/assets',{recursive:true}); fs.copyFileSync('src/server/speech/providers/local/sherpa/assets/silero_vad.onnx','dist/server/server/speech/providers/local/sherpa/assets/silero_vad.onnx'); fs.cpSync('src/terminal/shell-integration','dist/server/terminal/shell-integration',{recursive:true}); fs.cpSync('src/terminal/shell-integration','dist/src/terminal/shell-integration',{recursive:true}); fs.copyFileSync('src/terminal/terminal-ts-loader.mjs','dist/server/terminal/terminal-ts-loader.mjs'); fs.rmSync('dist/server/skills',{recursive:true,force:true}); fs.cpSync('../../skills','dist/server/skills',{recursive:true});"
+2026-09-08T21:12:50.9526550Z 
+2026-09-08T21:13:11.5839660Z 
+2026-09-08T21:13:11.5937840Z > @getpaseo/server@0.5.0-beta.2 build:scripts
+2026-09-08T21:13:11.6039340Z > tsc -p tsconfig.scripts.json --incremental false && node -e "const fs=require('node:fs'); fs.mkdirSync('dist/scripts',{recursive:true}); fs.copyFileSync('scripts/mcp-stdio-socket-bridge-cli.mjs','dist/scripts/mcp-stdio-socket-bridge-cli.mjs');"
+2026-09-08T21:13:11.6140180Z 
+2026-09-08T21:13:13.8431410Z 
+2026-09-08T21:13:13.8432100Z > @getpaseo/cli@0.5.0-beta.2 build:clean
+2026-09-08T21:13:13.8432670Z > npm run clean && npm run build
+2026-09-08T21:13:13.8438200Z 
+2026-09-08T21:13:14.0594710Z 
+2026-09-08T21:13:14.0609400Z > @getpaseo/cli@0.5.0-beta.2 clean
+2026-09-08T21:13:14.0620050Z > node ../../scripts/clean-package-dist.mjs
+2026-09-08T21:13:14.0625100Z 
+2026-09-08T21:13:14.2809640Z 
+2026-09-08T21:13:14.3012250Z > @getpaseo/cli@0.5.0-beta.2 build
+2026-09-08T21:13:14.3113870Z > tsc -p tsconfig.json --incremental false
+2026-09-08T21:13:14.3213790Z 
+2026-09-08T21:13:19.9179510Z 
+2026-09-08T21:13:19.9280270Z > @getpaseo/desktop@0.5.0-beta.2 build:main
+2026-09-08T21:13:19.9381360Z > tsc -p tsconfig.json
+2026-09-08T21:13:19.9481860Z 
+2026-09-08T21:13:24.7672180Z   • electron-builder  version=26.8.1 os=23.6.0
+2026-09-08T21:13:24.8449160Z   • loaded configuration  file=/Users/runner/work/paseo/paseo/packages/desktop/electron-builder.config.cjs
+2026-09-08T21:13:25.5439240Z   • skipped dependencies rebuild  reason=npmRebuild is set to false
+2026-09-08T21:13:25.5442440Z   • packaging       platform=darwin arch=arm64 electron=41.2.0 appOutDir=release/mac-arm64
+2026-09-08T21:13:25.9833520Z   • downloading     url=https://github.com/electron/electron/releases/download/v41.2.0/electron-v41.2.0-darwin-arm64.zip size=116 MB parts=6
+2026-09-08T21:13:26.5708870Z   • downloaded      url=https://github.com/electron/electron/releases/download/v41.2.0/electron-v41.2.0-darwin-arm64.zip duration=923ms
+2026-09-08T21:13:28.4926160Z   • packageManager not detected by file, falling back to environment detection  resolvedPackageManager=npm detected=/Users/runner/work/paseo/paseo/packages/desktop
+2026-09-08T21:13:28.6936970Z   • detected workspace root for project using lock file  pm=npm config=undefined resolved=/Users/runner/work/paseo/paseo projectDir=/Users/runner/work/paseo/paseo/packages/desktop
+2026-09-08T21:13:28.7035960Z   • searching for node modules  pm=npm searchDir=/Users/runner/work/paseo/paseo/packages/desktop
+2026-09-08T21:13:31.8494470Z   • duplicate dependency references  dependencies=["@emnapi/wasi-threads@1.1.0","@getpaseo/protocol@0.5.0-beta.2","@getpaseo/relay@0.5.0-beta.2","@getpaseo/server@0.5.0-beta.2","@anthropic-ai/sdk@0.104.2","@modelcontextprotocol/sdk@1.29.0","@getpaseo/client@0.5.0-beta.2","@codemirror/state@6.7.1","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@codemirror/language@6.12.4","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@lezer/highlight@1.2.3","@lezer/lr@1.4.8","@getpaseo/protocol@0.5.0-beta.2","ajv@8.20.0","express@4.22.1","mime-types@3.0.2","debug@4.4.3","http-errors@2.0.1","iconv-lite@0.7.2","on-finished@2.4.1","qs@6.15.2","raw-body@3.0.2","type-is@2.1.0","debug@4.4.3","debug@4.4.3","on-finished@2.4.1","http-errors@2.0.1","on-finished@2.4.1","proxy-addr@2.0.7","side-channel@1.1.0","debug@4.4.3","debug@4.4.3","http-errors@2.0.1","mime-types@3.0.2","on-finished@2.4.1","send@1.2.1","mime-types@3.0.2","http-errors@2.0.1","cross-spawn@7.0.6","@ai-sdk/provider-utils@3.0.12","@ai-sdk/provider@2.0.0","@ai-sdk/provider@2.0.0","mime-types@2.1.35","http-errors@2.0.1","on-finished@2.4.1","qs@6.14.2","http-errors@2.0.1","type-is@1.6.18","debug@2.6.9","on-finished@2.4.1","get-intrinsic@1.3.0","call-bind-apply-helpers@1.0.2","call-bind-apply-helpers@1.0.2","es-object-atoms@1.1.1","call-bound@1.0.4","get-intrinsic@1.3.0","side-channel-map@1.0.1","http-errors@2.0.1","on-finished@2.4.1","send@0.19.2","mime-types@2.1.35","once@1.4.0","once@1.4.0","pino-abstract-transport@3.0.0","sonic-boom@4.2.1","string-width@4.2.3","string-width@4.2.3","strip-ansi@6.0.1","strip-ansi@6.0.1","@emnapi/core@1.8.1","@emnapi/runtime@1.8.1","@tybys/wasm-util@0.10.1"]
+2026-09-08T21:13:48.1292120Z Pruned native modules: 246.0 MB removed (337.4 MB → 91.4 MB)
+2026-09-08T21:13:48.1981460Z   • falling back to ad-hoc signature for macOS application code signing
+2026-09-08T21:13:48.2192350Z   • signing         file=release/mac-arm64/Paseo.app platform=darwin type=distribution identityName=- identityHash=none provisioningProfile=none
+2026-09-08T21:14:16.3190280Z   • skipped macOS notarization  reason=`notarize` options were set explicitly `false`
+2026-09-08T21:14:16.3281210Z Packaged desktop smoke: cold-starting daemon through bundled CLI shim
+2026-09-08T21:14:20.8203810Z Packaged desktop smoke: launching /Users/runner/work/paseo/paseo/packages/desktop/release/mac-arm64/Paseo.app/Contents/MacOS/Paseo 
+2026-09-08T21:14:25.7037380Z Packaged desktop smoke: real app renderer and preload bridge loaded
+2026-09-08T21:14:35.6460980Z Packaged desktop smoke: renderer-started desktop daemon reported running
+2026-09-08T21:14:35.6568130Z Packaged desktop smoke: running bundled CLI shim daemon status
+2026-09-08T21:14:39.4162860Z Packaged desktop smoke: creating terminal through bundled CLI shim
+2026-09-08T21:14:46.6468100Z Packaged desktop smoke: terminal hook command completed
+2026-09-08T21:14:48.2466490Z Packaged desktop smoke: stopping daemon through bundled CLI shim
+2026-09-08T21:14:49.6812730Z Packaged desktop smoke passed: real renderer and preload loaded; renderer-started desktop daemon pid 41014, listen 127.0.0.1:49228; CLI shim daemon status and terminal smoke succeeded
+2026-09-08T21:14:50.0900090Z   • building        target=macOS zip arch=arm64 file=release/Paseo-0.5.0-beta.2-arm64.zip
+2026-09-08T21:14:50.0919100Z   • building        target=DMG arch=arm64 file=release/Paseo-0.5.0-beta.2-arm64.dmg
+2026-09-08T21:14:50.2406020Z   • downloading     release=dmg-builder@1.2.0 file=dmgbuild-bundle-arm64-75c8a6c.tar.gz
+2026-09-08T21:15:45.6825910Z   • building block map  blockMapFile=release/Paseo-0.5.0-beta.2-arm64.zip.blockmap
+2026-09-08T21:15:59.1630720Z   • building block map  blockMapFile=release/Paseo-0.5.0-beta.2-arm64.dmg.blockmap
+2026-09-08T21:16:00.6694640Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T21:16:00.6696080Z ##[group]Run actions/upload-artifact@v4
+2026-09-08T21:16:00.6697080Z with:
+2026-09-08T21:16:00.6697380Z   name: desktop-macos-arm64
+2026-09-08T21:16:00.6697690Z   path: packages/desktop/release/*.dmg
+2026-09-08T21:16:00.6698740Z   retention-days: 7
+2026-09-08T21:16:00.6699050Z   if-no-files-found: warn
+2026-09-08T21:16:00.6699330Z   compression-level: 6
+2026-09-08T21:16:00.6699780Z   overwrite: false
+2026-09-08T21:16:00.6700030Z   include-hidden-files: false
+2026-09-08T21:16:00.6700350Z env:
+2026-09-08T21:16:00.6700560Z   SOURCE_TAG: v0.5.0-beta.2
+2026-09-08T21:16:00.6700900Z   CHECKOUT_REF: b5f9c4913bb74490109365ce0f37d34ccbe699bd
+2026-09-08T21:16:00.6701420Z   SHOULD_PUBLISH: false
+2026-09-08T21:16:00.6701660Z   ROLLOUT_HOURS: 0
+2026-09-08T21:16:00.6701940Z   DESKTOP_PACKAGE_PATH: packages/desktop
+2026-09-08T21:16:00.6702300Z   RELEASE_TAG: v0.5.0-beta.2
+2026-09-08T21:16:00.6702600Z   RELEASE_VERSION: 0.5.0-beta.2
+2026-09-08T21:16:00.6702870Z   RELEASE_BASE_VERSION: 0.5.0
+2026-09-08T21:16:00.6703220Z   RELEASE_PRERELEASE: beta.2
+2026-09-08T21:16:00.6703480Z   IS_PRERELEASE: true
+2026-09-08T21:16:00.6703790Z   IS_BETA: true
+2026-09-08T21:16:00.6704050Z   RELEASE_TYPE: prerelease
+2026-09-08T21:16:00.6704270Z   RELEASE_CHANNEL: beta
+2026-09-08T21:16:00.6704570Z   DESKTOP_VERSION: 0.5.0-beta.2
+2026-09-08T21:16:00.6704800Z   IS_SMOKE_TAG: false
+2026-09-08T21:16:00.6715690Z   NPM_CONFIG_USERCONFIG: /Users/runner/work/_temp/.npmrc
+2026-09-08T21:16:00.6716100Z   NODE_AUTH_TOKEN: XXXXX-XXXXX-XXXXX-XXXXX
+2026-09-08T21:16:00.6716440Z ##[endgroup]
+2026-09-08T21:16:01.3073970Z (node:42935) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-08T21:16:01.3076270Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-08T21:16:01.3152440Z With the provided path, there will be 1 file uploaded
+2026-09-08T21:16:01.3159370Z Artifact name is valid!
+2026-09-08T21:16:01.3160420Z Root directory input is valid!
+2026-09-08T21:16:01.7770570Z Beginning upload of artifact content to blob storage
+2026-09-08T21:16:02.0817580Z (node:42935) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-08T21:16:03.0894120Z Uploaded bytes 8388608
+2026-09-08T21:16:03.2964740Z Uploaded bytes 16777216
+2026-09-08T21:16:03.5719390Z Uploaded bytes 25165824
+2026-09-08T21:16:03.5773420Z Uploaded bytes 33554432
+2026-09-08T21:16:03.9307580Z Uploaded bytes 41943040
+2026-09-08T21:16:04.0825050Z Uploaded bytes 50331648
+2026-09-08T21:16:04.5091380Z Uploaded bytes 58720256
+2026-09-08T21:16:04.8638050Z Uploaded bytes 67108864
+2026-09-08T21:16:05.2272090Z Uploaded bytes 75497472
+2026-09-08T21:16:05.2779980Z Uploaded bytes 83886080
+2026-09-08T21:16:05.6118060Z Uploaded bytes 92274688
+2026-09-08T21:16:05.9896900Z Uploaded bytes 100663296
+2026-09-08T21:16:06.3521720Z Uploaded bytes 109051904
+2026-09-08T21:16:06.6827600Z Uploaded bytes 117440512
+2026-09-08T21:16:07.2710880Z Uploaded bytes 125829120
+2026-09-08T21:16:07.6339300Z Uploaded bytes 134217728
+2026-09-08T21:16:08.1047180Z Uploaded bytes 142606336
+2026-09-08T21:16:08.4563580Z Uploaded bytes 150994944
+2026-09-08T21:16:08.7371140Z Uploaded bytes 158488118
+2026-09-08T21:16:08.8156000Z Finished uploading artifact content to blob storage!
+2026-09-08T21:16:08.8163940Z SHA256 digest of uploaded artifact zip is 0a0dbba722703b661e44af826ad402e2f14f38c347f25772fefb07a981c56f09
+2026-09-08T21:16:08.8168490Z Finalizing artifact upload
+2026-09-08T21:16:09.2816320Z Artifact desktop-macos-arm64.zip successfully finalized. Artifact ID 10077068473
+2026-09-08T21:16:09.2817340Z Artifact desktop-macos-arm64 has been successfully uploaded! Final size is 158488118 bytes. Artifact ID is 10077068473
+2026-09-08T21:16:09.2831090Z Artifact download URL: https://github.com/colonelpanic8/paseo/actions/runs/34278532216/artifacts/10077068473
+2026-09-08T21:16:09.3189310Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T21:16:09.3192460Z Post job cleanup.
+2026-09-08T21:16:09.5687360Z (node:43107) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-08T21:16:09.5689550Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-08T21:16:09.6716840Z [command]/opt/homebrew/bin/gtar --posix -cf cache.tzst --exclude cache.tzst -P -C /Users/runner/work/paseo/paseo --files-from manifest.txt --delay-directory-restore --use-compress-program zstdmt
+2026-09-08T21:16:20.2487760Z (node:43107) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-08T21:16:21.2236750Z Sent 0 of 733037286 (0.0%), 0.0 MBs/sec
+2026-09-08T21:16:22.2275210Z Sent 0 of 733037286 (0.0%), 0.0 MBs/sec
+2026-09-08T21:16:23.2195450Z Sent 67108864 of 733037286 (9.2%), 21.3 MBs/sec
+2026-09-08T21:16:24.2295610Z Sent 67108864 of 733037286 (9.2%), 16.0 MBs/sec
+2026-09-08T21:16:25.2222840Z Sent 335544320 of 733037286 (45.8%), 63.9 MBs/sec
+2026-09-08T21:16:26.2220590Z Sent 335544320 of 733037286 (45.8%), 53.3 MBs/sec
+2026-09-08T21:16:27.2226170Z Sent 469762048 of 733037286 (64.1%), 63.9 MBs/sec
+2026-09-08T21:16:28.2237460Z Sent 598819558 of 733037286 (81.7%), 71.3 MBs/sec
+2026-09-08T21:16:29.2247460Z Sent 598819558 of 733037286 (81.7%), 63.4 MBs/sec
+2026-09-08T21:16:30.2279950Z Sent 598819558 of 733037286 (81.7%), 57.0 MBs/sec
+2026-09-08T21:16:31.2276630Z Sent 598819558 of 733037286 (81.7%), 51.8 MBs/sec
+2026-09-08T21:16:32.2270650Z Sent 598819558 of 733037286 (81.7%), 47.5 MBs/sec
+2026-09-08T21:16:33.2282110Z Sent 598819558 of 733037286 (81.7%), 43.9 MBs/sec
+2026-09-08T21:16:34.2310460Z Sent 598819558 of 733037286 (81.7%), 40.7 MBs/sec
+2026-09-08T21:16:35.2308960Z Sent 665928422 of 733037286 (90.8%), 42.3 MBs/sec
+2026-09-08T21:16:35.6326720Z Sent 733037286 of 733037286 (100.0%), 45.3 MBs/sec
+2026-09-08T21:16:35.9259770Z Cache saved with the key: node-cache-macOS-arm64-npm-c302f1b3420f07daeb2e2ec56e1b38d3a06aa399396d974931582c335448e40f
+2026-09-08T21:16:35.9400060Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-08T21:16:35.9401300Z Post job cleanup.
+2026-09-08T21:16:36.2885260Z [command]/opt/homebrew/bin/git version
+2026-09-08T21:16:36.3083330Z git version 2.55.0
+2026-09-08T21:16:36.3178910Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/963b27bc-1069-44cf-9992-37f49fc11be3/.gitconfig'
+2026-09-08T21:16:36.3183290Z Temporarily overriding HOME='/Users/runner/work/_temp/963b27bc-1069-44cf-9992-37f49fc11be3' before making global git config changes
+2026-09-08T21:16:36.3184410Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-08T21:16:36.3185340Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/paseo/paseo
+2026-09-08T21:16:36.3312100Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-08T21:16:36.3384900Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-08T21:16:36.4701450Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-08T21:16:36.4802230Z http.https://github.com/.extraheader
+2026-09-08T21:16:36.4815970Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-09-08T21:16:36.4906570Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-08T21:16:36.6323820Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-08T21:16:36.6637850Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-08T21:16:36.8079220Z Cleaning up orphan processes
+2026-09-08T21:16:39.0573260Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
