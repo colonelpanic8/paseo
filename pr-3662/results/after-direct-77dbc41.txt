@@ -1,0 +1,984 @@
+Script started on 2026-09-08 13:51:00-07:00 [COMMAND="env PASEO_EVIDENCE_SOURCE_ROOT=/home/imalison/Projects/paseo/.worktrees/evidence-3662 PASEO_EVIDENCE_SHA=77dbc41eee PASEO_EVIDENCE_CODEX_SCRIPT=/tmp/paseo-pr-evidence/3662/tooling/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex PASEO_EVIDENCE_CODEX_VERSION=0.147.0 PASEO_EVIDENCE_COUNT=24 CODEX_HOME=/tmp/paseo-pr-evidence/3662/runtime/after-direct-77dbc41 ./node_modules/.bin/tsx /tmp/paseo-pr-evidence/3662/real-concurrent-starts.ts" <not executed on terminal>]
+{
+  "sourceSha": "77dbc41eee",
+  "codexVersion": "0.147.0",
+  "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/after-direct-77dbc41",
+  "requestedStarts": 24,
+  "succeeded": 24,
+  "failed": 0,
+  "sqliteInitializationFailures": 0,
+  "maxActiveProcesses": 2,
+  "maxActiveInitializations": 1,
+  "elapsedMs": 2096.9,
+  "failures": [],
+  "events": [
+    {
+      "ms": 0,
+      "type": "scenario-started",
+      "count": 24,
+      "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/after-direct-77dbc41"
+    },
+    {
+      "ms": 0.1,
+      "type": "caller-started",
+      "index": 0
+    },
+    {
+      "ms": 1.3,
+      "type": "caller-started",
+      "index": 1
+    },
+    {
+      "ms": 1.4,
+      "type": "caller-started",
+      "index": 2
+    },
+    {
+      "ms": 1.5,
+      "type": "caller-started",
+      "index": 3
+    },
+    {
+      "ms": 1.6,
+      "type": "caller-started",
+      "index": 4
+    },
+    {
+      "ms": 1.7,
+      "type": "caller-started",
+      "index": 5
+    },
+    {
+      "ms": 1.8,
+      "type": "caller-started",
+      "index": 6
+    },
+    {
+      "ms": 1.9,
+      "type": "caller-started",
+      "index": 7
+    },
+    {
+      "ms": 2,
+      "type": "caller-started",
+      "index": 8
+    },
+    {
+      "ms": 2.1,
+      "type": "caller-started",
+      "index": 9
+    },
+    {
+      "ms": 2.2,
+      "type": "caller-started",
+      "index": 10
+    },
+    {
+      "ms": 2.3,
+      "type": "caller-started",
+      "index": 11
+    },
+    {
+      "ms": 2.4,
+      "type": "caller-started",
+      "index": 12
+    },
+    {
+      "ms": 2.5,
+      "type": "caller-started",
+      "index": 13
+    },
+    {
+      "ms": 2.5,
+      "type": "caller-started",
+      "index": 14
+    },
+    {
+      "ms": 2.5,
+      "type": "caller-started",
+      "index": 15
+    },
+    {
+      "ms": 2.6,
+      "type": "caller-started",
+      "index": 16
+    },
+    {
+      "ms": 2.6,
+      "type": "caller-started",
+      "index": 17
+    },
+    {
+      "ms": 2.7,
+      "type": "caller-started",
+      "index": 18
+    },
+    {
+      "ms": 2.7,
+      "type": "caller-started",
+      "index": 19
+    },
+    {
+      "ms": 2.7,
+      "type": "caller-started",
+      "index": 20
+    },
+    {
+      "ms": 2.8,
+      "type": "caller-started",
+      "index": 21
+    },
+    {
+      "ms": 2.8,
+      "type": "caller-started",
+      "index": 22
+    },
+    {
+      "ms": 2.9,
+      "type": "caller-started",
+      "index": 23
+    },
+    {
+      "ms": 17.2,
+      "type": "process-spawned",
+      "index": 0,
+      "pid": 604181,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 17.8,
+      "type": "initialize-started",
+      "index": 0,
+      "pid": 604181,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 128.7,
+      "type": "initialize-succeeded",
+      "index": 0,
+      "pid": 604181
+    },
+    {
+      "ms": 140.4,
+      "type": "process-spawned",
+      "index": 1,
+      "pid": 604248,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 140.5,
+      "type": "initialize-started",
+      "index": 1,
+      "pid": 604248,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 154.3,
+      "type": "process-exited",
+      "index": 0,
+      "pid": 604181,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 187.5,
+      "type": "caller-succeeded",
+      "index": 0,
+      "sessions": 0
+    },
+    {
+      "ms": 213.6,
+      "type": "initialize-succeeded",
+      "index": 1,
+      "pid": 604248
+    },
+    {
+      "ms": 225.5,
+      "type": "process-spawned",
+      "index": 2,
+      "pid": 604315,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 225.6,
+      "type": "initialize-started",
+      "index": 2,
+      "pid": 604315,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 238.8,
+      "type": "process-exited",
+      "index": 1,
+      "pid": 604248,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 277.3,
+      "type": "caller-succeeded",
+      "index": 1,
+      "sessions": 0
+    },
+    {
+      "ms": 300.1,
+      "type": "initialize-succeeded",
+      "index": 2,
+      "pid": 604315
+    },
+    {
+      "ms": 310.8,
+      "type": "process-spawned",
+      "index": 3,
+      "pid": 604450,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 310.9,
+      "type": "initialize-started",
+      "index": 3,
+      "pid": 604450,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 323.1,
+      "type": "process-exited",
+      "index": 2,
+      "pid": 604315,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 355.6,
+      "type": "caller-succeeded",
+      "index": 2,
+      "sessions": 0
+    },
+    {
+      "ms": 381.9,
+      "type": "initialize-succeeded",
+      "index": 3,
+      "pid": 604450
+    },
+    {
+      "ms": 391.8,
+      "type": "process-spawned",
+      "index": 4,
+      "pid": 604516,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 392,
+      "type": "initialize-started",
+      "index": 4,
+      "pid": 604516,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 405.1,
+      "type": "process-exited",
+      "index": 3,
+      "pid": 604450,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 436.7,
+      "type": "caller-succeeded",
+      "index": 3,
+      "sessions": 0
+    },
+    {
+      "ms": 462.4,
+      "type": "initialize-succeeded",
+      "index": 4,
+      "pid": 604516
+    },
+    {
+      "ms": 473.2,
+      "type": "process-spawned",
+      "index": 5,
+      "pid": 604585,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 473.3,
+      "type": "initialize-started",
+      "index": 5,
+      "pid": 604585,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 486.8,
+      "type": "process-exited",
+      "index": 4,
+      "pid": 604516,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 519.1,
+      "type": "caller-succeeded",
+      "index": 4,
+      "sessions": 0
+    },
+    {
+      "ms": 544.1,
+      "type": "initialize-succeeded",
+      "index": 5,
+      "pid": 604585
+    },
+    {
+      "ms": 555.5,
+      "type": "process-spawned",
+      "index": 6,
+      "pid": 604653,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 555.6,
+      "type": "initialize-started",
+      "index": 6,
+      "pid": 604653,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 568.4,
+      "type": "process-exited",
+      "index": 5,
+      "pid": 604585,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 600.8,
+      "type": "caller-succeeded",
+      "index": 5,
+      "sessions": 0
+    },
+    {
+      "ms": 628.5,
+      "type": "initialize-succeeded",
+      "index": 6,
+      "pid": 604653
+    },
+    {
+      "ms": 640,
+      "type": "process-spawned",
+      "index": 7,
+      "pid": 604723,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 640.2,
+      "type": "initialize-started",
+      "index": 7,
+      "pid": 604723,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 652.7,
+      "type": "process-exited",
+      "index": 6,
+      "pid": 604653,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 686,
+      "type": "caller-succeeded",
+      "index": 6,
+      "sessions": 0
+    },
+    {
+      "ms": 711.8,
+      "type": "initialize-succeeded",
+      "index": 7,
+      "pid": 604723
+    },
+    {
+      "ms": 725,
+      "type": "process-spawned",
+      "index": 8,
+      "pid": 604791,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 725.1,
+      "type": "initialize-started",
+      "index": 8,
+      "pid": 604791,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 734,
+      "type": "process-exited",
+      "index": 7,
+      "pid": 604723,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 735.4,
+      "type": "caller-succeeded",
+      "index": 7,
+      "sessions": 0
+    },
+    {
+      "ms": 795.9,
+      "type": "initialize-succeeded",
+      "index": 8,
+      "pid": 604791
+    },
+    {
+      "ms": 806.6,
+      "type": "process-spawned",
+      "index": 9,
+      "pid": 604856,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 806.7,
+      "type": "initialize-started",
+      "index": 9,
+      "pid": 604856,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 820.1,
+      "type": "process-exited",
+      "index": 8,
+      "pid": 604791,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 852.7,
+      "type": "caller-succeeded",
+      "index": 8,
+      "sessions": 0
+    },
+    {
+      "ms": 880,
+      "type": "initialize-succeeded",
+      "index": 9,
+      "pid": 604856
+    },
+    {
+      "ms": 891,
+      "type": "process-spawned",
+      "index": 10,
+      "pid": 604927,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 891.1,
+      "type": "initialize-started",
+      "index": 10,
+      "pid": 604927,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 905.3,
+      "type": "process-exited",
+      "index": 9,
+      "pid": 604856,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 938.8,
+      "type": "caller-succeeded",
+      "index": 9,
+      "sessions": 0
+    },
+    {
+      "ms": 963.2,
+      "type": "initialize-succeeded",
+      "index": 10,
+      "pid": 604927
+    },
+    {
+      "ms": 975.1,
+      "type": "process-spawned",
+      "index": 11,
+      "pid": 604993,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 975.1,
+      "type": "initialize-started",
+      "index": 11,
+      "pid": 604993,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 988.2,
+      "type": "process-exited",
+      "index": 10,
+      "pid": 604927,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1021.1,
+      "type": "caller-succeeded",
+      "index": 10,
+      "sessions": 0
+    },
+    {
+      "ms": 1045.3,
+      "type": "initialize-succeeded",
+      "index": 11,
+      "pid": 604993
+    },
+    {
+      "ms": 1057.3,
+      "type": "process-spawned",
+      "index": 12,
+      "pid": 605060,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1057.4,
+      "type": "initialize-started",
+      "index": 12,
+      "pid": 605060,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1070.3,
+      "type": "process-exited",
+      "index": 11,
+      "pid": 604993,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1107.5,
+      "type": "caller-succeeded",
+      "index": 11,
+      "sessions": 0
+    },
+    {
+      "ms": 1129,
+      "type": "initialize-succeeded",
+      "index": 12,
+      "pid": 605060
+    },
+    {
+      "ms": 1140.7,
+      "type": "process-spawned",
+      "index": 13,
+      "pid": 605129,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1140.8,
+      "type": "initialize-started",
+      "index": 13,
+      "pid": 605129,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1152.2,
+      "type": "process-exited",
+      "index": 12,
+      "pid": 605060,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1152.2,
+      "type": "caller-succeeded",
+      "index": 12,
+      "sessions": 0
+    },
+    {
+      "ms": 1211.9,
+      "type": "initialize-succeeded",
+      "index": 13,
+      "pid": 605129
+    },
+    {
+      "ms": 1224.3,
+      "type": "process-spawned",
+      "index": 14,
+      "pid": 605197,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1224.4,
+      "type": "initialize-started",
+      "index": 14,
+      "pid": 605197,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1237,
+      "type": "process-exited",
+      "index": 13,
+      "pid": 605129,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1269.9,
+      "type": "caller-succeeded",
+      "index": 13,
+      "sessions": 0
+    },
+    {
+      "ms": 1297.6,
+      "type": "initialize-succeeded",
+      "index": 14,
+      "pid": 605197
+    },
+    {
+      "ms": 1308.4,
+      "type": "process-spawned",
+      "index": 15,
+      "pid": 605266,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1308.5,
+      "type": "initialize-started",
+      "index": 15,
+      "pid": 605266,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1321.4,
+      "type": "process-exited",
+      "index": 14,
+      "pid": 605197,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1354.5,
+      "type": "caller-succeeded",
+      "index": 14,
+      "sessions": 0
+    },
+    {
+      "ms": 1378.6,
+      "type": "initialize-succeeded",
+      "index": 15,
+      "pid": 605266
+    },
+    {
+      "ms": 1389.3,
+      "type": "process-spawned",
+      "index": 16,
+      "pid": 605336,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1389.3,
+      "type": "initialize-started",
+      "index": 16,
+      "pid": 605336,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1401.3,
+      "type": "process-exited",
+      "index": 15,
+      "pid": 605266,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1435.1,
+      "type": "caller-succeeded",
+      "index": 15,
+      "sessions": 0
+    },
+    {
+      "ms": 1459.5,
+      "type": "initialize-succeeded",
+      "index": 16,
+      "pid": 605336
+    },
+    {
+      "ms": 1470.2,
+      "type": "process-spawned",
+      "index": 17,
+      "pid": 605403,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1470.2,
+      "type": "initialize-started",
+      "index": 17,
+      "pid": 605403,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1482.1,
+      "type": "process-exited",
+      "index": 16,
+      "pid": 605336,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1518.2,
+      "type": "caller-succeeded",
+      "index": 16,
+      "sessions": 0
+    },
+    {
+      "ms": 1541.1,
+      "type": "initialize-succeeded",
+      "index": 17,
+      "pid": 605403
+    },
+    {
+      "ms": 1552.8,
+      "type": "process-spawned",
+      "index": 18,
+      "pid": 605517,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1552.9,
+      "type": "initialize-started",
+      "index": 18,
+      "pid": 605517,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1565.3,
+      "type": "process-exited",
+      "index": 17,
+      "pid": 605403,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1600.1,
+      "type": "caller-succeeded",
+      "index": 17,
+      "sessions": 0
+    },
+    {
+      "ms": 1623,
+      "type": "initialize-succeeded",
+      "index": 18,
+      "pid": 605517
+    },
+    {
+      "ms": 1633.6,
+      "type": "process-spawned",
+      "index": 19,
+      "pid": 605587,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1633.6,
+      "type": "initialize-started",
+      "index": 19,
+      "pid": 605587,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1646.2,
+      "type": "process-exited",
+      "index": 18,
+      "pid": 605517,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1679,
+      "type": "caller-succeeded",
+      "index": 18,
+      "sessions": 0
+    },
+    {
+      "ms": 1703.7,
+      "type": "initialize-succeeded",
+      "index": 19,
+      "pid": 605587
+    },
+    {
+      "ms": 1716.8,
+      "type": "process-spawned",
+      "index": 20,
+      "pid": 605654,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1717,
+      "type": "initialize-started",
+      "index": 20,
+      "pid": 605654,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1727.5,
+      "type": "process-exited",
+      "index": 19,
+      "pid": 605587,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1727.7,
+      "type": "caller-succeeded",
+      "index": 19,
+      "sessions": 0
+    },
+    {
+      "ms": 1788.8,
+      "type": "initialize-succeeded",
+      "index": 20,
+      "pid": 605654
+    },
+    {
+      "ms": 1799.4,
+      "type": "process-spawned",
+      "index": 21,
+      "pid": 605720,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1799.5,
+      "type": "initialize-started",
+      "index": 21,
+      "pid": 605720,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1812.3,
+      "type": "process-exited",
+      "index": 20,
+      "pid": 605654,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1845,
+      "type": "caller-succeeded",
+      "index": 20,
+      "sessions": 0
+    },
+    {
+      "ms": 1871.1,
+      "type": "initialize-succeeded",
+      "index": 21,
+      "pid": 605720
+    },
+    {
+      "ms": 1881.3,
+      "type": "process-spawned",
+      "index": 22,
+      "pid": 605789,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1881.4,
+      "type": "initialize-started",
+      "index": 22,
+      "pid": 605789,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1893.1,
+      "type": "process-exited",
+      "index": 21,
+      "pid": 605720,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1893.2,
+      "type": "caller-succeeded",
+      "index": 21,
+      "sessions": 0
+    },
+    {
+      "ms": 1954.8,
+      "type": "initialize-succeeded",
+      "index": 22,
+      "pid": 605789
+    },
+    {
+      "ms": 1965.2,
+      "type": "process-spawned",
+      "index": 23,
+      "pid": 605857,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1965.2,
+      "type": "initialize-started",
+      "index": 23,
+      "pid": 605857,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 1979.7,
+      "type": "process-exited",
+      "index": 22,
+      "pid": 605789,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 2011.4,
+      "type": "caller-succeeded",
+      "index": 22,
+      "sessions": 0
+    },
+    {
+      "ms": 2038,
+      "type": "initialize-succeeded",
+      "index": 23,
+      "pid": 605857
+    },
+    {
+      "ms": 2061.7,
+      "type": "process-exited",
+      "index": 23,
+      "pid": 605857,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 0
+    },
+    {
+      "ms": 2096.7,
+      "type": "caller-succeeded",
+      "index": 23,
+      "sessions": 0
+    }
+  ]
+}
+
+Script done on 2026-09-08 13:51:02-07:00 [COMMAND_EXIT_CODE="0"]

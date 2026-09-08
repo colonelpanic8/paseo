@@ -1,0 +1,983 @@
+Script started on 2026-09-08 13:46:08-07:00 [COMMAND="env PASEO_EVIDENCE_SOURCE_ROOT=/home/imalison/Projects/paseo/.worktrees/evidence-3662 PASEO_EVIDENCE_SHA=92442e743517cb4f1c304967bd79e2b9401a6ba6 PASEO_EVIDENCE_CODEX_SCRIPT=/tmp/paseo-pr-evidence/3662/tooling/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex PASEO_EVIDENCE_CODEX_VERSION=0.147.0 PASEO_EVIDENCE_COUNT=24 CODEX_HOME=/tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical ./node_modules/.bin/tsx /tmp/paseo-pr-evidence/3662/real-concurrent-starts.ts" <not executed on terminal>]
+{
+  "sourceSha": "92442e743517cb4f1c304967bd79e2b9401a6ba6",
+  "codexVersion": "0.147.0",
+  "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical",
+  "requestedStarts": 24,
+  "succeeded": 22,
+  "failed": 2,
+  "sqliteInitializationFailures": 2,
+  "maxActiveProcesses": 24,
+  "maxActiveInitializations": 24,
+  "elapsedMs": 1348.8,
+  "failures": [
+    {
+      "index": 4,
+      "error": "Codex app-server exited with code 1 and signal null\nWARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"/tmp\" (codex_home: AbsolutePathBuf(\"/tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical\"))\nError: failed to initialize sqlite state runtime under /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical: failed to initialize state runtime at /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical"
+    },
+    {
+      "index": 20,
+      "error": "Codex app-server exited with code 1 and signal null\nWARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"/tmp\" (codex_home: AbsolutePathBuf(\"/tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical\"))\nError: failed to initialize sqlite state runtime under /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical: failed to initialize state runtime at /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical"
+    }
+  ],
+  "events": [
+    {
+      "ms": 0,
+      "type": "scenario-started",
+      "count": 24,
+      "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical"
+    },
+    {
+      "ms": 0.1,
+      "type": "caller-started",
+      "index": 0
+    },
+    {
+      "ms": 1.3,
+      "type": "caller-started",
+      "index": 1
+    },
+    {
+      "ms": 1.4,
+      "type": "caller-started",
+      "index": 2
+    },
+    {
+      "ms": 1.5,
+      "type": "caller-started",
+      "index": 3
+    },
+    {
+      "ms": 1.7,
+      "type": "caller-started",
+      "index": 4
+    },
+    {
+      "ms": 1.7,
+      "type": "caller-started",
+      "index": 5
+    },
+    {
+      "ms": 1.8,
+      "type": "caller-started",
+      "index": 6
+    },
+    {
+      "ms": 1.9,
+      "type": "caller-started",
+      "index": 7
+    },
+    {
+      "ms": 2,
+      "type": "caller-started",
+      "index": 8
+    },
+    {
+      "ms": 2.1,
+      "type": "caller-started",
+      "index": 9
+    },
+    {
+      "ms": 2.2,
+      "type": "caller-started",
+      "index": 10
+    },
+    {
+      "ms": 2.3,
+      "type": "caller-started",
+      "index": 11
+    },
+    {
+      "ms": 2.4,
+      "type": "caller-started",
+      "index": 12
+    },
+    {
+      "ms": 2.4,
+      "type": "caller-started",
+      "index": 13
+    },
+    {
+      "ms": 2.5,
+      "type": "caller-started",
+      "index": 14
+    },
+    {
+      "ms": 2.5,
+      "type": "caller-started",
+      "index": 15
+    },
+    {
+      "ms": 2.6,
+      "type": "caller-started",
+      "index": 16
+    },
+    {
+      "ms": 2.6,
+      "type": "caller-started",
+      "index": 17
+    },
+    {
+      "ms": 2.7,
+      "type": "caller-started",
+      "index": 18
+    },
+    {
+      "ms": 2.7,
+      "type": "caller-started",
+      "index": 19
+    },
+    {
+      "ms": 2.7,
+      "type": "caller-started",
+      "index": 20
+    },
+    {
+      "ms": 2.8,
+      "type": "caller-started",
+      "index": 21
+    },
+    {
+      "ms": 2.8,
+      "type": "caller-started",
+      "index": 22
+    },
+    {
+      "ms": 2.9,
+      "type": "caller-started",
+      "index": 23
+    },
+    {
+      "ms": 89,
+      "type": "process-spawned",
+      "index": 20,
+      "pid": 585681,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 89.8,
+      "type": "initialize-started",
+      "index": 20,
+      "pid": 585681,
+      "activeInitializations": 1
+    },
+    {
+      "ms": 96.4,
+      "type": "process-spawned",
+      "index": 19,
+      "pid": 585703,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 96.5,
+      "type": "initialize-started",
+      "index": 19,
+      "pid": 585703,
+      "activeInitializations": 2
+    },
+    {
+      "ms": 98.8,
+      "type": "process-spawned",
+      "index": 18,
+      "pid": 585708,
+      "activeProcesses": 3
+    },
+    {
+      "ms": 98.9,
+      "type": "initialize-started",
+      "index": 18,
+      "pid": 585708,
+      "activeInitializations": 3
+    },
+    {
+      "ms": 101.5,
+      "type": "process-spawned",
+      "index": 17,
+      "pid": 585710,
+      "activeProcesses": 4
+    },
+    {
+      "ms": 101.7,
+      "type": "initialize-started",
+      "index": 17,
+      "pid": 585710,
+      "activeInitializations": 4
+    },
+    {
+      "ms": 104.8,
+      "type": "process-spawned",
+      "index": 16,
+      "pid": 585728,
+      "activeProcesses": 5
+    },
+    {
+      "ms": 104.9,
+      "type": "initialize-started",
+      "index": 16,
+      "pid": 585728,
+      "activeInitializations": 5
+    },
+    {
+      "ms": 107.5,
+      "type": "process-spawned",
+      "index": 15,
+      "pid": 585763,
+      "activeProcesses": 6
+    },
+    {
+      "ms": 107.7,
+      "type": "initialize-started",
+      "index": 15,
+      "pid": 585763,
+      "activeInitializations": 6
+    },
+    {
+      "ms": 112.8,
+      "type": "process-spawned",
+      "index": 14,
+      "pid": 585786,
+      "activeProcesses": 7
+    },
+    {
+      "ms": 113,
+      "type": "initialize-started",
+      "index": 14,
+      "pid": 585786,
+      "activeInitializations": 7
+    },
+    {
+      "ms": 117.4,
+      "type": "process-spawned",
+      "index": 13,
+      "pid": 585822,
+      "activeProcesses": 8
+    },
+    {
+      "ms": 117.5,
+      "type": "initialize-started",
+      "index": 13,
+      "pid": 585822,
+      "activeInitializations": 8
+    },
+    {
+      "ms": 121.5,
+      "type": "process-spawned",
+      "index": 12,
+      "pid": 585852,
+      "activeProcesses": 9
+    },
+    {
+      "ms": 121.6,
+      "type": "initialize-started",
+      "index": 12,
+      "pid": 585852,
+      "activeInitializations": 9
+    },
+    {
+      "ms": 124.5,
+      "type": "process-spawned",
+      "index": 11,
+      "pid": 585867,
+      "activeProcesses": 10
+    },
+    {
+      "ms": 124.7,
+      "type": "initialize-started",
+      "index": 11,
+      "pid": 585867,
+      "activeInitializations": 10
+    },
+    {
+      "ms": 127.6,
+      "type": "process-spawned",
+      "index": 10,
+      "pid": 585896,
+      "activeProcesses": 11
+    },
+    {
+      "ms": 127.7,
+      "type": "initialize-started",
+      "index": 10,
+      "pid": 585896,
+      "activeInitializations": 11
+    },
+    {
+      "ms": 130.1,
+      "type": "process-spawned",
+      "index": 9,
+      "pid": 585910,
+      "activeProcesses": 12
+    },
+    {
+      "ms": 130.2,
+      "type": "initialize-started",
+      "index": 9,
+      "pid": 585910,
+      "activeInitializations": 12
+    },
+    {
+      "ms": 132.4,
+      "type": "process-spawned",
+      "index": 8,
+      "pid": 585929,
+      "activeProcesses": 13
+    },
+    {
+      "ms": 132.5,
+      "type": "initialize-started",
+      "index": 8,
+      "pid": 585929,
+      "activeInitializations": 13
+    },
+    {
+      "ms": 135.8,
+      "type": "process-spawned",
+      "index": 7,
+      "pid": 585954,
+      "activeProcesses": 14
+    },
+    {
+      "ms": 135.9,
+      "type": "initialize-started",
+      "index": 7,
+      "pid": 585954,
+      "activeInitializations": 14
+    },
+    {
+      "ms": 138.7,
+      "type": "process-spawned",
+      "index": 6,
+      "pid": 585978,
+      "activeProcesses": 15
+    },
+    {
+      "ms": 138.8,
+      "type": "initialize-started",
+      "index": 6,
+      "pid": 585978,
+      "activeInitializations": 15
+    },
+    {
+      "ms": 141.9,
+      "type": "process-spawned",
+      "index": 5,
+      "pid": 586003,
+      "activeProcesses": 16
+    },
+    {
+      "ms": 142.1,
+      "type": "initialize-started",
+      "index": 5,
+      "pid": 586003,
+      "activeInitializations": 16
+    },
+    {
+      "ms": 145.7,
+      "type": "process-spawned",
+      "index": 4,
+      "pid": 586028,
+      "activeProcesses": 17
+    },
+    {
+      "ms": 145.8,
+      "type": "initialize-started",
+      "index": 4,
+      "pid": 586028,
+      "activeInitializations": 17
+    },
+    {
+      "ms": 149.4,
+      "type": "process-spawned",
+      "index": 3,
+      "pid": 586071,
+      "activeProcesses": 18
+    },
+    {
+      "ms": 149.5,
+      "type": "initialize-started",
+      "index": 3,
+      "pid": 586071,
+      "activeInitializations": 18
+    },
+    {
+      "ms": 152.7,
+      "type": "process-spawned",
+      "index": 2,
+      "pid": 586087,
+      "activeProcesses": 19
+    },
+    {
+      "ms": 152.8,
+      "type": "initialize-started",
+      "index": 2,
+      "pid": 586087,
+      "activeInitializations": 19
+    },
+    {
+      "ms": 155.5,
+      "type": "process-spawned",
+      "index": 1,
+      "pid": 586106,
+      "activeProcesses": 20
+    },
+    {
+      "ms": 155.6,
+      "type": "initialize-started",
+      "index": 1,
+      "pid": 586106,
+      "activeInitializations": 20
+    },
+    {
+      "ms": 158.6,
+      "type": "process-spawned",
+      "index": 0,
+      "pid": 586130,
+      "activeProcesses": 21
+    },
+    {
+      "ms": 158.7,
+      "type": "initialize-started",
+      "index": 0,
+      "pid": 586130,
+      "activeInitializations": 21
+    },
+    {
+      "ms": 163.8,
+      "type": "process-spawned",
+      "index": 21,
+      "pid": 586175,
+      "activeProcesses": 22
+    },
+    {
+      "ms": 164,
+      "type": "initialize-started",
+      "index": 21,
+      "pid": 586175,
+      "activeInitializations": 22
+    },
+    {
+      "ms": 167.7,
+      "type": "process-spawned",
+      "index": 22,
+      "pid": 586208,
+      "activeProcesses": 23
+    },
+    {
+      "ms": 167.8,
+      "type": "initialize-started",
+      "index": 22,
+      "pid": 586208,
+      "activeInitializations": 23
+    },
+    {
+      "ms": 171.4,
+      "type": "process-spawned",
+      "index": 23,
+      "pid": 586235,
+      "activeProcesses": 24
+    },
+    {
+      "ms": 171.5,
+      "type": "initialize-started",
+      "index": 23,
+      "pid": 586235,
+      "activeInitializations": 24
+    },
+    {
+      "ms": 178.8,
+      "type": "process-exited",
+      "index": 20,
+      "pid": 585681,
+      "code": 1,
+      "signal": null,
+      "activeProcesses": 23
+    },
+    {
+      "ms": 179,
+      "type": "initialize-failed",
+      "index": 20,
+      "pid": 585681,
+      "error": "Codex app-server exited with code 1 and signal null\nWARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"/tmp\" (codex_home: AbsolutePathBuf(\"/tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical\"))\nError: failed to initialize sqlite state runtime under /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical: failed to initialize state runtime at /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical"
+    },
+    {
+      "ms": 219.3,
+      "type": "process-exited",
+      "index": 4,
+      "pid": 586028,
+      "code": 1,
+      "signal": null,
+      "activeProcesses": 22
+    },
+    {
+      "ms": 219.4,
+      "type": "initialize-failed",
+      "index": 4,
+      "pid": 586028,
+      "error": "Codex app-server exited with code 1 and signal null\nWARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"/tmp\" (codex_home: AbsolutePathBuf(\"/tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical\"))\nError: failed to initialize sqlite state runtime under /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical: failed to initialize state runtime at /tmp/paseo-pr-evidence/3662/runtime/before-direct-canonical"
+    },
+    {
+      "ms": 286.7,
+      "type": "initialize-succeeded",
+      "index": 14,
+      "pid": 585786
+    },
+    {
+      "ms": 287.2,
+      "type": "initialize-succeeded",
+      "index": 15,
+      "pid": 585763
+    },
+    {
+      "ms": 296.4,
+      "type": "initialize-succeeded",
+      "index": 0,
+      "pid": 586130
+    },
+    {
+      "ms": 296.7,
+      "type": "initialize-succeeded",
+      "index": 12,
+      "pid": 585852
+    },
+    {
+      "ms": 297.5,
+      "type": "initialize-succeeded",
+      "index": 3,
+      "pid": 586071
+    },
+    {
+      "ms": 323.2,
+      "type": "initialize-succeeded",
+      "index": 17,
+      "pid": 585710
+    },
+    {
+      "ms": 324.1,
+      "type": "initialize-succeeded",
+      "index": 18,
+      "pid": 585708
+    },
+    {
+      "ms": 324.2,
+      "type": "initialize-succeeded",
+      "index": 2,
+      "pid": 586087
+    },
+    {
+      "ms": 324.3,
+      "type": "initialize-succeeded",
+      "index": 21,
+      "pid": 586175
+    },
+    {
+      "ms": 324.6,
+      "type": "initialize-succeeded",
+      "index": 6,
+      "pid": 585978
+    },
+    {
+      "ms": 324.7,
+      "type": "initialize-succeeded",
+      "index": 11,
+      "pid": 585867
+    },
+    {
+      "ms": 325.4,
+      "type": "initialize-succeeded",
+      "index": 16,
+      "pid": 585728
+    },
+    {
+      "ms": 390.3,
+      "type": "process-exited",
+      "index": 15,
+      "pid": 585763,
+      "code": null,
+      "signal": "SIGTERM",
+      "activeProcesses": 21
+    },
+    {
+      "ms": 390.5,
+      "type": "caller-succeeded",
+      "index": 15,
+      "sessions": 0
+    },
+    {
+      "ms": 390.6,
+      "type": "process-exited",
+      "index": 14,
+      "pid": 585786,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 20
+    },
+    {
+      "ms": 390.6,
+      "type": "process-exited",
+      "index": 12,
+      "pid": 585852,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 19
+    },
+    {
+      "ms": 390.7,
+      "type": "process-exited",
+      "index": 3,
+      "pid": 586071,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 18
+    },
+    {
+      "ms": 390.7,
+      "type": "process-exited",
+      "index": 0,
+      "pid": 586130,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 17
+    },
+    {
+      "ms": 392.8,
+      "type": "initialize-succeeded",
+      "index": 1,
+      "pid": 586106
+    },
+    {
+      "ms": 393,
+      "type": "initialize-succeeded",
+      "index": 10,
+      "pid": 585896
+    },
+    {
+      "ms": 393.1,
+      "type": "initialize-succeeded",
+      "index": 23,
+      "pid": 586235
+    },
+    {
+      "ms": 393.5,
+      "type": "initialize-succeeded",
+      "index": 5,
+      "pid": 586003
+    },
+    {
+      "ms": 393.7,
+      "type": "initialize-succeeded",
+      "index": 22,
+      "pid": 586208
+    },
+    {
+      "ms": 394.5,
+      "type": "initialize-succeeded",
+      "index": 19,
+      "pid": 585703
+    },
+    {
+      "ms": 395.2,
+      "type": "initialize-succeeded",
+      "index": 13,
+      "pid": 585822
+    },
+    {
+      "ms": 396.8,
+      "type": "caller-succeeded",
+      "index": 12,
+      "sessions": 0
+    },
+    {
+      "ms": 396.9,
+      "type": "caller-succeeded",
+      "index": 0,
+      "sessions": 0
+    },
+    {
+      "ms": 396.9,
+      "type": "caller-succeeded",
+      "index": 3,
+      "sessions": 0
+    },
+    {
+      "ms": 437.3,
+      "type": "process-exited",
+      "index": 19,
+      "pid": 585703,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 16
+    },
+    {
+      "ms": 437.4,
+      "type": "process-exited",
+      "index": 18,
+      "pid": 585708,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 15
+    },
+    {
+      "ms": 437.4,
+      "type": "process-exited",
+      "index": 17,
+      "pid": 585710,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 14
+    },
+    {
+      "ms": 437.4,
+      "type": "process-exited",
+      "index": 16,
+      "pid": 585728,
+      "code": null,
+      "signal": "SIGTERM",
+      "activeProcesses": 13
+    },
+    {
+      "ms": 437.5,
+      "type": "caller-succeeded",
+      "index": 16,
+      "sessions": 0
+    },
+    {
+      "ms": 437.5,
+      "type": "process-exited",
+      "index": 11,
+      "pid": 585867,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 12
+    },
+    {
+      "ms": 437.5,
+      "type": "process-exited",
+      "index": 10,
+      "pid": 585896,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 11
+    },
+    {
+      "ms": 437.6,
+      "type": "process-exited",
+      "index": 6,
+      "pid": 585978,
+      "code": null,
+      "signal": "SIGTERM",
+      "activeProcesses": 10
+    },
+    {
+      "ms": 437.6,
+      "type": "caller-succeeded",
+      "index": 6,
+      "sessions": 0
+    },
+    {
+      "ms": 437.6,
+      "type": "process-exited",
+      "index": 2,
+      "pid": 586087,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 9
+    },
+    {
+      "ms": 437.6,
+      "type": "process-exited",
+      "index": 21,
+      "pid": 586175,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 8
+    },
+    {
+      "ms": 437.6,
+      "type": "process-exited",
+      "index": 23,
+      "pid": 586235,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 7
+    },
+    {
+      "ms": 438.3,
+      "type": "caller-succeeded",
+      "index": 21,
+      "sessions": 0
+    },
+    {
+      "ms": 438.4,
+      "type": "caller-succeeded",
+      "index": 18,
+      "sessions": 0
+    },
+    {
+      "ms": 438.7,
+      "type": "caller-succeeded",
+      "index": 11,
+      "sessions": 0
+    },
+    {
+      "ms": 441.4,
+      "type": "caller-succeeded",
+      "index": 17,
+      "sessions": 0
+    },
+    {
+      "ms": 442,
+      "type": "caller-succeeded",
+      "index": 23,
+      "sessions": 0
+    },
+    {
+      "ms": 442.1,
+      "type": "caller-succeeded",
+      "index": 10,
+      "sessions": 0
+    },
+    {
+      "ms": 446.8,
+      "type": "caller-succeeded",
+      "index": 19,
+      "sessions": 0
+    },
+    {
+      "ms": 447.1,
+      "type": "process-exited",
+      "index": 1,
+      "pid": 586106,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 6
+    },
+    {
+      "ms": 447.4,
+      "type": "caller-succeeded",
+      "index": 14,
+      "sessions": 0
+    },
+    {
+      "ms": 447.5,
+      "type": "process-exited",
+      "index": 22,
+      "pid": 586208,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 5
+    },
+    {
+      "ms": 452.2,
+      "type": "process-exited",
+      "index": 13,
+      "pid": 585822,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 4
+    },
+    {
+      "ms": 452.3,
+      "type": "process-exited",
+      "index": 5,
+      "pid": 586003,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 3
+    },
+    {
+      "ms": 452.4,
+      "type": "caller-succeeded",
+      "index": 1,
+      "sessions": 0
+    },
+    {
+      "ms": 453.4,
+      "type": "caller-succeeded",
+      "index": 13,
+      "sessions": 0
+    },
+    {
+      "ms": 458,
+      "type": "caller-succeeded",
+      "index": 22,
+      "sessions": 0
+    },
+    {
+      "ms": 485.6,
+      "type": "caller-succeeded",
+      "index": 2,
+      "sessions": 0
+    },
+    {
+      "ms": 487.6,
+      "type": "caller-succeeded",
+      "index": 5,
+      "sessions": 0
+    },
+    {
+      "ms": 1282.7,
+      "type": "initialize-succeeded",
+      "index": 8,
+      "pid": 585929
+    },
+    {
+      "ms": 1283.6,
+      "type": "initialize-succeeded",
+      "index": 7,
+      "pid": 585954
+    },
+    {
+      "ms": 1284.6,
+      "type": "initialize-succeeded",
+      "index": 9,
+      "pid": 585910
+    },
+    {
+      "ms": 1309.1,
+      "type": "process-exited",
+      "index": 7,
+      "pid": 585954,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 2
+    },
+    {
+      "ms": 1309.4,
+      "type": "caller-succeeded",
+      "index": 7,
+      "sessions": 0
+    },
+    {
+      "ms": 1309.7,
+      "type": "process-exited",
+      "index": 9,
+      "pid": 585910,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 1
+    },
+    {
+      "ms": 1312.8,
+      "type": "process-exited",
+      "index": 8,
+      "pid": 585929,
+      "code": 0,
+      "signal": null,
+      "activeProcesses": 0
+    },
+    {
+      "ms": 1313.3,
+      "type": "caller-succeeded",
+      "index": 9,
+      "sessions": 0
+    },
+    {
+      "ms": 1348.5,
+      "type": "caller-succeeded",
+      "index": 8,
+      "sessions": 0
+    }
+  ]
+}
+
+Script done on 2026-09-08 13:46:10-07:00 [COMMAND_EXIT_CODE="1"]

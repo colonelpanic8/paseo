@@ -1,0 +1,12 @@
+Script started on 2026-09-08 13:52:27-07:00 [COMMAND="npx vitest run packages/server/src/server/agent/providers/codex/app-server-startup.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.spawn-error.test.ts --bail=1" <not executed on terminal>]
+[?25l
+ RUN  v4.1.7 /home/imalison/Projects/paseo/.worktrees/evidence-3662
+
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  13:52:27
+   Duration  756ms (transform 294ms, setup 0ms, import 430ms, tests 282ms, environment 0ms)
+
+[?25h
+Script done on 2026-09-08 13:52:28-07:00 [COMMAND_EXIT_CODE="0"]

@@ -1,0 +1,88 @@
+Script started on 2026-09-08 13:51:02-07:00 [COMMAND="env PASEO_EVIDENCE_SOURCE_ROOT=/home/imalison/Projects/paseo/.worktrees/evidence-3662 PASEO_EVIDENCE_SHA=77dbc41eee PASEO_EVIDENCE_CODEX_SCRIPT=/tmp/paseo-pr-evidence/3662/tooling/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex PASEO_EVIDENCE_CODEX_VERSION=0.147.0 PASEO_EVIDENCE_SCENARIO=final-failure CODEX_HOME=/tmp/paseo-pr-evidence/3662/runtime/final-failure-direct-77dbc41 ./node_modules/.bin/tsx /tmp/paseo-pr-evidence/3662/real-recovery.ts" <not executed on terminal>]
+{
+  "scenario": "final-failure",
+  "sourceSha": "77dbc41eee",
+  "codexVersion": "0.147.0",
+  "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/final-failure-direct-77dbc41",
+  "elapsedMs": 142.4,
+  "results": [
+    {
+      "status": "rejected",
+      "error": "Codex app-server exited with code null and signal SIGKILL"
+    },
+    {
+      "status": "fulfilled",
+      "value": "succeeded"
+    }
+  ],
+  "events": [
+    {
+      "ms": 0,
+      "type": "scenario-started",
+      "scenario": "final-failure",
+      "sourceSha": "77dbc41eee",
+      "codexVersion": "0.147.0",
+      "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/final-failure-direct-77dbc41"
+    },
+    {
+      "ms": 3.4,
+      "type": "process-spawned",
+      "label": "failed-first",
+      "pid": 605939
+    },
+    {
+      "ms": 4,
+      "type": "initialize-started",
+      "label": "failed-first",
+      "pid": 605939
+    },
+    {
+      "ms": 4.5,
+      "type": "forced-process-failure",
+      "label": "failed-first",
+      "pid": 605939
+    },
+    {
+      "ms": 6.8,
+      "type": "process-exited",
+      "label": "failed-first",
+      "pid": 605939,
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    {
+      "ms": 9,
+      "type": "process-spawned",
+      "label": "queued-second",
+      "pid": 605940
+    },
+    {
+      "ms": 9,
+      "type": "initialize-started",
+      "label": "queued-second",
+      "pid": 605940
+    },
+    {
+      "ms": 119.9,
+      "type": "initialize-succeeded",
+      "label": "queued-second",
+      "pid": 605940
+    },
+    {
+      "ms": 121,
+      "type": "thread-list-succeeded",
+      "label": "queued-second",
+      "count": 0
+    },
+    {
+      "ms": 142.2,
+      "type": "process-exited",
+      "label": "queued-second",
+      "pid": 605940,
+      "code": 0,
+      "signal": null
+    }
+  ]
+}
+
+Script done on 2026-09-08 13:51:03-07:00 [COMMAND_EXIT_CODE="0"]

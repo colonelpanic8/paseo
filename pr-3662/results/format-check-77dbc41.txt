@@ -1,0 +1,11 @@
+Script started on 2026-09-08 13:52:31-07:00 [COMMAND="npm run format:files -- --check packages/server/src/server/agent/providers/codex/app-server-startup.ts packages/server/src/server/agent/providers/codex/app-server-startup.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.ts packages/server/src/server/agent/providers/codex-app-server-agent.spawn-error.test.ts" <not executed on terminal>]
+
+> paseo@0.7.2 format:files
+> oxfmt --check packages/server/src/server/agent/providers/codex/app-server-startup.ts packages/server/src/server/agent/providers/codex/app-server-startup.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.ts packages/server/src/server/agent/providers/codex-app-server-agent.spawn-error.test.ts
+
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 84ms on 4 files using 16 threads.
+
+Script done on 2026-09-08 13:52:31-07:00 [COMMAND_EXIT_CODE="0"]

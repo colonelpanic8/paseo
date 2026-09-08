@@ -1,0 +1,102 @@
+Script started on 2026-09-08 13:51:08-07:00 [COMMAND="env PASEO_EVIDENCE_SOURCE_ROOT=/home/imalison/Projects/paseo/.worktrees/evidence-3662 PASEO_EVIDENCE_SHA=77dbc41eee PASEO_EVIDENCE_CODEX_SCRIPT=/tmp/paseo-pr-evidence/3662/tooling/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex PASEO_EVIDENCE_CODEX_VERSION=0.147.0 PASEO_EVIDENCE_SCENARIO=final-stall CODEX_HOME=/tmp/paseo-pr-evidence/3662/runtime/final-stall-direct-default-77dbc41 ./node_modules/.bin/tsx /tmp/paseo-pr-evidence/3662/real-recovery.ts" <not executed on terminal>]
+{
+  "scenario": "final-stall",
+  "sourceSha": "77dbc41eee",
+  "codexVersion": "0.147.0",
+  "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/final-stall-direct-default-77dbc41",
+  "elapsedMs": 32248.7,
+  "results": [
+    {
+      "status": "rejected",
+      "error": "Codex app-server startup timed out after 30000ms"
+    },
+    {
+      "status": "fulfilled",
+      "value": "succeeded"
+    }
+  ],
+  "events": [
+    {
+      "ms": 0,
+      "type": "scenario-started",
+      "scenario": "final-stall",
+      "sourceSha": "77dbc41eee",
+      "codexVersion": "0.147.0",
+      "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/final-stall-direct-default-77dbc41"
+    },
+    {
+      "ms": 4.6,
+      "type": "process-spawned",
+      "label": "stalled-first",
+      "pid": 606180
+    },
+    {
+      "ms": 5.2,
+      "type": "process-stopped",
+      "label": "stalled-first",
+      "pid": 606180
+    },
+    {
+      "ms": 5.2,
+      "type": "initialize-started",
+      "label": "stalled-first",
+      "pid": 606180
+    },
+    {
+      "ms": 1506.7,
+      "type": "queue-observed",
+      "waitMs": 1500,
+      "secondStarted": false
+    },
+    {
+      "ms": 30006.8,
+      "type": "timeout-cleanup-started"
+    },
+    {
+      "ms": 32057.2,
+      "type": "process-exited",
+      "label": "stalled-first",
+      "pid": 606180,
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    {
+      "ms": 32057.4,
+      "type": "timeout-cleanup-finished"
+    },
+    {
+      "ms": 32059.7,
+      "type": "process-spawned",
+      "label": "queued-second",
+      "pid": 607782
+    },
+    {
+      "ms": 32059.8,
+      "type": "initialize-started",
+      "label": "queued-second",
+      "pid": 607782
+    },
+    {
+      "ms": 32182.1,
+      "type": "initialize-succeeded",
+      "label": "queued-second",
+      "pid": 607782
+    },
+    {
+      "ms": 32183.3,
+      "type": "thread-list-succeeded",
+      "label": "queued-second",
+      "count": 0
+    },
+    {
+      "ms": 32205.9,
+      "type": "process-exited",
+      "label": "queued-second",
+      "pid": 607782,
+      "code": 0,
+      "signal": null
+    }
+  ]
+}
+
+Script done on 2026-09-08 13:51:41-07:00 [COMMAND_EXIT_CODE="0"]

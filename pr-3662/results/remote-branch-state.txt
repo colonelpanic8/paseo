@@ -1,0 +1,6 @@
+Script started on 2026-09-08 13:53:16-07:00 [COMMAND="git ls-remote fork refs/heads/fix/codex-sqlite-init && gh pr view 3662 --repo getpaseo/paseo --json state,headRefOid,headRefName,headRepositoryOwner" <not executed on terminal>]
+77dbc41eee1ac3b14136dcb0454e2b36fc460c11	refs/heads/fix/codex-sqlite-init
+Working...
+{"headRefName":"fix/codex-sqlite-init","headRefOid":"701e88bafc9cca05da45bc311150724deeac29b8","headRepositoryOwner":{"id":"MDQ6VXNlcjEyNDY2MTk=","name":"Ivan Malison","login":"colonelpanic8"},"state":"CLOSED"}
+
+Script done on 2026-09-08 13:53:18-07:00 [COMMAND_EXIT_CODE="0"]

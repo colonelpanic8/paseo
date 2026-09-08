@@ -1,0 +1,7 @@
+Script started on 2026-09-08 13:52:28-07:00 [COMMAND="npm run typecheck --workspace=@getpaseo/server" <not executed on terminal>]
+
+> @getpaseo/server@0.7.2 typecheck
+> tsgo -p tsconfig.server.typecheck.json --noEmit
+
+
+Script done on 2026-09-08 13:52:30-07:00 [COMMAND_EXIT_CODE="0"]

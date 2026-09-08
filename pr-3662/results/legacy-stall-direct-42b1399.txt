@@ -1,0 +1,100 @@
+Script started on 2026-09-08 13:46:32-07:00 [COMMAND="env PASEO_EVIDENCE_SOURCE_ROOT=/home/imalison/Projects/paseo/.worktrees/evidence-3662 PASEO_EVIDENCE_SHA=42b13998bf37cf3f01004bd1b14b43824bf47a5c PASEO_EVIDENCE_CODEX_SCRIPT=/tmp/paseo-pr-evidence/3662/tooling/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex PASEO_EVIDENCE_CODEX_VERSION=0.147.0 PASEO_EVIDENCE_SCENARIO=legacy-stall CODEX_HOME=/tmp/paseo-pr-evidence/3662/runtime/legacy-stall-direct-42b1399 ./node_modules/.bin/tsx /tmp/paseo-pr-evidence/3662/real-recovery.ts" <not executed on terminal>]
+{
+  "scenario": "legacy-stall",
+  "sourceSha": "42b13998bf37cf3f01004bd1b14b43824bf47a5c",
+  "codexVersion": "0.147.0",
+  "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/legacy-stall-direct-42b1399",
+  "elapsedMs": 1692.2,
+  "results": [
+    {
+      "status": "rejected",
+      "error": "Codex app-server exited with code null and signal SIGKILL"
+    },
+    {
+      "status": "fulfilled",
+      "value": "succeeded"
+    }
+  ],
+  "events": [
+    {
+      "ms": 0,
+      "type": "scenario-started",
+      "scenario": "legacy-stall",
+      "sourceSha": "42b13998bf37cf3f01004bd1b14b43824bf47a5c",
+      "codexVersion": "0.147.0",
+      "codexHome": "/tmp/paseo-pr-evidence/3662/runtime/legacy-stall-direct-42b1399"
+    },
+    {
+      "ms": 3.3,
+      "type": "process-spawned",
+      "label": "stalled-first",
+      "pid": 589774
+    },
+    {
+      "ms": 3.9,
+      "type": "process-stopped",
+      "label": "stalled-first",
+      "pid": 589774
+    },
+    {
+      "ms": 3.9,
+      "type": "initialize-started",
+      "label": "stalled-first",
+      "pid": 589774
+    },
+    {
+      "ms": 1504.6,
+      "type": "queue-observed",
+      "waitMs": 1500,
+      "secondStarted": false
+    },
+    {
+      "ms": 1504.6,
+      "type": "manual-cleanup-sent",
+      "label": "stalled-first",
+      "pid": 589774
+    },
+    {
+      "ms": 1506.3,
+      "type": "process-exited",
+      "label": "stalled-first",
+      "pid": 589774,
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    {
+      "ms": 1510,
+      "type": "process-spawned",
+      "label": "queued-second",
+      "pid": 589775
+    },
+    {
+      "ms": 1510.1,
+      "type": "initialize-started",
+      "label": "queued-second",
+      "pid": 589775
+    },
+    {
+      "ms": 1638.2,
+      "type": "initialize-succeeded",
+      "label": "queued-second",
+      "pid": 589775
+    },
+    {
+      "ms": 1639.3,
+      "type": "thread-list-succeeded",
+      "label": "queued-second",
+      "count": 0
+    },
+    {
+      "ms": 1661.6,
+      "type": "process-exited",
+      "label": "queued-second",
+      "pid": 589775,
+      "code": 0,
+      "signal": null
+    }
+  ]
+}
+
+Script done on 2026-09-08 13:46:34-07:00 [COMMAND_EXIT_CODE="0"]
