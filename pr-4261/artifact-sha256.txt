@@ -1,0 +1,5 @@
+74fb222c3dbf007855cf6fcb43afee5acb37f5906fe049a369daf1bee7bcffed  /tmp/paseo-pr-evidence/4261/before/offline-draft-pre-fix.png
+d3ac58d1fb674ec6a191b3e92a1e7d9579e976772e9f507c5da8b63d781fec61  /tmp/paseo-pr-evidence/4261/before/offline-draft-pre-fix.webm
+3abf95d07a2e4fc3d3b1e1af1544244fb735cf9db4213819ccac16c68bd49296  /tmp/paseo-pr-evidence/4261/after/offline-draft-fixed.png
+1b44dfebad2c6bebb5bd1e6f7a325ede94591c7387dd4ba8a6193cda7579bd3e  /tmp/paseo-pr-evidence/4261/after/reconnected-submission-fixed.png
+379cf9327741c83ed4d6fe4fc46ea56afa1e7d766eabf00fe13671439546292a  /tmp/paseo-pr-evidence/4261/after/offline-draft-reconnect-fixed.webm

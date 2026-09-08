@@ -1,0 +1,4 @@
+
+> @getpaseo/app@0.7.2 typecheck
+> tsgo --noEmit
+

@@ -1,0 +1,28 @@
+[metro] Starting project at /home/imalison/Projects/paseo/.worktrees/evidence-4261/packages/app
+[metro] Using src/app as the root directory for Expo Router.
+[metro] Experimental Expo Autolinking module resolver is enabled.
+[metro] React Compiler enabled
+[metro] Starting Metro Bundler
+[metro] Waiting on http://localhost:36137
+[metro] Logs for your project will appear below.
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 2283ms packages/app/index.ts (5110 modules)
+[e2e] Metro warmed on port 36137
+
+Running 1 test using 1 worker
+
+(node:639775) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:639775) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 0 daemon started on port 40637, home: /tmp/paseo-pr-evidence/4261/after-refactor/home-checkout-config/worker-0
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 240ms packages/app/index.ts (1 module)
+[metro] Web packages/app/src/attachments/web/indexeddb-attachment-store.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 57ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  1 [browser] › packages/app/e2e/browser/offline-draft-reconnect.spec.ts:5:7 › Offline draft reconnect › preserves and submits a queued new-workspace draft once after reconnect (12.7s)
+[e2e] Worker 0 daemon stopped
+[e2e] Metro stopped
+
+  1 passed (30.2s)

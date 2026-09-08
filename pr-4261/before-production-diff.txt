@@ -1,0 +1,179 @@
+diff --git a/packages/app/src/hooks/use-agent-form-state.ts b/packages/app/src/hooks/use-agent-form-state.ts
+index 1e3754896c..26908bd6a0 100644
+--- a/packages/app/src/hooks/use-agent-form-state.ts
++++ b/packages/app/src/hooks/use-agent-form-state.ts
+@@ -6,7 +6,6 @@ import type {
+   AgentProvider,
+   ProviderSnapshotEntry,
+ } from "@getpaseo/protocol/agent-types";
+-import { useHostRuntimeConnectionStatus } from "@/runtime/host-runtime";
+ import { buildProviderDefinitions } from "@/utils/provider-definitions";
+ import {
+   buildSelectableProviderSelectorProviders,
+@@ -186,10 +185,6 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+     refresh: refreshSnapshot,
+     refetchIfStale: refetchSnapshotIfStale,
+   } = useProvidersSnapshot(serverId, { cwd: workingDir });
+-  const hostConnectionStatus = useHostRuntimeConnectionStatus(serverId ?? "");
+-  // The snapshot query is disabled while the host is unreachable, so resolution
+-  // stays pending with no data. That is not "loading"; it resumes on reconnect.
+-  const isHostUnreachable = hostConnectionStatus === "offline" || hostConnectionStatus === "error";
+ 
+   const allProviderEntries = useMemo(() => snapshotEntries ?? [], [snapshotEntries]);
+   const snapshotProviderDefinitions = useMemo(
+@@ -252,8 +247,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
+   const availableModels = snapshotSelectedProviderModels;
+   const modeOptions = snapshotSelectedProviderModes;
+   const isModelSelectionLoading =
+-    !isHostUnreachable &&
+-    (resolution.status === "pending" || snapshotIsLoading || selectedProviderIsLoading);
++    resolution.status === "pending" || snapshotIsLoading || selectedProviderIsLoading;
+   const isAllModelsLoading = isModelSelectionLoading;
+ 
+   useEffect(() => {
+diff --git a/packages/app/src/panels/agent-panel.tsx b/packages/app/src/panels/agent-panel.tsx
+index c086d63046..c2129c654c 100644
+--- a/packages/app/src/panels/agent-panel.tsx
++++ b/packages/app/src/panels/agent-panel.tsx
+@@ -406,8 +406,6 @@ function DraftPanel() {
+   } = usePaneContext();
+   const { isInteractive } = usePaneFocus();
+   invariant(target.kind === "draft", "DraftPanel requires draft target");
+-  const runtimeClient = useHostRuntimeClient(serverId);
+-  const hostUnavailable = useHostUnavailableState(serverId);
+ 
+   const handleCreated = useCallback(
+     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
+@@ -419,10 +417,6 @@ function DraftPanel() {
+     [retargetCurrentTab, serverId],
+   );
+ 
+-  if (!runtimeClient) {
+-    return <AgentSessionUnavailableState {...hostUnavailable} />;
+-  }
+-
+   return (
+     <WorkspaceDraftAgentTab
+       serverId={serverId}
+@@ -520,30 +514,6 @@ type AgentLookupState =
+   | { tag: "not_found"; message: string }
+   | { tag: "error"; message: string };
+ 
+-interface HostUnavailableState {
+-  serverLabel: string;
+-  connectionStatus: HostRuntimeConnectionStatus;
+-  lastError: string | null;
+-  isUnknownDaemon: boolean;
+-  t: TFunction;
+-}
+-
+-function useHostUnavailableState(serverId: string | null): HostUnavailableState {
+-  const { t } = useTranslation();
+-  const daemons = useHosts();
+-  const runtimeServerId = serverId ?? "";
+-  const runtimeConnectionStatus = useHostRuntimeConnectionStatus(runtimeServerId);
+-  const lastError = useHostRuntimeLastError(runtimeServerId);
+-  const daemon = serverId ? (daemons.find((entry) => entry.serverId === serverId) ?? null) : null;
+-  const serverLabel = daemon?.label ?? serverId ?? t("agentPanel.unavailable.selectedHost");
+-  const isUnknownDaemon = Boolean(serverId && !daemon);
+-  const connectionStatus: HostRuntimeConnectionStatus =
+-    isUnknownDaemon && runtimeConnectionStatus === "connecting"
+-      ? "offline"
+-      : runtimeConnectionStatus;
+-  return { serverLabel, connectionStatus, lastError, isUnknownDaemon, t };
+-}
+-
+ function AgentPanelContent({
+   serverId,
+   workspaceId,
+@@ -557,12 +527,15 @@ function AgentPanelContent({
+   isPaneFocused: boolean;
+   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+ }) {
++  const { t } = useTranslation();
+   const resolvedAgentId = agentId.trim() || undefined;
+   const resolvedServerId = serverId.trim() || undefined;
++  const daemons = useHosts();
+   const runtimeServerId = resolvedServerId ?? "";
+   const runtimeClient = useHostRuntimeClient(runtimeServerId);
+   const runtimeIsConnected = useHostRuntimeIsConnected(runtimeServerId);
+-  const hostUnavailable = useHostUnavailableState(resolvedServerId ?? null);
++  const runtimeConnectionStatus = useHostRuntimeConnectionStatus(runtimeServerId);
++  const runtimeLastError = useHostRuntimeLastError(runtimeServerId);
+   const hasCachedAgent = useSessionStore((state) => {
+     if (!resolvedServerId || !resolvedAgentId) return false;
+     const session = state.sessions[resolvedServerId];
+@@ -571,10 +544,30 @@ function AgentPanelContent({
+     );
+   });
+ 
++  const connectionServerId = resolvedServerId ?? null;
++  const daemon = connectionServerId
++    ? (daemons.find((entry) => entry.serverId === connectionServerId) ?? null)
++    : null;
++  const serverLabel =
++    daemon?.label ?? connectionServerId ?? t("agentPanel.unavailable.selectedHost");
++  const isUnknownDaemon = Boolean(connectionServerId && !daemon);
++  const connectionStatus: HostRuntimeConnectionStatus =
++    isUnknownDaemon && runtimeConnectionStatus === "connecting"
++      ? "offline"
++      : runtimeConnectionStatus;
++  const lastConnectionError = runtimeLastError;
++
+   if (!resolvedServerId || (!runtimeClient && !hasCachedAgent)) {
+-    return <AgentSessionUnavailableState {...hostUnavailable} />;
++    return (
++      <AgentSessionUnavailableState
++        serverLabel={serverLabel}
++        connectionStatus={connectionStatus}
++        lastError={lastConnectionError}
++        isUnknownDaemon={isUnknownDaemon}
++        t={t}
++      />
++    );
+   }
+-  const connectionStatus = hostUnavailable.connectionStatus;
+ 
+   return (
+     <AgentPanelBody
+@@ -1742,9 +1735,15 @@ function AgentSessionUnavailableState({
+   serverLabel,
+   connectionStatus,
+   lastError,
+-  isUnknownDaemon,
++  isUnknownDaemon = false,
+   t,
+-}: HostUnavailableState) {
++}: {
++  serverLabel: string;
++  connectionStatus: HostRuntimeConnectionStatus;
++  lastError: string | null;
++  isUnknownDaemon?: boolean;
++  t: TFunction;
++}) {
+   if (isUnknownDaemon) {
+     return (
+       <View style={styles.container}>
+diff --git a/packages/app/src/provider-selection/provider-selection.ts b/packages/app/src/provider-selection/provider-selection.ts
+index 6af289b66f..ca8be17b85 100644
+--- a/packages/app/src/provider-selection/provider-selection.ts
++++ b/packages/app/src/provider-selection/provider-selection.ts
+@@ -329,9 +329,6 @@ export function resolveSubmissionReadiness(input: {
+   if (!input.allowsEmptyAutoSubmit && !input.text.trim()) {
+     return { ok: false, reason: i18n.t("providerSelection.readiness.initialPromptRequired") };
+   }
+-  if (!input.hasClient) {
+-    return { ok: false, reason: i18n.t("providerSelection.readiness.hostDisconnected") };
+-  }
+   if (input.providerCount === 0) {
+     return { ok: false, reason: i18n.t("providerSelection.readiness.noProviders") };
+   }
+@@ -348,5 +345,8 @@ export function resolveSubmissionReadiness(input: {
+   if (!input.workspaceDirectory) {
+     return { ok: false, reason: i18n.t("providerSelection.readiness.workspaceDirectoryNotFound") };
+   }
++  if (!input.hasClient) {
++    return { ok: false, reason: i18n.t("providerSelection.readiness.hostDisconnected") };
++  }
+   return { ok: true };
+ }

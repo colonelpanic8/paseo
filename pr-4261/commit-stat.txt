@@ -1,0 +1,4 @@
+6510f51666 (HEAD -> evidence/pr-4261, fork/downed-host-model-selection) test(app): extract offline draft reconnect scenario
+ .../e2e/browser/offline-draft-reconnect.spec.ts    |  77 ++-------------
+ .../e2e/support/helpers/offline-draft-reconnect.ts | 103 +++++++++++++++++++++
+ 2 files changed, 110 insertions(+), 70 deletions(-)
