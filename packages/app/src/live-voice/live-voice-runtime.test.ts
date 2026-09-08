@@ -971,6 +971,18 @@ describe("Live Voice runtime memory", () => {
     });
   });
 
+  it("passes a link's profile override through to the resolver", async () => {
+    const read = vi.fn((_serverId: string, override?: string | null) =>
+      override === undefined ? { profileId: PROFILE_ID, newThread: true } : { newThread: true },
+    );
+    const harness = createHarness({ memory: { read } });
+
+    await harness.runtime.start(SERVER_ID, { profileId: null });
+
+    expect(read).toHaveBeenCalledWith(SERVER_ID, null);
+    expect(harness.client.startLiveVoice.mock.calls[0]?.[0]).not.toHaveProperty("profileId");
+  });
+
   it("sends the profile and a new-thread request, leaves settings to the profile, and remembers the opened thread", async () => {
     const listVoices = vi.fn(async () => ["juniper"]);
     const remembered = vi.fn();
