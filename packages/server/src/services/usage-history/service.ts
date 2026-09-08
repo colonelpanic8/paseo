@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import path from "node:path";
 import type { Logger } from "pino";
 import type {
@@ -60,6 +60,8 @@ export interface UsageHistoryServiceOptions {
   readProviderOverrides?: () => Readonly<Record<string, unknown>> | undefined;
   fetch?: typeof fetch;
   now?: () => number;
+  /** Reported on every source so a multi-host client can tell directories apart. */
+  hostId?: string;
 }
 
 interface RateSnapshot {
@@ -131,6 +133,7 @@ export class UsageHistoryService {
   private readonly fetchApi: typeof fetch;
   private readonly now: () => number;
   private readonly scanCachePath: string;
+  private readonly hostId: string;
   private readonly ratesCachePath: string;
   private readonly fileCache: ScanCache = new Map();
   private scanCacheLoad: Promise<void> | null = null;
@@ -155,6 +158,7 @@ export class UsageHistoryService {
     this.now = options.now ?? Date.now;
     const persistenceDir = path.join(options.paseoHome, "usage-history");
     this.scanCachePath = path.join(persistenceDir, "scan-cache.json");
+    this.hostId = options.hostId ?? hostname();
     this.ratesCachePath = path.join(persistenceDir, "model-rates.json");
   }
 
@@ -203,6 +207,8 @@ export class UsageHistoryService {
         providerId: source.home.providerId,
         label: source.home.label,
         path: source.home.dir,
+        hostId: this.hostId,
+        volumeId: await readVolumeId(source.home.dir),
       };
       if (source.status !== "ok") {
         sources.push({
@@ -491,4 +497,14 @@ function readErrorCode(error: unknown): string | null {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** `device:inode` of a directory, or empty when it cannot be stat'd. */
+async function readVolumeId(dir: string): Promise<string> {
+  try {
+    const stats = await fs.stat(dir);
+    return `${stats.dev}:${stats.ino}`;
+  } catch {
+    return "";
+  }
 }
