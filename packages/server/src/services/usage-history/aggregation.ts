@@ -62,8 +62,13 @@ export class UsageAggregator {
     this.#toDay = makeDayFormatter(options.timeZone);
   }
 
-  /** Returns whether the record contributed to the requested window. */
-  add(record: UsageRecord): boolean {
+  /**
+   * `providerId` is the configured provider owning the transcript home the record came from; it
+   * splits accounts of the same kind apart without splitting the chart series.
+   *
+   * Returns whether the record contributed to the requested window.
+   */
+  add(record: UsageRecord, providerId: string): boolean {
     if (record.dedupeKey !== null) {
       if (this.#seen.has(record.dedupeKey)) {
         this.#duplicatesDropped += 1;
@@ -78,7 +83,7 @@ export class UsageAggregator {
       return false;
     }
 
-    const key = `${day}\u0000${record.provider}\u0000${record.model}`;
+    const key = `${day}\u0000${record.provider}\u0000${providerId}\u0000${record.model}`;
     let bucket = this.#buckets.get(key);
     if (bucket === undefined) {
       bucket = {
@@ -112,10 +117,11 @@ export class UsageAggregator {
   finish(): AggregateResult {
     const buckets: ProviderUsageHistoryBucket[] = [];
     for (const [key, bucket] of this.#buckets) {
-      const [day = "", provider = "", model = ""] = key.split("\u0000");
+      const [day = "", provider = "", providerId = "", model = ""] = key.split("\u0000");
       buckets.push({
         day,
         provider,
+        providerId,
         model,
         totals: bucket.totals,
         costUsd: bucket.costUsd,
@@ -130,6 +136,7 @@ export class UsageAggregator {
       (a, b) =>
         a.day.localeCompare(b.day) ||
         a.provider.localeCompare(b.provider) ||
+        (a.providerId ?? "").localeCompare(b.providerId ?? "") ||
         a.model.localeCompare(b.model),
     );
     return {

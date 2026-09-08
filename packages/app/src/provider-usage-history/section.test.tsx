@@ -3,7 +3,7 @@
  */
 import { i18n as testI18n } from "@/i18n/i18next";
 import React, { type ReactElement } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -122,6 +122,44 @@ const FIXTURE: ProviderUsageHistoryPayload = {
   scanDurationMs: 240,
 };
 
+/**
+ * The same window on a host that configures three Codex providers and one
+ * Claude. Buckets carry `providerId`; the sources name each home.
+ */
+const MULTI_PROVIDER_FIXTURE: ProviderUsageHistoryPayload = {
+  ...FIXTURE,
+  buckets: [
+    { ...FIXTURE.buckets[0], providerId: "claude" } as ProviderUsageHistoryPayload["buckets"][0],
+    { ...FIXTURE.buckets[1], providerId: "codex" } as ProviderUsageHistoryPayload["buckets"][0],
+    {
+      ...FIXTURE.buckets[1],
+      day: "2026-09-07",
+      providerId: "codex-colonel",
+      costUsd: 6,
+    } as ProviderUsageHistoryPayload["buckets"][0],
+  ],
+  sources: [
+    { ...FIXTURE.sources[0], providerId: "claude", label: "Claude Code" },
+    { ...FIXTURE.sources[1], providerId: "codex", label: "Codex", distinctSessions: 3 },
+    {
+      ...FIXTURE.sources[1],
+      providerId: "codex-colonel",
+      label: "Codex (Colonel)",
+      path: "/home/dev/.codex-colonel",
+      distinctSessions: 4,
+    },
+    {
+      ...FIXTURE.sources[1],
+      providerId: "codex-ben",
+      label: "Codex (Ben)",
+      path: "/home/dev/.codex-ben",
+      status: "failed",
+      distinctSessions: 0,
+      message: "EACCES",
+    },
+  ] as ProviderUsageHistoryPayload["sources"],
+};
+
 function createClient() {
   return {
     on: vi.fn(() => () => undefined),
@@ -184,6 +222,62 @@ describe("ProviderUsageHistorySection", () => {
     // Processed tokens exclude reasoning tokens, which are part of output.
     expect(screen.getByText("Processed tokens").parentElement?.textContent).toContain("11.5K");
     expect(screen.getByText("Cached input").parentElement?.textContent).toContain("4K");
+  });
+
+  it("keeps a kind with one configured provider free of sub-rows", async () => {
+    renderSection(createClient());
+
+    await screen.findByTestId("usage-history-headline");
+    expect(screen.queryByTestId("usage-history-provider-sub-claude")).toBeNull();
+    expect(screen.queryByTestId("usage-history-provider-sub-codex")).toBeNull();
+    expect(screen.queryByTestId("usage-history-unreadable")).toBeNull();
+  });
+
+  it("splits a kind with several configured providers into labelled sub-rows", async () => {
+    const client = createClient();
+    client.readProviderUsageHistory.mockResolvedValue(MULTI_PROVIDER_FIXTURE);
+    renderSection(client);
+
+    await screen.findByTestId("usage-history-headline");
+
+    // The kind's own row still reports the combined total.
+    const codex = screen.getByTestId("usage-history-provider-codex").textContent;
+    expect(codex).toContain("Codex");
+    expect(codex).toContain("$8.00");
+
+    expect(screen.getByTestId("usage-history-provider-sub-codex-colonel").textContent).toBe(
+      "Codex (Colonel)$6.00",
+    );
+    expect(screen.getByTestId("usage-history-provider-sub-codex").textContent).toBe("Codex$2.00");
+    // Claude has one configured provider, so it keeps the single row.
+    expect(screen.queryByTestId("usage-history-provider-sub-claude")).toBeNull();
+  });
+
+  it("names a provider whose transcript home could not be read", async () => {
+    const client = createClient();
+    client.readProviderUsageHistory.mockResolvedValue(MULTI_PROVIDER_FIXTURE);
+    renderSection(client);
+
+    expect((await screen.findByTestId("usage-history-unreadable")).textContent).toBe(
+      "Totals are incomplete: could not read transcripts for Codex (Ben)",
+    );
+  });
+
+  it("breaks usage down per configured provider", async () => {
+    const client = createClient();
+    client.readProviderUsageHistory.mockResolvedValue(MULTI_PROVIDER_FIXTURE);
+    renderSection(client);
+
+    fireEvent.click(await screen.findByText("Provider"));
+
+    const colonel = screen.getByTestId("usage-history-provider-total-codex-colonel").textContent;
+    expect(colonel).toContain("Codex (Colonel)");
+    expect(colonel).toContain("$6.00");
+    expect(colonel).toContain("54.5%");
+    expect(screen.getByTestId("usage-history-provider-total-claude").textContent).toContain(
+      "Claude Code",
+    );
+    expect(screen.queryByTestId("usage-history-model-sonnet-5")).toBeNull();
   });
 
   it("shows the empty state and drops the breakdown when the window has no activity", async () => {

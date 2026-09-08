@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildChartColumns, niceScale } from "./chart-data";
-import { deriveProviderUsageHistory } from "./derive";
+import { configuredProvidersByKind, deriveProviderUsageHistory } from "./derive";
 import type {
   ProviderUsageHistoryBucket,
   ProviderUsageHistoryPayload,
@@ -10,6 +10,7 @@ import type {
 interface BucketOverrides {
   day: string;
   provider: string;
+  providerId?: string;
   model: string;
   uncachedInputTokens?: number;
   cachedInputTokens?: number;
@@ -28,6 +29,7 @@ function bucket(overrides: BucketOverrides): ProviderUsageHistoryBucket {
   return {
     day: overrides.day,
     provider: overrides.provider,
+    ...(overrides.providerId === undefined ? {} : { providerId: overrides.providerId }),
     model: overrides.model,
     totals: {
       uncachedInputTokens: overrides.uncachedInputTokens ?? 0,
@@ -58,6 +60,22 @@ function source(
     skippedFiles: 0,
     distinctSessions,
     message: null,
+  };
+}
+
+/** A source from a daemon that scans one home per configured provider. */
+function configuredSource(
+  provider: string,
+  providerId: string,
+  label: string,
+  distinctSessions: number,
+  status: ProviderUsageHistorySource["status"] = "ok",
+): ProviderUsageHistorySource {
+  return {
+    ...source(provider, distinctSessions, status),
+    providerId,
+    label,
+    path: `/home/dev/.${providerId}`,
   };
 }
 
@@ -190,12 +208,117 @@ describe("deriveProviderUsageHistory", () => {
     expect(totals.daily[1]?.byProvider.get("codex")).toEqual({ costUsd: 2, totalTokens: 3_000 });
   });
 
+  it("rolls two configured providers of one kind into the kind and into their own rows", () => {
+    const totals = deriveProviderUsageHistory(
+      payload(
+        [
+          bucket({
+            day: "2026-09-06",
+            provider: "codex",
+            providerId: "codex",
+            model: "gpt-5",
+            outputTokens: 1_000,
+            costUsd: 1,
+          }),
+          bucket({
+            day: "2026-09-06",
+            provider: "codex",
+            providerId: "codex-colonel",
+            model: "gpt-5",
+            outputTokens: 3_000,
+            costUsd: 3,
+          }),
+        ],
+        [
+          configuredSource("codex", "codex", "Codex", 2),
+          configuredSource("codex", "codex-colonel", "Codex (Colonel)", 4),
+        ],
+      ),
+    );
+
+    expect(
+      totals.providers.map((entry) => [entry.provider, entry.costUsd, entry.sessions]),
+    ).toEqual([["codex", 4, 6]]);
+    expect(
+      totals.configuredProviders.map((entry) => [
+        entry.providerId,
+        entry.provider,
+        entry.label,
+        entry.costUsd,
+        entry.totalTokens,
+        entry.sessions,
+      ]),
+    ).toEqual([
+      ["codex-colonel", "codex", "Codex (Colonel)", 3, 3_000, 4],
+      ["codex", "codex", "Codex", 1, 1_000, 2],
+    ]);
+    expect(totals.configuredProviders[0]?.costShare).toBeCloseTo(3 / 4);
+    expect(totals.configuredProviders[0]?.tokenShare).toBeCloseTo(3_000 / 4_000);
+  });
+
+  it("attributes everything to the base kind when the daemon sends no configured ids", () => {
+    const totals = deriveProviderUsageHistory(SAMPLE);
+
+    expect(
+      totals.configuredProviders.map((entry) => [entry.providerId, entry.label, entry.costUsd]),
+    ).toEqual([
+      ["claude", "Claude Code", 4],
+      ["codex", "Codex", 2],
+    ]);
+    expect([...configuredProvidersByKind(totals.configuredProviders).keys()]).toEqual([
+      "claude",
+      "codex",
+    ]);
+  });
+
+  it("names a failed home so the missing tokens are visible, and stays quiet for a missing one", () => {
+    const failed = deriveProviderUsageHistory(
+      payload(
+        [
+          bucket({
+            day: "2026-09-06",
+            provider: "codex",
+            providerId: "codex",
+            model: "gpt-5",
+            costUsd: 1,
+          }),
+        ],
+        [
+          configuredSource("codex", "codex", "Codex", 1),
+          configuredSource("codex", "codex-ben", "Codex (Ben)", 0, "failed"),
+        ],
+      ),
+    );
+    expect(failed.unreadableProviders).toEqual(["Codex (Ben)"]);
+
+    const missing = deriveProviderUsageHistory(
+      payload(
+        [
+          bucket({
+            day: "2026-09-06",
+            provider: "codex",
+            providerId: "codex",
+            model: "gpt-5",
+            costUsd: 1,
+          }),
+        ],
+        [
+          configuredSource("codex", "codex", "Codex", 1),
+          configuredSource("codex", "codex-ben", "Codex (Ben)", 0, "missing"),
+        ],
+      ),
+    );
+    expect(missing.unreadableProviders).toEqual([]);
+    expect(missing.configuredProviders.map((entry) => entry.providerId)).toEqual(["codex"]);
+  });
+
   it("reports zero shares for an empty window", () => {
     const totals = deriveProviderUsageHistory(payload([], [source("claude", 0)]));
 
     expect(totals.costUsd).toBe(0);
     expect(totals.totalTokens).toBe(0);
     expect(totals.providers).toEqual([]);
+    expect(totals.configuredProviders).toEqual([]);
     expect(totals.daily).toEqual([]);
   });
 });

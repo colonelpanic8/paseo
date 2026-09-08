@@ -19,6 +19,11 @@ import {
   type CachedFile,
   type ScanCache,
 } from "./scan-cache.js";
+import {
+  dedupeTranscriptHomes,
+  resolveTranscriptHomes,
+  type TranscriptHome,
+} from "./provider-homes.js";
 import { listTranscriptFiles, readTranscriptRecords } from "./transcript-reader.js";
 import type { UsageProvider, UsageRecord } from "./transcripts.js";
 
@@ -45,6 +50,11 @@ export interface UsageHistoryServiceOptions {
   logger: Logger;
   claudeConfigDir?: string;
   codexHome?: string;
+  /**
+   * Reads `agents.providers` at scan time. Every configured provider extending a transcript-keeping
+   * built-in owns a home, and a config change must take effect without a daemon restart.
+   */
+  readProviderOverrides?: () => Readonly<Record<string, unknown>> | undefined;
   fetch?: typeof fetch;
   now?: () => number;
 }
@@ -54,19 +64,13 @@ interface RateSnapshot {
   document: unknown;
 }
 
-interface TranscriptSource {
-  provider: UsageProvider;
-  dir: string;
-}
-
 interface ScannedFile {
   path: string;
   records: readonly UsageRecord[];
 }
 
 interface ScannedSource {
-  provider: UsageProvider;
-  dir: string;
+  home: TranscriptHome;
   status: ProviderUsageHistorySource["status"];
   files: readonly ScannedFile[];
   message: string | null;
@@ -102,7 +106,8 @@ export function validateUsageHistoryWindow(input: UsageHistoryReadInput): void {
 /** Scans provider-owned transcripts and aggregates API-equivalent usage cost. */
 export class UsageHistoryService {
   private readonly logger: Logger;
-  private readonly sources: readonly TranscriptSource[];
+  private readonly defaultHomes: Record<UsageProvider, string>;
+  private readonly readProviderOverrides: () => Readonly<Record<string, unknown>> | undefined;
   private readonly fetchApi: typeof fetch;
   private readonly now: () => number;
   private readonly scanCachePath: string;
@@ -118,16 +123,14 @@ export class UsageHistoryService {
 
   constructor(options: UsageHistoryServiceOptions) {
     this.logger = options.logger.child({ module: "usage-history" });
-    const claudeConfigDir =
-      options.claudeConfigDir ??
-      process.env["CLAUDE_CONFIG_DIR"] ??
-      path.join(homedir(), ".claude");
-    const codexHome =
-      options.codexHome ?? process.env["CODEX_HOME"] ?? path.join(homedir(), ".codex");
-    this.sources = [
-      { provider: "claude", dir: path.join(claudeConfigDir, "projects") },
-      { provider: "codex", dir: path.join(codexHome, "sessions") },
-    ];
+    this.defaultHomes = {
+      claude:
+        options.claudeConfigDir ??
+        process.env["CLAUDE_CONFIG_DIR"] ??
+        path.join(homedir(), ".claude"),
+      codex: options.codexHome ?? process.env["CODEX_HOME"] ?? path.join(homedir(), ".codex"),
+    };
+    this.readProviderOverrides = options.readProviderOverrides ?? (() => undefined);
     this.fetchApi = options.fetch ?? fetch;
     this.now = options.now ?? Date.now;
     const persistenceDir = path.join(options.paseoHome, "usage-history");
@@ -168,10 +171,15 @@ export class UsageHistoryService {
     const walkedRoots: string[] = [];
 
     for (const source of scannedSources) {
+      const identity = {
+        provider: source.home.provider,
+        providerId: source.home.providerId,
+        label: source.home.label,
+        path: source.home.dir,
+      };
       if (source.status !== "ok") {
         sources.push({
-          provider: source.provider,
-          path: source.dir,
+          ...identity,
           status: source.status,
           scannedFiles: 0,
           skippedFiles: 0,
@@ -181,7 +189,7 @@ export class UsageHistoryService {
         continue;
       }
 
-      walkedRoots.push(source.dir);
+      walkedRoots.push(source.home.dir);
       let scannedFiles = 0;
       let skippedFiles = 0;
       const sessionIds = new Set<string>();
@@ -193,14 +201,13 @@ export class UsageHistoryService {
         }
         scannedFiles += 1;
         for (const record of file.records) {
-          if (aggregator.add(record) && record.sessionId.length > 0) {
+          if (aggregator.add(record, source.home.providerId) && record.sessionId.length > 0) {
             sessionIds.add(record.sessionId);
           }
         }
       }
       sources.push({
-        provider: source.provider,
-        path: source.dir,
+        ...identity,
         status: "ok",
         scannedFiles,
         skippedFiles,
@@ -233,16 +240,22 @@ export class UsageHistoryService {
   }
 
   private async collectSources(windowStartMs: number): Promise<readonly ScannedSource[]> {
+    const homes = await dedupeTranscriptHomes(
+      resolveTranscriptHomes({
+        overrides: this.readProviderOverrides(),
+        defaultHomes: this.defaultHomes,
+      }),
+    );
     const scanned: ScannedSource[] = [];
-    for (const source of this.sources) {
+    for (const home of homes) {
       let stats;
       try {
-        stats = await fs.stat(source.dir);
+        stats = await fs.stat(home.dir);
       } catch (error) {
         const code = readErrorCode(error);
         const isMissing = code === "ENOENT" || code === "ENOTDIR";
         scanned.push({
-          ...source,
+          home,
           status: isMissing ? "missing" : "failed",
           files: [],
           message: isMissing
@@ -253,7 +266,7 @@ export class UsageHistoryService {
       }
       if (!stats.isDirectory()) {
         scanned.push({
-          ...source,
+          home,
           status: "missing",
           files: [],
           message: "No transcript directory on this environment.",
@@ -263,10 +276,10 @@ export class UsageHistoryService {
 
       let transcriptFiles;
       try {
-        transcriptFiles = await listTranscriptFiles(source.dir, windowStartMs);
+        transcriptFiles = await listTranscriptFiles(home.dir, windowStartMs);
       } catch (error) {
         scanned.push({
-          ...source,
+          home,
           status: "failed",
           files: [],
           message: `Could not scan transcript directory: ${errorMessage(error)}`,
@@ -278,10 +291,10 @@ export class UsageHistoryService {
       for (const file of transcriptFiles) {
         files.push({
           path: file.path,
-          records: await this.readFileRecords(file.path, file.size, file.mtimeMs, source.provider),
+          records: await this.readFileRecords(file.path, file.size, file.mtimeMs, home.provider),
         });
       }
-      scanned.push({ ...source, status: "ok", files, message: null });
+      scanned.push({ home, status: "ok", files, message: null });
     }
     return scanned;
   }

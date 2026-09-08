@@ -744,6 +744,7 @@ export class VoiceAssistantWebSocketServer {
     this.usageHistoryService = new UsageHistoryService({
       paseoHome,
       logger: this.logger,
+      readProviderOverrides: () => this.daemonConfigStore.get().providers,
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);

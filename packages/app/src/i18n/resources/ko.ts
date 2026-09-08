@@ -1985,6 +1985,7 @@ export const ko: TranslationResources = {
         costSubline: "{{sessions}} · API 추정치",
         shareOfCost: "비용의 {{share}} · 토큰 {{tokens}}",
         shareOfTokens: "토큰의 {{share}} · {{cost}}",
+        unreadableProviders: "합계가 불완전합니다: {{providers}}의 세션 기록을 읽을 수 없습니다",
       },
       chart: {
         titleCost: "일별 비용",
@@ -2001,10 +2002,12 @@ export const ko: TranslationResources = {
       },
       breakdown: {
         title: "분석",
+        provider: "프로바이더",
         model: "모델",
         day: "일",
       },
       table: {
+        provider: "프로바이더",
         model: "모델",
         cost: "비용",
         share: "비중",
