@@ -1930,8 +1930,8 @@ export const zhCN: TranslationResources = {
       host: "概览",
     },
     usageHistory: {
-      incompleteCosts:
-        "部分活动没有价格。费用和图表柱仅包含已知价格的活动；≥ 表示下限，— 表示费用未知。",
+      unpricedNote_one: "估算已排除 {{count}} 条价格未知的响应",
+      unpricedNote_other: "估算已排除 {{count}} 条价格未知的响应",
       readFailed: "请检查主机连接后重试。",
       title: "使用历史",
       info: "从每台已连接主机上各 Provider CLI 的会话记录中读取的 token 与费用汇总。费用为按 API 价目表估算的结果，并非账单。",
@@ -1958,7 +1958,9 @@ export const zhCN: TranslationResources = {
         unsupported_other: "{{hosts}} 运行的 Paseo 版本过旧，已排除",
         failed_one: "无法读取 {{hosts}} 的会话记录",
         failed_other: "无法读取 {{hosts}} 的会话记录",
-        duplicates: "仅计一次：{{sources}}",
+        duplicates: "仅计一次：{{groups}}",
+        duplicateGroup_one: "{{hosts}} 与 {{claimedBy}} 读取相同的记录",
+        duplicateGroup_other: "{{hosts}} 与 {{claimedBy}} 读取相同的记录",
       },
       metric: {
         cost: "费用",

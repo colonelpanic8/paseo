@@ -1951,8 +1951,8 @@ export const ar: TranslationResources = {
       host: "نظرة عامة",
     },
     usageHistory: {
-      incompleteCosts:
-        "بعض الأنشطة بلا سعر. تشمل التكاليف وأعمدة الرسم الأنشطة المسعّرة فقط؛ تشير ≥ إلى الحد الأدنى و— إلى تكلفة غير معروفة.",
+      unpricedNote_one: "التقدير يستثني {{count}} استجابة بلا سعر معروف",
+      unpricedNote_other: "التقدير يستثني {{count}} استجابة بلا سعر معروف",
       readFailed: "تحقق من الاتصال بالمضيف وحاول مرة أخرى.",
       title: "سجل الاستخدام",
       info: "إجماليات الرموز والتكلفة المقروءة من سجلات جلسات أدوات المزوّدين على كل مضيف متصل. التكاليف تقديرات معادلة لأسعار API وليست فاتورة.",
@@ -1979,7 +1979,9 @@ export const ar: TranslationResources = {
         unsupported_other: "{{hosts}} تشغّل إصدارًا أقدم من Paseo وتم استبعادها",
         failed_one: "تعذّرت قراءة السجلات من {{hosts}}",
         failed_other: "تعذّرت قراءة السجلات من {{hosts}}",
-        duplicates: "محسوب مرة واحدة: {{sources}}",
+        duplicates: "محسوب مرة واحدة: {{groups}}",
+        duplicateGroup_one: "{{hosts}} يقرأ نفس النصوص التي يقرأها {{claimedBy}}",
+        duplicateGroup_other: "{{hosts}} تقرأ نفس النصوص التي يقرأها {{claimedBy}}",
       },
       metric: {
         cost: "التكلفة",

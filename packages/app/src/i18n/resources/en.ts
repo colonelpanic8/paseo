@@ -1996,8 +1996,8 @@ export const en = {
       host: "Overview",
     },
     usageHistory: {
-      incompleteCosts:
-        "Some activity has no price. Costs and chart bars include only priced activity; ≥ marks a lower bound and — an unknown cost.",
+      unpricedNote_one: "Estimate excludes {{count}} response with no known price",
+      unpricedNote_other: "Estimate excludes {{count}} responses with no known price",
       readFailed: "Check the host connection and try again.",
       title: "Usage history",
       info: "Token and cost totals read from the provider CLIs' own session transcripts on every connected host. Costs are API-equivalent estimates, not a bill.",
@@ -2024,7 +2024,9 @@ export const en = {
         unsupported_other: "{{hosts}} run an older Paseo and are excluded",
         failed_one: "{{hosts}} could not read transcripts",
         failed_other: "{{hosts}} could not read transcripts",
-        duplicates: "Counted once: {{sources}}",
+        duplicates: "Counted once: {{groups}}",
+        duplicateGroup_one: "{{hosts}} reads the same transcripts as {{claimedBy}}",
+        duplicateGroup_other: "{{hosts}} read the same transcripts as {{claimedBy}}",
       },
       metric: {
         cost: "Cost",

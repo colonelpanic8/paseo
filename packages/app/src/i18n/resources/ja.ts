@@ -1969,8 +1969,8 @@ export const ja: TranslationResources = {
       host: "概要",
     },
     usageHistory: {
-      incompleteCosts:
-        "料金が不明なアクティビティがあります。費用とグラフの棒には料金が判明している分のみを含みます。≥ は下限、— は費用不明を示します。",
+      unpricedNote_one: "見積もりから、料金が不明な {{count}} 件の応答を除外しています",
+      unpricedNote_other: "見積もりから、料金が不明な {{count}} 件の応答を除外しています",
       readFailed: "ホストへの接続を確認して、もう一度お試しください。",
       title: "使用履歴",
       info: "接続中の各ホストのプロバイダー CLI のセッション記録から読み取ったトークンとコストの合計です。コストは API 相当の概算であり、請求額ではありません。",
@@ -1997,7 +1997,9 @@ export const ja: TranslationResources = {
         unsupported_other: "{{hosts}} は古い Paseo を実行しているため除外されました",
         failed_one: "{{hosts}} の記録を読み取れませんでした",
         failed_other: "{{hosts}} の記録を読み取れませんでした",
-        duplicates: "1 回だけ集計: {{sources}}",
+        duplicates: "1 回だけ集計: {{groups}}",
+        duplicateGroup_one: "{{hosts}} は {{claimedBy}} と同じトランスクリプトを読み取っています",
+        duplicateGroup_other: "{{hosts}} は {{claimedBy}} と同じトランスクリプトを読み取っています",
       },
       metric: {
         cost: "コスト",

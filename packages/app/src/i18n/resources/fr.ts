@@ -2002,8 +2002,8 @@ export const fr: TranslationResources = {
       host: "Aperçu",
     },
     usageHistory: {
-      incompleteCosts:
-        "Certaines activités ne sont pas tarifées. Les coûts et les barres incluent uniquement les activités tarifées ; ≥ indique un minimum et — un coût inconnu.",
+      unpricedNote_one: "L’estimation exclut {{count}} réponse sans prix connu",
+      unpricedNote_other: "L’estimation exclut {{count}} réponses sans prix connu",
       readFailed: "Vérifiez la connexion à l’hôte et réessayez.",
       title: "Historique d'utilisation",
       info: "Totaux de jetons et de coûts lus dans les transcriptions de session des CLI des fournisseurs sur chaque hôte connecté. Les coûts sont des estimations équivalentes à l'API, pas une facture.",
@@ -2031,7 +2031,9 @@ export const fr: TranslationResources = {
         unsupported_other: "{{hosts}} exécutent une version plus ancienne de Paseo et sont exclus",
         failed_one: "{{hosts}} n'a pas pu lire les transcriptions",
         failed_other: "{{hosts}} n'ont pas pu lire les transcriptions",
-        duplicates: "Compté une seule fois : {{sources}}",
+        duplicates: "Compté une seule fois : {{groups}}",
+        duplicateGroup_one: "{{hosts}} lit les mêmes transcriptions que {{claimedBy}}",
+        duplicateGroup_other: "{{hosts}} lisent les mêmes transcriptions que {{claimedBy}}",
       },
       metric: {
         cost: "Coût",

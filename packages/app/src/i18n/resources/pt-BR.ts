@@ -1983,8 +1983,8 @@ export const ptBR: TranslationResources = {
       host: "Visão geral",
     },
     usageHistory: {
-      incompleteCosts:
-        "Algumas atividades não têm preço. Os custos e as barras incluem apenas atividades com preço; ≥ indica um limite inferior e — um custo desconhecido.",
+      unpricedNote_one: "A estimativa exclui {{count}} resposta sem preço conhecido",
+      unpricedNote_other: "A estimativa exclui {{count}} respostas sem preço conhecido",
       readFailed: "Verifique a conexão com o host e tente novamente.",
       title: "Histórico de uso",
       info: "Totais de tokens e custo lidos das transcrições de sessão das CLIs dos provedores em cada host conectado. Os custos são estimativas equivalentes à API, não uma fatura.",
@@ -2011,7 +2011,9 @@ export const ptBR: TranslationResources = {
         unsupported_other: "{{hosts}} usam uma versão antiga do Paseo e ficaram de fora",
         failed_one: "{{hosts}} não conseguiu ler as transcrições",
         failed_other: "{{hosts}} não conseguiram ler as transcrições",
-        duplicates: "Contado uma vez: {{sources}}",
+        duplicates: "Contado uma vez: {{groups}}",
+        duplicateGroup_one: "{{hosts}} lê as mesmas transcrições que {{claimedBy}}",
+        duplicateGroup_other: "{{hosts}} leem as mesmas transcrições que {{claimedBy}}",
       },
       metric: {
         cost: "Custo",

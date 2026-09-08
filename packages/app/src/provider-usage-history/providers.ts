@@ -14,6 +14,22 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 const KNOWN_PROVIDERS = new Set<string>(PROVIDER_ORDER);
 
+/**
+ * Provider brand colors, and the only place one lives.
+ *
+ * A brand color is fixed by whoever owns the brand, so it cannot come from the
+ * theme; `styles/identity-colors.ts` is the precedent for a theme-independent
+ * hex, and this table is scoped to the usage-history page. Anything not listed
+ * draws in the theme's own foreground, which reads on every surface.
+ */
+export const PROVIDER_BRAND_COLORS: Record<string, string> = {
+  claude: "#d97757",
+};
+
+export function providerSeriesColor(provider: string, foreground: string): string {
+  return PROVIDER_BRAND_COLORS[provider] ?? foreground;
+}
+
 export function providerLabel(provider: string): string {
   return PROVIDER_LABELS[provider] ?? provider;
 }

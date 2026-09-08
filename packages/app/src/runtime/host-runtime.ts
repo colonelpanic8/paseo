@@ -2543,6 +2543,61 @@ function serializeConnectionStatuses(
     .join("\n");
 }
 
+/**
+ * Where each host is reached right now, formatted for display. Two hosts can
+ * carry the same label — three daemons on one machine all call themselves after
+ * it — and the endpoint is what tells them apart.
+ *
+ * Subscribes to the serialized labels themselves, for the reason spelled out on
+ * {@link useHostRuntimeConnectionStatuses}.
+ */
+export function useHostRuntimeActiveConnectionLabels(
+  serverIds: readonly string[],
+): ReadonlyMap<string, string> {
+  const store = getHostRuntimeStore();
+  const serialized = useSyncExternalStore(
+    (onStoreChange) => store.subscribeAll(onStoreChange),
+    () => serializeConnectionLabels(store, serverIds),
+    () => serializeConnectionLabels(store, serverIds),
+  );
+
+  return useMemo(() => {
+    const entries: Array<[string, string]> =
+      serialized === ""
+        ? []
+        : serialized.split("\n").flatMap((line) => {
+            const separator = line.lastIndexOf("\t");
+            const label = line.slice(separator + 1);
+            return label === "" ? [] : [[line.slice(0, separator), label] as [string, string]];
+          });
+    return new Map(entries);
+  }, [serialized]);
+}
+
+function serializeConnectionLabels(store: HostRuntimeStore, serverIds: readonly string[]): string {
+  return serverIds
+    .map((serverId) => {
+      const connection = store.getSnapshot(serverId)?.activeConnection ?? null;
+      return `${serverId}\t${connection === null ? "" : formatActiveConnectionLabel(connection)}`;
+    })
+    .join("\n");
+}
+
+// Standard secure/plain web ports carry no information in the host display, so
+// "relay.paseo.sh:443" reads as "relay.paseo.sh" while "127.0.0.1:6767" is kept.
+function formatConnectionEndpoint(endpoint: string): string {
+  return endpoint.replace(/:(?:443|80)$/, "");
+}
+
+// Socket/pipe transports have no host:port — their endpoint is a filesystem
+// path, so they read as "Local". TCP and relay show the address being used.
+export function formatActiveConnectionLabel(connection: ActiveConnection): string {
+  if (connection.type === "directSocket" || connection.type === "directPipe") {
+    return "Local";
+  }
+  return formatConnectionEndpoint(connection.endpoint);
+}
+
 export function useHostRuntimeLastError(serverId: string): string | null {
   const store = getHostRuntimeStore();
   return useSyncExternalStore(
