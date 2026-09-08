@@ -36,12 +36,7 @@ export async function fetchAgentCommands(input: {
     agentId: input.agentId,
     draftConfig: input.draftConfig,
   });
-  // Draft listings spin up a provider session on demand, so a failure here is a
-  // real failure the user needs to see: without this the daemon's error is
-  // dropped and a broken provider is indistinguishable from "no skills". Only
-  // draft listings throw — a draft surface with no config yet answers "agent not
-  // found", which is an ordinary state rather than something worth reporting.
-  if (response.error && input.draftConfig) {
+  if (response.error) {
     throw new Error(response.error);
   }
   return response.commands as AgentSlashCommand[];
