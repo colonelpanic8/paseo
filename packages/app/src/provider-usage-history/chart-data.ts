@@ -15,7 +15,7 @@ export interface ProviderUsageHistoryChartBand {
 
 export interface ProviderUsageHistoryChartColumn {
   readonly day: string;
-  /** In the given provider order, i.e. bottom of the stack first. */
+  /** One per provider, in the given provider order. */
   readonly bands: readonly ProviderUsageHistoryChartBand[];
   readonly total: number;
   readonly unpricedRecords: number;
@@ -55,6 +55,18 @@ export function buildChartColumns(
       total: bands.reduce((sum, band) => sum + band.value, 0),
     };
   });
+}
+
+/**
+ * The tallest single provider-day. The chart layers its series rather than
+ * stacking them, so each measures from zero and a combined peak would leave the
+ * plot permanently half empty.
+ */
+export function seriesPeak(columns: readonly ProviderUsageHistoryChartColumn[]): number {
+  return columns.reduce(
+    (max, column) => column.bands.reduce((inner, band) => Math.max(inner, band.value), max),
+    0,
+  );
 }
 
 function stepMultiple(normalized: number): number {

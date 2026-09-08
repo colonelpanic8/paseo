@@ -36,9 +36,18 @@ export interface ProviderUsageHistoryHostInput {
   readonly payload?: ProviderUsageHistoryPayload;
 }
 
+/**
+ * Hosts whose transcripts another host already reported. Grouped by the host
+ * that claimed them, because the page says it in one sentence: listing every
+ * dropped directory produced a line nobody could read past.
+ */
+export interface ProviderUsageHistoryDuplicateHosts {
+  readonly hostNames: readonly string[];
+  readonly claimedByHostName: string;
+}
+
 export interface ProviderUsageHistoryReport extends ProviderUsageHistoryTotals {
-  /** `"<host>: <path>"` per source dropped because another host reads the same directory. */
-  readonly duplicates: readonly string[];
+  readonly duplicates: readonly ProviderUsageHistoryDuplicateHosts[];
 }
 
 function sourceFingerprint(source: ProviderUsageHistorySource): string | null {
@@ -55,8 +64,9 @@ export function mergeProviderUsageHistory(
     .flatMap((host) => (host.payload ? [{ ...host, payload: host.payload }] : []))
     .sort((left, right) => left.serverId.localeCompare(right.serverId));
 
-  const claimed = new Set<string>();
-  const duplicates: string[] = [];
+  const claimed = new Map<string, string>();
+  // Claimant host name -> the hosts that lost a source to it, in first-seen order.
+  const losers = new Map<string, string[]>();
 
   const payloads = contributors.map((host) => ({
     serverId: host.serverId,
@@ -68,13 +78,21 @@ export function mergeProviderUsageHistory(
       if (source.status === "missing") return true;
       const fingerprint = sourceFingerprint(source);
       if (fingerprint === null) return true;
-      if (claimed.has(fingerprint)) {
-        duplicates.push(`${host.hostName}: ${source.path}`);
+      const claimant = claimed.get(fingerprint);
+      if (claimant !== undefined) {
+        const group = losers.get(claimant) ?? [];
+        if (!group.includes(host.hostName)) group.push(host.hostName);
+        losers.set(claimant, group);
         return false;
       }
-      claimed.add(fingerprint);
+      claimed.set(fingerprint, host.hostName);
       return true;
     }),
+  }));
+
+  const duplicates = [...losers.entries()].map(([claimedByHostName, hostNames]) => ({
+    hostNames,
+    claimedByHostName,
   }));
 
   return { ...deriveProviderUsageHistory(payloads), duplicates };

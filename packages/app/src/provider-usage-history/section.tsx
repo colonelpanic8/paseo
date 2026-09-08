@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
-import { useHosts } from "@/runtime/host-runtime";
-import { settingsStyles } from "@/styles/settings";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { useHostRuntimeActiveConnectionLabels, useHosts } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import { normalizeHostLabel } from "@/types/host-connection";
 import { ProviderUsageHistoryChart } from "./chart";
@@ -31,6 +31,7 @@ import {
 } from "./derive";
 import {
   mergeProviderUsageHistory,
+  type ProviderUsageHistoryDuplicateHosts,
   type ProviderUsageHistoryHostInput,
   type ProviderUsageHistoryReport,
 } from "./merge";
@@ -55,8 +56,10 @@ const SERIES_DOT_SIZE = 8;
 const PROVIDER_MARK_SIZE = 14;
 /** Where a provider row's text starts: dot, gap, mark, gap. Sub-rows share it. */
 const PROVIDER_NAME_RAIL = SERIES_DOT_SIZE + 8 + PROVIDER_MARK_SIZE + 8;
-/** The coverage line is always this tall, so naming a missing host never moves the chart. */
+/** The coverage line is always this tall, so naming a missing host never moves the page. */
 const COVERAGE_LINE_HEIGHT = 18;
+/** Wide enough for the headline and a provider row, narrow enough to leave the chart room. */
+const SUMMARY_COLUMN_WIDTH = 260;
 
 interface ProviderMarkProps {
   provider: string;
@@ -73,13 +76,38 @@ const ThemedProviderMark = withUnistyles(ProviderMark);
 const mutedMarkColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 /**
- * Names every host the totals do not cover, plus every transcript directory two
- * hosts both reported. One line, so the summary stays a summary.
+ * Two hosts can carry the same name — three daemons on one machine all call
+ * themselves after it — and only the endpoint tells them apart. Suffixing every
+ * host with one would be noise, so a name is qualified only when it collides.
+ */
+function nameUsageHistoryHosts(
+  hosts: readonly { readonly serverId: string; readonly label?: string | null }[],
+  endpoints: ReadonlyMap<string, string>,
+): readonly ProviderUsageHistoryHostRef[] {
+  const named = hosts.map((host) => ({
+    serverId: host.serverId,
+    name: normalizeHostLabel(host.label, host.serverId),
+  }));
+  const uses = new Map<string, number>();
+  for (const host of named) uses.set(host.name, (uses.get(host.name) ?? 0) + 1);
+
+  return named.map((host) => {
+    if ((uses.get(host.name) ?? 0) < 2) return host;
+    const endpoint = endpoints.get(host.serverId);
+    return endpoint === undefined
+      ? host
+      : { serverId: host.serverId, name: `${host.name} (${endpoint})` };
+  });
+}
+
+/**
+ * Names every host the totals do not cover, plus the hosts whose transcripts
+ * another host already reported. One line, so the summary stays a summary.
  */
 function coverageLine(
   t: TFunction,
   hosts: readonly ProviderUsageHistoryHostInput[],
-  duplicates: readonly string[],
+  duplicates: readonly ProviderUsageHistoryDuplicateHosts[],
 ): string {
   const named = (status: ProviderUsageHistoryHostInput["status"]) =>
     hosts.filter((host) => host.status === status).map((host) => host.hostName);
@@ -102,7 +130,16 @@ function coverageLine(
   }
 
   if (duplicates.length > 0) {
-    parts.push(t("settings.usageHistory.coverage.duplicates", { sources: duplicates.join(", ") }));
+    // Grouped by claimant: naming every dropped directory produced a line
+    // nobody could read past.
+    const groups = duplicates.map((group) =>
+      t("settings.usageHistory.coverage.duplicateGroup", {
+        hosts: group.hostNames.join(", "),
+        claimedBy: group.claimedByHostName,
+        count: group.hostNames.length,
+      }),
+    );
+    parts.push(t("settings.usageHistory.coverage.duplicates", { groups: groups.join("; ") }));
   }
   return parts.join(" · ");
 }
@@ -129,14 +166,9 @@ export function ProviderUsageHistorySection() {
   const [selection, setSelection] = useState<readonly string[] | null>(null);
 
   const allHosts = useHosts();
-  const hostRefs = useMemo<ProviderUsageHistoryHostRef[]>(
-    () =>
-      allHosts.map((host) => ({
-        serverId: host.serverId,
-        name: normalizeHostLabel(host.label, host.serverId),
-      })),
-    [allHosts],
-  );
+  const allServerIds = useMemo(() => allHosts.map((host) => host.serverId), [allHosts]);
+  const endpoints = useHostRuntimeActiveConnectionLabels(allServerIds);
+  const hostRefs = useMemo(() => nameUsageHistoryHosts(allHosts, endpoints), [allHosts, endpoints]);
   const selectedHosts = useMemo(() => {
     if (selection === null) return hostRefs;
     const chosen = hostRefs.filter((host) => selection.includes(host.serverId));
@@ -277,7 +309,7 @@ export function ProviderUsageHistorySection() {
       </SettingsSection>
       {activeReport === null ? null : (
         <>
-          <TotalsGrid totals={activeReport} />
+          <Totals totals={activeReport} />
           <Breakdown totals={activeReport} />
         </>
       )}
@@ -383,27 +415,19 @@ function ProviderUsageHistoryBody({
   const { t } = useTranslation();
 
   if (view.kind === "noHosts") {
-    return (
-      <View style={[settingsStyles.card, styles.emptyCard]}>
-        <Text style={styles.emptyText}>{t("settings.usageHistory.addHost")}</Text>
-      </View>
-    );
+    return <Text style={styles.emptyText}>{t("settings.usageHistory.addHost")}</Text>;
   }
 
   if (view.kind === "loading") {
     return (
-      <View style={[settingsStyles.card, styles.placeholderCard]}>
+      <View style={styles.placeholder}>
         <Text style={styles.emptyText}>{t("common.states.loading")}</Text>
       </View>
     );
   }
 
   if (view.kind === "unavailable") {
-    return (
-      <View style={[settingsStyles.card, styles.emptyCard]}>
-        <Text style={styles.emptyText}>{t(view.messageKey)}</Text>
-      </View>
-    );
+    return <Text style={styles.emptyText}>{t(view.messageKey)}</Text>;
   }
 
   if (view.kind === "error") {
@@ -423,9 +447,7 @@ function ProviderUsageHistoryBody({
   if (report === null) {
     return (
       <>
-        <View style={[settingsStyles.card, styles.emptyCard]}>
-          <Text style={styles.emptyText}>{t("settings.usageHistory.empty")}</Text>
-        </View>
+        <Text style={styles.emptyText}>{t("settings.usageHistory.empty")}</Text>
         {showCoverage ? (
           <Text style={styles.coverage} numberOfLines={2} testID="usage-history-coverage">
             {coverageLine(t, hosts, [])}
@@ -436,7 +458,7 @@ function ProviderUsageHistoryBody({
   }
 
   return (
-    <SummaryCard
+    <Summary
       totals={report}
       hosts={hosts}
       showCoverage={showCoverage}
@@ -447,7 +469,7 @@ function ProviderUsageHistoryBody({
   );
 }
 
-interface SummaryCardProps {
+interface SummaryProps {
   totals: ProviderUsageHistoryReport;
   hosts: readonly ProviderUsageHistoryHostInput[];
   showCoverage: boolean;
@@ -456,15 +478,14 @@ interface SummaryCardProps {
   untilDay: string;
 }
 
-function SummaryCard({
-  totals,
-  hosts,
-  showCoverage,
-  metric,
-  sinceDay,
-  untilDay,
-}: SummaryCardProps) {
+/**
+ * Headline and provider rows in a narrow left column, the chart in the rest.
+ * The two read as one statement — a figure and the shape behind it — so they
+ * only stack when the column is too narrow to hold both.
+ */
+function Summary({ totals, hosts, showCoverage, metric, sinceDay, untilDay }: SummaryProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const days = useMemo(() => enumerateDays(sinceDay, untilDay), [sinceDay, untilDay]);
   const activeProviders = useMemo(
     () => totals.providers.map((entry) => entry.provider),
@@ -477,47 +498,54 @@ function SummaryCard({
   );
 
   return (
-    <View style={[settingsStyles.card, styles.summaryCard]}>
-      <Headline totals={totals} metric={metric} />
-      {totals.providers.map((entry) => {
-        const configured = configuredByKind.get(entry.provider) ?? [];
-        return (
-          <ProviderRow
-            key={entry.provider}
-            entry={entry}
+    <View style={styles.summary} testID="usage-history-summary">
+      <View style={isCompact ? styles.summaryStacked : styles.summaryColumns}>
+        <View
+          style={isCompact ? styles.figuresStacked : styles.figures}
+          testID="usage-history-figures"
+        >
+          <Headline totals={totals} metric={metric} />
+          {totals.providers.map((entry) => {
+            const configured = configuredByKind.get(entry.provider) ?? [];
+            return (
+              <ProviderRow
+                key={entry.provider}
+                entry={entry}
+                metric={metric}
+                configured={configured.length > 1 ? configured : []}
+              />
+            );
+          })}
+        </View>
+        <View style={styles.chartColumn} testID="usage-history-chart">
+          <ProviderUsageHistoryChart
+            days={days}
+            daily={totals.daily}
+            providers={activeProviders}
             metric={metric}
-            seriesIndex={totals.providerOrder.indexOf(entry.provider)}
-            configured={configured.length > 1 ? configured : []}
           />
-        );
-      })}
+        </View>
+      </View>
       {showCoverage ? (
         <Text style={styles.coverage} numberOfLines={2} testID="usage-history-coverage">
           {coverageLine(t, hosts, totals.duplicates)}
         </Text>
       ) : null}
       {totals.unreadableProviders.length === 0 ? null : (
-        <Text style={settingsStyles.rowHint} testID="usage-history-unreadable">
+        <Text style={styles.footnote} testID="usage-history-unreadable">
           {t("settings.usageHistory.summary.unreadableProviders", {
             providers: totals.unreadableProviders.join(", "),
           })}
         </Text>
       )}
       {totals.unpricedRecords > 0 ? (
-        <Text style={settingsStyles.rowHint}>{t("settings.usageHistory.incompleteCosts")}</Text>
+        <Text style={styles.footnote} testID="usage-history-unpriced">
+          {t("settings.usageHistory.unpricedNote", { count: totals.unpricedRecords })}
+        </Text>
       ) : null}
       {totals.pricingUnavailable ? (
-        <Text style={settingsStyles.rowHint}>{t("settings.usageHistory.pricingUnavailable")}</Text>
+        <Text style={styles.footnote}>{t("settings.usageHistory.pricingUnavailable")}</Text>
       ) : null}
-      <View style={styles.chartBlock}>
-        <ProviderUsageHistoryChart
-          days={days}
-          daily={totals.daily}
-          providers={activeProviders}
-          providerOrder={totals.providerOrder}
-          metric={metric}
-        />
-      </View>
     </View>
   );
 }
@@ -541,9 +569,7 @@ function Headline({
   return (
     <View style={styles.headline}>
       <Text style={styles.headlineValue} testID="usage-history-headline">
-        {metric === "cost"
-          ? formatUsd(totals.costUsd, totals.unpricedRecords)
-          : formatTokens(totals.totalTokens)}
+        {metric === "cost" ? formatUsd(totals.costUsd) : formatTokens(totals.totalTokens)}
       </Text>
       <Text style={styles.headlineSubline}>{subline}</Text>
     </View>
@@ -553,12 +579,10 @@ function Headline({
 function ProviderRow({
   entry,
   metric,
-  seriesIndex,
   configured,
 }: {
   entry: ProviderUsageHistoryProviderTotals;
   metric: ProviderUsageHistoryMetric;
-  seriesIndex: number;
   /** The kind's configured providers, or empty when it has only one. */
   configured: readonly ProviderUsageHistoryConfiguredTotals[];
 }) {
@@ -572,13 +596,13 @@ function ProviderRow({
         })
       : t("settings.usageHistory.summary.shareOfTokens", {
           share: formatPercent(share),
-          cost: formatUsd(entry.costUsd, entry.unpricedRecords),
+          cost: formatUsd(entry.costUsd),
         });
 
   return (
     <View style={styles.providerRow} testID={`usage-history-provider-${entry.provider}`}>
       <View style={styles.providerRowMain}>
-        <View style={[styles.seriesDot, seriesFillStyle(seriesIndex)]} />
+        <View style={[styles.seriesDot, seriesFillStyle(entry.provider)]} />
         <ThemedProviderMark
           provider={entry.provider}
           size={PROVIDER_MARK_SIZE}
@@ -587,17 +611,12 @@ function ProviderRow({
         <Text style={styles.providerName} numberOfLines={1}>
           {providerLabel(entry.provider)}
         </Text>
-        <Text style={styles.providerSessions} numberOfLines={1}>
-          {sessionsLabel(t, entry.sessions)}
-        </Text>
         <Text style={styles.providerValue}>
-          {metric === "cost"
-            ? formatUsd(entry.costUsd, entry.unpricedRecords)
-            : formatTokens(entry.totalTokens)}
+          {metric === "cost" ? formatUsd(entry.costUsd) : formatTokens(entry.totalTokens)}
         </Text>
       </View>
       <Text style={styles.providerDetail} numberOfLines={1}>
-        {detail}
+        {`${sessionsLabel(t, entry.sessions)} · ${detail}`}
       </Text>
       {configured.length === 0 ? null : (
         <View style={styles.providerSubRows}>
@@ -612,7 +631,7 @@ function ProviderRow({
               </Text>
               <Text style={styles.providerSubValue}>
                 {metric === "cost"
-                  ? formatUsd(configuredProvider.costUsd, configuredProvider.unpricedRecords)
+                  ? formatUsd(configuredProvider.costUsd)
                   : formatTokens(configuredProvider.totalTokens)}
               </Text>
             </View>
@@ -623,19 +642,19 @@ function ProviderRow({
   );
 }
 
-function TotalsGrid({ totals }: { totals: ProviderUsageHistoryReport }) {
+function Totals({ totals }: { totals: ProviderUsageHistoryReport }) {
   const { t } = useTranslation();
   const cells = [
     { key: "processedTokens", value: formatTokens(totals.totalTokens) },
     { key: "cachedInput", value: formatTokens(totals.cachedInputTokens) },
     { key: "uncachedInput", value: formatTokens(totals.uncachedInputTokens) },
     { key: "output", value: formatTokens(totals.outputTokens) },
-    { key: "cacheSavings", value: formatUsd(totals.cacheSavingsUsd, totals.unpricedRecords) },
+    { key: "cacheSavings", value: formatUsd(totals.cacheSavingsUsd) },
   ];
 
   return (
     <SettingsSection title={t("settings.usageHistory.totals.title")}>
-      <View style={[settingsStyles.card, styles.totalsCard]}>
+      <View style={styles.totalsRow}>
         {cells.map((cell) => (
           <View key={cell.key} style={styles.totalsCell}>
             <Text style={styles.totalsLabel} numberOfLines={1}>
@@ -693,6 +712,24 @@ function Breakdown({ totals }: { totals: ProviderUsageHistoryReport }) {
   );
 }
 
+/** Header labels for the three tables that share the cost/share/tokens columns. */
+function ValueColumnHeaders() {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Text style={[styles.headerCell, styles.valueColumn]}>
+        {t("settings.usageHistory.table.cost")}
+      </Text>
+      <Text style={[styles.headerCell, styles.valueColumn]}>
+        {t("settings.usageHistory.table.share")}
+      </Text>
+      <Text style={[styles.headerCell, styles.valueColumn]}>
+        {t("settings.usageHistory.table.tokens")}
+      </Text>
+    </>
+  );
+}
+
 function ProviderTable({
   providers,
 }: {
@@ -701,25 +738,17 @@ function ProviderTable({
   const { t } = useTranslation();
 
   return (
-    <View style={settingsStyles.card}>
+    <View>
       <View style={styles.tableHeader}>
         <Text style={[styles.headerCell, styles.nameColumn]}>
           {t("settings.usageHistory.table.provider")}
         </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.cost")}
-        </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.share")}
-        </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.tokens")}
-        </Text>
+        <ValueColumnHeaders />
       </View>
       {providers.map((entry) => (
         <View
           key={entry.id}
-          style={[styles.tableRow, settingsStyles.rowBorder]}
+          style={styles.tableRow}
           testID={`usage-history-provider-total-${entry.id}`}
         >
           <View style={[styles.nameColumn, styles.nameCell]}>
@@ -729,7 +758,7 @@ function ProviderTable({
             </Text>
           </View>
           <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(entry.costUsd, entry.unpricedRecords)}
+            {formatUsd(entry.costUsd)}
           </Text>
           <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
             {formatPercent(entry.costShare)}
@@ -747,32 +776,24 @@ function HostTable({ hosts }: { hosts: readonly ProviderUsageHistoryHostTotals[]
   const { t } = useTranslation();
 
   return (
-    <View style={settingsStyles.card}>
+    <View>
       <View style={styles.tableHeader}>
         <Text style={[styles.headerCell, styles.nameColumn]}>
           {t("settings.usageHistory.table.host")}
         </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.cost")}
-        </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.share")}
-        </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.tokens")}
-        </Text>
+        <ValueColumnHeaders />
       </View>
       {hosts.map((entry) => (
         <View
           key={entry.serverId}
-          style={[styles.tableRow, settingsStyles.rowBorder]}
+          style={styles.tableRow}
           testID={`usage-history-host-total-${entry.serverId}`}
         >
           <Text style={[styles.bodyCell, styles.nameColumn]} numberOfLines={1}>
             {entry.name}
           </Text>
           <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(entry.costUsd, entry.unpricedRecords)}
+            {formatUsd(entry.costUsd)}
           </Text>
           <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
             {formatPercent(entry.costShare)}
@@ -790,25 +811,17 @@ function ModelTable({ models }: { models: readonly ProviderUsageHistoryModelTota
   const { t } = useTranslation();
 
   return (
-    <View style={settingsStyles.card}>
+    <View>
       <View style={styles.tableHeader}>
         <Text style={[styles.headerCell, styles.nameColumn]}>
           {t("settings.usageHistory.table.model")}
         </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.cost")}
-        </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.share")}
-        </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.tokens")}
-        </Text>
+        <ValueColumnHeaders />
       </View>
       {models.map((model) => (
         <View
           key={`${model.provider}:${model.model}`}
-          style={[styles.tableRow, settingsStyles.rowBorder]}
+          style={styles.tableRow}
           testID={`usage-history-model-${model.model}`}
         >
           <View style={[styles.nameColumn, styles.nameCell]}>
@@ -818,7 +831,7 @@ function ModelTable({ models }: { models: readonly ProviderUsageHistoryModelTota
             </Text>
           </View>
           <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(model.costUsd, model.unpricedRecords)}
+            {formatUsd(model.costUsd)}
           </Text>
           <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
             {formatPercent(model.costShare)}
@@ -844,7 +857,7 @@ function DayTable({
   const rows = useMemo(() => totals.daily.toReversed(), [totals.daily]);
 
   return (
-    <View style={settingsStyles.card}>
+    <View>
       <View style={styles.tableHeader}>
         <Text style={[styles.headerCell, styles.nameColumn]}>
           {t("settings.usageHistory.table.day")}
@@ -862,22 +875,15 @@ function DayTable({
         </Text>
       </View>
       {rows.map((row) => (
-        <View
-          key={row.day}
-          style={[styles.tableRow, settingsStyles.rowBorder]}
-          testID={`usage-history-day-${row.day}`}
-        >
+        <View key={row.day} style={styles.tableRow} testID={`usage-history-day-${row.day}`}>
           <Text style={[styles.bodyCell, styles.nameColumn]}>{formatDayShort(row.day)}</Text>
           {activeProviders.map((provider) => (
             <Text key={provider} style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-              {formatUsd(
-                row.byProvider.get(provider)?.costUsd ?? 0,
-                row.byProvider.get(provider)?.unpricedRecords ?? 0,
-              )}
+              {formatUsd(row.byProvider.get(provider)?.costUsd ?? 0)}
             </Text>
           ))}
           <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(row.costUsd, row.unpricedRecords)}
+            {formatUsd(row.costUsd)}
           </Text>
           <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
             {formatTokens(row.totalTokens)}
@@ -911,22 +917,39 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     flexShrink: 1,
   },
-  summaryCard: {
-    padding: theme.spacing[4],
-    gap: theme.spacing[3],
+  // The page is flat rather than carded, so its content sits on the same
+  // leading rail as the section headers above it.
+  summary: {
+    paddingHorizontal: theme.spacing[1],
+    gap: theme.spacing[2],
   },
-  emptyCard: {
-    padding: theme.spacing[4],
-    alignItems: "center",
+  summaryColumns: {
+    flexDirection: "row",
+    gap: theme.spacing[6],
   },
-  placeholderCard: {
+  summaryStacked: {
+    gap: theme.spacing[4],
+  },
+  figures: {
+    width: SUMMARY_COLUMN_WIDTH,
+    flexShrink: 0,
+    gap: theme.spacing[4],
+  },
+  figuresStacked: {
+    gap: theme.spacing[4],
+  },
+  chartColumn: {
+    flex: 1,
+  },
+  placeholder: {
     // Holds the loaded report's height so results do not shove the page down.
     minHeight: 320,
-    padding: theme.spacing[4],
+    paddingHorizontal: theme.spacing[1],
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
+    paddingHorizontal: theme.spacing[1],
   },
   coverage: {
     color: theme.colors.foregroundMuted,
@@ -934,13 +957,17 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: COVERAGE_LINE_HEIGHT,
     minHeight: COVERAGE_LINE_HEIGHT,
   },
+  footnote: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
   headline: {
     gap: theme.spacing[0.5],
   },
   headlineValue: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize["4xl"],
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: theme.fontWeight.semibold,
   },
   headlineSubline: {
     color: theme.colors.foregroundMuted,
@@ -960,18 +987,15 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
   },
   providerName: {
+    flex: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     flexShrink: 1,
   },
-  providerSessions: {
-    flex: 1,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
   providerValue: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
   },
   providerDetail: {
     color: theme.colors.foregroundMuted,
@@ -996,17 +1020,15 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
-  chartBlock: {
-    paddingTop: theme.spacing[2],
-  },
-  totalsCard: {
+  totalsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    padding: theme.spacing[4],
+    paddingHorizontal: theme.spacing[1],
+    columnGap: theme.spacing[6],
     rowGap: theme.spacing[4],
   },
   totalsCell: {
-    minWidth: 110,
+    minWidth: 100,
     flexGrow: 1,
     flexBasis: 0,
     gap: theme.spacing[0.5],
@@ -1024,15 +1046,18 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
+    paddingBottom: theme.spacing[2],
   },
+  // Only the divider separates rows; the table carries no border of its own.
   tableRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[1],
     paddingVertical: theme.spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
   },
   nameColumn: {
     flex: 2,
