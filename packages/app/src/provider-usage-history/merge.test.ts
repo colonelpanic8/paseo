@@ -151,12 +151,38 @@ describe("mergeProviderUsageHistory", () => {
     expect(report.costUsd).toBe(3);
     expect(report.totalTokens).toBe(1_000);
     expect(report.sessions).toBe(2);
-    expect(report.duplicates).toEqual(["second-daemon: /home/dev/.codex"]);
-    // The claim goes to the first host in serverId order; the other reports zero.
-    expect(report.hosts.map((entry) => [entry.name, entry.costUsd])).toEqual([
-      ["ryzen-shine", 3],
-      ["second-daemon", 0],
+    expect(report.duplicates).toEqual([
+      { hostNames: ["second-daemon"], claimedByHostName: "ryzen-shine" },
     ]);
+    // The claim goes to the first host in serverId order. The other contributed
+    // nothing after dedupe, so it is named in the coverage line rather than
+    // given a zero row of its own.
+    expect(report.hosts.map((entry) => entry.name)).toEqual(["ryzen-shine"]);
+  });
+
+  it("summarizes every host that lost a source under the one host that claimed it", () => {
+    const shared = (provider: string, path: string) =>
+      source({ provider, path, hostId: "ryzen-shine", volumeId: "66306:12345" });
+    const both = payload(
+      [
+        bucket({ provider: "codex", outputTokens: 1_000, costUsd: 3 }),
+        bucket({ provider: "claude", outputTokens: 500, costUsd: 1 }),
+      ],
+      [shared("codex", "/home/dev/.codex"), shared("claude", "/home/dev/.claude")],
+    );
+    const report = mergeProviderUsageHistory([
+      ready("host-a", "ryzen-shine", both),
+      ready("host-b", "ryzen-b", both),
+      ready("host-c", "ryzen-c", both),
+    ]);
+
+    // One entry per claimant, not one per dropped directory: the page renders
+    // this as a single sentence.
+    expect(report.duplicates).toEqual([
+      { hostNames: ["ryzen-b", "ryzen-c"], claimedByHostName: "ryzen-shine" },
+    ]);
+    expect(report.costUsd).toBe(4);
+    expect(report.hosts.map((entry) => entry.name)).toEqual(["ryzen-shine"]);
   });
 
   it("counts a source with no fingerprint twice, because nothing proves it is the same one", () => {

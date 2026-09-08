@@ -35,7 +35,7 @@ export interface ProviderUsageHistoryProviderTotals extends ProviderUsageHistory
   readonly provider: string;
   readonly records: number;
   readonly sessions: number;
-  readonly costShare: number | null;
+  readonly costShare: number;
   readonly tokenShare: number;
 }
 
@@ -57,7 +57,7 @@ export interface ProviderUsageHistoryConfiguredTotals extends ProviderUsageHisto
   readonly label: string;
   readonly records: number;
   readonly sessions: number;
-  readonly costShare: number | null;
+  readonly costShare: number;
   readonly tokenShare: number;
 }
 
@@ -66,7 +66,7 @@ export interface ProviderUsageHistoryHostTotals extends ProviderUsageHistoryValu
   readonly name: string;
   readonly records: number;
   readonly sessions: number;
-  readonly costShare: number | null;
+  readonly costShare: number;
   readonly tokenShare: number;
 }
 
@@ -74,7 +74,7 @@ export interface ProviderUsageHistoryModelTotals extends ProviderUsageHistoryVal
   readonly provider: string;
   readonly model: string;
   readonly records: number;
-  readonly costShare: number | null;
+  readonly costShare: number;
 }
 
 export interface ProviderUsageHistoryDayTotals extends ProviderUsageHistoryValue {
@@ -105,7 +105,7 @@ export interface ProviderUsageHistoryTotals {
    * cost descending. One entry per kind when the user extends no built-in.
    */
   readonly configuredProviders: readonly ProviderUsageHistoryConfiguredTotals[];
-  /** One entry per contributing host, cost descending. Length 1 on a single host. */
+  /** One entry per host that contributed a counted source, cost descending. */
   readonly hosts: readonly ProviderUsageHistoryHostTotals[];
   /**
    * Labels of configured providers whose transcript home could not be read.
@@ -187,8 +187,11 @@ function addBucket(target: MutableValue, bucket: ProviderUsageHistoryBucket, tok
 export function deriveProviderUsageHistory(
   hosts: readonly ProviderUsageHistoryHostPayload[],
 ): ProviderUsageHistoryTotals {
-  // With one host the ids and labels stay exactly what that daemon reports.
-  const isMultiHost = hosts.length > 1;
+  // A host whose every source was claimed by another host contributed nothing;
+  // it is named in the coverage line, and a zero row for it is noise.
+  const contributing = hosts.filter((host) => host.countedSources.length > 0);
+  // With one contributor the ids and labels stay exactly what that daemon reports.
+  const isMultiHost = contributing.length > 1;
 
   let costUsd = 0;
   let unpricedRecords = 0;
@@ -236,7 +239,7 @@ export function deriveProviderUsageHistory(
     return created;
   }
 
-  for (const host of hosts) {
+  for (const host of contributing) {
     if (host.payload.pricing.status === "unavailable") pricingUnavailable = true;
 
     const hostTotals: MutableHost = {
@@ -330,8 +333,9 @@ export function deriveProviderUsageHistory(
 
   const totalTokens = uncachedInputTokens + cachedInputTokens + cacheCreationTokens + outputTokens;
 
-  function costShare(subtotal: number): number | null {
-    if (unpricedRecords > 0) return null;
+  // Over priced cost, which is the only cost there is: an unpriced record adds
+  // nothing to either side of the ratio. The footnote owns the caveat.
+  function costShare(subtotal: number): number {
     return costUsd === 0 ? 0 : subtotal / costUsd;
   }
 
@@ -395,8 +399,8 @@ export function deriveProviderUsageHistory(
         left.id.localeCompare(right.id),
     );
 
-  // Every contributing host gets a row, including one that reported nothing:
-  // "counted, and had no usage" is the answer to a question the page is asked.
+  // One row per host that still owned a source after dedupe, including a host
+  // that owned one and used it for nothing: "counted, and idle" is an answer.
   const hostTotals = [...hostAccumulator.values()]
     .map((totals) => ({
       serverId: totals.serverId,

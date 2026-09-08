@@ -1,20 +1,51 @@
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import Svg, { Line, Path } from "react-native-svg";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
-import { buildChartColumns, niceScale, type ProviderUsageHistoryChartColumn } from "./chart-data";
+import type { Theme } from "@/styles/theme";
+import {
+  buildChartColumns,
+  niceScale,
+  seriesPeak,
+  type ProviderUsageHistoryChartColumn,
+} from "./chart-data";
+import { curvePath, smoothCurve } from "./curve";
 import type { ProviderUsageHistoryDayTotals } from "./derive";
-import { providerLabel } from "./providers";
-import { seriesFillStyle } from "./series";
+import { providerLabel, providerSeriesColor } from "./providers";
 import type { ProviderUsageHistoryMetric } from "./types";
 import { formatDayShort, formatTokens, formatUsd, formatUsdCompact } from "./window";
 
-const PLOT_HEIGHT = 140;
-const AXIS_WIDTH = 44;
+const PLOT_HEIGHT = 176;
+/** Headroom above the top gridline so a series at the peak keeps its full stroke. */
+const PLOT_TOP = 8;
+const AXIS_WIDTH = 48;
 const TICK_COUNT = 4;
 // Half a `fontSize.sm` line, so a tick label centers on its gridline.
 const TICK_LABEL_OFFSET = 8;
+const STROKE_WIDTH = 2;
+const AREA_OPACITY = 0.12;
+
+/**
+ * Theme colors the SVG needs. Resolved once for the whole drawing through
+ * `withUnistyles` on the outer `Svg`, never per primitive: the HOC wraps its
+ * child in a `<div>`, and a `<div>` inside `<svg>` is foreign content the
+ * browser will not paint.
+ */
+interface ChartPalette {
+  readonly gridline: string;
+  readonly hairline: string;
+  readonly foreground: string;
+}
+
+const chartPaletteMapping = (theme: Theme) => ({
+  palette: {
+    gridline: theme.colors.border,
+    hairline: theme.colors.foregroundMuted,
+    foreground: theme.colors.foreground,
+  },
+});
 
 interface ChartSelection {
   readonly hovered: string | null;
@@ -46,68 +77,98 @@ export interface ProviderUsageHistoryChartProps {
   daily: readonly ProviderUsageHistoryDayTotals[];
   /** Providers with activity, in canonical order. */
   providers: readonly string[];
-  /** Full canonical order; a provider's index here picks its series color. */
-  providerOrder: readonly string[];
   metric: ProviderUsageHistoryMetric;
 }
 
+interface SeriesPath {
+  readonly provider: string;
+  readonly line: string;
+  readonly area: string;
+}
+
+/**
+ * Layered — not stacked — smooth areas, one per provider. Stacking answers "what
+ * did everything cost together", which the headline already says; layering
+ * answers "which provider is this", which is the only question the chart is for.
+ */
 export function ProviderUsageHistoryChart({
   days,
   daily,
   providers,
-  providerOrder,
   metric,
 }: ProviderUsageHistoryChartProps) {
   const { t } = useTranslation();
   const [selection, dispatch] = useReducer(selectionReducer, NO_SELECTION);
+  // SVG needs real pixels, and the plot is whatever the two-column layout left
+  // it. Measured rather than a scaled viewBox: `preserveAspectRatio="none"`
+  // stretches the stroke with the geometry.
+  const [plotWidth, setPlotWidth] = useState(0);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    setPlotWidth(event.nativeEvent.layout.width);
+  }, []);
 
   const columns = useMemo(
     () => buildChartColumns(days, daily, providers, metric),
     [daily, days, metric, providers],
   );
-  const scale = useMemo(() => {
-    const peak = columns.reduce((max, column) => Math.max(max, column.total), 0);
-    return niceScale(peak, TICK_COUNT);
-  }, [columns]);
+  const scale = useMemo(() => niceScale(seriesPeak(columns), TICK_COUNT), [columns]);
+  const stepX = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
+
+  const paths = useMemo<readonly SeriesPath[]>(() => {
+    if (plotWidth <= 0 || columns.length === 0) return [];
+    const step = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
+    const built = providers.map((provider, providerIndex) => {
+      const line = curvePath(
+        smoothCurve(
+          columns.map((column, dayIndex) => ({
+            x: dayIndex * step,
+            y: plotY(column.bands[providerIndex]?.value ?? 0, scale.max),
+          })),
+        ),
+      );
+      return {
+        provider,
+        line,
+        area: line === "" ? "" : `${line} L${plotWidth},${PLOT_HEIGHT} L0,${PLOT_HEIGHT} Z`,
+        total: columns.reduce((sum, column) => sum + (column.bands[providerIndex]?.value ?? 0), 0),
+      };
+    });
+    // Paint the heavier series first so the lighter one is not buried.
+    return built.toSorted((left, right) => right.total - left.total);
+  }, [columns, plotWidth, providers, scale.max]);
 
   const format = metric === "cost" ? formatUsd : formatTokens;
   const formatTick = metric === "cost" ? formatUsdCompact : formatTokens;
   const candidate = selection.hovered ?? selection.pinned;
-  const selected = columns.find((column) => column.day === candidate);
+  const selectedIndex = columns.findIndex((column) => column.day === candidate);
+  const selected = selectedIndex < 0 ? undefined : columns[selectedIndex];
 
   const title =
     metric === "cost"
       ? t("settings.usageHistory.chart.titleCost")
       : t("settings.usageHistory.chart.titleTokens");
-  const firstDay = days[0];
-  const lastDay = days[days.length - 1];
-  const rangeLabel =
-    firstDay === undefined || lastDay === undefined
-      ? ""
-      : `${formatDayShort(firstDay)} – ${formatDayShort(lastDay)}`;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{title}</Text>
       <View style={styles.readout}>
-        {selected === undefined ? (
-          <Text style={styles.readoutRange} numberOfLines={1}>
-            {rangeLabel}
-          </Text>
-        ) : (
-          <Text style={styles.readoutRange} numberOfLines={1}>
-            <Text style={styles.readoutDay}>{formatDayShort(selected.day)}</Text>
-            {selected.bands.map((band) => (
-              <Text key={band.provider}>{`  ${providerLabel(band.provider)} ${format(
-                band.value,
-                band.unpricedRecords,
-              )}`}</Text>
-            ))}
-            <Text style={styles.readoutDay}>{`  ${t(
-              "settings.usageHistory.chart.total",
-            )} ${format(selected.total, selected.unpricedRecords)}`}</Text>
-          </Text>
-        )}
+        <Text style={styles.readoutLine} numberOfLines={1}>
+          {selected === undefined ? (
+            ""
+          ) : (
+            <>
+              <Text style={styles.readoutDay}>{formatDayShort(selected.day)}</Text>
+              {selected.bands.map((band) => (
+                <Text key={band.provider}>{`  ${providerLabel(band.provider)} ${format(
+                  band.value,
+                )}`}</Text>
+              ))}
+              <Text style={styles.readoutDay}>{`  ${t(
+                "settings.usageHistory.chart.total",
+              )} ${format(selected.total)}`}</Text>
+            </>
+          )}
+        </Text>
       </View>
 
       <View style={styles.plotRow}>
@@ -117,7 +178,7 @@ export function ProviderUsageHistoryChart({
               key={tick}
               style={[
                 styles.tickLabel,
-                inlineUnistylesStyle({ top: tickTop(tick, scale.max) - TICK_LABEL_OFFSET }),
+                inlineUnistylesStyle({ top: plotY(tick, scale.max) - TICK_LABEL_OFFSET }),
               ]}
               numberOfLines={1}
             >
@@ -126,26 +187,31 @@ export function ProviderUsageHistoryChart({
           ))}
         </View>
 
-        <View style={styles.plot}>
-          {scale.ticks.map((tick) => (
-            <View
-              key={tick}
-              style={[styles.gridline, inlineUnistylesStyle({ top: tickTop(tick, scale.max) })]}
+        <View style={styles.plot} onLayout={handleLayout}>
+          {plotWidth <= 0 ? null : (
+            <ThemedChartSvg
+              plotWidth={plotWidth}
+              ticks={scale.ticks}
+              max={scale.max}
+              paths={paths}
+              selectedIndex={selectedIndex}
+              stepX={stepX}
+              uniProps={chartPaletteMapping}
             />
-          ))}
-          <View style={styles.columns}>
-            {columns.map((column) => (
-              <ChartColumn
-                key={column.day}
-                column={column}
-                max={scale.max}
-                providerOrder={providerOrder}
-                isSelected={column.day === candidate}
-                label={`${formatDayShort(column.day)} ${format(column.total, column.unpricedRecords)}`}
-                onDispatch={dispatch}
-              />
-            ))}
-          </View>
+          )}
+          {plotWidth <= 0
+            ? null
+            : columns.map((column, index) => (
+                <ChartDayTarget
+                  key={column.day}
+                  column={column}
+                  left={cellLeft(index, stepX, plotWidth)}
+                  width={cellWidth(index, stepX, plotWidth, columns.length)}
+                  isSelected={column.day === candidate}
+                  label={`${formatDayShort(column.day)} ${format(column.total)}`}
+                  onDispatch={dispatch}
+                />
+              ))}
         </View>
       </View>
 
@@ -158,9 +224,79 @@ export function ProviderUsageHistoryChart({
   );
 }
 
-function tickTop(tick: number, max: number): number {
+interface ChartSvgProps {
+  plotWidth: number;
+  ticks: readonly number[];
+  max: number;
+  paths: readonly SeriesPath[];
+  selectedIndex: number;
+  stepX: number;
+  palette: ChartPalette;
+}
+
+function ChartSvg({ plotWidth, ticks, max, paths, selectedIndex, stepX, palette }: ChartSvgProps) {
+  return (
+    <Svg width={plotWidth} height={PLOT_HEIGHT}>
+      {ticks.map((tick) => (
+        <Line
+          key={tick}
+          x1={0}
+          x2={plotWidth}
+          y1={plotY(tick, max)}
+          y2={plotY(tick, max)}
+          stroke={palette.gridline}
+          strokeWidth={1}
+        />
+      ))}
+      {/* Fills first, then every stroke, so no series covers another's line. */}
+      {paths.map((series) => (
+        <Path
+          key={series.provider}
+          d={series.area}
+          fill={providerSeriesColor(series.provider, palette.foreground)}
+          fillOpacity={AREA_OPACITY}
+        />
+      ))}
+      {paths.map((series) => (
+        <Path
+          key={series.provider}
+          d={series.line}
+          fill="none"
+          stroke={providerSeriesColor(series.provider, palette.foreground)}
+          strokeWidth={STROKE_WIDTH}
+        />
+      ))}
+      {selectedIndex < 0 ? null : (
+        <Line
+          x1={selectedIndex * stepX}
+          x2={selectedIndex * stepX}
+          y1={PLOT_TOP}
+          y2={PLOT_HEIGHT}
+          stroke={palette.hairline}
+          strokeWidth={1}
+        />
+      )}
+    </Svg>
+  );
+}
+
+const ThemedChartSvg = withUnistyles(ChartSvg);
+
+function plotY(value: number, max: number): number {
   if (max === 0) return PLOT_HEIGHT;
-  return PLOT_HEIGHT - (tick / max) * PLOT_HEIGHT;
+  return PLOT_HEIGHT - (value / max) * (PLOT_HEIGHT - PLOT_TOP);
+}
+
+/** Each day owns the strip centered on its own point, clamped at the edges. */
+function cellLeft(index: number, stepX: number, plotWidth: number): number {
+  if (stepX === 0) return 0;
+  return Math.max(0, Math.min(plotWidth, index * stepX - stepX / 2));
+}
+
+function cellWidth(index: number, stepX: number, plotWidth: number, count: number): number {
+  if (stepX === 0) return plotWidth;
+  const right = index === count - 1 ? plotWidth : Math.min(plotWidth, index * stepX + stepX / 2);
+  return Math.max(0, right - cellLeft(index, stepX, plotWidth));
 }
 
 function dayLabelAt(days: readonly string[], index: number): string {
@@ -168,27 +304,28 @@ function dayLabelAt(days: readonly string[], index: number): string {
   return day === undefined ? "" : formatDayShort(day);
 }
 
-interface ChartColumnProps {
+interface ChartDayTargetProps {
   column: ProviderUsageHistoryChartColumn;
-  max: number;
-  providerOrder: readonly string[];
+  left: number;
+  width: number;
   isSelected: boolean;
   label: string;
   onDispatch: (action: ChartSelectionAction) => void;
 }
 
 /**
- * One day's stack. Hover lives on this `Pressable` rather than a wrapping view
- * because the column holds no other pressable to fight it for hover state.
+ * One day's hit target over the plot. Hover lives on this `Pressable` rather
+ * than a wrapping view because the strip holds no other pressable to fight it
+ * for hover state; press is what selects a day everywhere hover does not exist.
  */
-function ChartColumn({
+function ChartDayTarget({
   column,
-  max,
-  providerOrder,
+  left,
+  width,
   isSelected,
   label,
   onDispatch,
-}: ChartColumnProps) {
+}: ChartDayTargetProps) {
   const handleHoverIn = useCallback(
     () => onDispatch({ type: "hoverIn", day: column.day }),
     [column.day, onDispatch],
@@ -210,30 +347,13 @@ function ChartColumn({
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
       onPress={handlePress}
-      style={[styles.column, isSelected ? styles.columnSelected : null]}
-    >
-      <View style={styles.stack}>
-        {column.bands.map((band) => (
-          <View
-            key={band.provider}
-            style={[
-              seriesFillStyle(providerOrder.indexOf(band.provider)),
-              inlineUnistylesStyle({ height: bandHeight(band.value, max) }),
-            ]}
-          />
-        ))}
-      </View>
-    </Pressable>
+      style={[styles.dayTarget, inlineUnistylesStyle({ left, width })]}
+    />
   );
 }
 
 function selectedState(isSelected: boolean) {
   return { selected: isSelected };
-}
-
-function bandHeight(value: number, max: number): number {
-  if (max === 0 || value <= 0) return 0;
-  return (value / max) * PLOT_HEIGHT;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -250,7 +370,7 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 18,
     justifyContent: "center",
   },
-  readoutRange: {
+  readoutLine: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
@@ -275,32 +395,10 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     height: PLOT_HEIGHT,
   },
-  gridline: {
+  dayTarget: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: theme.colors.border,
-  },
-  columns: {
-    flexDirection: "row",
-    alignItems: "flex-end",
+    top: 0,
     height: PLOT_HEIGHT,
-    gap: 1,
-  },
-  column: {
-    flex: 1,
-    height: PLOT_HEIGHT,
-    justifyContent: "flex-end",
-    borderRadius: theme.borderRadius.sm,
-  },
-  columnSelected: {
-    backgroundColor: theme.colors.interactionHighlight,
-  },
-  stack: {
-    flexDirection: "column-reverse",
-    borderRadius: theme.borderRadius.sm,
-    overflow: "hidden",
   },
   axisLabels: {
     flexDirection: "row",
@@ -310,5 +408,6 @@ const styles = StyleSheet.create((theme) => ({
   axisLabel: {
     color: theme.colors.foregroundExtraMuted,
     fontSize: theme.fontSize.sm,
+    textTransform: "uppercase",
   },
 }));
