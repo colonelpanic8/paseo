@@ -2110,6 +2110,7 @@ export const en = {
         costSubline: "{{sessions}} · API estimate",
         shareOfCost: "{{share}} of cost · {{tokens}} tokens",
         shareOfTokens: "{{share}} of tokens · {{cost}}",
+        unreadableProviders: "Totals are incomplete: could not read transcripts for {{providers}}",
       },
       chart: {
         titleCost: "Daily cost",
@@ -2126,10 +2127,12 @@ export const en = {
       },
       breakdown: {
         title: "Breakdown",
+        provider: "Provider",
         model: "Model",
         day: "Day",
       },
       table: {
+        provider: "Provider",
         model: "Model",
         cost: "Cost",
         share: "Share",
