@@ -10,6 +10,28 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+function createManualTimer() {
+  const timer = {} as NodeJS.Timeout;
+  let callback: (() => void) | null = null;
+  return {
+    port: {
+      setTimeout: (next: () => void) => {
+        callback = next;
+        return timer;
+      },
+      clearTimeout: (handle: NodeJS.Timeout) => {
+        if (handle === timer) callback = null;
+      },
+    },
+    expire: () => {
+      const next = callback;
+      callback = null;
+      if (!next) throw new Error("No pending timer");
+      next();
+    },
+  };
+}
+
 describe("Codex app-server startup", () => {
   test("serializes concurrent SQLite runtime initialization", async () => {
     const firstStarted = deferred();
@@ -89,38 +111,35 @@ describe("Codex app-server startup", () => {
   });
 
   test("releases the queue when a running startup never settles", async () => {
-    vi.useFakeTimers();
     const firstStarted = deferred();
     const firstAborted = deferred();
     const cleanupAllowed = deferred();
     const secondStart = vi.fn(async () => "second");
+    const deadline = createManualTimer();
 
-    try {
-      const first = runCodexAppServerStartup({
-        timeoutMs: 100,
-        start: async (_attempt, signal) => {
-          firstStarted.resolve();
-          signal.addEventListener("abort", firstAborted.resolve, { once: true });
-          return await new Promise<never>(() => {});
-        },
-        onAbort: async () => await cleanupAllowed.promise,
-      });
-      await firstStarted.promise;
-      const second = runCodexAppServerStartup({ start: secondStart });
+    const first = runCodexAppServerStartup({
+      timeoutMs: 100,
+      timer: deadline.port,
+      start: async (_attempt, signal) => {
+        firstStarted.resolve();
+        signal.addEventListener("abort", firstAborted.resolve, { once: true });
+        return await new Promise<never>(() => {});
+      },
+      onAbort: async () => await cleanupAllowed.promise,
+    });
+    await firstStarted.promise;
+    const second = runCodexAppServerStartup({ start: secondStart });
 
-      await vi.advanceTimersByTimeAsync(100);
-      await firstAborted.promise;
-      await Promise.resolve();
-      expect(secondStart).not.toHaveBeenCalled();
+    deadline.expire();
+    await firstAborted.promise;
+    await Promise.resolve();
+    expect(secondStart).not.toHaveBeenCalled();
 
-      cleanupAllowed.resolve();
+    cleanupAllowed.resolve();
 
-      await expect(first).rejects.toThrow("startup timed out after 100ms");
-      await expect(second).resolves.toBe("second");
-      expect(secondStart).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
+    await expect(first).rejects.toThrow("startup timed out after 100ms");
+    await expect(second).resolves.toBe("second");
+    expect(secondStart).toHaveBeenCalledTimes(1);
   });
 
   test("does not retry unrelated startup failures", async () => {
