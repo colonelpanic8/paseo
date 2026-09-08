@@ -626,7 +626,12 @@ function ProviderRow({
               style={styles.providerSubRow}
               testID={`usage-history-provider-sub-${configuredProvider.id}`}
             >
-              <Text style={styles.providerSubName} numberOfLines={1}>
+              {/* Host-qualified labels do not fit the summary column on one
+                  line, and the endpoint at the tail is the part that tells two
+                  same-named hosts apart, so wrap rather than clip it away.
+                  `ellipsizeMode` cannot save it: on web it is CSS
+                  `text-overflow`, which only ever ellipsizes the end. */}
+              <Text style={styles.providerSubName} numberOfLines={2}>
                 {configuredProvider.label}
               </Text>
               <Text style={styles.providerSubValue}>
