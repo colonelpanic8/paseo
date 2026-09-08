@@ -6014,7 +6014,14 @@ export const ProviderUsageHistoryTokenTotalsSchema = z.object({
 /** One `(day, provider, model)` cell. `costUsd` is an API-equivalent estimate, not a bill. */
 export const ProviderUsageHistoryBucketSchema = z.object({
   day: z.string(),
+  /** Base provider kind: `claude` or `codex`. Groups the chart series. */
   provider: z.string(),
+  /**
+   * Configured provider id that owns the transcript home these tokens came
+   * from, e.g. `codex-colonel`. Absent for daemons that predate multi-home
+   * scanning; treat that as equal to `provider`.
+   */
+  providerId: z.string().optional(),
   model: z.string(),
   totals: ProviderUsageHistoryTokenTotalsSchema,
   costUsd: z.number(),
@@ -6028,7 +6035,12 @@ export const ProviderUsageHistoryBucketSchema = z.object({
 export const ProviderUsageHistorySourceStatusSchema = z.enum(["ok", "missing", "failed"]);
 
 export const ProviderUsageHistorySourceSchema = z.object({
+  /** Base provider kind: `claude` or `codex`. */
   provider: z.string(),
+  /** Configured provider id owning this transcript home, e.g. `codex-colonel`. */
+  providerId: z.string().optional(),
+  /** That provider's configured label, e.g. `Codex (Colonel)`. */
+  label: z.string().optional(),
   path: z.string(),
   status: ProviderUsageHistorySourceStatusSchema,
   scannedFiles: z.number(),

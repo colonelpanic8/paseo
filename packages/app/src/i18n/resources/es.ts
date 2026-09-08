@@ -2025,6 +2025,8 @@ export const es: TranslationResources = {
         costSubline: "{{sessions}} · estimación de API",
         shareOfCost: "{{share}} del costo · {{tokens}} tokens",
         shareOfTokens: "{{share}} de los tokens · {{cost}}",
+        unreadableProviders:
+          "Los totales están incompletos: no se pudieron leer las transcripciones de {{providers}}",
       },
       chart: {
         titleCost: "Costo diario",
@@ -2041,10 +2043,12 @@ export const es: TranslationResources = {
       },
       breakdown: {
         title: "Desglose",
+        provider: "Proveedor",
         model: "Modelo",
         day: "Día",
       },
       table: {
+        provider: "Proveedor",
         model: "Modelo",
         cost: "Costo",
         share: "Proporción",

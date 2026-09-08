@@ -1957,6 +1957,7 @@ export const zhCN: TranslationResources = {
         costSubline: "{{sessions}} · API 估算",
         shareOfCost: "占费用 {{share}} · {{tokens}} tokens",
         shareOfTokens: "占 tokens {{share}} · {{cost}}",
+        unreadableProviders: "汇总不完整：无法读取 {{providers}} 的会话记录",
       },
       chart: {
         titleCost: "每日费用",
@@ -1973,10 +1974,12 @@ export const zhCN: TranslationResources = {
       },
       breakdown: {
         title: "明细",
+        provider: "Provider",
         model: "模型",
         day: "日期",
       },
       table: {
+        provider: "Provider",
         model: "模型",
         cost: "费用",
         share: "占比",

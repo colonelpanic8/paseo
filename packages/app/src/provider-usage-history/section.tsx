@@ -13,7 +13,9 @@ import { settingsStyles } from "@/styles/settings";
 import type { Theme } from "@/styles/theme";
 import { ProviderUsageHistoryChart } from "./chart";
 import {
+  configuredProvidersByKind,
   deriveProviderUsageHistory,
+  type ProviderUsageHistoryConfiguredTotals,
   type ProviderUsageHistoryModelTotals,
   type ProviderUsageHistoryProviderTotals,
   type ProviderUsageHistoryTotals,
@@ -30,7 +32,12 @@ import { useProviderUsageHistory } from "./use-provider-usage-history";
 import { enumerateDays, formatDayShort, formatPercent, formatTokens, formatUsd } from "./window";
 
 const WINDOW_DAYS: readonly ProviderUsageHistoryWindowDays[] = [7, 30, 90];
-type BreakdownMode = "model" | "day";
+type BreakdownMode = "provider" | "model" | "day";
+
+const SERIES_DOT_SIZE = 8;
+const PROVIDER_MARK_SIZE = 14;
+/** Where a provider row's text starts: dot, gap, mark, gap. Sub-rows share it. */
+const PROVIDER_NAME_RAIL = SERIES_DOT_SIZE + 8 + PROVIDER_MARK_SIZE + 8;
 
 interface ProviderMarkProps {
   provider: string;
@@ -225,18 +232,34 @@ function SummaryCard({ totals, pricing, metric, sinceDay, untilDay }: SummaryCar
     () => totals.providers.map((entry) => entry.provider),
     [totals.providers],
   );
+  // A kind only earns sub-rows once more than one configured provider used it.
+  const configuredByKind = useMemo(
+    () => configuredProvidersByKind(totals.configuredProviders),
+    [totals.configuredProviders],
+  );
 
   return (
     <View style={[settingsStyles.card, styles.summaryCard]}>
       <Headline totals={totals} metric={metric} />
-      {totals.providers.map((entry) => (
-        <ProviderRow
-          key={entry.provider}
-          entry={entry}
-          metric={metric}
-          seriesIndex={totals.providerOrder.indexOf(entry.provider)}
-        />
-      ))}
+      {totals.providers.map((entry) => {
+        const configured = configuredByKind.get(entry.provider) ?? [];
+        return (
+          <ProviderRow
+            key={entry.provider}
+            entry={entry}
+            metric={metric}
+            seriesIndex={totals.providerOrder.indexOf(entry.provider)}
+            configured={configured.length > 1 ? configured : []}
+          />
+        );
+      })}
+      {totals.unreadableProviders.length === 0 ? null : (
+        <Text style={settingsStyles.rowHint} testID="usage-history-unreadable">
+          {t("settings.usageHistory.summary.unreadableProviders", {
+            providers: totals.unreadableProviders.join(", "),
+          })}
+        </Text>
+      )}
       {totals.unpricedRecords > 0 ? (
         <Text style={settingsStyles.rowHint}>{t("settings.usageHistory.incompleteCosts")}</Text>
       ) : null}
@@ -288,10 +311,13 @@ function ProviderRow({
   entry,
   metric,
   seriesIndex,
+  configured,
 }: {
   entry: ProviderUsageHistoryProviderTotals;
   metric: ProviderUsageHistoryMetric;
   seriesIndex: number;
+  /** The kind's configured providers, or empty when it has only one. */
+  configured: readonly ProviderUsageHistoryConfiguredTotals[];
 }) {
   const { t } = useTranslation();
   const share = metric === "cost" ? entry.costShare : entry.tokenShare;
@@ -310,7 +336,11 @@ function ProviderRow({
     <View style={styles.providerRow} testID={`usage-history-provider-${entry.provider}`}>
       <View style={styles.providerRowMain}>
         <View style={[styles.seriesDot, seriesFillStyle(seriesIndex)]} />
-        <ThemedProviderMark provider={entry.provider} size={14} uniProps={mutedMarkColor} />
+        <ThemedProviderMark
+          provider={entry.provider}
+          size={PROVIDER_MARK_SIZE}
+          uniProps={mutedMarkColor}
+        />
         <Text style={styles.providerName} numberOfLines={1}>
           {providerLabel(entry.provider)}
         </Text>
@@ -326,6 +356,26 @@ function ProviderRow({
       <Text style={styles.providerDetail} numberOfLines={1}>
         {detail}
       </Text>
+      {configured.length === 0 ? null : (
+        <View style={styles.providerSubRows}>
+          {configured.map((configuredProvider) => (
+            <View
+              key={configuredProvider.providerId}
+              style={styles.providerSubRow}
+              testID={`usage-history-provider-sub-${configuredProvider.providerId}`}
+            >
+              <Text style={styles.providerSubName} numberOfLines={1}>
+                {configuredProvider.label}
+              </Text>
+              <Text style={styles.providerSubValue}>
+                {metric === "cost"
+                  ? formatUsd(configuredProvider.costUsd, configuredProvider.unpricedRecords)
+                  : formatTokens(configuredProvider.totalTokens)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -365,6 +415,7 @@ function Breakdown({ totals }: { totals: ProviderUsageHistoryTotals }) {
   );
   const options = useMemo<SegmentedControlOption<BreakdownMode>[]>(
     () => [
+      { value: "provider", label: t("settings.usageHistory.breakdown.provider") },
       { value: "model", label: t("settings.usageHistory.breakdown.model") },
       { value: "day", label: t("settings.usageHistory.breakdown.day") },
     ],
@@ -386,12 +437,60 @@ function Breakdown({ totals }: { totals: ProviderUsageHistoryTotals }) {
 
   return (
     <SettingsSection title={t("settings.usageHistory.breakdown.title")} trailing={trailing}>
-      {mode === "model" ? (
-        <ModelTable models={totals.models} />
-      ) : (
-        <DayTable totals={totals} activeProviders={activeProviders} />
-      )}
+      {mode === "provider" ? <ProviderTable providers={totals.configuredProviders} /> : null}
+      {mode === "model" ? <ModelTable models={totals.models} /> : null}
+      {mode === "day" ? <DayTable totals={totals} activeProviders={activeProviders} /> : null}
     </SettingsSection>
+  );
+}
+
+function ProviderTable({
+  providers,
+}: {
+  providers: readonly ProviderUsageHistoryConfiguredTotals[];
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <View style={settingsStyles.card}>
+      <View style={styles.tableHeader}>
+        <Text style={[styles.headerCell, styles.nameColumn]}>
+          {t("settings.usageHistory.table.provider")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.cost")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.share")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.tokens")}
+        </Text>
+      </View>
+      {providers.map((entry) => (
+        <View
+          key={entry.providerId}
+          style={[styles.tableRow, settingsStyles.rowBorder]}
+          testID={`usage-history-provider-total-${entry.providerId}`}
+        >
+          <View style={[styles.nameColumn, styles.nameCell]}>
+            <ThemedProviderMark provider={entry.provider} size={12} uniProps={mutedMarkColor} />
+            <Text style={styles.bodyCell} numberOfLines={1}>
+              {entry.label}
+            </Text>
+          </View>
+          <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
+            {formatUsd(entry.costUsd, entry.unpricedRecords)}
+          </Text>
+          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
+            {formatPercent(entry.costShare)}
+          </Text>
+          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
+            {formatTokens(entry.totalTokens)}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -541,8 +640,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   seriesDot: {
-    width: 8,
-    height: 8,
+    width: SERIES_DOT_SIZE,
+    height: SERIES_DOT_SIZE,
     borderRadius: theme.borderRadius.full,
   },
   providerName: {
@@ -560,6 +659,25 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
   providerDetail: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  providerSubRows: {
+    paddingLeft: PROVIDER_NAME_RAIL,
+    paddingTop: theme.spacing[0.5],
+    gap: theme.spacing[0.5],
+  },
+  providerSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  providerSubName: {
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  providerSubValue: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },

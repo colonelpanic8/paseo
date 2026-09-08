@@ -2009,6 +2009,7 @@ export const ru: TranslationResources = {
         costSubline: "{{sessions}} · оценка по API",
         shareOfCost: "{{share}} стоимости · {{tokens}} токенов",
         shareOfTokens: "{{share}} токенов · {{cost}}",
+        unreadableProviders: "Итоги неполные: не удалось прочитать журналы сессий {{providers}}",
       },
       chart: {
         titleCost: "Стоимость по дням",
@@ -2025,10 +2026,12 @@ export const ru: TranslationResources = {
       },
       breakdown: {
         title: "Разбивка",
+        provider: "Провайдер",
         model: "Модель",
         day: "День",
       },
       table: {
+        provider: "Провайдер",
         model: "Модель",
         cost: "Стоимость",
         share: "Доля",

@@ -2010,6 +2010,8 @@ export const ptBR: TranslationResources = {
         costSubline: "{{sessions}} · estimativa de API",
         shareOfCost: "{{share}} do custo · {{tokens}} tokens",
         shareOfTokens: "{{share}} dos tokens · {{cost}}",
+        unreadableProviders:
+          "Os totais estão incompletos: não foi possível ler as transcrições de {{providers}}",
       },
       chart: {
         titleCost: "Custo diário",
@@ -2026,10 +2028,12 @@ export const ptBR: TranslationResources = {
       },
       breakdown: {
         title: "Detalhamento",
+        provider: "Provedor",
         model: "Modelo",
         day: "Dia",
       },
       table: {
+        provider: "Provedor",
         model: "Modelo",
         cost: "Custo",
         share: "Participação",

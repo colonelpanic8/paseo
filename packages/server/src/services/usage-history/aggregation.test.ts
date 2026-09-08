@@ -34,14 +34,14 @@ function record(overrides: Partial<UsageRecord> = {}): UsageRecord {
   };
 }
 
-function aggregate(records: readonly UsageRecord[], timeZone = "UTC") {
+function aggregate(records: readonly UsageRecord[], timeZone = "UTC", providerId?: string) {
   const aggregator = new UsageAggregator({
     timeZone,
     sinceDay: "2026-08-01",
     untilDay: "2026-08-31",
     rates,
   });
-  for (const item of records) aggregator.add(item);
+  for (const item of records) aggregator.add(item, providerId ?? item.provider);
   return aggregator.finish();
 }
 
@@ -89,6 +89,22 @@ describe("UsageAggregator", () => {
     expect(bucket?.costSource).toBe("providerReported");
   });
 
+  it("splits accounts of one kind into their own buckets", () => {
+    const aggregator = new UsageAggregator({
+      timeZone: "UTC",
+      sinceDay: "2026-08-01",
+      untilDay: "2026-08-31",
+      rates,
+    });
+    aggregator.add(record({ provider: "codex" }), "codex-ben");
+    aggregator.add(record({ provider: "codex" }), "codex-colonel");
+    const buckets = aggregator.finish().buckets;
+    expect(buckets.map((bucket) => [bucket.provider, bucket.providerId])).toEqual([
+      ["codex", "codex-ben"],
+      ["codex", "codex-colonel"],
+    ]);
+  });
+
   it("uses the weakest cost provenance for a mixed bucket", () => {
     const mixed = aggregate([record({ reportedCostUsd: 1 }), record()]).buckets[0];
     expect(mixed?.costSource).toBe("modelPriced");
@@ -115,9 +131,11 @@ describe("UsageAggregator", () => {
       untilDay: "2026-08-31",
       rates,
     });
-    expect(aggregator.add(record({ dedupeKey: "msg_1:" }))).toBe(true);
-    expect(aggregator.add(record({ dedupeKey: "msg_1:" }))).toBe(false);
-    expect(aggregator.add(record({ timestampMs: Date.parse("2026-07-01T12:00:00Z") }))).toBe(false);
+    expect(aggregator.add(record({ dedupeKey: "msg_1:" }), "claude")).toBe(true);
+    expect(aggregator.add(record({ dedupeKey: "msg_1:" }), "claude")).toBe(false);
+    expect(
+      aggregator.add(record({ timestampMs: Date.parse("2026-07-01T12:00:00Z") }), "claude"),
+    ).toBe(false);
     expect(aggregator.finish().outOfWindow).toBe(1);
   });
 
