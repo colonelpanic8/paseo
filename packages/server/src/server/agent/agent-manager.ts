@@ -1367,6 +1367,7 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      lastMessageAt?: Date | null;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
@@ -1399,6 +1400,7 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      lastMessageAt?: Date | null;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
@@ -1649,6 +1651,7 @@ export class AgentManager {
         owner: existing.owner,
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,
+        lastMessageAt: existing.lastMessageAt,
         lastUserMessageAt: existing.lastUserMessageAt,
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
@@ -2496,7 +2499,7 @@ export class AgentManager {
       // for live subscribers. Other event types are broadcast only.
       if (event.type === "timeline") {
         this.touchUpdatedAt(agent);
-        const row = this.recordTimeline(agent.id, event.item);
+        const row = this.recordTimeline(agent.id, event.item, { trackMessageActivity: true });
         this.dispatchStream(agent.id, event, {
           seq: row.seq,
           epoch: this.timelineStore.getEpoch(agent.id),
@@ -2528,7 +2531,7 @@ export class AgentManager {
     const agent = this.requireAgent(agentId);
     item = limitAgentTimelineItemContent(item);
     this.touchUpdatedAt(agent);
-    const row = this.recordTimeline(agentId, item);
+    const row = this.recordTimeline(agentId, item, { trackMessageActivity: true });
     this.dispatchStream(
       agentId,
       {
@@ -3574,6 +3577,7 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      lastMessageAt?: Date | null;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       timeline?: AgentTimelineItem[];
@@ -3761,6 +3765,7 @@ export class AgentManager {
       | {
           createdAt?: Date;
           updatedAt?: Date;
+          lastMessageAt?: Date | null;
           lastUserMessageAt?: Date | null;
           labels?: Record<string, string>;
           historyPrimed?: boolean;
@@ -4799,7 +4804,11 @@ export class AgentManager {
     turnId?: string,
     options?: { providerMessageId?: string },
   ): AgentStreamEvent {
-    const row = this.recordTimeline(agentId, item, { ...options, turnId });
+    const row = this.recordTimeline(agentId, item, {
+      ...options,
+      turnId,
+      trackMessageActivity: true,
+    });
     const event: AgentStreamEvent = {
       type: "timeline",
       item,
@@ -4915,7 +4924,7 @@ export class AgentManager {
     }
 
     const item: AgentTimelineItem = { type: "assistant_message", text };
-    const row = this.recordTimeline(agent.id, item);
+    const row = this.recordTimeline(agent.id, item, { trackMessageActivity: true });
     this.dispatchStream(
       agent.id,
       {
