@@ -768,7 +768,7 @@ function laterTimestamp(
   return Number.isNaN(currentTime) || candidateTime > currentTime ? candidate : current;
 }
 
-function resolveWorkspaceRootAgent(
+export function resolveWorkspaceRootAgent(
   agent: AgentSnapshotPayload,
   activeAgentsById: ReadonlyMap<string, AgentSnapshotPayload>,
 ): AgentSnapshotPayload | null {
