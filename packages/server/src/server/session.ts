@@ -48,6 +48,7 @@ import {
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
 import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
+import { collectAgentMessageActivity } from "./agent/message-activity.js";
 import {
   sendPromptToAgent,
   waitForAgentRunStartWithTimeout,
@@ -4986,21 +4987,7 @@ export class Session {
 
   private async listAgentActivityAt(): Promise<ReadonlyMap<string, string>> {
     const records = await this.agentStorage.list();
-    const activityAtByAgentId = new Map<string, string>();
-    for (const record of records) {
-      const lastMessageAt = record.lastMessageAt ?? record.lastUserMessageAt;
-      if (lastMessageAt) {
-        activityAtByAgentId.set(record.id, lastMessageAt);
-      }
-    }
-    for (const agent of this.agentManager.listAgents()) {
-      if (agent.lastMessageAt) {
-        activityAtByAgentId.set(agent.id, agent.lastMessageAt.toISOString());
-      } else {
-        activityAtByAgentId.delete(agent.id);
-      }
-    }
-    return activityAtByAgentId;
+    return collectAgentMessageActivity([...records, ...this.agentManager.listAgents()]);
   }
 
   private async resolveAgentIdentifier(

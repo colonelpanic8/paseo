@@ -10136,6 +10136,53 @@ test("hydrateTimeline preserves provider replay timestamps without changing agen
   expect(manager.getAgent(snapshot.id)?.lastMessageAt).toEqual(snapshot.lastMessageAt);
 });
 
+test("running agents retain message activity through prompts, replies, and tool events", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-message-activity-"));
+  const session = new SteeringTestSession({ provider: "codex", cwd: workdir });
+  const manager = new AgentManager({
+    clients: {
+      codex: new (class extends TestAgentClient {
+        override async createSession(): Promise<AgentSession> {
+          return session;
+        }
+      })(),
+    },
+    logger,
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  try {
+    const stream = manager.streamAgent(agent.id, "hello", { clientMessageId: "activity-prompt" });
+    await stream.next();
+    expect(manager.getAgent(agent.id)?.lifecycle).toBe("running");
+    const prompt = manager
+      .fetchTimeline(agent.id, { limit: 0 })
+      .rows.find((row) => row.item.type === "user_message");
+    expect(prompt?.item).toMatchObject({ type: "user_message", text: "hello" });
+    expect(manager.getAgent(agent.id)?.lastMessageAt?.toISOString()).toBe(prompt?.timestamp);
+
+    session.pushEvent({
+      type: "timeline",
+      provider: "codex",
+      turnId: "active-turn-1",
+      item: { type: "assistant_message", text: "working on it" },
+    });
+    await vi.waitFor(() => {
+      const reply = manager.fetchTimeline(agent.id, { limit: 0 }).rows.at(-1);
+      expect(reply?.item).toMatchObject({ type: "assistant_message", text: "working on it" });
+      expect(manager.getAgent(agent.id)?.lastMessageAt?.toISOString()).toBe(reply?.timestamp);
+    });
+    const lastMessageAt = manager.getAgent(agent.id)?.lastMessageAt;
+    await manager.appendTimelineItem(agent.id, { type: "reasoning", text: "thinking" });
+    expect(manager.getAgent(agent.id)?.lastMessageAt).toEqual(lastMessageAt);
+    expect(manager.getAgent(agent.id)?.lifecycle).toBe("running");
+  } finally {
+    await manager.closeAgent(agent.id);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("provider user_message is recorded from the live stream", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-no-prior-record-"));
   const storagePath = join(workdir, "agents");
