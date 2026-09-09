@@ -157,7 +157,15 @@ export function LiveVoiceLinkListener() {
       });
     };
     void startWithLinkOptions();
-  }, [availability, defaultHost, hosts, isAppVisible, isHostBootstrapReady, liveVoice, pendingLink]);
+  }, [
+    availability,
+    defaultHost,
+    hosts,
+    isAppVisible,
+    isHostBootstrapReady,
+    liveVoice,
+    pendingLink,
+  ]);
 
   return null;
 }
