@@ -27,6 +27,7 @@ export interface ResolveLiveVoiceLinkHostInput {
   /** The quick-launch host from settings; stands in for a link without `host`. */
   defaultHost?: string | null;
   isHostBootstrapReady: boolean;
+  isAppVisible: boolean;
   availability: LiveVoiceAvailability;
   hosts: LiveVoiceHostAvailability[];
 }
@@ -62,6 +63,10 @@ function isHostEligibilityPending(host: LiveVoiceHostAvailability): boolean {
 export function resolveLiveVoiceLinkHost(
   input: ResolveLiveVoiceLinkHostInput,
 ): LiveVoiceLinkHostDecision {
+  // Native call startup requires a resumed Activity, which can follow the URL event.
+  if (!input.isAppVisible) {
+    return { kind: "wait" };
+  }
   const requestedHostId = input.link.host ?? input.defaultHost ?? null;
   const requestedHost = requestedHostId
     ? (input.hosts.find((host) => host.serverId === requestedHostId) ?? null)

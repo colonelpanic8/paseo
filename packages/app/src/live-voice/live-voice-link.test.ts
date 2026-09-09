@@ -27,6 +27,7 @@ function decide(input: {
   link?: LiveVoiceLink;
   defaultHost?: string | null;
   isHostBootstrapReady?: boolean;
+  isAppVisible?: boolean;
   availability: LiveVoiceAvailability;
   hosts?: LiveVoiceHostAvailability[];
 }) {
@@ -34,6 +35,7 @@ function decide(input: {
     link: input.link ?? { host: null, assistant: null },
     defaultHost: input.defaultHost ?? null,
     isHostBootstrapReady: input.isHostBootstrapReady ?? true,
+    isAppVisible: input.isAppVisible ?? true,
     availability: input.availability,
     hosts: input.hosts ?? input.availability.hosts,
   });
@@ -69,6 +71,17 @@ describe("parseLiveVoiceLink", () => {
 });
 
 describe("resolveLiveVoiceLinkHost", () => {
+  it("holds a shortcut until Paseo is visible, then starts the eligible host", () => {
+    const available = host();
+    const availability: LiveVoiceAvailability = { kind: "available", hosts: [available] };
+
+    expect(decide({ availability, isAppVisible: false })).toEqual({ kind: "wait" });
+    expect(decide({ availability, isAppVisible: true })).toEqual({
+      kind: "start",
+      serverId: available.serverId,
+    });
+  });
+
   it("waits for host bootstrap before deciding", () => {
     expect(
       decide({

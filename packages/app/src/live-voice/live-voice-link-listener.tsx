@@ -1,5 +1,6 @@
 import * as Linking from "expo-linking";
 import { useEffect, useState } from "react";
+import { useAppVisible } from "@/hooks/use-app-visible";
 import { isNative } from "@/constants/platform";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
 import {
@@ -55,6 +56,7 @@ async function resolveLinkStartOptions(
 
 export function LiveVoiceLinkListener() {
   const liveVoice = useLiveVoiceOptional();
+  const isAppVisible = useAppVisible();
   const availability = useLiveVoiceAvailability();
   const hosts = useLiveVoiceHostAvailability();
   const defaultHost = useLiveVoiceSettingsStore((state) => state.quickLaunchServerId);
@@ -133,6 +135,7 @@ export function LiveVoiceLinkListener() {
       link: pendingLink,
       defaultHost,
       isHostBootstrapReady,
+      isAppVisible,
       availability,
       hosts,
     });
@@ -148,10 +151,23 @@ export function LiveVoiceLinkListener() {
     const link = pendingLink;
     const startWithLinkOptions = async () => {
       const options = await resolveLinkStartOptions(decision.serverId, link);
-      startLiveVoiceCall(liveVoice.start, decision.serverId, options);
+      await startLiveVoiceCall({
+        start: liveVoice.start,
+        serverId: decision.serverId,
+        options,
+        showLauncher: requestLiveVoiceLauncher,
+      });
     };
     void startWithLinkOptions();
-  }, [availability, defaultHost, hosts, isHostBootstrapReady, liveVoice, pendingLink]);
+  }, [
+    availability,
+    defaultHost,
+    hosts,
+    isAppVisible,
+    isHostBootstrapReady,
+    liveVoice,
+    pendingLink,
+  ]);
 
   return null;
 }

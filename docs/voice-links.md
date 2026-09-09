@@ -29,8 +29,9 @@ Parameters, all optional:
   call with **no** assistant rather than a different one — a shortcut wired to
   "Reviewer" must not quietly call whoever was last selected.
 
-Opening the link during a call does nothing; after a call ended with an error
-it opens the launcher so the error is visible.
+The shortcut waits for Paseo to become visible before starting microphone access.
+Opening the link during a call does nothing. If startup fails, or a previous
+call ended with an error, the launcher opens with the error and retry action.
 
 ## `paseo://dispatch`
 
