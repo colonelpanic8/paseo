@@ -29,8 +29,9 @@ Parameters, all optional:
   call with the host's default profile rather than a different one. It continues
   the selected thread only when that thread belongs to the same profile.
 
-Opening the link during a call does nothing; after a call ended with an error
-it opens the launcher so the error is visible.
+The shortcut waits for Paseo to become visible before starting microphone access.
+Opening the link during a call does nothing. If startup fails, or a previous
+call ended with an error, the launcher opens with the error and retry action.
 
 ## `paseo://dispatch`
 
