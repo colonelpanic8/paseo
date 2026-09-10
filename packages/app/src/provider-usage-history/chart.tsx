@@ -134,7 +134,7 @@ export function ProviderUsageHistoryChart({
       };
     });
     // Paint the heavier series first so the lighter one is not buried.
-    return built.toSorted((left, right) => right.total - left.total);
+    return built.sort((left, right) => right.total - left.total);
   }, [columns, plotWidth, providers, scale.max]);
 
   const format = metric === "cost" ? formatUsd : formatTokens;
