@@ -51,7 +51,7 @@ const test = base.extend<{}, { transcriptHome: string }>({
   ],
 });
 
-test("shows incomplete costs from real transcripts and refreshes to an empty window", async ({
+test("shows the unpriced footnote from real transcripts and refreshes to an empty window", async ({
   page,
   transcriptHome,
 }, testInfo) => {
@@ -90,21 +90,27 @@ test("shows incomplete costs from real transcripts and refreshes to an empty win
   await gotoAppShell(page);
   await openSettings(page);
   await page.getByTestId("settings-section-usage-history").click();
-  await expect(page.getByTestId("usage-history-headline")).toHaveText("≥$2.00");
-  await expect(page.getByText(/Some activity has no price/)).toBeVisible();
-  await expect(page.getByTestId("usage-history-model-usage-test-partial")).toContainText("≥$2.00");
-  await expect(page.getByTestId("usage-history-model-usage-test-unpriced")).toContainText("—");
-  await expect(page.getByTestId("usage-history-model-usage-test-unpriced")).not.toContainText(
-    "$0.00",
-  );
+  await expect(page.getByTestId("usage-history-headline")).toHaveText("$2.00");
+  const chart = page.getByTestId("usage-history-chart");
+  const chartBounds = await chart.boundingBox();
+  expect(chartBounds?.width).toBeGreaterThan(720);
+  expect(chartBounds?.height).toBeGreaterThan(450);
+
+  await expect(page.getByTestId("usage-history-unpriced")).toBeVisible();
+  const tableRows = page.getByTestId("usage-history-breakdown-row");
+  await expect(tableRows.filter({ hasText: "usage-test-partial" })).toContainText("$2.00");
+  await expect(tableRows.filter({ hasText: "usage-test-unpriced" })).toContainText("$0.00");
   await page.screenshot({ path: testInfo.outputPath("incomplete-costs.png"), fullPage: true });
-  await page.getByRole("button", { name: "Tokens", exact: true }).click();
+  await page
+    .getByTestId("usage-history-metric")
+    .getByRole("button", { name: "Tokens", exact: true })
+    .click();
   await expect(page.getByTestId("usage-history-headline")).toHaveText("900");
   await page.getByRole("button", { name: "90d", exact: true }).click();
   await expect(page.getByTestId("usage-history-headline")).toHaveText("900");
   await page.setViewportSize({ width: 420, height: 900 });
   await page.getByRole("button", { name: "90d", exact: true }).click();
-  await expect(page.getByTestId("usage-history-headline")).toHaveText("≥$2.00");
+  await expect(page.getByTestId("usage-history-headline")).toHaveText("$2.00");
   await page.screenshot({
     path: testInfo.outputPath("incomplete-costs-compact.png"),
     fullPage: true,
@@ -143,7 +149,7 @@ async function writeCodexRollout(home: string, session: string, outputTokens: nu
 test.describe("multiple configured providers of one kind", () => {
   test.use({ deviceScaleFactor: 2 });
 
-  test("splits a kind into per-provider sub-rows and a Provider breakdown", async ({
+  test("combines breakdown dimensions and sorts the resulting rows", async ({
     page,
     transcriptHome,
   }, testInfo) => {
@@ -192,12 +198,43 @@ test.describe("multiple configured providers of one kind", () => {
     await expect(page.getByTestId("usage-history-provider-codex")).toContainText("$0.07");
     await page.screenshot({ path: testInfo.outputPath("provider-sub-rows.png"), fullPage: true });
 
-    await page.getByRole("button", { name: "Provider", exact: true }).click();
-    await expect(page.getByTestId("usage-history-provider-total-codex-colonel")).toContainText(
-      COLONEL_LABEL,
-    );
-    await expect(page.getByTestId("usage-history-provider-total-codex-ben")).toBeVisible();
-    await expect(page.getByTestId("usage-history-provider-total-claude")).toBeVisible();
+    const rows = page.getByTestId("usage-history-breakdown-row");
+    await expect(rows).toHaveCount(1);
+    const chartLines = page.getByTestId("usage-history-chart").locator('svg path[fill="none"]');
+    await expect(chartLines).toHaveCount(1);
+
+    await page.getByTestId("usage-history-group-provider").click();
+    await expect(rows).toHaveCount(4);
+    await expect(chartLines).toHaveCount(4);
+    await page.screenshot({
+      path: testInfo.outputPath("combined-provider-model.png"),
+      fullPage: true,
+    });
+
+    await expect(rows.filter({ hasText: COLONEL_LABEL })).toContainText("usage-test-known");
+    await expect(rows.first()).toContainText(COLONEL_LABEL);
+    await page.getByTestId("usage-history-group-day").click();
+    await expect(rows).toHaveCount(4);
+    await expect(rows.first()).toContainText(new Date().getFullYear().toString());
+    await page.getByTestId("usage-history-sort-direction").click();
+    await expect(rows.first()).toContainText("Claude Code");
+    await page
+      .getByTestId("usage-history-sort")
+      .getByRole("button", { name: "Group", exact: true })
+      .click();
+    await expect(rows.first()).toContainText("Claude Code");
+    await page
+      .getByTestId("usage-history-sort")
+      .getByRole("button", { name: "Tokens", exact: true })
+      .click();
+    await expect(rows.first()).toContainText("Claude Code");
+    await page.getByTestId("usage-history-group-model").click();
+    await page.getByTestId("usage-history-group-provider").click();
+    await page.getByTestId("usage-history-group-day").click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("Total");
+    await page.getByTestId("usage-history-group-provider").click();
+    await expect(rows).toHaveCount(4);
     await page.screenshot({
       path: testInfo.outputPath("provider-breakdown.png"),
       fullPage: true,
