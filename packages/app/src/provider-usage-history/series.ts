@@ -1,10 +1,7 @@
 import { StyleSheet } from "react-native-unistyles";
 import { providerSeriesColor } from "./providers";
 
-/**
- * The series mark next to a provider's name. Same color as that provider's
- * chart line and its mark in the tables, so one series reads as one series.
- */
+/** Provider brand marks in the summary below the grouped chart. */
 export function seriesFillStyle(provider: string) {
   return provider === "claude" ? seriesStyles.claude : seriesStyles.neutral;
 }

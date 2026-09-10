@@ -1,3 +1,4 @@
+import { BREAKDOWN_DIMENSIONS, deriveUsageBreakdown, sortBreakdown } from "./breakdown";
 import { describe, expect, it } from "vitest";
 import { buildChartColumns, niceScale } from "./chart-data";
 import { configuredProvidersByKind, deriveProviderUsageHistory } from "./derive";
@@ -419,5 +420,122 @@ describe("niceScale", () => {
 
   it("degenerates to a single tick with no data", () => {
     expect(niceScale(0, 4)).toEqual({ max: 0, ticks: [0] });
+  });
+});
+
+describe("combined usage breakdown", () => {
+  const input = payload(
+    [
+      bucket({
+        day: "2026-09-05",
+        provider: "codex",
+        providerId: "personal",
+        model: "shared",
+        costUsd: 3,
+        outputTokens: 10,
+      }),
+      bucket({
+        day: "2026-09-06",
+        provider: "codex",
+        providerId: "personal",
+        model: "shared",
+        costUsd: 1,
+        outputTokens: 20,
+        unpricedRecords: 1,
+      }),
+      bucket({
+        day: "2026-09-05",
+        provider: "codex",
+        providerId: "work",
+        model: "shared",
+        costUsd: 2,
+        outputTokens: 30,
+      }),
+      bucket({
+        day: "2026-09-05",
+        provider: "codex",
+        providerId: "work",
+        model: "other",
+        costUsd: 4,
+        outputTokens: 40,
+      }),
+    ],
+    [
+      configuredSource("codex", "personal", "Personal", 1),
+      configuredSource("codex", "work", "Work", 1),
+    ],
+  );
+  const hosts = [
+    ...onlyHost(input),
+    { ...onlyHost(input)[0]!, serverId: "host-b", hostName: "Laptop" },
+  ];
+  const totals = deriveProviderUsageHistory(hosts);
+
+  it("uses only the selected dimensions and preserves totals in all 16 combinations", () => {
+    for (let mask = 0; mask < 16; mask++) {
+      const dimensions = BREAKDOWN_DIMENSIONS.filter((_, index) => (mask & (1 << index)) !== 0);
+      const grouped = deriveUsageBreakdown(totals, dimensions);
+      const expectedCounts = [1, 2, 4, 4, 2, 4, 6, 6, 2, 4, 6, 6, 3, 6, 8, 8];
+      expect(grouped.rows).toHaveLength(expectedCounts[mask]);
+      expect(grouped.rows.reduce((sum, row) => sum + row.costUsd, 0)).toBe(20);
+      expect(grouped.rows.reduce((sum, row) => sum + row.totalTokens, 0)).toBe(200);
+      expect(grouped.rows.reduce((sum, row) => sum + row.unpricedRecords, 0)).toBe(2);
+      const columns = buildChartColumns(
+        ["2026-09-05", "2026-09-06", "2026-09-07"],
+        grouped.daily,
+        grouped.rows.map((row) => row.key),
+        "cost",
+      );
+      expect(columns.map((column) => column.total)).toEqual([18, 2, 0]);
+      for (const row of grouped.rows) {
+        let chartTotal = 0;
+        for (const column of columns) {
+          chartTotal += column.bands.find((band) => band.provider === row.key)?.value ?? 0;
+        }
+        expect(chartTotal).toBe(row.costUsd);
+      }
+    }
+  });
+
+  it("combines matching model names and separates configured providers and hosts when selected", () => {
+    expect(deriveUsageBreakdown(totals, ["model"]).rows).toHaveLength(2);
+    expect(deriveUsageBreakdown(totals, ["host", "model"]).rows).toHaveLength(4);
+    const combined = deriveUsageBreakdown(totals, ["provider", "model"]);
+    expect(combined.rows).toHaveLength(6);
+    expect(combined.rows.find((row) => row.label === "Personal · Laptop · shared")?.costUsd).toBe(
+      4,
+    );
+    expect(deriveUsageBreakdown(totals, ["day", "provider", "model", "host"]).rows).toHaveLength(8);
+    expect(deriveUsageBreakdown(totals, []).rows).toMatchObject([
+      { costUsd: 20, totalTokens: 200 },
+    ]);
+  });
+
+  it("does not restore buckets from a deduplicated source", () => {
+    const deduplicated = deriveProviderUsageHistory([
+      ...onlyHost(input),
+      { ...hosts[1]!, countedSources: [input.sources[0]!] },
+    ]);
+    const grouped = deriveUsageBreakdown(deduplicated, ["host", "provider", "model"]);
+    expect(grouped.rows.reduce((sum, row) => sum + row.costUsd, 0)).toBe(14);
+    expect(grouped.rows.filter((row) => row.label.startsWith("Laptop"))).toHaveLength(1);
+  });
+
+  it("sorts by group, cost, or tokens in either direction without changing colors or input", () => {
+    const rows = deriveUsageBreakdown(totals, ["model"]).rows;
+    for (const sort of ["label", "costUsd", "totalTokens"] as const) {
+      const ascending = sortBreakdown(rows, sort, "ascending");
+      const descending = sortBreakdown(rows, sort, "descending");
+      expect(ascending.map((row) => row.key)).toEqual(
+        descending.map((row) => row.key).toReversed(),
+      );
+      expect(ascending).not.toBe(rows);
+      expect(ascending.every((row) => rows.includes(row))).toBe(true);
+    }
+    expect(sortBreakdown(rows, "costUsd", "descending")[0]?.label).toBe("shared");
+    expect(sortBreakdown(rows, "label", "ascending")[0]?.label).toBe("other");
+    expect(deriveUsageBreakdown(totals, ["host", "model"])).toEqual(
+      deriveUsageBreakdown(totals, ["model", "host"]),
+    );
   });
 });

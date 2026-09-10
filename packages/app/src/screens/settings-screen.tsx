@@ -1383,7 +1383,11 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
   if (isCompactLayout) {
     return (
       <View style={styles.container}>
-        <PageLayout title={detailTitle} onBack={handleBackFromDetail}>
+        <PageLayout
+          wide={view.kind === "section" && view.section === "usage-history"}
+          title={detailTitle}
+          onBack={handleBackFromDetail}
+        >
           {content}
         </PageLayout>
       </View>
@@ -1411,6 +1415,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
         <WindowChromeRegion corners="top-right">
           <View style={desktopStyles.contentPane} testID="settings-detail-pane">
             <PageLayout
+              wide={view.kind === "section" && view.section === "usage-history"}
               title={detailTitle}
               titleTestID="settings-detail-header-title"
               testID="settings-detail-scroll-body"
