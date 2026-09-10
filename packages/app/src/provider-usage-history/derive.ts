@@ -82,7 +82,15 @@ export interface ProviderUsageHistoryDayTotals extends ProviderUsageHistoryValue
   readonly byProvider: ReadonlyMap<string, ProviderUsageHistoryValue>;
 }
 
+export interface UsageHistoryEntry {
+  readonly serverId: string;
+  readonly hostName: string;
+  readonly providerLabel: string;
+  readonly bucket: ProviderUsageHistoryBucket;
+}
+
 export interface ProviderUsageHistoryTotals {
+  readonly entries: readonly UsageHistoryEntry[];
   readonly costUsd: number;
   readonly unpricedRecords: number;
   readonly totalTokens: number;
@@ -193,6 +201,7 @@ export function deriveProviderUsageHistory(
   // With one contributor the ids and labels stay exactly what that daemon reports.
   const isMultiHost = contributing.length > 1;
 
+  const entries: UsageHistoryEntry[] = [];
   let costUsd = 0;
   let unpricedRecords = 0;
   let cacheSavingsUsd = 0;
@@ -302,6 +311,12 @@ export function deriveProviderUsageHistory(
         bucket.provider,
         providerLabel(providerId),
       );
+      entries.push({
+        serverId: host.serverId,
+        hostName: host.hostName,
+        providerLabel: configured.label,
+        bucket,
+      });
       addBucket(configured, bucket, tokens);
       configured.records += bucket.records;
 
@@ -445,6 +460,7 @@ export function deriveProviderUsageHistory(
   const sessions = [...hostAccumulator.values()].reduce((sum, host) => sum + host.sessions, 0);
 
   return {
+    entries,
     costUsd,
     unpricedRecords,
     totalTokens,
