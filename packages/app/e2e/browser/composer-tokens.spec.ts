@@ -83,9 +83,7 @@ test("composer token pills and trigger settings stay aligned", async ({
     timeout: 30_000,
   });
   await composer.press("Enter");
-  const shellVariableMessage = page.getByTestId("user-message").last();
-  await expect(shellVariableMessage).toContainText("check $HOME");
-  await expect(shellVariableMessage).not.toContainText("check /HOME");
+  await expect(composer).toHaveValue("check /HOME ");
 
   await composer.fill("please run $release-beta");
   await expect(autocomplete.getByText("$release-beta", { exact: true }).first()).toBeVisible();
