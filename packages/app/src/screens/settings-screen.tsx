@@ -1507,7 +1507,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                 title lives in the content, like a document heading. */}
             <ScreenHeader borderless />
             <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-              <View style={styles.content}>
+              <View style={settingsContentStyle(view)}>
                 {desktopPageTitle}
                 {content}
               </View>
@@ -1549,6 +1549,7 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 720,
     alignSelf: "center",
   },
+  wideContent: { maxWidth: "100%" },
   pageTitleRow: {
     flexDirection: "row",
     alignItems: "center",
