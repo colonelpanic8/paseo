@@ -98,7 +98,6 @@ export function filterInlineSkillCommandEntries<TEntry extends InlineSkillComman
 }
 
 const INVALID_QUERY_CHARS = /[/\s\n\r\t"']/;
-const SHELL_VARIABLE_QUERY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function isInvalidQuery(query: string, sigils: ComposerSigils): boolean {
   // A second sigil inside the query means the earlier one was not the live
@@ -157,23 +156,4 @@ export function applySlashCommandReplacement(input: ApplySlashCommandReplacement
   const after = input.text.slice(input.command.end);
   const replacement = `${before}${DEFAULT_COMMAND_SIGIL}${input.commandName}${after}`;
   return input.command.end === input.text.length ? `${replacement} ` : replacement;
-}
-
-/**
- * `$name` is shell-variable shaped because of the `$` character, not because of
- * which menu it happens to open. The check keys off the sigil and deliberately
- * ignores `command.menu`: if the user assigns `$` to the command trigger,
- * `check $HOME` must still submit verbatim rather than being rewritten to
- * `check /HOME`. Tab and click remain the explicit commit actions in both
- * assignments.
- */
-export function shouldSubmitShellVariable(input: {
-  key: string;
-  command: SlashCommandRange | null;
-}): boolean {
-  return (
-    input.key === "Enter" &&
-    input.command?.sigil === "$" &&
-    SHELL_VARIABLE_QUERY.test(input.command.query)
-  );
 }

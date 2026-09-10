@@ -28,9 +28,8 @@ Detection rules:
 - Configured triggers open autocomplete but are not tokens by themselves. A selection
   explicitly commits the chosen command or skill to canonical slash syntax.
 - Enter or Tab commits the highlighted autocomplete option, regardless of which
-  configured trigger opened the menu. The exception is a `$` trigger whose name follows
-  the shell-variable identifier shape: Enter submits it as text, while Tab or a click
-  explicitly commits the colliding skill.
+  configured trigger opened the menu. Enter submits the draft only when autocomplete has
+  no option to select.
 - A leading canonical slash means a command; a canonical slash after whitespace means a
   skill. Slash-delimited paths are not tokens.
 - A slash glued to a preceding word is prose. `and/or` and `/tmp/project` therefore stay
