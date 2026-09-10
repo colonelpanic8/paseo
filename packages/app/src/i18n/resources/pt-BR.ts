@@ -1983,6 +1983,12 @@ export const ptBR: TranslationResources = {
       host: "Visão geral",
     },
     usageHistory: {
+      sort: {
+        label: "Ordenar por",
+        group: "Grupo",
+        ascending: "Crescente ↑",
+        descending: "Decrescente ↓",
+      },
       unpricedNote_one: "A estimativa exclui {{count}} resposta sem preço conhecido",
       unpricedNote_other: "A estimativa exclui {{count}} respostas sem preço conhecido",
       readFailed: "Verifique a conexão com o host e tente novamente.",

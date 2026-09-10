@@ -1930,6 +1930,12 @@ export const zhCN: TranslationResources = {
       host: "概览",
     },
     usageHistory: {
+      sort: {
+        label: "排序依据",
+        group: "分组",
+        ascending: "升序 ↑",
+        descending: "降序 ↓",
+      },
       unpricedNote_one: "估算已排除 {{count}} 条价格未知的响应",
       unpricedNote_other: "估算已排除 {{count}} 条价格未知的响应",
       readFailed: "请检查主机连接后重试。",

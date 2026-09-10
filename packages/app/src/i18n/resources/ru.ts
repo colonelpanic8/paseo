@@ -1982,6 +1982,12 @@ export const ru: TranslationResources = {
       host: "Обзор",
     },
     usageHistory: {
+      sort: {
+        label: "Сортировать по",
+        group: "Группа",
+        ascending: "По возрастанию ↑",
+        descending: "По убыванию ↓",
+      },
       unpricedNote_one: "Оценка не учитывает {{count}} ответ с неизвестной ценой",
       unpricedNote_other: "Оценка не учитывает {{count}} ответов с неизвестной ценой",
       readFailed: "Проверьте подключение к хосту и повторите попытку.",

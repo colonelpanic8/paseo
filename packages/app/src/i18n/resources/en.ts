@@ -1996,6 +1996,12 @@ export const en = {
       host: "Overview",
     },
     usageHistory: {
+      sort: {
+        label: "Sort by",
+        group: "Group",
+        ascending: "Ascending ↑",
+        descending: "Descending ↓",
+      },
       unpricedNote_one: "Estimate excludes {{count}} response with no known price",
       unpricedNote_other: "Estimate excludes {{count}} responses with no known price",
       readFailed: "Check the host connection and try again.",

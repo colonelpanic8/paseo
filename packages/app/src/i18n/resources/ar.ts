@@ -1951,6 +1951,12 @@ export const ar: TranslationResources = {
       host: "نظرة عامة",
     },
     usageHistory: {
+      sort: {
+        label: "ترتيب حسب",
+        group: "المجموعة",
+        ascending: "تصاعدي ↑",
+        descending: "تنازلي ↓",
+      },
       unpricedNote_one: "التقدير يستثني {{count}} استجابة بلا سعر معروف",
       unpricedNote_other: "التقدير يستثني {{count}} استجابة بلا سعر معروف",
       readFailed: "تحقق من الاتصال بالمضيف وحاول مرة أخرى.",

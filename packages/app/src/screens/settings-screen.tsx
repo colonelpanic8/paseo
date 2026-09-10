@@ -1188,6 +1188,11 @@ export interface SettingsScreenProps {
   openAddHostIntent?: string | null;
 }
 
+function settingsContentStyle(view: SettingsView) {
+  const isUsageHistory = view.kind === "section" && view.section === "usage-history";
+  return [styles.content, isUsageHistory ? styles.wideContent : null];
+}
+
 export default function SettingsScreen({ view, openAddHostIntent = null }: SettingsScreenProps) {
   const router = useRouter();
   const { theme } = useUnistyles();
@@ -1632,7 +1637,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           onBack={handleBackFromDetail}
         />
         <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-          <View style={styles.content}>{content}</View>
+          <View style={settingsContentStyle(view)}>{content}</View>
         </ScrollView>
         {addHostModals}
       </View>
@@ -1665,7 +1670,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               leftStyle={desktopStyles.detailLeft}
             />
             <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-              <View style={styles.content}>{content}</View>
+              <View style={settingsContentStyle(view)}>{content}</View>
             </ScrollView>
           </View>
         </WindowChromeRegion>
@@ -1704,6 +1709,7 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 720,
     alignSelf: "center",
   },
+  wideContent: { maxWidth: "100%" },
   aboutValue: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,

@@ -1961,6 +1961,12 @@ export const ko: TranslationResources = {
       host: "개요",
     },
     usageHistory: {
+      sort: {
+        label: "정렬 기준",
+        group: "그룹",
+        ascending: "오름차순 ↑",
+        descending: "내림차순 ↓",
+      },
       unpricedNote_one: "가격을 알 수 없는 응답 {{count}}개는 추정치에서 제외됩니다",
       unpricedNote_other: "가격을 알 수 없는 응답 {{count}}개는 추정치에서 제외됩니다",
       readFailed: "호스트 연결을 확인한 후 다시 시도하세요.",

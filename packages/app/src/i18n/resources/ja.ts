@@ -1969,6 +1969,12 @@ export const ja: TranslationResources = {
       host: "概要",
     },
     usageHistory: {
+      sort: {
+        label: "並べ替え",
+        group: "グループ",
+        ascending: "昇順 ↑",
+        descending: "降順 ↓",
+      },
       unpricedNote_one: "見積もりから、料金が不明な {{count}} 件の応答を除外しています",
       unpricedNote_other: "見積もりから、料金が不明な {{count}} 件の応答を除外しています",
       readFailed: "ホストへの接続を確認して、もう一度お試しください。",

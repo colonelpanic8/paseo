@@ -1997,6 +1997,12 @@ export const es: TranslationResources = {
       host: "Resumen",
     },
     usageHistory: {
+      sort: {
+        label: "Ordenar por",
+        group: "Grupo",
+        ascending: "Ascendente ↑",
+        descending: "Descendente ↓",
+      },
       unpricedNote_one: "La estimación excluye {{count}} respuesta sin precio conocido",
       unpricedNote_other: "La estimación excluye {{count}} respuestas sin precio conocido",
       readFailed: "Comprueba la conexión con el host e inténtalo de nuevo.",

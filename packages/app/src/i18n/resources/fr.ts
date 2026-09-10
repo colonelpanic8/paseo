@@ -2002,6 +2002,12 @@ export const fr: TranslationResources = {
       host: "Aperçu",
     },
     usageHistory: {
+      sort: {
+        label: "Trier par",
+        group: "Groupe",
+        ascending: "Croissant ↑",
+        descending: "Décroissant ↓",
+      },
       unpricedNote_one: "L’estimation exclut {{count}} réponse sans prix connu",
       unpricedNote_other: "L’estimation exclut {{count}} réponses sans prix connu",
       readFailed: "Vérifiez la connexion à l’hôte et réessayez.",
