@@ -14,12 +14,14 @@ import type { LiveVoiceCue } from "@/live-voice/live-voice-cue-tones";
 export type { LiveVoiceCue } from "@/live-voice/live-voice-cue-tones";
 
 export interface LiveVoiceCuePlayer {
+  prepare(): void;
   play(cue: LiveVoiceCue): void;
   dispose(): void;
 }
 
 export function createLiveVoiceCuePlayer(): LiveVoiceCuePlayer {
   return {
+    prepare() {},
     play() {},
     dispose() {},
   };
