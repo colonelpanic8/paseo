@@ -17,16 +17,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { identityForeground, type IdentityColorName } from "@/styles/identity-colors";
 import { useHostRuntimeActiveConnectionLabels, useHosts } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import { normalizeHostLabel } from "@/types/host-connection";
+import {
+  BREAKDOWN_DIMENSIONS,
+  deriveUsageBreakdown,
+  sortBreakdown,
+  type BreakdownDimension,
+  type BreakdownSort,
+  type SortDirection,
+  type UsageBreakdown,
+  type BreakdownRow,
+} from "./breakdown";
 import { ProviderUsageHistoryChart } from "./chart";
 import {
   configuredProvidersByKind,
   type ProviderUsageHistoryConfiguredTotals,
-  type ProviderUsageHistoryHostTotals,
-  type ProviderUsageHistoryModelTotals,
   type ProviderUsageHistoryProviderTotals,
 } from "./derive";
 import {
@@ -47,10 +55,9 @@ import {
   type ProviderUsageHistoryHostRef,
 } from "./use-provider-usage-history";
 import { usageHistoryView } from "./view";
-import { enumerateDays, formatDayShort, formatPercent, formatTokens, formatUsd } from "./window";
+import { enumerateDays, formatPercent, formatTokens, formatUsd } from "./window";
 
 const WINDOW_DAYS: readonly ProviderUsageHistoryWindowDays[] = [7, 30, 90];
-type BreakdownMode = "provider" | "host" | "model" | "day";
 
 const SERIES_DOT_SIZE = 8;
 const PROVIDER_MARK_SIZE = 14;
@@ -58,8 +65,6 @@ const PROVIDER_MARK_SIZE = 14;
 const PROVIDER_NAME_RAIL = SERIES_DOT_SIZE + 8 + PROVIDER_MARK_SIZE + 8;
 /** The coverage line is always this tall, so naming a missing host never moves the page. */
 const COVERAGE_LINE_HEIGHT = 18;
-/** Wide enough for the headline and a provider row, narrow enough to leave the chart room. */
-const SUMMARY_COLUMN_WIDTH = 260;
 
 interface ProviderMarkProps {
   provider: string;
@@ -160,6 +165,9 @@ function hostFilterLabel(
 
 export function ProviderUsageHistorySection() {
   const { t } = useTranslation();
+  const [dimensions, setDimensions] = useState<readonly BreakdownDimension[]>(["model"]);
+  const [sort, setSort] = useState<BreakdownSort>("costUsd");
+  const [direction, setDirection] = useState<SortDirection>("descending");
   const [metric, setMetric] = useState<ProviderUsageHistoryMetric>("cost");
   const [windowDays, setWindowDays] = useState<ProviderUsageHistoryWindowDays>(30);
   /** `null` is every host, including any host added while the page is open. */
@@ -183,6 +191,13 @@ export function ProviderUsageHistorySection() {
     refresh,
   } = useProviderUsageHistory(selectedHosts, windowDays);
 
+  const handleToggleDimension = useCallback((dimension: BreakdownDimension) => {
+    setDimensions((current) =>
+      current.includes(dimension)
+        ? current.filter((value) => value !== dimension)
+        : [...current, dimension],
+    );
+  }, []);
   const handleRefresh = useCallback(() => {
     void refresh();
   }, [refresh]);
@@ -222,10 +237,19 @@ export function ProviderUsageHistorySection() {
   );
 
   const view = usageHistoryView({ hosts, isFetching });
-  const report = view.kind === "ready" ? mergeProviderUsageHistory(hosts) : null;
+  const isReady = view.kind === "ready";
+  const report = useMemo(
+    () => (isReady ? mergeProviderUsageHistory(hosts) : null),
+    [hosts, isReady],
+  );
   // Totals and Breakdown are their own sections, so they only exist once there
   // is something to break down.
   const activeReport = report !== null && report.daily.length > 0 ? report : null;
+  const breakdown = useMemo(() => {
+    if (activeReport === null) return null;
+    const grouped = deriveUsageBreakdown(activeReport, dimensions);
+    return { ...grouped, rows: sortBreakdown(grouped.rows, sort, direction) };
+  }, [activeReport, dimensions, sort, direction]);
 
   const busy = view.kind === "loading" || (view.kind === "ready" && view.isRefreshing);
   const isMultiHost = hostRefs.length > 1;
@@ -294,11 +318,23 @@ export function ProviderUsageHistorySection() {
         title={t("settings.usageHistory.title")}
         info={t("settings.usageHistory.info")}
         testID="usage-history-section"
-        trailing={controls}
       >
+        {controls}
+        <View style={styles.breakdownControls} testID="usage-history-breakdown">
+          <Text style={styles.headerCell}>{t("settings.usageHistory.breakdown.title")}</Text>
+          {BREAKDOWN_DIMENSIONS.map((dimension) => (
+            <DimensionButton
+              key={dimension}
+              dimension={dimension}
+              selected={dimensions.includes(dimension)}
+              onToggle={handleToggleDimension}
+            />
+          ))}
+        </View>
         <ProviderUsageHistoryBody
           view={view}
           report={activeReport}
+          breakdown={breakdown}
           hosts={hosts}
           showCoverage={isMultiHost}
           metric={metric}
@@ -310,10 +346,44 @@ export function ProviderUsageHistorySection() {
       {activeReport === null ? null : (
         <>
           <Totals totals={activeReport} />
-          <Breakdown totals={activeReport} />
+          {breakdown === null ? null : (
+            <Breakdown
+              breakdown={breakdown}
+              metric={metric}
+              sort={sort}
+              direction={direction}
+              onSort={setSort}
+              onDirection={setDirection}
+            />
+          )}
         </>
       )}
     </View>
+  );
+}
+
+function DimensionButton({
+  dimension,
+  selected,
+  onToggle,
+}: {
+  dimension: BreakdownDimension;
+  selected: boolean;
+  onToggle: (dimension: BreakdownDimension) => void;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => onToggle(dimension), [dimension, onToggle]);
+  const accessibilityState = useMemo(() => ({ selected }), [selected]);
+  return (
+    <Button
+      size="xs"
+      variant={selected ? "secondary" : "ghost"}
+      accessibilityState={accessibilityState}
+      testID={`usage-history-group-${dimension}`}
+      onPress={handlePress}
+    >
+      {t(`settings.usageHistory.breakdown.${dimension}`)}
+    </Button>
   );
 }
 
@@ -394,6 +464,7 @@ function HostFilterItem({
 interface ProviderUsageHistoryBodyProps {
   view: ProviderUsageHistoryView;
   report: ProviderUsageHistoryReport | null;
+  breakdown: UsageBreakdown | null;
   hosts: readonly ProviderUsageHistoryHostInput[];
   showCoverage: boolean;
   metric: ProviderUsageHistoryMetric;
@@ -405,6 +476,7 @@ interface ProviderUsageHistoryBodyProps {
 function ProviderUsageHistoryBody({
   view,
   report,
+  breakdown,
   hosts,
   showCoverage,
   metric,
@@ -444,7 +516,7 @@ function ProviderUsageHistoryBody({
     );
   }
 
-  if (report === null) {
+  if (report === null || breakdown === null) {
     return (
       <>
         <Text style={styles.emptyText}>{t("settings.usageHistory.empty")}</Text>
@@ -460,6 +532,7 @@ function ProviderUsageHistoryBody({
   return (
     <Summary
       totals={report}
+      breakdown={breakdown}
       hosts={hosts}
       showCoverage={showCoverage}
       metric={metric}
@@ -470,6 +543,7 @@ function ProviderUsageHistoryBody({
 }
 
 interface SummaryProps {
+  breakdown: UsageBreakdown;
   totals: ProviderUsageHistoryReport;
   hosts: readonly ProviderUsageHistoryHostInput[];
   showCoverage: boolean;
@@ -478,18 +552,24 @@ interface SummaryProps {
   untilDay: string;
 }
 
-/**
- * Headline and provider rows in a narrow left column, the chart in the rest.
- * The two read as one statement — a figure and the shape behind it — so they
- * only stack when the column is too narrow to hold both.
- */
-function Summary({ totals, hosts, showCoverage, metric, sinceDay, untilDay }: SummaryProps) {
+function Summary({
+  totals,
+  breakdown,
+  hosts,
+  showCoverage,
+  metric,
+  sinceDay,
+  untilDay,
+}: SummaryProps) {
   const { t } = useTranslation();
-  const isCompact = useIsCompactFormFactor();
   const days = useMemo(() => enumerateDays(sinceDay, untilDay), [sinceDay, untilDay]);
-  const activeProviders = useMemo(
-    () => totals.providers.map((entry) => entry.provider),
-    [totals.providers],
+  const series = useMemo(
+    () =>
+      breakdown.rows.map((row) => ({
+        ...row,
+        label: row.label || t("settings.usageHistory.table.total"),
+      })),
+    [breakdown.rows, t],
   );
   // A kind only earns sub-rows once more than one configured provider used it.
   const configuredByKind = useMemo(
@@ -499,32 +579,28 @@ function Summary({ totals, hosts, showCoverage, metric, sinceDay, untilDay }: Su
 
   return (
     <View style={styles.summary} testID="usage-history-summary">
-      <View style={isCompact ? styles.summaryStacked : styles.summaryColumns}>
-        <View
-          style={isCompact ? styles.figuresStacked : styles.figures}
-          testID="usage-history-figures"
-        >
-          <Headline totals={totals} metric={metric} />
-          {totals.providers.map((entry) => {
-            const configured = configuredByKind.get(entry.provider) ?? [];
-            return (
+      <Headline totals={totals} metric={metric} />
+      <View testID="usage-history-chart">
+        <ProviderUsageHistoryChart
+          days={days}
+          daily={breakdown.daily}
+          series={series}
+          metric={metric}
+        />
+      </View>
+      <View style={styles.figures} testID="usage-history-figures">
+        {totals.providers.map((entry) => {
+          const configured = configuredByKind.get(entry.provider) ?? [];
+          return (
+            <View key={entry.provider} style={styles.providerSummary}>
               <ProviderRow
-                key={entry.provider}
                 entry={entry}
                 metric={metric}
                 configured={configured.length > 1 ? configured : []}
               />
-            );
-          })}
-        </View>
-        <View style={styles.chartColumn} testID="usage-history-chart">
-          <ProviderUsageHistoryChart
-            days={days}
-            daily={totals.daily}
-            providers={activeProviders}
-            metric={metric}
-          />
-        </View>
+            </View>
+          );
+        })}
       </View>
       {showCoverage ? (
         <Text style={styles.coverage} numberOfLines={2} testID="usage-history-coverage">
@@ -673,228 +749,89 @@ function Totals({ totals }: { totals: ProviderUsageHistoryReport }) {
   );
 }
 
-function Breakdown({ totals }: { totals: ProviderUsageHistoryReport }) {
+interface BreakdownProps {
+  breakdown: UsageBreakdown;
+  metric: ProviderUsageHistoryMetric;
+  sort: BreakdownSort;
+  direction: SortDirection;
+  onSort: (sort: BreakdownSort) => void;
+  onDirection: (direction: SortDirection) => void;
+}
+
+function Breakdown({ breakdown, metric, sort, direction, onSort, onDirection }: BreakdownProps) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<BreakdownMode>("model");
-  const hasHostSplit = totals.hosts.length > 1;
-  const activeProviders = useMemo(
-    () => totals.providers.map((entry) => entry.provider),
-    [totals.providers],
-  );
-  const options = useMemo<SegmentedControlOption<BreakdownMode>[]>(
-    () => [
-      { value: "provider", label: t("settings.usageHistory.breakdown.provider") },
-      ...(hasHostSplit
-        ? [{ value: "host" as const, label: t("settings.usageHistory.breakdown.host") }]
-        : []),
-      { value: "model", label: t("settings.usageHistory.breakdown.model") },
-      { value: "day", label: t("settings.usageHistory.breakdown.day") },
-    ],
-    [hasHostSplit, t],
-  );
-  const activeMode = mode === "host" && !hasHostSplit ? "model" : mode;
-
-  const trailing = useMemo(
-    () => (
-      <SegmentedControl
-        size="xs"
-        options={options}
-        value={activeMode}
-        onValueChange={setMode}
-        testID="usage-history-breakdown"
-      />
-    ),
-    [activeMode, options],
-  );
-
+  const handleDirection = useCallback(() => {
+    onDirection(direction === "ascending" ? "descending" : "ascending");
+  }, [direction, onDirection]);
+  const sortOptions: SegmentedControlOption<BreakdownSort>[] = [
+    { value: "label", label: t("settings.usageHistory.sort.group") },
+    { value: "costUsd", label: t("settings.usageHistory.table.cost") },
+    { value: "totalTokens", label: t("settings.usageHistory.table.tokens") },
+  ];
   return (
-    <SettingsSection title={t("settings.usageHistory.breakdown.title")} trailing={trailing}>
-      {activeMode === "provider" ? <ProviderTable providers={totals.configuredProviders} /> : null}
-      {activeMode === "host" ? <HostTable hosts={totals.hosts} /> : null}
-      {activeMode === "model" ? <ModelTable models={totals.models} /> : null}
-      {activeMode === "day" ? <DayTable totals={totals} activeProviders={activeProviders} /> : null}
+    <SettingsSection title={t("settings.usageHistory.breakdown.title")}>
+      <View style={styles.breakdownControls}>
+        <Text style={styles.headerCell}>{t("settings.usageHistory.sort.label")}</Text>
+        <SegmentedControl
+          size="xs"
+          options={sortOptions}
+          value={sort}
+          onValueChange={onSort}
+          testID="usage-history-sort"
+        />
+        <Button
+          size="xs"
+          variant="outline"
+          testID="usage-history-sort-direction"
+          onPress={handleDirection}
+        >
+          {t(`settings.usageHistory.sort.${direction}`)}
+        </Button>
+      </View>
+      <View testID="usage-history-table">
+        <View style={styles.tableHeader}>
+          <Text style={[styles.headerCell, styles.nameColumn]}>
+            {t("settings.usageHistory.sort.group")}
+          </Text>
+          <Text style={[styles.headerCell, styles.valueColumn]}>
+            {t("settings.usageHistory.table.cost")}
+          </Text>
+          <Text style={[styles.headerCell, styles.valueColumn]}>
+            {t("settings.usageHistory.table.share")}
+          </Text>
+          <Text style={[styles.headerCell, styles.valueColumn]}>
+            {t("settings.usageHistory.table.tokens")}
+          </Text>
+        </View>
+        {breakdown.rows.map((row) => (
+          <BreakdownTableRow key={row.key} row={row} metric={metric} />
+        ))}
+      </View>
     </SettingsSection>
   );
 }
 
-/** Header labels for the three tables that share the cost/share/tokens columns. */
-function ValueColumnHeaders() {
-  const { t } = useTranslation();
-  return (
-    <>
-      <Text style={[styles.headerCell, styles.valueColumn]}>
-        {t("settings.usageHistory.table.cost")}
-      </Text>
-      <Text style={[styles.headerCell, styles.valueColumn]}>
-        {t("settings.usageHistory.table.share")}
-      </Text>
-      <Text style={[styles.headerCell, styles.valueColumn]}>
-        {t("settings.usageHistory.table.tokens")}
-      </Text>
-    </>
-  );
-}
-
-function ProviderTable({
-  providers,
+function BreakdownTableRow({
+  row,
+  metric,
 }: {
-  providers: readonly ProviderUsageHistoryConfiguredTotals[];
+  row: BreakdownRow;
+  metric: ProviderUsageHistoryMetric;
 }) {
   const { t } = useTranslation();
-
   return (
-    <View>
-      <View style={styles.tableHeader}>
-        <Text style={[styles.headerCell, styles.nameColumn]}>
-          {t("settings.usageHistory.table.provider")}
-        </Text>
-        <ValueColumnHeaders />
-      </View>
-      {providers.map((entry) => (
-        <View
-          key={entry.id}
-          style={styles.tableRow}
-          testID={`usage-history-provider-total-${entry.id}`}
-        >
-          <View style={[styles.nameColumn, styles.nameCell]}>
-            <ThemedProviderMark provider={entry.provider} size={12} uniProps={mutedMarkColor} />
-            <Text style={styles.bodyCell} numberOfLines={1}>
-              {entry.label}
-            </Text>
-          </View>
-          <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(entry.costUsd)}
-          </Text>
-          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-            {formatPercent(entry.costShare)}
-          </Text>
-          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-            {formatTokens(entry.totalTokens)}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function HostTable({ hosts }: { hosts: readonly ProviderUsageHistoryHostTotals[] }) {
-  const { t } = useTranslation();
-
-  return (
-    <View>
-      <View style={styles.tableHeader}>
-        <Text style={[styles.headerCell, styles.nameColumn]}>
-          {t("settings.usageHistory.table.host")}
-        </Text>
-        <ValueColumnHeaders />
-      </View>
-      {hosts.map((entry) => (
-        <View
-          key={entry.serverId}
-          style={styles.tableRow}
-          testID={`usage-history-host-total-${entry.serverId}`}
-        >
-          <Text style={[styles.bodyCell, styles.nameColumn]} numberOfLines={1}>
-            {entry.name}
-          </Text>
-          <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(entry.costUsd)}
-          </Text>
-          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-            {formatPercent(entry.costShare)}
-          </Text>
-          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-            {formatTokens(entry.totalTokens)}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function ModelTable({ models }: { models: readonly ProviderUsageHistoryModelTotals[] }) {
-  const { t } = useTranslation();
-
-  return (
-    <View>
-      <View style={styles.tableHeader}>
-        <Text style={[styles.headerCell, styles.nameColumn]}>
-          {t("settings.usageHistory.table.model")}
-        </Text>
-        <ValueColumnHeaders />
-      </View>
-      {models.map((model) => (
-        <View
-          key={`${model.provider}:${model.model}`}
-          style={styles.tableRow}
-          testID={`usage-history-model-${model.model}`}
-        >
-          <View style={[styles.nameColumn, styles.nameCell]}>
-            <ThemedProviderMark provider={model.provider} size={12} uniProps={mutedMarkColor} />
-            <Text style={styles.bodyCell} numberOfLines={1}>
-              {model.model}
-            </Text>
-          </View>
-          <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(model.costUsd)}
-          </Text>
-          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-            {formatPercent(model.costShare)}
-          </Text>
-          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-            {formatTokens(model.totalTokens)}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function DayTable({
-  totals,
-  activeProviders,
-}: {
-  totals: ProviderUsageHistoryReport;
-  activeProviders: readonly string[];
-}) {
-  const { t } = useTranslation();
-  // Newest first: a 90-day window puts the interesting end at the top.
-  const rows = useMemo(() => totals.daily.toReversed(), [totals.daily]);
-
-  return (
-    <View>
-      <View style={styles.tableHeader}>
-        <Text style={[styles.headerCell, styles.nameColumn]}>
-          {t("settings.usageHistory.table.day")}
-        </Text>
-        {activeProviders.map((provider) => (
-          <Text key={provider} style={[styles.headerCell, styles.valueColumn]} numberOfLines={1}>
-            {providerLabel(provider)}
-          </Text>
-        ))}
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.total")}
-        </Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>
-          {t("settings.usageHistory.table.tokens")}
+    <View style={styles.tableRow} testID="usage-history-breakdown-row">
+      <View style={[styles.nameColumn, styles.nameCell]}>
+        <View style={[styles.seriesDot, styles.groupDot(row.colorName)]} />
+        <Text style={[styles.bodyCell, styles.groupLabel]}>
+          {row.label || t("settings.usageHistory.table.total")}
         </Text>
       </View>
-      {rows.map((row) => (
-        <View key={row.day} style={styles.tableRow} testID={`usage-history-day-${row.day}`}>
-          <Text style={[styles.bodyCell, styles.nameColumn]}>{formatDayShort(row.day)}</Text>
-          {activeProviders.map((provider) => (
-            <Text key={provider} style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-              {formatUsd(row.byProvider.get(provider)?.costUsd ?? 0)}
-            </Text>
-          ))}
-          <Text style={[styles.bodyCell, styles.valueColumn]} numberOfLines={1}>
-            {formatUsd(row.costUsd)}
-          </Text>
-          <Text style={[styles.mutedCell, styles.valueColumn]} numberOfLines={1}>
-            {formatTokens(row.totalTokens)}
-          </Text>
-        </View>
-      ))}
+      <Text style={[styles.bodyCell, styles.valueColumn]}>{formatUsd(row.costUsd)}</Text>
+      <Text style={[styles.mutedCell, styles.valueColumn]}>
+        {formatPercent(metric === "cost" ? row.costShare : row.tokenShare)}
+      </Text>
+      <Text style={[styles.mutedCell, styles.valueColumn]}>{formatTokens(row.totalTokens)}</Text>
     </View>
   );
 }
@@ -928,24 +865,23 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[1],
     gap: theme.spacing[2],
   },
-  summaryColumns: {
+  breakdownControls: {
     flexDirection: "row",
-    gap: theme.spacing[6],
-  },
-  summaryStacked: {
-    gap: theme.spacing[4],
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: theme.spacing[2],
   },
   figures: {
-    width: SUMMARY_COLUMN_WIDTH,
-    flexShrink: 0,
-    gap: theme.spacing[4],
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[6],
+    marginTop: theme.spacing[4],
   },
-  figuresStacked: {
-    gap: theme.spacing[4],
-  },
-  chartColumn: {
-    flex: 1,
-  },
+  providerSummary: { flexGrow: 1, flexBasis: 260, gap: theme.spacing[3] },
+  groupLabel: { flex: 1 },
+  groupDot: (name: IdentityColorName) => ({
+    backgroundColor: identityForeground(name, theme.colorScheme),
+  }),
   placeholder: {
     // Holds the loaded report's height so results do not shove the page down.
     minHeight: 320,

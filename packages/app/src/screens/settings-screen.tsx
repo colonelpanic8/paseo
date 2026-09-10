@@ -1458,7 +1458,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   if (isCompactLayout) {
     return (
       <View style={styles.container}>
-        <PageLayout title={detailTitle} onBack={handleBackFromDetail}>
+        <PageLayout
+          wide={view.kind === "section" && view.section === "usage-history"}
+          title={detailTitle}
+          onBack={handleBackFromDetail}
+        >
           {content}
         </PageLayout>
         {addHostModals}
@@ -1486,7 +1490,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
         </WindowChromeRegion>
         <WindowChromeRegion corners="top-right">
           <View style={desktopStyles.contentPane} testID="settings-detail-pane">
-            <PageLayout title={detailTitle} titleTestID="settings-detail-header-title">
+            <PageLayout
+              wide={view.kind === "section" && view.section === "usage-history"}
+              title={detailTitle}
+              titleTestID="settings-detail-header-title"
+            >
               {content}
             </PageLayout>
           </View>
