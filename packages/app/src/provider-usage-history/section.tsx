@@ -25,6 +25,7 @@ import {
   BREAKDOWN_DIMENSIONS,
   deriveUsageBreakdown,
   sortBreakdown,
+  deriveChartBreakdown,
   type BreakdownDimension,
   type BreakdownSort,
   type SortDirection,
@@ -245,11 +246,16 @@ export function ProviderUsageHistorySection() {
   // Totals and Breakdown are their own sections, so they only exist once there
   // is something to break down.
   const activeReport = report !== null && report.daily.length > 0 ? report : null;
+  const tableSort = sort === "day" && !dimensions.includes("day") ? "label" : sort;
+  const chartBreakdown = useMemo(
+    () => (activeReport === null ? null : deriveChartBreakdown(activeReport, dimensions)),
+    [activeReport, dimensions],
+  );
   const breakdown = useMemo(() => {
     if (activeReport === null) return null;
     const grouped = deriveUsageBreakdown(activeReport, dimensions);
-    return { ...grouped, rows: sortBreakdown(grouped.rows, sort, direction) };
-  }, [activeReport, dimensions, sort, direction]);
+    return { ...grouped, rows: sortBreakdown(grouped.rows, tableSort, direction) };
+  }, [activeReport, dimensions, tableSort, direction]);
 
   const busy = view.kind === "loading" || (view.kind === "ready" && view.isRefreshing);
   const isMultiHost = hostRefs.length > 1;
@@ -334,7 +340,7 @@ export function ProviderUsageHistorySection() {
         <ProviderUsageHistoryBody
           view={view}
           report={activeReport}
-          breakdown={breakdown}
+          breakdown={chartBreakdown}
           hosts={hosts}
           showCoverage={isMultiHost}
           metric={metric}
@@ -350,7 +356,7 @@ export function ProviderUsageHistorySection() {
             <Breakdown
               breakdown={breakdown}
               metric={metric}
-              sort={sort}
+              sort={tableSort}
               direction={direction}
               onSort={setSort}
               onDirection={setDirection}
@@ -765,6 +771,9 @@ function Breakdown({ breakdown, metric, sort, direction, onSort, onDirection }: 
   }, [direction, onDirection]);
   const sortOptions: SegmentedControlOption<BreakdownSort>[] = [
     { value: "label", label: t("settings.usageHistory.sort.group") },
+    ...(breakdown.rows.some((row) => row.day !== "")
+      ? [{ value: "day" as const, label: t("settings.usageHistory.breakdown.day") }]
+      : []),
     { value: "costUsd", label: t("settings.usageHistory.table.cost") },
     { value: "totalTokens", label: t("settings.usageHistory.table.tokens") },
   ];
