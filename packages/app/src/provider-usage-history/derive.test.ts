@@ -1,4 +1,9 @@
-import { BREAKDOWN_DIMENSIONS, deriveUsageBreakdown, sortBreakdown } from "./breakdown";
+import {
+  BREAKDOWN_DIMENSIONS,
+  deriveChartBreakdown,
+  deriveUsageBreakdown,
+  sortBreakdown,
+} from "./breakdown";
 import { describe, expect, it } from "vitest";
 import { buildChartColumns, niceScale } from "./chart-data";
 import { configuredProvidersByKind, deriveProviderUsageHistory } from "./derive";
@@ -519,6 +524,24 @@ describe("combined usage breakdown", () => {
     const grouped = deriveUsageBreakdown(deduplicated, ["host", "provider", "model"]);
     expect(grouped.rows.reduce((sum, row) => sum + row.costUsd, 0)).toBe(14);
     expect(grouped.rows.filter((row) => row.label.startsWith("Laptop"))).toHaveLength(1);
+  });
+
+  it("keeps chart series and colors unchanged when grouping the table by day", () => {
+    for (const dimensions of [[], ["model"], ["host", "provider", "model"]] as const) {
+      expect(deriveChartBreakdown(totals, [...dimensions, "day"])).toEqual(
+        deriveChartBreakdown(totals, dimensions),
+      );
+    }
+  });
+
+  it("sorts combined groups chronologically across model and host labels", () => {
+    const rows = deriveUsageBreakdown(totals, ["host", "model", "day"]).rows;
+    const days = rows.map((row) => row.day).sort();
+    expect(new Set(days).size).toBeGreaterThan(1);
+    expect(sortBreakdown(rows, "day", "ascending").map((row) => row.day)).toEqual(days);
+    expect(sortBreakdown(rows, "day", "descending").map((row) => row.day)).toEqual(
+      days.toReversed(),
+    );
   });
 
   it("sorts by group, cost, or tokens in either direction without changing colors or input", () => {

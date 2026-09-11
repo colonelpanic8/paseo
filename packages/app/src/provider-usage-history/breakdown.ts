@@ -3,13 +3,14 @@ import type { ProviderUsageHistoryDayTotals, ProviderUsageHistoryTotals } from "
 
 export const BREAKDOWN_DIMENSIONS = ["host", "provider", "model", "day"] as const;
 export type BreakdownDimension = (typeof BREAKDOWN_DIMENSIONS)[number];
-export type BreakdownSort = "label" | "costUsd" | "totalTokens";
+export type BreakdownSort = "label" | "day" | "costUsd" | "totalTokens";
 export type SortDirection = "ascending" | "descending";
 
 export interface BreakdownRow {
   colorName: IdentityColorName;
   key: string;
   label: string;
+  day: string;
   costUsd: number;
   totalTokens: number;
   unpricedRecords: number;
@@ -48,6 +49,7 @@ export function deriveUsageBreakdown(
       colorName: "violet",
       key,
       label,
+      day: selected.includes("day") ? bucket.day : "",
       costUsd: 0,
       totalTokens: 0,
       unpricedRecords: 0,
@@ -98,7 +100,19 @@ export function sortBreakdown(
   const sign = direction === "ascending" ? 1 : -1;
   return [...rows].sort((left, right) => {
     const comparison =
-      sort === "label" ? left.label.localeCompare(right.label) : left[sort] - right[sort];
+      sort === "label" || sort === "day"
+        ? left[sort].localeCompare(right[sort])
+        : left[sort] - right[sort];
     return sign * comparison || left.key.localeCompare(right.key);
   });
+}
+
+export function deriveChartBreakdown(
+  totals: ProviderUsageHistoryTotals,
+  selected: readonly BreakdownDimension[],
+): UsageBreakdown {
+  return deriveUsageBreakdown(
+    totals,
+    selected.filter((dimension) => dimension !== "day"),
+  );
 }
