@@ -5,6 +5,23 @@ export const BREAKDOWN_DIMENSIONS = ["host", "provider", "model", "day"] as cons
 export type BreakdownDimension = (typeof BREAKDOWN_DIMENSIONS)[number];
 export type BreakdownSort = "label" | "day" | "costUsd" | "totalTokens";
 export type SortDirection = "ascending" | "descending";
+export type TimeGrouping = "day" | "week" | "month";
+
+export function timePeriodStart(day: string, grouping: TimeGrouping): string {
+  if (grouping === "day") return day;
+  if (grouping === "month") return `${day.slice(0, 7)}-01`;
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  return date.toISOString().slice(0, 10);
+}
+
+export function timePeriodLabel(start: string, grouping: TimeGrouping): string {
+  if (grouping === "day") return start;
+  if (grouping === "month") return start.slice(0, 7);
+  const end = new Date(`${start}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 6);
+  return `${start} – ${end.toISOString().slice(0, 10)}`;
+}
 
 export interface BreakdownSortCriterion {
   field: BreakdownSort;
@@ -31,6 +48,7 @@ export interface UsageBreakdown {
 export function deriveUsageBreakdown(
   totals: ProviderUsageHistoryTotals,
   selected: readonly BreakdownDimension[],
+  timeGrouping: TimeGrouping = "day",
 ): UsageBreakdown {
   const dimensions = BREAKDOWN_DIMENSIONS.filter((dimension) => selected.includes(dimension));
   const rows = new Map<string, BreakdownRow>();
@@ -38,23 +56,29 @@ export function deriveUsageBreakdown(
   for (const entry of totals.entries) {
     const { bucket, serverId, hostName } = entry;
     const providerId = bucket.providerId ?? bucket.provider;
+    const periodStart = timePeriodStart(bucket.day, timeGrouping);
     // Configured providers belong to a host, even when Host is not selected.
     const identity = {
       host: serverId,
       provider: [serverId, providerId],
       model: bucket.model,
-      day: bucket.day,
+      day: periodStart,
     };
     const qualifyProvider = totals.hosts.length > 1 && !selected.includes("host");
     const provider = qualifyProvider ? `${entry.providerLabel} · ${hostName}` : entry.providerLabel;
-    const display = { host: hostName, provider, model: bucket.model, day: bucket.day };
+    const display = {
+      host: hostName,
+      provider,
+      model: bucket.model,
+      day: timePeriodLabel(periodStart, timeGrouping),
+    };
     const key = JSON.stringify(dimensions.map((dimension) => identity[dimension]));
     const label = dimensions.map((dimension) => display[dimension]).join(" · ");
     const empty: BreakdownRow = {
       colorName: "violet",
       key,
       label,
-      day: selected.includes("day") ? bucket.day : "",
+      day: selected.includes("day") ? periodStart : "",
       costUsd: 0,
       totalTokens: 0,
       unpricedRecords: 0,
