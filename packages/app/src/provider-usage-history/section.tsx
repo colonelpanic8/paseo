@@ -920,18 +920,49 @@ function BreakdownTable({
       </View>
       {groups.map((group) => (
         <View key={group.rows[0].key} style={styles.tableGroup} testID="usage-history-table-group">
-          <Text
-            accessibilityRole="header"
-            style={styles.tableGroupHeading}
-            testID="usage-history-table-group-heading"
-          >
-            {group.label}
-          </Text>
+          <BreakdownGroupSummary label={group.label} rows={group.rows} metric={metric} />
           {group.rows.map((row) => (
             <BreakdownTableRow key={row.key} row={row} metric={metric} />
           ))}
         </View>
       ))}
+    </View>
+  );
+}
+
+function BreakdownGroupSummary({
+  label,
+  rows,
+  metric,
+}: {
+  label: string;
+  rows: readonly BreakdownRow[];
+  metric: ProviderUsageHistoryMetric;
+}) {
+  const totals = rows.reduce(
+    (sum, row) => ({
+      costUsd: sum.costUsd + row.costUsd,
+      tokens: sum.tokens + row.totalTokens,
+      share: sum.share + (metric === "cost" ? row.costShare : row.tokenShare),
+    }),
+    { costUsd: 0, tokens: 0, share: 0 },
+  );
+  return (
+    <View style={styles.tableGroupHeading} testID="usage-history-table-group-summary">
+      <Text
+        accessibilityRole="header"
+        style={[styles.groupSummaryCell, styles.nameColumn]}
+        testID="usage-history-table-group-heading"
+      >
+        {label}
+      </Text>
+      <Text style={[styles.groupSummaryCell, styles.valueColumn]}>{formatUsd(totals.costUsd)}</Text>
+      <Text style={[styles.groupSummaryCell, styles.valueColumn]}>
+        {formatPercent(totals.share)}
+      </Text>
+      <Text style={[styles.groupSummaryCell, styles.valueColumn]}>
+        {formatTokens(totals.tokens)}
+      </Text>
     </View>
   );
 }
@@ -1120,11 +1151,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   tableGroupHeading: {
     backgroundColor: theme.colors.surface2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
+    paddingVertical: theme.spacing[2],
+  },
+  groupSummaryCell: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.semibold,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
   },
   tableRow: {
     flexDirection: "row",
