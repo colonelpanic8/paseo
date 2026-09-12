@@ -205,7 +205,7 @@ test.describe("Worktree restore", () => {
       "restore-success",
     );
     await worktreeClient.fetchWorkspaces({
-      subscribe: { subscriptionId: `restore-secondary-${randomUUID()}` },
+      subscribe: {},
     });
     let updateTimeout: ReturnType<typeof setTimeout> | null = null;
     let unsubscribeSecondaryWorkspaceUpdate = () => {};
@@ -290,9 +290,16 @@ test.describe("Worktree restore", () => {
     await expect(
       page.getByTestId(`workspace-tab-agent_${firstAgent.id}`).filter({ visible: true }).first(),
     ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByTestId(`workspace-tab-agent_${firstAgent.id}`).filter({ visible: true }).first(),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(await fetchAgentArchivedAt(client, firstAgent.id)).not.toBeNull();
+    expect(await fetchAgentArchivedAt(client, secondAgent.id)).not.toBeNull();
+    await page.getByRole("button", { name: "Unarchive", exact: true }).click();
     await expect
       .poll(() => fetchAgentArchivedAt(client, firstAgent.id), { timeout: 30_000 })
       .toBeNull();
+    expect(await fetchAgentArchivedAt(client, secondAgent.id)).not.toBeNull();
     await expect(page.getByRole("button", { name: "Unarchive" })).toHaveCount(0, {
       timeout: 30_000,
     });
