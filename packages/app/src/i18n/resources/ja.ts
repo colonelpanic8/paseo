@@ -2034,6 +2034,11 @@ export const ja: TranslationResources = {
         titleCost: "日別コスト",
         titleTokens: "日別処理トークン",
         total: "合計",
+        shape: {
+          smooth: "滑らか",
+          linear: "直線",
+          step: "階段",
+        },
       },
       totals: {
         title: "合計",

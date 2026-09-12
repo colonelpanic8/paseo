@@ -2046,6 +2046,11 @@ export const ru: TranslationResources = {
         titleCost: "Стоимость по дням",
         titleTokens: "Обработанные токены по дням",
         total: "Всего",
+        shape: {
+          smooth: "Плавно",
+          linear: "Линейно",
+          step: "Ступени",
+        },
       },
       totals: {
         title: "Итоги",

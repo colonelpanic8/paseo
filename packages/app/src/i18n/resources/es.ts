@@ -2064,6 +2064,11 @@ export const es: TranslationResources = {
         titleCost: "Costo diario",
         titleTokens: "Tokens procesados por día",
         total: "Total",
+        shape: {
+          smooth: "Suave",
+          linear: "Lineal",
+          step: "Escalones",
+        },
       },
       totals: {
         title: "Totales",

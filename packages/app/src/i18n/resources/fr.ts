@@ -2069,6 +2069,11 @@ export const fr: TranslationResources = {
         titleCost: "Coût quotidien",
         titleTokens: "Jetons traités par jour",
         total: "Total",
+        shape: {
+          smooth: "Lissé",
+          linear: "Linéaire",
+          step: "Paliers",
+        },
       },
       totals: {
         title: "Totaux",

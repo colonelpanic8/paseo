@@ -1994,6 +1994,11 @@ export const zhCN: TranslationResources = {
         titleCost: "每日费用",
         titleTokens: "每日处理 tokens",
         total: "合计",
+        shape: {
+          smooth: "平滑",
+          linear: "直线",
+          step: "阶梯",
+        },
       },
       totals: {
         title: "汇总",

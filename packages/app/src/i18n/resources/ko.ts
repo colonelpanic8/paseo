@@ -2025,6 +2025,11 @@ export const ko: TranslationResources = {
         titleCost: "일별 비용",
         titleTokens: "일별 처리 토큰",
         total: "합계",
+        shape: {
+          smooth: "부드럽게",
+          linear: "직선",
+          step: "계단",
+        },
       },
       totals: {
         title: "합계",
