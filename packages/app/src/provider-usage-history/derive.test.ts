@@ -538,25 +538,31 @@ describe("combined usage breakdown", () => {
     const rows = deriveUsageBreakdown(totals, ["host", "model", "day"]).rows;
     const days = rows.map((row) => row.day).sort();
     expect(new Set(days).size).toBeGreaterThan(1);
-    expect(sortBreakdown(rows, "day", "ascending").map((row) => row.day)).toEqual(days);
-    expect(sortBreakdown(rows, "day", "descending").map((row) => row.day)).toEqual(
-      days.toReversed(),
-    );
+    expect(
+      sortBreakdown(rows, [{ field: "day", direction: "ascending" }]).map((row) => row.day),
+    ).toEqual(days);
+    expect(
+      sortBreakdown(rows, [{ field: "day", direction: "descending" }]).map((row) => row.day),
+    ).toEqual(days.toReversed());
   });
 
   it("sorts by group, cost, or tokens in either direction without changing colors or input", () => {
     const rows = deriveUsageBreakdown(totals, ["model"]).rows;
     for (const sort of ["label", "costUsd", "totalTokens"] as const) {
-      const ascending = sortBreakdown(rows, sort, "ascending");
-      const descending = sortBreakdown(rows, sort, "descending");
+      const ascending = sortBreakdown(rows, [{ field: sort, direction: "ascending" }]);
+      const descending = sortBreakdown(rows, [{ field: sort, direction: "descending" }]);
       expect(ascending.map((row) => row.key)).toEqual(
         descending.map((row) => row.key).toReversed(),
       );
       expect(ascending).not.toBe(rows);
       expect(ascending.every((row) => rows.includes(row))).toBe(true);
     }
-    expect(sortBreakdown(rows, "costUsd", "descending")[0]?.label).toBe("shared");
-    expect(sortBreakdown(rows, "label", "ascending")[0]?.label).toBe("other");
+    expect(sortBreakdown(rows, [{ field: "costUsd", direction: "descending" }])[0]?.label).toBe(
+      "shared",
+    );
+    expect(sortBreakdown(rows, [{ field: "label", direction: "ascending" }])[0]?.label).toBe(
+      "other",
+    );
     expect(deriveUsageBreakdown(totals, ["host", "model"])).toEqual(
       deriveUsageBreakdown(totals, ["model", "host"]),
     );
