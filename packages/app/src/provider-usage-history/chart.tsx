@@ -18,11 +18,11 @@ import {
   seriesPeak,
   type ProviderUsageHistoryChartColumn,
 } from "./chart-data";
-import { curvePath, smoothCurve } from "./curve";
+import { seriesLinePath } from "./curve";
 import type { ProviderUsageHistoryDayTotals } from "./derive";
 import { identityForeground, type IdentityColorName } from "@/styles/identity-colors";
 import type { BreakdownRow } from "./breakdown";
-import type { ProviderUsageHistoryMetric } from "./types";
+import type { ProviderUsageHistoryLineShape, ProviderUsageHistoryMetric } from "./types";
 import { formatDayShort, formatTokens, formatUsd, formatUsdCompact } from "./window";
 
 /** Headroom above the top gridline so a series at the peak keeps its full stroke. */
@@ -84,6 +84,7 @@ export interface ProviderUsageHistoryChartProps {
   daily: readonly ProviderUsageHistoryDayTotals[];
   series: readonly BreakdownRow[];
   metric: ProviderUsageHistoryMetric;
+  lineShape: ProviderUsageHistoryLineShape;
 }
 
 interface SeriesPath {
@@ -98,6 +99,7 @@ export function ProviderUsageHistoryChart({
   daily,
   series,
   metric,
+  lineShape,
 }: ProviderUsageHistoryChartProps) {
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
@@ -123,13 +125,12 @@ export function ProviderUsageHistoryChart({
     if (plotWidth <= 0 || columns.length === 0) return [];
     const step = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
     const built = providers.map((provider, providerIndex) => {
-      const line = curvePath(
-        smoothCurve(
-          columns.map((column, dayIndex) => ({
-            x: dayIndex * step,
-            y: plotY(column.bands[providerIndex]?.value ?? 0, scale.max, plotHeight),
-          })),
-        ),
+      const line = seriesLinePath(
+        columns.map((column, dayIndex) => ({
+          x: dayIndex * step,
+          y: plotY(column.bands[providerIndex]?.value ?? 0, scale.max, plotHeight),
+        })),
+        lineShape,
       );
       return {
         provider,
@@ -141,7 +142,7 @@ export function ProviderUsageHistoryChart({
     });
     // Paint the heavier series first so the lighter one is not buried.
     return built.sort((left, right) => right.total - left.total);
-  }, [columns, plotWidth, providers, scale.max, plotHeight, series]);
+  }, [columns, lineShape, plotWidth, providers, scale.max, plotHeight, series]);
 
   const format = metric === "cost" ? formatUsd : formatTokens;
   const formatTick = metric === "cost" ? formatUsdCompact : formatTokens;

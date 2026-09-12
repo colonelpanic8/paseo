@@ -2439,6 +2439,11 @@ export const ptBR: TranslationResources = {
         titleCost: "Custo diário",
         titleTokens: "Tokens processados por dia",
         total: "Total",
+        shape: {
+          smooth: "Suave",
+          linear: "Linear",
+          step: "Degraus",
+        },
       },
       totals: {
         title: "Totais",

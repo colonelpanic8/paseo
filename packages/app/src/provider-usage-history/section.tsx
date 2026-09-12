@@ -49,6 +49,7 @@ import {
 import { providerLabel } from "./providers";
 import { seriesFillStyle } from "./series";
 import type {
+  ProviderUsageHistoryLineShape,
   ProviderUsageHistoryMetric,
   ProviderUsageHistoryView,
   ProviderUsageHistoryWindowDays,
@@ -61,6 +62,7 @@ import { usageHistoryView } from "./view";
 import { enumerateDays, formatPercent, formatTokens, formatUsd } from "./window";
 
 const WINDOW_DAYS: readonly ProviderUsageHistoryWindowDays[] = [7, 30, 90];
+const LINE_SHAPES: readonly ProviderUsageHistoryLineShape[] = ["smooth", "linear", "step"];
 
 const SERIES_DOT_SIZE = 8;
 const PROVIDER_MARK_SIZE = 14;
@@ -176,6 +178,7 @@ export function ProviderUsageHistorySection() {
     { field: "costUsd", direction: "descending" },
   ]);
   const [metric, setMetric] = useState<ProviderUsageHistoryMetric>("cost");
+  const [lineShape, setLineShape] = useState<ProviderUsageHistoryLineShape>("smooth");
   const [windowDays, setWindowDays] = useState<ProviderUsageHistoryWindowDays>(30);
   /** `null` is every host, including any host added while the page is open. */
   const [selection, setSelection] = useState<readonly string[] | null>(null);
@@ -239,6 +242,15 @@ export function ProviderUsageHistorySection() {
       { value: "cost", label: t("settings.usageHistory.metric.cost") },
       { value: "tokens", label: t("settings.usageHistory.metric.tokens") },
     ],
+    [t],
+  );
+  const lineShapeOptions = useMemo<SegmentedControlOption<ProviderUsageHistoryLineShape>[]>(
+    () =>
+      LINE_SHAPES.map((shape) => ({
+        value: shape,
+        label: t(`settings.usageHistory.chart.shape.${shape}`),
+        testID: `usage-history-chart-shape-${shape}`,
+      })),
     [t],
   );
   const windowOptions = useMemo<SegmentedControlOption<string>[]>(
@@ -353,6 +365,13 @@ export function ProviderUsageHistorySection() {
               onToggle={handleToggleChartDimension}
             />
           ))}
+          <SegmentedControl
+            size="xs"
+            options={lineShapeOptions}
+            value={lineShape}
+            onValueChange={setLineShape}
+            testID="usage-history-chart-shape"
+          />
         </View>
         <ProviderUsageHistoryBody
           view={view}
@@ -361,6 +380,7 @@ export function ProviderUsageHistorySection() {
           hosts={hosts}
           showCoverage={isMultiHost}
           metric={metric}
+          lineShape={lineShape}
           sinceDay={usageWindow.sinceDay}
           untilDay={usageWindow.untilDay}
           onRetry={handleRefresh}
@@ -501,6 +521,7 @@ interface ProviderUsageHistoryBodyProps {
   hosts: readonly ProviderUsageHistoryHostInput[];
   showCoverage: boolean;
   metric: ProviderUsageHistoryMetric;
+  lineShape: ProviderUsageHistoryLineShape;
   sinceDay: string;
   untilDay: string;
   onRetry: () => void;
@@ -513,6 +534,7 @@ function ProviderUsageHistoryBody({
   hosts,
   showCoverage,
   metric,
+  lineShape,
   sinceDay,
   untilDay,
   onRetry,
@@ -569,6 +591,7 @@ function ProviderUsageHistoryBody({
       hosts={hosts}
       showCoverage={showCoverage}
       metric={metric}
+      lineShape={lineShape}
       sinceDay={sinceDay}
       untilDay={untilDay}
     />
@@ -581,6 +604,7 @@ interface SummaryProps {
   hosts: readonly ProviderUsageHistoryHostInput[];
   showCoverage: boolean;
   metric: ProviderUsageHistoryMetric;
+  lineShape: ProviderUsageHistoryLineShape;
   sinceDay: string;
   untilDay: string;
 }
@@ -591,6 +615,7 @@ function Summary({
   hosts,
   showCoverage,
   metric,
+  lineShape,
   sinceDay,
   untilDay,
 }: SummaryProps) {
@@ -619,6 +644,7 @@ function Summary({
           daily={breakdown.daily}
           series={series}
           metric={metric}
+          lineShape={lineShape}
         />
       </View>
       <View style={styles.figures} testID="usage-history-figures">
