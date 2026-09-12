@@ -221,9 +221,26 @@ describe("ProviderUsageHistorySection", () => {
     expect(headings()).toEqual(["2026-09-05", "2026-09-06"]);
     expect(screen.getByTestId("usage-history-chart").innerHTML).toBe(chart);
     fireEvent.click(
-      within(screen.getByTestId("usage-history-metric")).getByRole("button", { name: "Tokens" }),
+      within(screen.getByTestId("usage-history-table-metric")).getByRole("button", {
+        name: "Tokens",
+      }),
     );
     expect(summaries()).toEqual(["2026-09-05$3.0033.3%1K", "2026-09-06$3.0066.7%2K"]);
+    const timeGrouping = within(screen.getByTestId("usage-history-time-grouping"));
+    fireEvent.click(timeGrouping.getByRole("button", { name: "Week" }));
+    expect(headings()).toEqual(["2026-08-31 – 2026-09-06"]);
+    expect(rows()).toHaveLength(2);
+    expect(summaries()).toEqual(["2026-08-31 – 2026-09-06$6.00100.0%3K"]);
+    fireEvent.click(timeGrouping.getByRole("button", { name: "Month" }));
+    expect(headings()).toEqual(["2026-09"]);
+    expect(summaries()).toEqual(["2026-09$6.00100.0%3K"]);
+    fireEvent.click(screen.getByTestId("usage-history-table-group-model"));
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByTestId("usage-history-chart").innerHTML).toBe(chart);
+    const table = screen.getByTestId("usage-history-table").innerHTML;
+    fireEvent.click(screen.getByTestId("usage-history-chart-group-model"));
+    expect(screen.getByTestId("usage-history-chart").innerHTML).not.toBe(chart);
+    expect(screen.getByTestId("usage-history-table").innerHTML).toBe(table);
   });
 
   it("renders the hosts that answered and names the one that did not", async () => {
