@@ -2011,7 +2011,8 @@ export const fr: TranslationResources = {
         add: "Ajouter un critère",
         moveUp: "Monter",
         remove: "Supprimer",
-        dayHint: "Le tri par jour divise le tableau en lignes quotidiennes.",
+        timeHint:
+          "Les semaines commencent le lundi. Les totaux couvrent uniquement la période sélectionnée.",
       },
       unpricedNote_one: "L’estimation exclut {{count}} réponse sans prix connu",
       unpricedNote_other: "L’estimation exclut {{count}} réponses sans prix connu",
@@ -2078,6 +2079,11 @@ export const fr: TranslationResources = {
         cacheSavings: "Économies de cache",
       },
       breakdown: {
+        week: "Semaine",
+        month: "Mois",
+        timeGrouping: "Regroupement temporel",
+        chart: "Répartition du graphique",
+        table: "Tableau d’utilisation",
         title: "Répartition",
         provider: "Fournisseur",
         host: "Hôte",

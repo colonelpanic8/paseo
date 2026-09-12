@@ -1992,7 +1992,8 @@ export const ptBR: TranslationResources = {
         add: "Adicionar critério",
         moveUp: "Mover para cima",
         remove: "Remover",
-        dayHint: "Ordenar por dia divide a tabela em linhas diárias.",
+        timeHint:
+          "As semanas começam na segunda-feira. Os totais incluem apenas o período selecionado.",
       },
       unpricedNote_one: "A estimativa exclui {{count}} resposta sem preço conhecido",
       unpricedNote_other: "A estimativa exclui {{count}} respostas sem preço conhecido",
@@ -2058,6 +2059,11 @@ export const ptBR: TranslationResources = {
         cacheSavings: "Economia de cache",
       },
       breakdown: {
+        week: "Semana",
+        month: "Mês",
+        timeGrouping: "Agrupamento por período",
+        chart: "Detalhamento do gráfico",
+        table: "Tabela de uso",
         title: "Detalhamento",
         provider: "Provedor",
         host: "Host",

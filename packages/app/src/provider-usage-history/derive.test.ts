@@ -3,6 +3,8 @@ import {
   deriveChartBreakdown,
   deriveUsageBreakdown,
   sortBreakdown,
+  timePeriodStart,
+  timePeriodLabel,
 } from "./breakdown";
 import { describe, expect, it } from "vitest";
 import { buildChartColumns, niceScale } from "./chart-data";
@@ -475,6 +477,47 @@ describe("combined usage breakdown", () => {
     { ...onlyHost(input)[0]!, serverId: "host-b", hostName: "Laptop" },
   ];
   const totals = deriveProviderUsageHistory(hosts);
+
+  it("aggregates calendar periods across year, month, and Monday boundaries", () => {
+    const dates = ["2025-12-31", "2026-01-01", "2026-01-04", "2026-01-05", "2026-02-01"];
+    const report = deriveProviderUsageHistory(
+      onlyHost(
+        payload(
+          dates.map((day) =>
+            bucket({
+              day,
+              provider: "codex",
+              model: "shared",
+              costUsd: 1,
+              outputTokens: 10,
+            }),
+          ),
+          [source("codex", dates.length)],
+        ),
+      ),
+    );
+    const weekly = deriveUsageBreakdown(report, ["day"], "week");
+    expect(
+      weekly.rows.map(({ day, costUsd, totalTokens }) => ({ day, costUsd, totalTokens })),
+    ).toEqual([
+      { day: "2025-12-29", costUsd: 3, totalTokens: 30 },
+      { day: "2026-01-05", costUsd: 1, totalTokens: 10 },
+      { day: "2026-01-26", costUsd: 1, totalTokens: 10 },
+    ]);
+    const monthly = deriveUsageBreakdown(report, ["day"], "month");
+    expect(monthly.rows.map(({ day, costUsd }) => ({ day, costUsd }))).toEqual([
+      { day: "2025-12-01", costUsd: 1 },
+      { day: "2026-01-01", costUsd: 3 },
+      { day: "2026-02-01", costUsd: 1 },
+    ]);
+    expect(
+      sortBreakdown(monthly.rows, [{ field: "day", direction: "descending" }]).map(
+        ({ label }) => label,
+      ),
+    ).toEqual(["2026-02", "2026-01", "2025-12"]);
+    expect(timePeriodStart("2024-02-29", "month")).toBe("2024-02-01");
+    expect(timePeriodLabel("2025-12-29", "week")).toBe("2025-12-29 – 2026-01-04");
+  });
 
   it("uses only the selected dimensions and preserves totals in all 16 combinations", () => {
     for (let mask = 0; mask < 16; mask++) {

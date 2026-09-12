@@ -2006,7 +2006,8 @@ export const es: TranslationResources = {
         add: "Añadir criterio",
         moveUp: "Subir",
         remove: "Eliminar",
-        dayHint: "Ordenar por día divide la tabla en filas diarias.",
+        timeHint:
+          "Las semanas empiezan el lunes. Los totales solo incluyen el intervalo seleccionado.",
       },
       unpricedNote_one: "La estimación excluye {{count}} respuesta sin precio conocido",
       unpricedNote_other: "La estimación excluye {{count}} respuestas sin precio conocido",
@@ -2073,6 +2074,11 @@ export const es: TranslationResources = {
         cacheSavings: "Ahorro por caché",
       },
       breakdown: {
+        week: "Semana",
+        month: "Mes",
+        timeGrouping: "Agrupación temporal",
+        chart: "Desglose del gráfico",
+        table: "Tabla de uso",
         title: "Desglose",
         provider: "Proveedor",
         host: "Host",
