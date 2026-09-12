@@ -6,6 +6,11 @@ export type BreakdownDimension = (typeof BREAKDOWN_DIMENSIONS)[number];
 export type BreakdownSort = "label" | "day" | "costUsd" | "totalTokens";
 export type SortDirection = "ascending" | "descending";
 
+export interface BreakdownSortCriterion {
+  field: BreakdownSort;
+  direction: SortDirection;
+}
+
 export interface BreakdownRow {
   colorName: IdentityColorName;
   key: string;
@@ -94,16 +99,17 @@ export function deriveUsageBreakdown(
 
 export function sortBreakdown(
   rows: readonly BreakdownRow[],
-  sort: BreakdownSort,
-  direction: SortDirection,
+  criteria: readonly BreakdownSortCriterion[],
 ): BreakdownRow[] {
-  const sign = direction === "ascending" ? 1 : -1;
   return [...rows].sort((left, right) => {
-    const comparison =
-      sort === "label" || sort === "day"
-        ? left[sort].localeCompare(right[sort])
-        : left[sort] - right[sort];
-    return sign * comparison || left.key.localeCompare(right.key);
+    for (const { field, direction } of criteria) {
+      const comparison =
+        field === "label" || field === "day"
+          ? left[field].localeCompare(right[field])
+          : left[field] - right[field];
+      if (comparison !== 0) return (direction === "ascending" ? 1 : -1) * comparison;
+    }
+    return left.key.localeCompare(right.key);
   });
 }
 

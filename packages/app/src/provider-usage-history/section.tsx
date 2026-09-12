@@ -28,7 +28,7 @@ import {
   deriveChartBreakdown,
   type BreakdownDimension,
   type BreakdownSort,
-  type SortDirection,
+  type BreakdownSortCriterion,
   type UsageBreakdown,
   type BreakdownRow,
 } from "./breakdown";
@@ -167,8 +167,9 @@ function hostFilterLabel(
 export function ProviderUsageHistorySection() {
   const { t } = useTranslation();
   const [dimensions, setDimensions] = useState<readonly BreakdownDimension[]>(["model"]);
-  const [sort, setSort] = useState<BreakdownSort>("costUsd");
-  const [direction, setDirection] = useState<SortDirection>("descending");
+  const [sortCriteria, setSortCriteria] = useState<readonly BreakdownSortCriterion[]>([
+    { field: "costUsd", direction: "descending" },
+  ]);
   const [metric, setMetric] = useState<ProviderUsageHistoryMetric>("cost");
   const [windowDays, setWindowDays] = useState<ProviderUsageHistoryWindowDays>(30);
   /** `null` is every host, including any host added while the page is open. */
@@ -246,16 +247,18 @@ export function ProviderUsageHistorySection() {
   // Totals and Breakdown are their own sections, so they only exist once there
   // is something to break down.
   const activeReport = report !== null && report.daily.length > 0 ? report : null;
-  const tableSort = sort === "day" && !dimensions.includes("day") ? "label" : sort;
   const chartBreakdown = useMemo(
     () => (activeReport === null ? null : deriveChartBreakdown(activeReport, dimensions)),
     [activeReport, dimensions],
   );
   const breakdown = useMemo(() => {
     if (activeReport === null) return null;
-    const grouped = deriveUsageBreakdown(activeReport, dimensions);
-    return { ...grouped, rows: sortBreakdown(grouped.rows, tableSort, direction) };
-  }, [activeReport, dimensions, tableSort, direction]);
+    const tableDimensions = sortCriteria.some(({ field }) => field === "day")
+      ? [...dimensions, "day" as const]
+      : dimensions;
+    const grouped = deriveUsageBreakdown(activeReport, tableDimensions);
+    return { ...grouped, rows: sortBreakdown(grouped.rows, sortCriteria) };
+  }, [activeReport, dimensions, sortCriteria]);
 
   const busy = view.kind === "loading" || (view.kind === "ready" && view.isRefreshing);
   const isMultiHost = hostRefs.length > 1;
@@ -356,10 +359,8 @@ export function ProviderUsageHistorySection() {
             <Breakdown
               breakdown={breakdown}
               metric={metric}
-              sort={tableSort}
-              direction={direction}
-              onSort={setSort}
-              onDirection={setDirection}
+              criteria={sortCriteria}
+              onCriteriaChange={setSortCriteria}
             />
           )}
         </>
@@ -758,65 +759,152 @@ function Totals({ totals }: { totals: ProviderUsageHistoryReport }) {
 interface BreakdownProps {
   breakdown: UsageBreakdown;
   metric: ProviderUsageHistoryMetric;
-  sort: BreakdownSort;
-  direction: SortDirection;
-  onSort: (sort: BreakdownSort) => void;
-  onDirection: (direction: SortDirection) => void;
+  criteria: readonly BreakdownSortCriterion[];
+  onCriteriaChange: (criteria: readonly BreakdownSortCriterion[]) => void;
 }
 
-function Breakdown({ breakdown, metric, sort, direction, onSort, onDirection }: BreakdownProps) {
+function Breakdown({ breakdown, metric, criteria, onCriteriaChange }: BreakdownProps) {
   const { t } = useTranslation();
-  const handleDirection = useCallback(() => {
-    onDirection(direction === "ascending" ? "descending" : "ascending");
-  }, [direction, onDirection]);
   const sortOptions: SegmentedControlOption<BreakdownSort>[] = [
     { value: "label", label: t("settings.usageHistory.sort.group") },
-    ...(breakdown.rows.some((row) => row.day !== "")
-      ? [{ value: "day" as const, label: t("settings.usageHistory.breakdown.day") }]
-      : []),
+    { value: "day", label: t("settings.usageHistory.breakdown.day") },
     { value: "costUsd", label: t("settings.usageHistory.table.cost") },
     { value: "totalTokens", label: t("settings.usageHistory.table.tokens") },
   ];
+  const handleAdd = useCallback(() => {
+    const next = (["day", "costUsd", "totalTokens", "label"] as const).find(
+      (field) => !criteria.some((criterion) => criterion.field === field),
+    );
+    if (next) onCriteriaChange([...criteria, { field: next, direction: "descending" }]);
+  }, [criteria, onCriteriaChange]);
   return (
     <SettingsSection title={t("settings.usageHistory.breakdown.title")}>
-      <View style={styles.breakdownControls}>
-        <Text style={styles.headerCell}>{t("settings.usageHistory.sort.label")}</Text>
-        <SegmentedControl
-          size="xs"
+      {criteria.map((criterion, index) => (
+        <SortCriterionRow
+          key={criterion.field}
+          criterion={criterion}
+          index={index}
+          criteria={criteria}
           options={sortOptions}
-          value={sort}
-          onValueChange={onSort}
-          testID="usage-history-sort"
+          onChange={onCriteriaChange}
         />
-        <Button
-          size="xs"
-          variant="outline"
-          testID="usage-history-sort-direction"
-          onPress={handleDirection}
-        >
-          {t(`settings.usageHistory.sort.${direction}`)}
-        </Button>
-      </View>
-      <View testID="usage-history-table">
-        <View style={styles.tableHeader}>
-          <Text style={[styles.headerCell, styles.nameColumn]}>
-            {t("settings.usageHistory.sort.group")}
-          </Text>
-          <Text style={[styles.headerCell, styles.valueColumn]}>
-            {t("settings.usageHistory.table.cost")}
-          </Text>
-          <Text style={[styles.headerCell, styles.valueColumn]}>
-            {t("settings.usageHistory.table.share")}
-          </Text>
-          <Text style={[styles.headerCell, styles.valueColumn]}>
-            {t("settings.usageHistory.table.tokens")}
-          </Text>
+      ))}
+      {criteria.length < sortOptions.length ? (
+        <View style={styles.breakdownControls}>
+          <Button size="xs" variant="outline" onPress={handleAdd}>
+            {t("settings.usageHistory.sort.add")}
+          </Button>
         </View>
-        {breakdown.rows.map((row) => (
-          <BreakdownTableRow key={row.key} row={row} metric={metric} />
-        ))}
-      </View>
+      ) : null}
+      {criteria.some(({ field }) => field === "day") ? (
+        <Text style={styles.footnote}>{t("settings.usageHistory.sort.dayHint")}</Text>
+      ) : null}
+      <BreakdownTable breakdown={breakdown} metric={metric} />
     </SettingsSection>
+  );
+}
+
+function SortCriterionRow({
+  criterion,
+  index,
+  criteria,
+  options,
+  onChange,
+}: {
+  criterion: BreakdownSortCriterion;
+  index: number;
+  criteria: readonly BreakdownSortCriterion[];
+  options: SegmentedControlOption<BreakdownSort>[];
+  onChange: (criteria: readonly BreakdownSortCriterion[]) => void;
+}) {
+  const { t } = useTranslation();
+  const handleField = useCallback(
+    (field: BreakdownSort) =>
+      onChange(
+        criteria.map((entry, position) => (position === index ? { ...entry, field } : entry)),
+      ),
+    [criteria, index, onChange],
+  );
+  const handleDirection = useCallback(
+    () =>
+      onChange(
+        criteria.map((entry, position) =>
+          position === index
+            ? { ...entry, direction: entry.direction === "ascending" ? "descending" : "ascending" }
+            : entry,
+        ),
+      ),
+    [criteria, index, onChange],
+  );
+  const handleMoveUp = useCallback(() => {
+    if (index === 0) return;
+    const reordered = [...criteria];
+    [reordered[index - 1], reordered[index]] = [reordered[index]!, reordered[index - 1]!];
+    onChange(reordered);
+  }, [criteria, index, onChange]);
+  const handleRemove = useCallback(
+    () => onChange(criteria.filter((_, position) => position !== index)),
+    [criteria, index, onChange],
+  );
+  return (
+    <View style={styles.breakdownControls} testID={`usage-history-sort-row-${index}`}>
+      <Text style={styles.headerCell}>
+        {index === 0
+          ? t("settings.usageHistory.sort.label")
+          : t("settings.usageHistory.sort.thenBy")}
+      </Text>
+      <SegmentedControl
+        size="xs"
+        options={options.map((option) => ({
+          ...option,
+          disabled:
+            option.value !== criterion.field &&
+            criteria.some(({ field }) => field === option.value),
+        }))}
+        value={criterion.field}
+        onValueChange={handleField}
+        testID={`usage-history-sort-${index}`}
+      />
+      <Button
+        size="xs"
+        variant="outline"
+        testID={`usage-history-sort-direction-${index}`}
+        onPress={handleDirection}
+      >
+        {t(`settings.usageHistory.sort.${criterion.direction}`)}
+      </Button>
+      <Button size="xs" variant="ghost" disabled={index === 0} onPress={handleMoveUp}>
+        {t("settings.usageHistory.sort.moveUp")}
+      </Button>
+      <Button size="xs" variant="ghost" disabled={criteria.length === 1} onPress={handleRemove}>
+        {t("settings.usageHistory.sort.remove")}
+      </Button>
+    </View>
+  );
+}
+
+function BreakdownTable({ breakdown, metric }: Pick<BreakdownProps, "breakdown" | "metric">) {
+  const { t } = useTranslation();
+  return (
+    <View testID="usage-history-table">
+      <View style={styles.tableHeader}>
+        <Text style={[styles.headerCell, styles.nameColumn]}>
+          {t("settings.usageHistory.sort.group")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.cost")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.share")}
+        </Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>
+          {t("settings.usageHistory.table.tokens")}
+        </Text>
+      </View>
+      {breakdown.rows.map((row) => (
+        <BreakdownTableRow key={row.key} row={row} metric={metric} />
+      ))}
+    </View>
   );
 }
 

@@ -3,7 +3,7 @@
  */
 import { i18n as testI18n } from "@/i18n/i18next";
 import React, { type ReactElement } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -152,6 +152,55 @@ describe("ProviderUsageHistorySection", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it("sorts daily rows by ordered criteria without changing the chart", async () => {
+    const report = payload(3, "test-host");
+    report.buckets = [
+      { ...bucket(3), day: "2026-09-05", model: "alpha" },
+      { ...bucket(1), day: "2026-09-06", model: "alpha" },
+      { ...bucket(2), day: "2026-09-06", model: "beta" },
+    ];
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "test-host",
+        connectionStatus: "online",
+        supported: true,
+        payload: report,
+      },
+    ]);
+    await screen.findByTestId("usage-history-headline");
+    const chart = screen.getByTestId("usage-history-chart").innerHTML;
+    const rows = () =>
+      screen.getAllByTestId("usage-history-breakdown-row").map((row) => row.textContent);
+    const choose = (index: number, name: string) =>
+      fireEvent.click(
+        within(screen.getByTestId(`usage-history-sort-${index}`)).getByRole("button", { name }),
+      );
+    choose(0, "Day");
+    expect(rows()).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Add sort" }));
+    choose(1, "Cost");
+    expect(rows()[0]).toContain("beta · 2026-09-06");
+    expect(rows()[1]).toContain("alpha · 2026-09-06");
+    fireEvent.click(screen.getByTestId("usage-history-sort-direction-1"));
+    expect(rows()[0]).toContain("alpha · 2026-09-06");
+    fireEvent.click(screen.getByTestId("usage-history-sort-direction-0"));
+    expect(rows()[0]).toContain("alpha · 2026-09-05");
+    fireEvent.click(
+      within(screen.getByTestId("usage-history-sort-row-1")).getByRole("button", {
+        name: "Move up",
+      }),
+    );
+    expect(rows()[0]).toContain("alpha · 2026-09-06");
+    fireEvent.click(
+      within(screen.getByTestId("usage-history-sort-row-0")).getByRole("button", {
+        name: "Remove",
+      }),
+    );
+    expect(rows()[0]).toContain("alpha · 2026-09-05");
+    expect(screen.getByTestId("usage-history-chart").innerHTML).toBe(chart);
   });
 
   it("renders the hosts that answered and names the one that did not", async () => {
