@@ -180,6 +180,16 @@ describe("ProviderUsageHistorySection", () => {
       );
     choose(0, "Day");
     expect(rows()).toHaveLength(3);
+    const headings = () =>
+      screen
+        .getAllByTestId("usage-history-table-group-heading")
+        .map((heading) => heading.textContent);
+    expect(headings()).toEqual(["2026-09-06", "2026-09-05"]);
+    expect(
+      screen
+        .getAllByTestId("usage-history-table-group")
+        .map((group) => within(group).getAllByTestId("usage-history-breakdown-row").length),
+    ).toEqual([2, 1]);
     fireEvent.click(screen.getByRole("button", { name: "Add sort" }));
     choose(1, "Cost");
     expect(rows()[0]).toContain("beta · 2026-09-06");
@@ -188,18 +198,21 @@ describe("ProviderUsageHistorySection", () => {
     expect(rows()[0]).toContain("alpha · 2026-09-06");
     fireEvent.click(screen.getByTestId("usage-history-sort-direction-0"));
     expect(rows()[0]).toContain("alpha · 2026-09-05");
+    expect(headings()).toEqual(["2026-09-05", "2026-09-06"]);
     fireEvent.click(
       within(screen.getByTestId("usage-history-sort-row-1")).getByRole("button", {
         name: "Move up",
       }),
     );
     expect(rows()[0]).toContain("alpha · 2026-09-06");
+    expect(headings()).toEqual(["$1.00", "$2.00", "$3.00"]);
     fireEvent.click(
       within(screen.getByTestId("usage-history-sort-row-0")).getByRole("button", {
         name: "Remove",
       }),
     );
     expect(rows()[0]).toContain("alpha · 2026-09-05");
+    expect(headings()).toEqual(["2026-09-05", "2026-09-06"]);
     expect(screen.getByTestId("usage-history-chart").innerHTML).toBe(chart);
   });
 

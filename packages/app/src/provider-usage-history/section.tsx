@@ -799,7 +799,7 @@ function Breakdown({ breakdown, metric, criteria, onCriteriaChange }: BreakdownP
       {criteria.some(({ field }) => field === "day") ? (
         <Text style={styles.footnote}>{t("settings.usageHistory.sort.dayHint")}</Text>
       ) : null}
-      <BreakdownTable breakdown={breakdown} metric={metric} />
+      <BreakdownTable breakdown={breakdown} metric={metric} primarySort={criteria[0].field} />
     </SettingsSection>
   );
 }
@@ -883,8 +883,25 @@ function SortCriterionRow({
   );
 }
 
-function BreakdownTable({ breakdown, metric }: Pick<BreakdownProps, "breakdown" | "metric">) {
+function BreakdownTable({
+  breakdown,
+  metric,
+  primarySort,
+}: Pick<BreakdownProps, "breakdown" | "metric"> & { primarySort: BreakdownSort }) {
   const { t } = useTranslation();
+  const groups: { value: string | number; label: string; rows: BreakdownRow[] }[] = [];
+  for (const row of breakdown.rows) {
+    const value = row[primarySort];
+    const previous = groups.at(-1);
+    if (previous?.value === value) {
+      previous.rows.push(row);
+    } else {
+      let label = String(value) || t("settings.usageHistory.table.total");
+      if (primarySort === "costUsd") label = formatUsd(row.costUsd);
+      if (primarySort === "totalTokens") label = formatTokens(row.totalTokens);
+      groups.push({ value, label, rows: [row] });
+    }
+  }
   return (
     <View testID="usage-history-table">
       <View style={styles.tableHeader}>
@@ -901,8 +918,19 @@ function BreakdownTable({ breakdown, metric }: Pick<BreakdownProps, "breakdown" 
           {t("settings.usageHistory.table.tokens")}
         </Text>
       </View>
-      {breakdown.rows.map((row) => (
-        <BreakdownTableRow key={row.key} row={row} metric={metric} />
+      {groups.map((group) => (
+        <View key={group.rows[0].key} style={styles.tableGroup} testID="usage-history-table-group">
+          <Text
+            accessibilityRole="header"
+            style={styles.tableGroupHeading}
+            testID="usage-history-table-group-heading"
+          >
+            {group.label}
+          </Text>
+          {group.rows.map((row) => (
+            <BreakdownTableRow key={row.key} row={row} metric={metric} />
+          ))}
+        </View>
       ))}
     </View>
   );
@@ -1087,7 +1115,17 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[1],
     paddingBottom: theme.spacing[2],
   },
-  // Only the divider separates rows; the table carries no border of its own.
+  tableGroup: {
+    marginBottom: theme.spacing[4],
+  },
+  tableGroupHeading: {
+    backgroundColor: theme.colors.surface2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+  },
   tableRow: {
     flexDirection: "row",
     alignItems: "center",
