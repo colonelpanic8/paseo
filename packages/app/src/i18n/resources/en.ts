@@ -2147,6 +2147,11 @@ export const en = {
         titleCost: "Daily cost",
         titleTokens: "Daily processed tokens",
         total: "Total",
+        shape: {
+          smooth: "Smooth",
+          linear: "Linear",
+          step: "Step",
+        },
       },
       totals: {
         title: "Totals",
