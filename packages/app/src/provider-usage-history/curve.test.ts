@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { curvePath, monotoneTangents, smoothCurve, type CurvePoint } from "./curve";
+import {
+  curvePath,
+  monotoneTangents,
+  seriesLinePath,
+  smoothCurve,
+  stepPath,
+  type CurvePoint,
+} from "./curve";
 
 function points(values: readonly number[]): CurvePoint[] {
   return values.map((y, x) => ({ x, y }));
@@ -48,4 +55,41 @@ describe("smoothCurve", () => {
     expect(smoothCurve(points([5]))).toEqual([]);
     expect(curvePath([])).toBe("");
   });
+});
+
+describe("stepPath", () => {
+  it("changes value halfway between days, where the hover strips meet", () => {
+    expect(
+      stepPath([
+        { x: 0, y: 100 },
+        { x: 10, y: 20 },
+        { x: 20, y: 60 },
+      ]),
+    ).toBe("M0.00,100.00 L5.00,100.00 L5.00,20.00 L15.00,20.00 L15.00,60.00 L20.00,60.00");
+  });
+
+  it("has nothing to draw for a single day", () => {
+    expect(stepPath([{ x: 0, y: 5 }])).toBe("");
+  });
+});
+
+describe("seriesLinePath", () => {
+  it("joins recorded values with the selected shape", () => {
+    const spike = points([0, 9, 0]);
+    expect(seriesLinePath(spike, "linear")).toBe("M0.00,0.00 L1.00,9.00 L2.00,0.00");
+    expect(seriesLinePath(spike, "step")).toBe(
+      "M0.00,0.00 L0.50,0.00 L0.50,9.00 L1.50,9.00 L1.50,0.00 L2.00,0.00",
+    );
+    expect(seriesLinePath(spike, "smooth")).toBe(
+      "M0.00,0.00 C0.33,3.00 0.67,9.00 1.00,9.00 C1.33,9.00 1.67,3.00 2.00,0.00",
+    );
+  });
+
+  it.each(["smooth", "linear", "step"] as const)(
+    "omits empty and single-point %s lines",
+    (shape) => {
+      expect(seriesLinePath([], shape)).toBe("");
+      expect(seriesLinePath(points([5]), shape)).toBe("");
+    },
+  );
 });

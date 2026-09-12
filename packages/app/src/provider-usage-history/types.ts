@@ -18,6 +18,9 @@ export type ProviderUsageHistoryPayload = ProviderUsageHistoryReadResponseMessag
 /** Which number the headline, the chart, and the provider rows report. */
 export type ProviderUsageHistoryMetric = "cost" | "tokens";
 
+/** How the chart joins one day's point to the next. */
+export type ProviderUsageHistoryLineShape = "smooth" | "linear" | "step";
+
 /** Trailing calendar days the page asks the daemon for. */
 export type ProviderUsageHistoryWindowDays = 7 | 30 | 90;
 

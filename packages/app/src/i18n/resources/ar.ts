@@ -2084,6 +2084,11 @@ export const ar: TranslationResources = {
         titleCost: "التكلفة اليومية",
         titleTokens: "الرموز المعالجة يوميًا",
         total: "الإجمالي",
+        shape: {
+          smooth: "ناعم",
+          linear: "خطي",
+          step: "درجات",
+        },
       },
       totals: {
         title: "الإجماليات",

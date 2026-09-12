@@ -523,7 +523,7 @@ describe("combined usage breakdown", () => {
     for (let mask = 0; mask < 16; mask++) {
       const dimensions = BREAKDOWN_DIMENSIONS.filter((_, index) => (mask & (1 << index)) !== 0);
       const grouped = deriveUsageBreakdown(totals, dimensions);
-      const expectedCounts = [1, 2, 4, 4, 2, 4, 6, 6, 2, 4, 6, 6, 3, 6, 8, 8];
+      const expectedCounts = [1, 2, 2, 4, 2, 4, 3, 6, 2, 4, 3, 6, 3, 6, 4, 8];
       expect(grouped.rows).toHaveLength(expectedCounts[mask]);
       expect(grouped.rows.reduce((sum, row) => sum + row.costUsd, 0)).toBe(20);
       expect(grouped.rows.reduce((sum, row) => sum + row.totalTokens, 0)).toBe(200);
@@ -545,17 +545,54 @@ describe("combined usage breakdown", () => {
     }
   });
 
-  it("combines matching model names and separates configured providers and hosts when selected", () => {
+  it("combines matching model names and provider ids across hosts until Host is selected", () => {
     expect(deriveUsageBreakdown(totals, ["model"]).rows).toHaveLength(2);
     expect(deriveUsageBreakdown(totals, ["host", "model"]).rows).toHaveLength(4);
+    const byProvider = deriveUsageBreakdown(totals, ["provider"]);
+    expect(byProvider.rows.map(({ label, costUsd }) => ({ label, costUsd }))).toEqual([
+      { label: "Personal", costUsd: 8 },
+      { label: "Work", costUsd: 12 },
+    ]);
     const combined = deriveUsageBreakdown(totals, ["provider", "model"]);
-    expect(combined.rows).toHaveLength(6);
-    expect(combined.rows.find((row) => row.label === "Personal · Laptop · shared")?.costUsd).toBe(
-      4,
-    );
+    expect(combined.rows).toHaveLength(3);
+    expect(combined.rows.find((row) => row.label === "Personal · shared")?.costUsd).toBe(8);
+    expect(deriveUsageBreakdown(totals, ["host", "provider", "model"]).rows).toHaveLength(6);
+    expect(
+      deriveUsageBreakdown(totals, ["host", "provider", "model"]).rows.find(
+        (row) => row.label === "Laptop · Personal · shared",
+      )?.costUsd,
+    ).toBe(4);
     expect(deriveUsageBreakdown(totals, ["day", "provider", "model", "host"]).rows).toHaveLength(8);
     expect(deriveUsageBreakdown(totals, []).rows).toMatchObject([
       { costUsd: 20, totalTokens: 200 },
+    ]);
+  });
+
+  it("keeps different provider kinds separate even when their configured ids and labels match", () => {
+    const reports = ["codex", "claude"].map((provider, index) => {
+      const report = payload(
+        [
+          bucket({
+            day: "2026-09-05",
+            provider,
+            providerId: "work",
+            model: "shared",
+            costUsd: index + 1,
+          }),
+        ],
+        [configuredSource(provider, "work", "Work", 1)],
+      );
+      return {
+        serverId: `host-${index}`,
+        hostName: `Host ${index}`,
+        payload: report,
+        countedSources: report.sources,
+      };
+    });
+    const grouped = deriveUsageBreakdown(deriveProviderUsageHistory(reports), ["provider"]);
+    expect(grouped.rows.map(({ key, label, costUsd }) => ({ key, label, costUsd }))).toEqual([
+      { key: '[["codex","work"]]', label: "Work", costUsd: 1 },
+      { key: '[["claude","work"]]', label: "Work", costUsd: 2 },
     ]);
   });
 
