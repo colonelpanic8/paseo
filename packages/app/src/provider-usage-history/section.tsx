@@ -26,6 +26,8 @@ import {
   deriveUsageBreakdown,
   sortBreakdown,
   deriveChartBreakdown,
+  timePeriodLabel,
+  type TimeGrouping,
   type BreakdownDimension,
   type BreakdownSort,
   type BreakdownSortCriterion,
@@ -167,6 +169,9 @@ function hostFilterLabel(
 export function ProviderUsageHistorySection() {
   const { t } = useTranslation();
   const [dimensions, setDimensions] = useState<readonly BreakdownDimension[]>(["model"]);
+  const [chartDimensions, setChartDimensions] = useState<readonly BreakdownDimension[]>(["model"]);
+  const [tableMetric, setTableMetric] = useState<ProviderUsageHistoryMetric>("cost");
+  const [timeGrouping, setTimeGrouping] = useState<TimeGrouping>("day");
   const [sortCriteria, setSortCriteria] = useState<readonly BreakdownSortCriterion[]>([
     { field: "costUsd", direction: "descending" },
   ]);
@@ -195,6 +200,13 @@ export function ProviderUsageHistorySection() {
 
   const handleToggleDimension = useCallback((dimension: BreakdownDimension) => {
     setDimensions((current) =>
+      current.includes(dimension)
+        ? current.filter((value) => value !== dimension)
+        : [...current, dimension],
+    );
+  }, []);
+  const handleToggleChartDimension = useCallback((dimension: BreakdownDimension) => {
+    setChartDimensions((current) =>
       current.includes(dimension)
         ? current.filter((value) => value !== dimension)
         : [...current, dimension],
@@ -248,17 +260,17 @@ export function ProviderUsageHistorySection() {
   // is something to break down.
   const activeReport = report !== null && report.daily.length > 0 ? report : null;
   const chartBreakdown = useMemo(
-    () => (activeReport === null ? null : deriveChartBreakdown(activeReport, dimensions)),
-    [activeReport, dimensions],
+    () => (activeReport === null ? null : deriveChartBreakdown(activeReport, chartDimensions)),
+    [activeReport, chartDimensions],
   );
   const breakdown = useMemo(() => {
     if (activeReport === null) return null;
     const tableDimensions = sortCriteria.some(({ field }) => field === "day")
       ? [...dimensions, "day" as const]
       : dimensions;
-    const grouped = deriveUsageBreakdown(activeReport, tableDimensions);
+    const grouped = deriveUsageBreakdown(activeReport, tableDimensions, timeGrouping);
     return { ...grouped, rows: sortBreakdown(grouped.rows, sortCriteria) };
-  }, [activeReport, dimensions, sortCriteria]);
+  }, [activeReport, dimensions, sortCriteria, timeGrouping]);
 
   const busy = view.kind === "loading" || (view.kind === "ready" && view.isRefreshing);
   const isMultiHost = hostRefs.length > 1;
@@ -329,14 +341,16 @@ export function ProviderUsageHistorySection() {
         testID="usage-history-section"
       >
         {controls}
-        <View style={styles.breakdownControls} testID="usage-history-breakdown">
-          <Text style={styles.headerCell}>{t("settings.usageHistory.breakdown.title")}</Text>
-          {BREAKDOWN_DIMENSIONS.map((dimension) => (
+        <View style={styles.breakdownControls} testID="usage-history-chart-breakdown">
+          <Text style={styles.headerCell}>{t("settings.usageHistory.breakdown.chart")}</Text>
+          {BREAKDOWN_DIMENSIONS.filter((dimension) => dimension !== "day").map((dimension) => (
             <DimensionButton
               key={dimension}
               dimension={dimension}
-              selected={dimensions.includes(dimension)}
-              onToggle={handleToggleDimension}
+              timeGrouping={timeGrouping}
+              selected={chartDimensions.includes(dimension)}
+              scope="chart"
+              onToggle={handleToggleChartDimension}
             />
           ))}
         </View>
@@ -358,8 +372,16 @@ export function ProviderUsageHistorySection() {
           {breakdown === null ? null : (
             <Breakdown
               breakdown={breakdown}
-              metric={metric}
+              metric={tableMetric}
+              onMetricChange={setTableMetric}
+              dimensions={dimensions}
+              onToggleDimension={handleToggleDimension}
               criteria={sortCriteria}
+              timeGrouping={timeGrouping}
+              showTimeGrouping={
+                dimensions.includes("day") || sortCriteria.some(({ field }) => field === "day")
+              }
+              onTimeGroupingChange={setTimeGrouping}
               onCriteriaChange={setSortCriteria}
             />
           )}
@@ -371,10 +393,14 @@ export function ProviderUsageHistorySection() {
 
 function DimensionButton({
   dimension,
+  timeGrouping,
+  scope = "table",
   selected,
   onToggle,
 }: {
   dimension: BreakdownDimension;
+  timeGrouping: TimeGrouping;
+  scope?: "chart" | "table";
   selected: boolean;
   onToggle: (dimension: BreakdownDimension) => void;
 }) {
@@ -386,10 +412,10 @@ function DimensionButton({
       size="xs"
       variant={selected ? "secondary" : "ghost"}
       accessibilityState={accessibilityState}
-      testID={`usage-history-group-${dimension}`}
+      testID={`usage-history-${scope}-group-${dimension}`}
       onPress={handlePress}
     >
-      {t(`settings.usageHistory.breakdown.${dimension}`)}
+      {t(`settings.usageHistory.breakdown.${dimension === "day" ? timeGrouping : dimension}`)}
     </Button>
   );
 }
@@ -761,13 +787,30 @@ interface BreakdownProps {
   metric: ProviderUsageHistoryMetric;
   criteria: readonly BreakdownSortCriterion[];
   onCriteriaChange: (criteria: readonly BreakdownSortCriterion[]) => void;
+  timeGrouping: TimeGrouping;
+  showTimeGrouping: boolean;
+  onTimeGroupingChange: (grouping: TimeGrouping) => void;
+  dimensions: readonly BreakdownDimension[];
+  onToggleDimension: (dimension: BreakdownDimension) => void;
+  onMetricChange: (metric: ProviderUsageHistoryMetric) => void;
 }
 
-function Breakdown({ breakdown, metric, criteria, onCriteriaChange }: BreakdownProps) {
+function Breakdown({
+  breakdown,
+  metric,
+  criteria,
+  onCriteriaChange,
+  timeGrouping,
+  showTimeGrouping,
+  onTimeGroupingChange,
+  dimensions,
+  onToggleDimension,
+  onMetricChange,
+}: BreakdownProps) {
   const { t } = useTranslation();
   const sortOptions: SegmentedControlOption<BreakdownSort>[] = [
     { value: "label", label: t("settings.usageHistory.sort.group") },
-    { value: "day", label: t("settings.usageHistory.breakdown.day") },
+    { value: "day", label: t(`settings.usageHistory.breakdown.${timeGrouping}`) },
     { value: "costUsd", label: t("settings.usageHistory.table.cost") },
     { value: "totalTokens", label: t("settings.usageHistory.table.tokens") },
   ];
@@ -778,7 +821,47 @@ function Breakdown({ breakdown, metric, criteria, onCriteriaChange }: BreakdownP
     if (next) onCriteriaChange([...criteria, { field: next, direction: "descending" }]);
   }, [criteria, onCriteriaChange]);
   return (
-    <SettingsSection title={t("settings.usageHistory.breakdown.title")}>
+    <SettingsSection title={t("settings.usageHistory.breakdown.table")}>
+      <View style={styles.breakdownControls} testID="usage-history-breakdown">
+        <Text style={styles.headerCell}>{t("settings.usageHistory.breakdown.title")}</Text>
+        {BREAKDOWN_DIMENSIONS.map((dimension) => (
+          <DimensionButton
+            key={dimension}
+            dimension={dimension}
+            timeGrouping={timeGrouping}
+            selected={dimensions.includes(dimension)}
+            onToggle={onToggleDimension}
+          />
+        ))}
+      </View>
+      {showTimeGrouping ? (
+        <View style={styles.breakdownControls}>
+          <Text style={styles.headerCell}>{t("settings.usageHistory.breakdown.timeGrouping")}</Text>
+          <SegmentedControl
+            value={timeGrouping}
+            onValueChange={onTimeGroupingChange}
+            options={(["day", "week", "month"] as const).map((value) => ({
+              value,
+              label: t(`settings.usageHistory.breakdown.${value}`),
+            }))}
+            size="xs"
+            testID="usage-history-time-grouping"
+          />
+        </View>
+      ) : null}
+      <View style={styles.breakdownControls}>
+        <Text style={styles.headerCell}>{t("settings.usageHistory.table.share")}</Text>
+        <SegmentedControl
+          value={metric}
+          onValueChange={onMetricChange}
+          options={(["cost", "tokens"] as const).map((value) => ({
+            value,
+            label: t(`settings.usageHistory.metric.${value}`),
+          }))}
+          size="xs"
+          testID="usage-history-table-metric"
+        />
+      </View>
       {criteria.map((criterion, index) => (
         <SortCriterionRow
           key={criterion.field}
@@ -797,9 +880,14 @@ function Breakdown({ breakdown, metric, criteria, onCriteriaChange }: BreakdownP
         </View>
       ) : null}
       {criteria.some(({ field }) => field === "day") ? (
-        <Text style={styles.footnote}>{t("settings.usageHistory.sort.dayHint")}</Text>
+        <Text style={styles.footnote}>{t("settings.usageHistory.sort.timeHint")}</Text>
       ) : null}
-      <BreakdownTable breakdown={breakdown} metric={metric} primarySort={criteria[0].field} />
+      <BreakdownTable
+        breakdown={breakdown}
+        metric={metric}
+        primarySort={criteria[0].field}
+        timeGrouping={timeGrouping}
+      />
     </SettingsSection>
   );
 }
@@ -887,7 +975,8 @@ function BreakdownTable({
   breakdown,
   metric,
   primarySort,
-}: Pick<BreakdownProps, "breakdown" | "metric"> & { primarySort: BreakdownSort }) {
+  timeGrouping,
+}: Pick<BreakdownProps, "breakdown" | "metric" | "timeGrouping"> & { primarySort: BreakdownSort }) {
   const { t } = useTranslation();
   const groups: { value: string | number; label: string; rows: BreakdownRow[] }[] = [];
   for (const row of breakdown.rows) {
@@ -897,6 +986,7 @@ function BreakdownTable({
       previous.rows.push(row);
     } else {
       let label = String(value) || t("settings.usageHistory.table.total");
+      if (primarySort === "day") label = timePeriodLabel(row.day, timeGrouping);
       if (primarySort === "costUsd") label = formatUsd(row.costUsd);
       if (primarySort === "totalTokens") label = formatTokens(row.totalTokens);
       groups.push({ value, label, rows: [row] });
