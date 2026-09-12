@@ -185,6 +185,11 @@ describe("ProviderUsageHistorySection", () => {
         .getAllByTestId("usage-history-table-group-heading")
         .map((heading) => heading.textContent);
     expect(headings()).toEqual(["2026-09-06", "2026-09-05"]);
+    const summaries = () =>
+      screen
+        .getAllByTestId("usage-history-table-group-summary")
+        .map((summary) => summary.textContent);
+    expect(summaries()).toEqual(["2026-09-06$3.0050.0%2K", "2026-09-05$3.0050.0%1K"]);
     expect(
       screen
         .getAllByTestId("usage-history-table-group")
@@ -199,6 +204,7 @@ describe("ProviderUsageHistorySection", () => {
     fireEvent.click(screen.getByTestId("usage-history-sort-direction-0"));
     expect(rows()[0]).toContain("alpha · 2026-09-05");
     expect(headings()).toEqual(["2026-09-05", "2026-09-06"]);
+    expect(summaries()).toEqual(["2026-09-05$3.0050.0%1K", "2026-09-06$3.0050.0%2K"]);
     fireEvent.click(
       within(screen.getByTestId("usage-history-sort-row-1")).getByRole("button", {
         name: "Move up",
@@ -214,6 +220,10 @@ describe("ProviderUsageHistorySection", () => {
     expect(rows()[0]).toContain("alpha · 2026-09-05");
     expect(headings()).toEqual(["2026-09-05", "2026-09-06"]);
     expect(screen.getByTestId("usage-history-chart").innerHTML).toBe(chart);
+    fireEvent.click(
+      within(screen.getByTestId("usage-history-metric")).getByRole("button", { name: "Tokens" }),
+    );
+    expect(summaries()).toEqual(["2026-09-05$3.0033.3%1K", "2026-09-06$3.0066.7%2K"]);
   });
 
   it("renders the hosts that answered and names the one that did not", async () => {
