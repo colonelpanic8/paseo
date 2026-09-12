@@ -57,18 +57,16 @@ export function deriveUsageBreakdown(
     const { bucket, serverId, hostName } = entry;
     const providerId = bucket.providerId ?? bucket.provider;
     const periodStart = timePeriodStart(bucket.day, timeGrouping);
-    // Configured providers belong to a host, even when Host is not selected.
+    // Match by kind and configured id; transcripts cannot establish account identity.
     const identity = {
       host: serverId,
-      provider: [serverId, providerId],
+      provider: [bucket.provider, providerId],
       model: bucket.model,
       day: periodStart,
     };
-    const qualifyProvider = totals.hosts.length > 1 && !selected.includes("host");
-    const provider = qualifyProvider ? `${entry.providerLabel} · ${hostName}` : entry.providerLabel;
     const display = {
       host: hostName,
-      provider,
+      provider: entry.providerLabel,
       model: bucket.model,
       day: timePeriodLabel(periodStart, timeGrouping),
     };

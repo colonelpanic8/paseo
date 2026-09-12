@@ -269,7 +269,7 @@ describe("ProviderUsageHistorySection", () => {
     expect(screen.queryByTestId("usage-history-headline")).toBeNull();
   });
 
-  it("offers the Host breakdown only once more than one host contributes", async () => {
+  it("combines built-in providers across hosts and splits them when Host is selected", async () => {
     const online = (serverId: string, label: string, cost: number): FakeHost => ({
       serverId,
       label,
@@ -278,14 +278,45 @@ describe("ProviderUsageHistorySection", () => {
       payload: payload(cost, label),
     });
 
-    renderSection([online("host-a", "ryzen-shine", 3)]);
-    await screen.findByTestId("usage-history-headline");
-    expect(screen.queryByRole("button", { name: "Host" })).toBeNull();
-    cleanup();
-
     renderSection([online("host-a", "ryzen-shine", 3), online("host-b", "jimi-hendnix", 1)]);
     expect((await screen.findByTestId("usage-history-headline")).textContent).toBe("$4.00");
-    expect(screen.getByRole("button", { name: "Host" })).toBeDefined();
+    fireEvent.click(screen.getByTestId("usage-history-table-group-model"));
+    fireEvent.click(screen.getByTestId("usage-history-table-group-provider"));
+    expect(
+      screen.getAllByTestId("usage-history-breakdown-row").map((row) => row.textContent),
+    ).toEqual(["Codex$4.00100.0%2K"]);
+    fireEvent.click(screen.getByTestId("usage-history-table-group-host"));
+    expect(
+      screen.getAllByTestId("usage-history-breakdown-row").map((row) => row.textContent),
+    ).toEqual(["ryzen-shine · Codex$3.0075.0%1K", "jimi-hendnix · Codex$1.0025.0%1K"]);
+  });
+
+  it("selects each line shape without changing usage totals", async () => {
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "Laptop",
+        connectionStatus: "online",
+        supported: true,
+        payload: payload(3, "laptop"),
+      },
+    ]);
+    await screen.findByTestId("usage-history-headline");
+    const controls = within(screen.getByTestId("usage-history-chart-shape"));
+    expect(controls.getByRole("button", { name: "Smooth" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    const figures = screen.getByTestId("usage-history-figures").textContent;
+    for (const name of ["Linear", "Step", "Smooth"]) {
+      fireEvent.click(controls.getByRole("button", { name }));
+      expect(
+        controls
+          .getAllByRole("button")
+          .filter((button) => button.getAttribute("aria-selected") === "true")
+          .map((button) => button.textContent),
+      ).toEqual([name]);
+      expect(screen.getByTestId("usage-history-figures").textContent).toBe(figures);
+    }
   });
 
   it("tells identically named hosts apart by the endpoint each is reached at", async () => {
