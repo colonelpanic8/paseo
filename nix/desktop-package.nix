@@ -24,7 +24,6 @@
   buildCommitMessage ? null,
   buildRepoUrl ? null,
 }:
-
 let
   buildInfo = import ./build-info.nix { inherit lib; } {
     inherit
@@ -36,7 +35,7 @@ let
   };
 in
 
-buildNpmPackage {
+buildNpmPackage rec {
   pname = "paseo-desktop";
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
 
