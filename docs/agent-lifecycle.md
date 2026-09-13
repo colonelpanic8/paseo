@@ -109,10 +109,19 @@ archived workspace. History navigation must not infer workspace lifecycle from `
 or mutate either lifecycle. The workspace route asks the daemon for authoritative recovery state;
 only the route's explicit Unarchive or Restore action changes the archived workspace.
 
+**Workspace unarchive restores the workspace's agents.** Archiving a workspace archives every agent
+that belongs to it (`archiveWorkspaceContents`), and each agent taken from unarchived to archived by
+that gesture is stamped with `archivedWithWorkspaceId` on its stored record. The stamp is
+storage-only — it never crosses the wire. Unarchiving the workspace
+(`unarchiveWorkspaceContents`) restores exactly the stamped agents — running each one's
+provider-native unarchive hook and clearing the stamp — so the workspace comes back with the threads
+it had when it was archived. Agents the user archived individually before the workspace archive
+carry no stamp and stay archived; they remain recoverable from History. Unarchiving an agent
+individually also clears its stamp, so a later workspace restore leaves it alone.
+
 History navigation opens the selected agent without changing either archive state. Workspace
-**Restore** recovers only the workspace; the selected archived agent stays open with its callout.
-The agent's **Unarchive** runs the provider's native unarchive hook before interactive resume and
-history hydration. Other archived agents stay archived.
+**Restore** recovers the workspace and the agents stamped by its archive gesture. Individually
+archived agents stay open with their callouts until the user explicitly unarchives them.
 
 Opening an agent is a navigation choice, independent of whether its details are cached. The
 layout retains that choice across reload while the panel fetches the agent from the daemon.
