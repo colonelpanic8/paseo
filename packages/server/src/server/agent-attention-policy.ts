@@ -24,6 +24,11 @@ interface ComputeNotificationPlanInput {
   // Whether a push notification is allowed when no client is present.
   pushEligible: boolean;
   nowMs: number;
+  // How long after a client's last activity it still counts as present.
+  presenceThresholdMs?: number;
+  // Push even while a client is present or focused. In-app delivery is
+  // unchanged, so the desktop still gets its notification.
+  ignorePresence?: boolean;
 }
 
 function isFocusedOnTarget(
@@ -44,7 +49,10 @@ export function computeNotificationPlan({
   focusTarget,
   pushEligible,
   nowMs,
+  presenceThresholdMs = PRESENCE_THRESHOLD_MS,
+  ignorePresence = false,
 }: ComputeNotificationPlanInput): NotificationPlan {
+  const forcedPush = ignorePresence && pushEligible;
   let mostRecentPresentIndex: number | null = null;
   let mostRecentPresentAtMs = Number.NEGATIVE_INFINITY;
 
@@ -52,14 +60,14 @@ export function computeNotificationPlan({
     const clampedActivityAtMs =
       state.lastActivityAtMs === null ? null : Math.min(state.lastActivityAtMs, nowMs);
     const isPresent =
-      clampedActivityAtMs !== null && nowMs - clampedActivityAtMs <= PRESENCE_THRESHOLD_MS;
+      clampedActivityAtMs !== null && nowMs - clampedActivityAtMs <= presenceThresholdMs;
 
     if (!isPresent) {
       continue;
     }
 
     if (state.appVisible && isFocusedOnTarget(state, focusTarget)) {
-      return { inAppRecipientIndex: null, shouldPush: false };
+      return { inAppRecipientIndex: null, shouldPush: forcedPush };
     }
 
     if (clampedActivityAtMs > mostRecentPresentAtMs) {
@@ -69,7 +77,7 @@ export function computeNotificationPlan({
   }
 
   if (mostRecentPresentIndex !== null) {
-    return { inAppRecipientIndex: mostRecentPresentIndex, shouldPush: false };
+    return { inAppRecipientIndex: mostRecentPresentIndex, shouldPush: forcedPush };
   }
 
   return { inAppRecipientIndex: null, shouldPush: pushEligible };
