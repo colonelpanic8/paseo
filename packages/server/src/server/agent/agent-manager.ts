@@ -651,6 +651,18 @@ function buildImportedTimelineRows(entries: readonly ImportedTimelineEntry[]): A
   return rows;
 }
 
+function resolveImportedLastMessageAt(timelineRows: readonly AgentTimelineRow[]): Date | null {
+  let latest: Date | null = null;
+  for (const row of timelineRows) {
+    if (!isConversationMessage(row.item)) continue;
+    const timestamp = new Date(row.timestamp);
+    if (!Number.isNaN(timestamp.getTime()) && (!latest || timestamp > latest)) {
+      latest = timestamp;
+    }
+  }
+  return latest;
+}
+
 function resolveImportedAgentTitle(
   config: AgentSessionConfig,
   timelineRows: readonly AgentTimelineRow[],
@@ -1462,6 +1474,7 @@ export class AgentManager {
         workspaceId: input.workspaceId,
         timelineRows,
         timelineNextSeq: timelineRows.length + 1,
+        lastMessageAt: resolveImportedLastMessageAt(timelineRows),
         persistence: imported.persistence,
         historyPrimed: true,
         initialTitle,
