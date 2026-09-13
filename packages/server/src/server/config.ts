@@ -611,6 +611,7 @@ export function resolveConfigFromPersisted(
     git: resolveGitProcessConfig(env, persisted),
     autoArchiveAfterMerge,
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
+    ...(persisted.daemon?.push !== undefined ? { push: persisted.daemon.push } : {}),
     appendSystemPrompt,
     terminalProfiles,
     agentProfiles,

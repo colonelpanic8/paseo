@@ -12,6 +12,7 @@ import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.j
 import {
   AgentProfileSchema,
   AgentSkillSelectionSchema,
+  DaemonPushConfigSchema,
   PluginIdSchema,
   PluginSourceSchema,
   TerminalProfileSchema,
@@ -263,6 +264,7 @@ export const PersistedConfigSchema = z
           .optional(),
         autoArchiveAfterMerge: z.boolean().optional(),
         enableTerminalAgentHooks: z.boolean().optional(),
+        push: DaemonPushConfigSchema.optional(),
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
         agentProfiles: z.array(AgentProfileSchema).optional(),
