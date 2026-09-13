@@ -49,6 +49,7 @@ export const CLAUDE_MODEL_MANIFEST = [
     id: "claude-fable-5-1",
     label: "Fable 5.1",
     description: "Fable 5.1 · Most powerful model",
+    minimumClaudeCodeVersion: "2.1.257",
     contextWindowMaxTokens: 1_000_000,
     effortLevels: CLAUDE_EFFORT_LEVELS.xhigh,
   },
@@ -363,32 +364,36 @@ export function normalizeClaudeRuntimeModelId(value: string | null | undefined):
     return null;
   }
 
-  const singleSegmentMatch = trimmed.match(
-    /claude[-_ ](fable|opus|sonnet|haiku)[-_ ]+(\d+)(\[1m\])?/i,
+  const hasOneMillionContext = trimmed.toLowerCase().includes("[1m]");
+
+  // Major/minor first: these patterns are unanchored, so a prefixed `anthropic.claude-fable-5-1`
+  // would otherwise match the major-only pattern and collapse onto Fable 5.
+  const runtimeMatch = trimmed.match(
+    /claude[-_ ](fable|opus|sonnet|haiku)[-_ ]+(\d+)[-.](\d+)(\[1m\])?/i,
   );
-  if (singleSegmentMatch) {
-    const normalizedModelId = normalizeSingleSegmentClaudeModelId(
-      singleSegmentMatch[1],
-      singleSegmentMatch[2],
-      trimmed.toLowerCase().includes("[1m]"),
+  if (runtimeMatch) {
+    const normalizedModelId = normalizeMajorMinorClaudeModelId(
+      runtimeMatch[1],
+      runtimeMatch[2],
+      runtimeMatch[3],
+      hasOneMillionContext,
     );
     if (normalizedModelId) {
       return normalizedModelId;
     }
   }
 
-  const runtimeMatch = trimmed.match(
-    /claude[-_ ](fable|opus|sonnet|haiku)[-_ ]+(\d+)[-.](\d+)(\[1m\])?/i,
+  const singleSegmentMatch = trimmed.match(
+    /claude[-_ ](fable|opus|sonnet|haiku)[-_ ]+(\d+)(\[1m\])?/i,
   );
-  if (!runtimeMatch) {
+  if (!singleSegmentMatch) {
     return null;
   }
 
-  return normalizeMajorMinorClaudeModelId(
-    runtimeMatch[1],
-    runtimeMatch[2],
-    runtimeMatch[3],
-    trimmed.toLowerCase().includes("[1m]"),
+  return normalizeSingleSegmentClaudeModelId(
+    singleSegmentMatch[1],
+    singleSegmentMatch[2],
+    hasOneMillionContext,
   );
 }
 
