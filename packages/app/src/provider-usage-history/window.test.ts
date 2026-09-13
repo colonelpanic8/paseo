@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   enumerateDays,
+  formatPeriodLong,
+  formatPeriodShort,
   formatCount,
   formatDayShort,
   formatPercent,
@@ -110,4 +112,14 @@ it("preserves fractional cost ticks instead of repeating rounded labels", () => 
     "$2",
   ]);
   expect(formatUsdCompact(0.00001)).toBe("$0.00001");
+});
+
+describe("period labels", () => {
+  it("names the period the column covers", () => {
+    expect(formatPeriodShort("2026-09-07", "day")).toBe("Sep 7");
+    expect(formatPeriodShort("2026-09-07", "week")).toBe("Sep 7");
+    expect(formatPeriodShort("2026-09-01", "month")).toBe("Sep");
+    // A week's axis label is its first day, so the readout spells out the rest.
+    expect(formatPeriodLong("2026-09-07", "week")).toBe("Sep 7 – Sep 13");
+  });
 });
