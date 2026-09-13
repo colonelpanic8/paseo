@@ -2743,6 +2743,14 @@ export const ru: TranslationResources = {
             blue: "Синий",
           },
         },
+        hostColor: {
+          label: "Цвет по умолчанию",
+          hint: "Хранится на хосте. Устройства используют его, если не выбрали свой цвет.",
+          accessibilityLabel: "Цвет по умолчанию, {{value}}",
+          options: {
+            auto: "Автоматически",
+          },
+        },
         badge: {
           label: "Значок на боковой панели",
           accessibilityLabel: "Значок на боковой панели, {{value}}",

@@ -31,6 +31,7 @@ import type { AgentSessionConfig } from "@getpaseo/protocol/agent-types";
 import type { GitSetupOptions } from "@getpaseo/protocol/messages";
 import type { AgentPermissionResponse } from "@getpaseo/protocol/agent-types";
 import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { parseIdentityColorName } from "@/styles/identity-colors";
 import { useVoiceAudioEngineOptional, useVoiceRuntimeOptional } from "@/contexts/voice-context";
 import type { AudioPlaybackSource } from "@/voice/audio-engine-types";
 import {
@@ -355,6 +356,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
       ...(serverInfo.features ? { features: serverInfo.features } : {}),
     });
+    void getHostRuntimeStore().recordDeclaredHostColor(
+      serverId,
+      parseIdentityColorName(serverInfo.appearance?.color),
+    );
   }, [client, serverId, updateSessionServerInfo]);
 
   useEffect(() => {
@@ -597,6 +602,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
           ...(serverInfo.features ? { features: serverInfo.features } : {}),
         });
+        void getHostRuntimeStore().recordDeclaredHostColor(
+          serverId,
+          parseIdentityColorName(serverInfo.appearance?.color),
+        );
         return;
       }
     });
