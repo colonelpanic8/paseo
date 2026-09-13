@@ -36,6 +36,7 @@ import {
   BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Check, File, Folder, Search } from "lucide-react-native";
 import {
   flip,
@@ -1322,7 +1323,12 @@ function DesktopComboboxBody(props: DesktopBodyProps): ReactElement {
       visible={props.isOpen}
       onRequestClose={props.handleClose}
     >
-      {overlay}
+      {/*
+       * Modal children mount into a separate native view hierarchy, outside the
+       * app's root GestureHandlerRootView. Gesture handlers inside need their own
+       * root or they never receive touches.
+       */}
+      <GestureHandlerRootView style={styles.modalGestureRoot}>{overlay}</GestureHandlerRootView>
     </Modal>
   );
 }
@@ -1719,6 +1725,9 @@ export function Combobox({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  modalGestureRoot: {
+    flex: 1,
+  },
   mobileSheetFrame: {
     flex: 1,
     minHeight: 0,
