@@ -169,6 +169,20 @@ const MutableRelayConfigSchema = z
   })
   .passthrough();
 
+const DaemonPushNtfyConfigSchema = z
+  .object({
+    serverUrl: z.string().min(1),
+    topic: z.string().min(1),
+  })
+  .passthrough();
+export const DaemonPushConfigSchema = z
+  .object({
+    ntfy: DaemonPushNtfyConfigSchema.optional(),
+  })
+  .passthrough();
+export type DaemonPushConfig = z.infer<typeof DaemonPushConfigSchema>;
+export type DaemonPushNtfyConfig = z.infer<typeof DaemonPushNtfyConfigSchema>;
+
 export const MutableDaemonConfigSchema = z
   .object({
     // COMPAT(relayConfig): added in v0.2.6, remove after 2027-01-31 when old daemons are unsupported.
@@ -206,6 +220,7 @@ export const MutableDaemonConfigSchema = z
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
+    push: DaemonPushConfigSchema.optional(),
   })
   .passthrough();
 
