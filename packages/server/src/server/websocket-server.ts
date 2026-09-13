@@ -817,6 +817,28 @@ export class VoiceAssistantWebSocketServer {
       }),
     });
 
+    // One store for the daemon; every read and write is keyed by the admitted
+    // principal, so sharing the instance never shares data across principals.
+    this.assistantStore = new AssistantStore(join(paseoHome, "assistants"));
+
+    // Daemon-global: a call belongs to the daemon, not to an agent, and each one
+    // runs on a hidden host session the coordinator spawns for it.
+    this.liveVoiceCoordinator = new LiveVoiceCoordinator({
+      agents: this.agentManager,
+      logger: this.logger,
+      hostProfile: resolveLiveVoiceHostProfile(),
+      routeBroker: this.liveVoiceRouteBroker,
+      assistantStore: this.assistantStore,
+      // Teaches the voice model what Paseo is and what is currently running. The
+      // host session carries Paseo's MCP tools, so this is what turns "can talk"
+      // into "can act on Paseo".
+      context: new LiveVoiceDaemonContextProvider({
+        agents: this.agentManager,
+        workspaces: this.workspaceRegistry,
+        logger: this.logger,
+      }),
+    });
+
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
     this.startRuntimeMetricsInterval();
     this.startApplicationSocketLeaseInterval();

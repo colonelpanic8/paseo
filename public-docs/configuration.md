@@ -52,6 +52,10 @@ Every filesystem path you write in `config.json` or in a `PASEO_*` variable — 
 
 Every filesystem path you write in `config.json` or in a `PASEO_*` variable — `worktrees.root`, `providers.local.modelsDir`, `features.webUi.distDir`, `log.file.path` — takes `~` for your home directory. Relative paths are resolved against `PASEO_HOME`, not the daemon's working directory.
 
+## Paths
+
+Every filesystem path you write in `config.json` or in a `PASEO_*` variable — `worktrees.root`, `providers.local.modelsDir`, `features.webUi.distDir`, `log.file.path` — takes `~` for your home directory. Relative paths are resolved against `PASEO_HOME`, not the daemon's working directory.
+
 ## Precedence
 
 Managed `start` and Desktop use defaults, then `config.json`. Inherited daemon-setting environment variables are removed from their launches.
