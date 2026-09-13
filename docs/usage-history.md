@@ -6,11 +6,11 @@
 
 The daemon scans the provider CLIs' own session transcripts on disk, not Paseo's agent records:
 
-| Provider    | Directory                                                | Usage carrier                                                           |
-| ----------- | -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Claude Code | `<home>/projects/**/*.jsonl` (default `~/.claude`)       | `type: "assistant"` records, `message.usage`                            |
-| Codex       | `<home>/sessions/**/*.jsonl` (default `~/.codex`)        | `token_count` events; the model comes from the preceding `turn_context` |
-| OpenCode    | `<data-dir>/opencode*.db` (default `~/.local/share/opencode`) | assistant rows in the SQLite `message` table, `data.tokens`        |
+| Provider    | Directory                                                     | Usage carrier                                                           |
+| ----------- | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Claude Code | `<home>/projects/**/*.jsonl` (default `~/.claude`)            | `type: "assistant"` records, `message.usage`                            |
+| Codex       | `<home>/sessions/**/*.jsonl` (default `~/.codex`)             | `token_count` events; the model comes from the preceding `turn_context` |
+| OpenCode    | `<data-dir>/opencode*.db` (default `~/.local/share/opencode`) | assistant rows in the SQLite `message` table, `data.tokens`             |
 
 Reading the CLI's files means usage is complete even for turns that never went through Paseo. It also means the page only knows about providers that keep a transcript with token counts. Copilot and Pi are absent for that reason, not by policy. Adding one is a new parser in `packages/server/src/services/usage-history/transcripts.ts` plus a kind in `provider-homes.ts`.
 
