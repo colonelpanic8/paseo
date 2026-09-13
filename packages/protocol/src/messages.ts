@@ -224,6 +224,8 @@ const DaemonPushNtfyConfigSchema = z
 export const DaemonPushConfigSchema = z
   .object({
     ntfy: DaemonPushNtfyConfigSchema.optional(),
+    presenceThresholdMs: z.number().int().nonnegative().optional(),
+    ignorePresence: z.boolean().optional(),
   })
   .passthrough();
 export type DaemonPushConfig = z.infer<typeof DaemonPushConfigSchema>;

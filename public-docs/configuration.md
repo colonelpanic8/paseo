@@ -252,7 +252,22 @@ Store builds receive push through Expo automatically once the app has connected 
 }
 ```
 
-Both channels deliver in parallel. The daemon pushes only when no Paseo client has been active in the last three minutes, and the notification body includes the agent's last message, so prefer a self-hosted server or one on a private network. Tapping the notification opens the agent in Paseo. This setting applies on reload without a restart.
+Both channels deliver in parallel. The notification body includes the agent's last message, so prefer a self-hosted server or one on a private network. Tapping the notification opens the agent in Paseo. These settings apply on reload without a restart.
+
+By default the daemon pushes only when no Paseo client has been active for three minutes. On desktop that means input anywhere on the machine, not just in Paseo. Two settings change it:
+
+```json
+{
+  "daemon": {
+    "push": {
+      "presenceThresholdMs": 30000,
+      "ignorePresence": false
+    }
+  }
+}
+```
+
+`presenceThresholdMs` is how long after your last activity you still count as present. `ignorePresence: true` pushes every eligible notification even while you are at the machine, and still delivers the in-app notification. Use it rather than a zero threshold, which would suppress the in-app notification instead of adding a push alongside it.
 
 ## Common env vars
 
