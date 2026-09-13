@@ -7,46 +7,11 @@ import {
   type LiveVoiceHostAvailability,
 } from "@/live-voice/live-voice-availability-policy";
 import {
-  getHostRuntimeStore,
   useHosts,
   useHostRuntimeConnectionStatuses,
 } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { getLiveVoiceContextProfileHostInfo } from "@/live-voice/live-voice-context-profile-selection";
-
-/**
- * Availability read straight from the stores, for callers that live outside
- * React — the Wear bridge, which publishes to the watch on a subscription rather
- * than a render. Same policy as [useLiveVoiceAvailability]; only the plumbing
- * differs, so the wrist and the phone can never disagree about what is callable.
- */
-export function readLiveVoiceHostAvailability(): LiveVoiceHostAvailability[] {
-  const sessions = useSessionStore.getState().sessions;
-  const store = getHostRuntimeStore();
-  return store.getHosts().map((host): LiveVoiceHostAvailability => {
-    const serverInfo = sessions[host.serverId]?.serverInfo ?? null;
-    return {
-      serverId: host.serverId,
-      label: host.label,
-      connectionStatus: store.getSnapshot(host.serverId)?.connectionStatus ?? "connecting",
-      version: serverInfo?.version ?? null,
-      // COMPAT(liveVoice): added in v0.2.5, drop the gate when floor >= v0.2.5.
-      supportsLiveVoice: serverInfo ? serverInfo.features?.liveVoice === true : null,
-      // COMPAT(liveVoiceVoiceCatalog): older Live Voice daemons use the fallback list.
-      supportsVoiceCatalog: serverInfo?.features?.liveVoiceVoiceCatalog === true,
-      // COMPAT(agentPaseoTools): added in v0.2.6. Missing means an older
-      // Live Voice daemon whose start response remains authoritative.
-      paseoToolsEnabled: serverInfo ? serverInfo.features?.agentPaseoTools !== false : null,
-    };
-  });
-}
-
-export function readLiveVoiceAvailability(): LiveVoiceAvailability {
-  return resolveLiveVoiceAvailability({
-    isPlatformSupported: isLiveVoiceSessionSupported,
-    hosts: readLiveVoiceHostAvailability(),
-  });
-}
 
 /**
  * Every configured host with the facts live voice availability is decided from,
