@@ -6,13 +6,14 @@ import {
   DEFAULT_DAEMON_LOG_FILENAME,
   loadPersistedConfig,
   resolveDaemonLogPath,
-  resolvePaseoHome,
+  resolvePaseoPaths,
   startDaemonInstance,
   DaemonInstanceError,
   stopDaemonInstance,
   readDaemonInstance,
   isSameDaemonInstance,
   type DaemonInstance,
+  type PaseoPaths,
 } from "@getpaseo/server";
 import {
   copyAttachmentFileToManagedStorage,
@@ -128,8 +129,12 @@ function parseDesktopDaemonStopReason(
 // Utilities
 // ---------------------------------------------------------------------------
 
+function getPaseoPaths(): PaseoPaths {
+  return resolvePaseoPaths(process.env);
+}
+
 function getPaseoHome(): string {
-  return resolvePaseoHome(process.env);
+  return getPaseoPaths().home;
 }
 
 function logFilePath(): string {
@@ -232,16 +237,17 @@ function resolveDesktopAppVersion(): string {
 // ---------------------------------------------------------------------------
 
 export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus> {
-  const home = getPaseoHome();
+  const paths = getPaseoPaths();
+  const home = paths.home;
 
   try {
-    const payload = (await runExternalCliJsonCommand([
-      "daemon",
-      "status",
-      "--home",
-      home,
-      "--json",
-    ])) as Record<string, unknown>;
+    const targetArgs = paths.layout === "xdg" ? [] : ["--home", home];
+    const env = { ...process.env };
+    delete env.PASEO_HOST;
+    const payload = (await runExternalCliJsonCommand(
+      ["daemon", "status", ...targetArgs, "--json"],
+      { env },
+    )) as Record<string, unknown>;
     return statusFromDaemonProbe(payload, home);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -305,7 +311,8 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
     }
   }
 
-  const home = getPaseoHome();
+  const paths = getPaseoPaths();
+  const home = paths.home;
   const invocation = createNodeEntrypointInvocation({
     entrypoint: resolveDaemonRunnerEntrypoint(),
     argvMode: "node-script",
@@ -315,6 +322,7 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
   try {
     await startDaemonInstance({
       home,
+      paths,
       timeoutMs: 30_000,
       ...invocation,
       env: { ...invocation.env, PASEO_CLI: getBundledCliShimPath() },

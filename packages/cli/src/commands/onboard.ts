@@ -7,6 +7,7 @@ import {
   savePersistedConfig,
   readDaemonInstance,
   waitForDaemonReady,
+  type PaseoPaths,
   type PersistedConfig,
 } from "@getpaseo/server";
 import { withGlobalOptions } from "../utils/command-options.js";
@@ -177,9 +178,10 @@ export function onboardCommand(): Command {
 
 async function resolveAndPersistVoice(
   paseoHome: string,
+  paths: PaseoPaths | undefined,
   options: OnboardOptions,
 ): Promise<boolean> {
-  let persisted = loadPersistedConfig(paseoHome) as OnboardPersistedConfig;
+  let persisted = loadPersistedConfig(paseoHome, undefined, paths) as OnboardPersistedConfig;
   const persistedVoiceSelection = resolvePersistedVoiceSelection(persisted);
   const shouldPrompt = options.voice === "ask" || options.voice === undefined;
   let voiceEnabled: boolean;
@@ -201,12 +203,16 @@ async function resolveAndPersistVoice(
   }
 
   persisted = applyVoiceSelection(persisted, voiceEnabled);
-  savePersistedConfig(paseoHome, persisted);
+  savePersistedConfig(paseoHome, persisted, undefined, paths);
   return voiceEnabled;
 }
 
-function persistSetupChoices(paseoHome: string, options: OnboardOptions): void {
-  const persisted = loadPersistedConfig(paseoHome);
+function persistSetupChoices(
+  paseoHome: string,
+  paths: PaseoPaths | undefined,
+  options: OnboardOptions,
+): void {
+  const persisted = loadPersistedConfig(paseoHome, undefined, paths);
   if (options.listen || options.port) {
     persisted.daemon = {
       ...persisted.daemon,
@@ -228,7 +234,7 @@ function persistSetupChoices(paseoHome: string, options: OnboardOptions): void {
       ...persisted.daemon,
       hostnames: options.hostnames === "true" ? true : options.hostnames.split(","),
     };
-  savePersistedConfig(paseoHome, persisted);
+  savePersistedConfig(paseoHome, persisted, undefined, paths);
 }
 
 export async function runOnboard(options: OnboardOptions): Promise<void> {
@@ -246,13 +252,14 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   if (options.daemonTarget.kind !== "instance") throw new Error("Onboarding requires a local home");
   const paseoHome = options.daemonTarget.home;
+  const paths = options.daemonTarget.paths;
   const alreadyRunning = await readDaemonInstance(paseoHome);
-  persistSetupChoices(paseoHome, options);
+  persistSetupChoices(paseoHome, paths, options);
   if (richUi) {
     renderNote(paseoHome, "Paseo home");
   }
 
-  const voiceEnabled = await resolveAndPersistVoice(paseoHome, options);
+  const voiceEnabled = await resolveAndPersistVoice(paseoHome, paths, options);
   log.message(
     voiceEnabled
       ? "Voice features enabled. Local speech models will be downloaded automatically if missing."
@@ -268,9 +275,9 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
       await client.close();
     }
   } else {
-    await launchLocalDaemon({ home: paseoHome, timeoutMs });
+    await launchLocalDaemon({ home: paseoHome, paths, timeoutMs });
   }
-  const ready = await waitForDaemonReady(paseoHome, { timeoutMs });
+  const ready = await waitForDaemonReady(paseoHome, { timeoutMs, paths });
   log.message(`Daemon ready on ${ready.listen}`);
 
   if (options.relay === false) {
@@ -282,6 +289,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   let pairing = await resolveLocalPairingOffer({
     paseoHome,
+    paths,
     enableRelay: options.relay === true,
   });
 
@@ -293,7 +301,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
       if (richUi) outro("Paseo daemon is running.");
       return;
     }
-    pairing = await resolveLocalPairingOffer({ paseoHome, enableRelay: true });
+    pairing = await resolveLocalPairingOffer({ paseoHome, paths, enableRelay: true });
     log.success("Relay enabled");
   }
 
