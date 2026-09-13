@@ -7,9 +7,10 @@ import {
   readPersistedConfig,
   editPersistedConfig,
   resolveConfigFromPersisted,
+  type PaseoPaths,
 } from "@getpaseo/server";
 import { connectToDaemon } from "../../utils/client.js";
-import type { DaemonTarget } from "../../utils/daemon-target.js";
+import { localDaemonCommand, type DaemonTarget } from "../../utils/daemon-target.js";
 import { addJsonAndDaemonHostOptions, withGlobalOptions } from "../../utils/command-options.js";
 import { formatPairingInstructions } from "../../output/pairing.js";
 
@@ -67,19 +68,20 @@ export function pairCommand(): Command {
 
 export async function resolveLocalPairingOffer(options: {
   paseoHome: string;
+  paths?: PaseoPaths;
   enableRelay?: boolean;
 }): Promise<PairingOffer> {
   const instance = await readDaemonInstance(options.paseoHome);
   if (instance)
     return resolveDaemonPairingOffer(
-      { kind: "instance", home: options.paseoHome },
+      { kind: "instance", home: options.paseoHome, paths: options.paths },
       options.enableRelay,
     );
   if (options.enableRelay)
-    editPersistedConfig(options.paseoHome, "daemon.relay.enabled", { value: true });
+    editPersistedConfig(options.paseoHome, "daemon.relay.enabled", { value: true }, options.paths);
   const config = resolveConfigFromPersisted(
     options.paseoHome,
-    readPersistedConfig(options.paseoHome, { defaultsIfMissing: true }),
+    readPersistedConfig(options.paseoHome, { defaultsIfMissing: true }, options.paths),
     { env: {} },
   );
 
@@ -160,14 +162,14 @@ export async function runPairCommand(options: PairOptions): Promise<void> {
   const target = options.daemonTarget;
   const resolveOffer = (enableRelay: boolean) =>
     target.kind === "instance"
-      ? resolveLocalPairingOffer({ paseoHome: target.home, enableRelay })
+      ? resolveLocalPairingOffer({ paseoHome: target.home, paths: target.paths, enableRelay })
       : resolveDaemonPairingOffer(target, enableRelay);
   const offline = target.kind === "instance" && !(await readDaemonInstance(target.home));
   const pairing = await resolveOffer(options.relay === true);
 
-  if (offline)
+  if (offline && target.kind === "instance")
     output.writeStderr(
-      `Offline pairing offer. Start with: paseo daemon start --home ${JSON.stringify(target.kind === "instance" ? target.home : "")}\n`,
+      `Offline pairing offer. Start with: ${localDaemonCommand("start", target)}\n`,
     );
 
   outputPairingResult(pairing, options, output);

@@ -865,13 +865,15 @@ export function editPersistedConfig(
   paseoHome: string,
   field: string,
   edit: { value: unknown } | { unset: true },
+  paths: PaseoPaths = resolvePaseoPaths(),
 ): PersistedConfig {
   const parts = configPathParts(field);
   if (field === "daemon.auth" || field.startsWith("daemon.auth.")) {
     throw new Error("Use daemon set-password to change the daemon password.");
   }
-  const stack = loadConfigStack(paseoHome);
-  const config = structuredClone(stack.effective);
+  const config = structuredClone(
+    readPersistedConfig(paseoHome, { defaultsIfMissing: true }, paths),
+  );
   let object = config as Record<string, unknown>;
   for (const part of parts.slice(0, -1)) {
     object[part] ??= {};
@@ -889,6 +891,8 @@ export function editPersistedConfig(
   }
   if ("unset" in edit) delete object[key];
   else object[key] = edit.value;
+  validateConfigToSave(config);
+  const stack = loadConfigStack(paseoHome, undefined, paths);
   saveConfigStack(stack, config);
   return config;
 }
@@ -899,10 +903,11 @@ export function savePersistedConfig(
   logger?: LoggerLike,
   paths: PaseoPaths = resolvePaseoPaths(),
 ): void {
+  const validated = validateConfigToSave(config);
   const configPath = resolvePersistedConfigPath(paseoHome, paths);
   if (!existsSync(configPath)) {
     if (paths.home === path.resolve(paseoHome)) persistPaseoLayoutSelection(paths);
-    writeConfigFile(configPath, validateConfigToSave(config), getLogger(logger));
+    writeConfigFile(configPath, validated, getLogger(logger));
     return;
   }
   saveConfigStack(loadConfigStack(paseoHome, logger, paths), config, logger);

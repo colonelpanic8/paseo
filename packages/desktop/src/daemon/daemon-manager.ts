@@ -234,12 +234,12 @@ export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus>
 
   try {
     const targetArgs = paths.layout === "xdg" ? [] : ["--home", home];
-    const payload = (await runExternalCliJsonCommand([
-      "daemon",
-      "status",
-      ...targetArgs,
-      "--json",
-    ])) as Record<string, unknown>;
+    const env = { ...process.env };
+    delete env.PASEO_HOST;
+    const payload = (await runExternalCliJsonCommand(
+      ["daemon", "status", ...targetArgs, "--json"],
+      { env },
+    )) as Record<string, unknown>;
     return statusFromDaemonProbe(payload, home);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -52,3 +52,11 @@ export function describeDaemonTarget(target: DaemonTarget): string {
     return target.host.replace(/([?&](?:password|token|secret)=)[^&]*/gi, "$1REDACTED");
   }
 }
+
+export function localDaemonCommand(
+  action: "start" | "reload",
+  target: Extract<DaemonTarget, { kind: "instance" }>,
+): string {
+  const selector = target.paths?.layout === "xdg" ? "" : ` --home ${JSON.stringify(target.home)}`;
+  return `paseo daemon ${action}${selector}`;
+}
