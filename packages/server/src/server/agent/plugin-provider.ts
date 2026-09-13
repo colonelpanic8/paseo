@@ -1540,9 +1540,7 @@ function mapSessionConfig(
   return {
     cwd: config.cwd,
     env: Object.fromEntries(
-      Object.entries(launchContext?.env ?? {}).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string",
-      ),
+      Object.entries(launchContext?.env ?? {}).map(([key, value]) => [key, value ?? null]),
     ),
     systemPrompt: combineSystemPrompts(config.systemPrompt, config.daemonAppendSystemPrompt),
     mcpServers: { ...config.mcpServers },

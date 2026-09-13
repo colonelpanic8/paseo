@@ -19,6 +19,7 @@ import {
   PluginSourceSchema,
   TerminalProfileSchema,
 } from "@getpaseo/protocol/messages";
+import { AgentEnvironmentEntrySchema } from "@getpaseo/protocol/agent-environment";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
@@ -186,6 +187,13 @@ const AgentMetadataGenerationSchema = z
   })
   .strict();
 
+const AgentEnvironmentPersistedSchema = z
+  .object({
+    entries: z.array(AgentEnvironmentEntrySchema).optional(),
+    timeoutMs: z.number().int().positive().optional(),
+  })
+  .strict();
+
 const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi", "omp"] as const;
 
 function isLegacyProviderEntry(value: unknown): boolean {
@@ -331,6 +339,9 @@ export const PersistedConfigSchema = z
         catalogRefreshTimeoutMs: z.number().int().positive().max(2_147_483_647).optional(),
         metadataGeneration: AgentMetadataGenerationSchema.optional(),
         skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
+        // `entries` absent means never configured, so the daemon seeds its
+        // defaults. An explicit [] means the user emptied the list.
+        environment: AgentEnvironmentPersistedSchema.optional(),
       })
       .strict()
       .optional(),
