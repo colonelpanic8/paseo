@@ -695,6 +695,7 @@ export function resolveConfigFromPersisted(
     agentPurposeSummariesEnabled,
     autoArchiveAfterMerge,
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
+    ...(persisted.daemon?.push !== undefined ? { push: persisted.daemon.push } : {}),
     appendSystemPrompt,
     ...(persisted.daemon?.appearance?.color !== undefined
       ? { hostColor: persisted.daemon.appearance.color }

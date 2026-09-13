@@ -785,6 +785,7 @@ export class VoiceAssistantWebSocketServer {
     this.pushNotifications = createPushNotifications({
       logger: pushLogger,
       filePath: join(paseoHome, "push-tokens.json"),
+      readNtfyTarget: () => this.daemonConfigStore.get().push?.ntfy ?? null,
     });
     this.pushNotificationSender = pushNotificationSender ?? this.pushNotifications;
 
@@ -2665,6 +2666,17 @@ export class VoiceAssistantWebSocketServer {
     };
   }
 
+  // Read on every notification so config reloads take effect without a restart.
+  private readPresencePolicy(): { presenceThresholdMs?: number; ignorePresence?: boolean } {
+    const push = this.daemonConfigStore.get().push;
+    return {
+      ...(push?.presenceThresholdMs !== undefined
+        ? { presenceThresholdMs: push.presenceThresholdMs }
+        : {}),
+      ...(push?.ignorePresence !== undefined ? { ignorePresence: push.ignorePresence } : {}),
+    };
+  }
+
   private async broadcastAgentAttention(params: {
     agentId: string;
     provider: AgentProvider;
@@ -2712,6 +2724,7 @@ export class VoiceAssistantWebSocketServer {
       focusTarget: { kind: "agent", id: params.agentId },
       pushEligible: isPushEligibleAttentionReason(params.reason),
       nowMs,
+      ...this.readPresencePolicy(),
     });
 
     if (plan.shouldPush) {
@@ -2807,6 +2820,7 @@ export class VoiceAssistantWebSocketServer {
       focusTarget: { kind: "terminal", id: params.terminalId },
       pushEligible: true,
       nowMs,
+      ...this.readPresencePolicy(),
     });
 
     const title = terminalAttentionTitle(params.reason);
