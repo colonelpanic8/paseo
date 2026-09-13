@@ -98,6 +98,7 @@ export function createLiveVoiceCuePlayer(): LiveVoiceCuePlayer {
   }
 
   return {
+    prepare() {},
     play(cue) {
       void Haptics.impactAsync(CUE_HAPTIC[cue]).catch(() => undefined);
       if (players.has(cue)) {
