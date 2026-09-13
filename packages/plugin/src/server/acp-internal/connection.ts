@@ -338,7 +338,7 @@ function requireSession(state: AcpConnectionState, sessionId: string): AcpBounda
 interface StartRuntimeOptions {
   options: RunAcpProviderOptions;
   boundarySessionId: string;
-  env: Readonly<Record<string, string>>;
+  env: Readonly<Record<string, string | null>>;
   emit(event: ProviderEvent): void;
 }
 
@@ -376,8 +376,13 @@ class AcpRuntime {
     let closeConnector = async () => {};
     if (options.options.command) {
       const [executable, ...args] = options.options.command;
+      const env: NodeJS.ProcessEnv = { ...process.env };
+      for (const [key, value] of Object.entries(options.env)) {
+        if (value === null) delete env[key];
+        else env[key] = value;
+      }
       child = spawn(executable, args, {
-        env: { ...process.env, ...options.env },
+        env,
         stdio: ["pipe", "pipe", "pipe"],
       });
       spawnFailure = new Promise<never>((_resolve, reject) => child!.once("error", reject));

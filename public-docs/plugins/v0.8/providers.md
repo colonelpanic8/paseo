@@ -115,7 +115,8 @@ later through `session.config`.
 
 `session.open` contains the complete launch configuration: working directory, environment, system
 prompt, MCP servers, tool policy, model, mode, settings, opaque provider options, and persistence
-preference.
+preference. An environment value of `null` removes that variable from the provider process's
+inherited environment.
 
 Create the native session with the selected catalog values, then publish its effective state:
 

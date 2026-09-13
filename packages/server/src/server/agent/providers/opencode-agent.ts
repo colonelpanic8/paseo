@@ -18,6 +18,7 @@ import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import pLimit from "p-limit";
 import type { Logger } from "pino";
 import { z } from "zod";
+import { createExternalProcessEnv } from "../../paseo-env.js";
 
 import {
   getAgentStreamEventTurnId,
@@ -1566,7 +1567,7 @@ export class OpenCodeAgentClient implements AgentClient {
     if (!this.bridge || !launchContext) return undefined;
     return this.bridge.bindSession({
       sessionId,
-      env: launchContext.env ?? {},
+      env: createExternalProcessEnv({}, launchContext.env ?? {}),
       tools: launchContext.paseoTools,
     });
   }

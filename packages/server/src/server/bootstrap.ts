@@ -531,6 +531,17 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
+function createInitialAgentEnvironment(
+  config: PaseoDaemonConfig,
+): MutableDaemonConfig["agentEnvironment"] {
+  return {
+    entries: [...(config.agentEnvironment?.entries ?? DEFAULT_AGENT_ENVIRONMENT_ENTRIES)],
+    ...(config.agentEnvironment?.timeoutMs !== undefined
+      ? { timeoutMs: config.agentEnvironment.timeoutMs }
+      : {}),
+  };
+}
+
 function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
   const providers = config.providerOverrides ?? {};
 
@@ -559,12 +570,7 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
     skills: { selection: config.skillSelection },
-    agentEnvironment: {
-      entries: [...(config.agentEnvironment?.entries ?? DEFAULT_AGENT_ENVIRONMENT_ENTRIES)],
-      ...(config.agentEnvironment?.timeoutMs !== undefined
-        ? { timeoutMs: config.agentEnvironment.timeoutMs }
-        : {}),
-    },
+    agentEnvironment: createInitialAgentEnvironment(config),
   };
 
   if (config.terminalProfiles !== undefined) {

@@ -1539,7 +1539,9 @@ function mapSessionConfig(
 ): ProviderSessionConfig {
   return {
     cwd: config.cwd,
-    env: { ...launchContext?.env },
+    env: Object.fromEntries(
+      Object.entries(launchContext?.env ?? {}).map(([key, value]) => [key, value ?? null]),
+    ),
     systemPrompt: combineSystemPrompts(config.systemPrompt, config.daemonAppendSystemPrompt),
     mcpServers: { ...config.mcpServers },
     toolPolicy: config.toolPolicy
