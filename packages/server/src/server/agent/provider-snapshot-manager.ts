@@ -142,6 +142,7 @@ interface ProviderSnapshotReadOptions {
 interface ApplyMutableProviderConfigOptions {
   removeProviders?: readonly string[];
   replace?: boolean;
+  replaceProviders?: readonly string[];
 }
 
 export interface PreparedMutableProviderConfig {
@@ -587,7 +588,10 @@ export class ProviderSnapshotManager {
   ): PreparedMutableProviderConfig {
     const baseProviderOverrides = options.replace
       ? undefined
-      : omitProviderOverrides(this.baseProviderOverrides, options.removeProviders ?? []);
+      : omitProviderOverrides(this.baseProviderOverrides, [
+          ...(options.removeProviders ?? []),
+          ...(options.replaceProviders ?? []),
+        ]);
     const runtimeSettings = options.replace ? undefined : this.runtimeSettings;
     const providerOverrides = applyMutableProviderConfigToOverrides(
       baseProviderOverrides,
@@ -836,6 +840,7 @@ export class ProviderSnapshotManager {
           status: definition.enabled ? "loading" : "unavailable",
           enabled: definition.enabled,
           source: custom ? "custom" : "builtin",
+          baseProviderId: resolveBaseProviderId(provider, overrides),
           label: definition.label,
           description: definition.description,
           iconSvg: definition.iconSvg,
@@ -1161,6 +1166,22 @@ function createFetchCatalogOptions(
 
 export function isGlobalProviderSnapshotKey(cwd: string): boolean {
   return cwd === GLOBAL_PROVIDER_SNAPSHOT_KEY;
+}
+
+/**
+ * The builtin provider a custom account extends. Builtin ids never report a
+ * base even when they derive from another builtin (omp extends pi), because
+ * the base only exists to group and icon provider accounts.
+ */
+function resolveBaseProviderId(
+  provider: AgentProvider,
+  overrides: Record<string, ProviderOverride> | undefined,
+): string | undefined {
+  if (BUILTIN_PROVIDER_IDS.includes(provider)) {
+    return undefined;
+  }
+  const base = overrides?.[provider]?.extends;
+  return typeof base === "string" && BUILTIN_PROVIDER_IDS.includes(base) ? base : undefined;
 }
 
 function identifyEntry(entry: ProviderSnapshotEntry): ProviderSnapshotRecord {
