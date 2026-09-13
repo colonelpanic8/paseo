@@ -2,6 +2,7 @@ import {
   BREAKDOWN_DIMENSIONS,
   deriveChartBreakdown,
   deriveUsageBreakdown,
+  enumeratePeriods,
   sortBreakdown,
   timePeriodStart,
   timePeriodLabel,
@@ -606,12 +607,27 @@ describe("combined usage breakdown", () => {
     expect(grouped.rows.filter((row) => row.label.startsWith("Laptop"))).toHaveLength(1);
   });
 
-  it("keeps chart series and colors unchanged when grouping the table by day", () => {
+  it("keeps chart series and colors unchanged when the table also groups by day", () => {
     for (const dimensions of [[], ["model"], ["host", "provider", "model"]] as const) {
-      expect(deriveChartBreakdown(totals, [...dimensions, "day"])).toEqual(
-        deriveChartBreakdown(totals, dimensions),
+      expect(deriveChartBreakdown(totals, [...dimensions, "day"], "day")).toEqual(
+        deriveChartBreakdown(totals, dimensions, "day"),
       );
     }
+  });
+
+  it("gives the chart one column per period", () => {
+    const byDay = deriveChartBreakdown(totals, ["model"], "day");
+    const byMonth = deriveChartBreakdown(totals, ["model"], "month");
+    expect(byDay.daily.length).toBeGreaterThan(byMonth.daily.length);
+    expect(byMonth.daily.map((period) => period.day)).toEqual(
+      enumeratePeriods(
+        byDay.daily.map((day) => day.day),
+        "month",
+      ),
+    );
+    expect(byMonth.daily.reduce((sum, period) => sum + period.costUsd, 0)).toBeCloseTo(
+      byDay.daily.reduce((sum, day) => sum + day.costUsd, 0),
+    );
   });
 
   it("sorts combined groups chronologically across model and host labels", () => {

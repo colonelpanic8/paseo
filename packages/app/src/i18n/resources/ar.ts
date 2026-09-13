@@ -2081,14 +2081,19 @@ export const ar: TranslationResources = {
         unreadableProviders: "الإجماليات غير مكتملة: تعذّرت قراءة سجلات {{providers}}",
       },
       chart: {
-        titleCost: "التكلفة اليومية",
-        titleTokens: "الرموز المعالجة يوميًا",
-        total: "الإجمالي",
-        shape: {
-          smooth: "ناعم",
-          linear: "خطي",
-          step: "درجات",
+        title: {
+          cost: {
+            day: "التكلفة اليومية",
+            week: "التكلفة الأسبوعية",
+            month: "التكلفة الشهرية",
+          },
+          tokens: {
+            day: "الرموز المعالجة يوميًا",
+            week: "الرموز المعالجة أسبوعيًا",
+            month: "الرموز المعالجة شهريًا",
+          },
         },
+        total: "الإجمالي",
       },
       totals: {
         title: "الإجماليات",
@@ -2101,7 +2106,6 @@ export const ar: TranslationResources = {
       breakdown: {
         week: "الأسبوع",
         month: "الشهر",
-        timeGrouping: "التجميع الزمني",
         chart: "تفصيل الرسم البياني",
         table: "جدول الاستخدام",
         title: "التفصيل",

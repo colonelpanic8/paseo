@@ -26,6 +26,7 @@ import {
   deriveUsageBreakdown,
   sortBreakdown,
   deriveChartBreakdown,
+  enumeratePeriods,
   timePeriodLabel,
   type TimeGrouping,
   type BreakdownDimension,
@@ -49,7 +50,6 @@ import {
 import { providerLabel } from "./providers";
 import { seriesFillStyle } from "./series";
 import type {
-  ProviderUsageHistoryLineShape,
   ProviderUsageHistoryMetric,
   ProviderUsageHistoryView,
   ProviderUsageHistoryWindowDays,
@@ -62,7 +62,7 @@ import { usageHistoryView } from "./view";
 import { enumerateDays, formatPercent, formatTokens, formatUsd } from "./window";
 
 const WINDOW_DAYS: readonly ProviderUsageHistoryWindowDays[] = [7, 30, 90];
-const LINE_SHAPES: readonly ProviderUsageHistoryLineShape[] = ["smooth", "linear", "step"];
+const TIME_GROUPINGS: readonly TimeGrouping[] = ["day", "week", "month"];
 
 const SERIES_DOT_SIZE = 8;
 const PROVIDER_MARK_SIZE = 14;
@@ -178,7 +178,6 @@ export function ProviderUsageHistorySection() {
     { field: "costUsd", direction: "descending" },
   ]);
   const [metric, setMetric] = useState<ProviderUsageHistoryMetric>("cost");
-  const [lineShape, setLineShape] = useState<ProviderUsageHistoryLineShape>("smooth");
   const [windowDays, setWindowDays] = useState<ProviderUsageHistoryWindowDays>(30);
   /** `null` is every host, including any host added while the page is open. */
   const [selection, setSelection] = useState<readonly string[] | null>(null);
@@ -244,12 +243,11 @@ export function ProviderUsageHistorySection() {
     ],
     [t],
   );
-  const lineShapeOptions = useMemo<SegmentedControlOption<ProviderUsageHistoryLineShape>[]>(
+  const timeGroupingOptions = useMemo<SegmentedControlOption<TimeGrouping>[]>(
     () =>
-      LINE_SHAPES.map((shape) => ({
-        value: shape,
-        label: t(`settings.usageHistory.chart.shape.${shape}`),
-        testID: `usage-history-chart-shape-${shape}`,
+      TIME_GROUPINGS.map((grouping) => ({
+        value: grouping,
+        label: t(`settings.usageHistory.breakdown.${grouping}`),
       })),
     [t],
   );
@@ -272,8 +270,11 @@ export function ProviderUsageHistorySection() {
   // is something to break down.
   const activeReport = report !== null && report.daily.length > 0 ? report : null;
   const chartBreakdown = useMemo(
-    () => (activeReport === null ? null : deriveChartBreakdown(activeReport, chartDimensions)),
-    [activeReport, chartDimensions],
+    () =>
+      activeReport === null
+        ? null
+        : deriveChartBreakdown(activeReport, chartDimensions, timeGrouping),
+    [activeReport, chartDimensions, timeGrouping],
   );
   const breakdown = useMemo(() => {
     if (activeReport === null) return null;
@@ -317,6 +318,13 @@ export function ProviderUsageHistorySection() {
           onValueChange={handleWindowChange}
           testID="usage-history-window"
         />
+        <SegmentedControl
+          size="xs"
+          options={timeGroupingOptions}
+          value={timeGrouping}
+          onValueChange={setTimeGrouping}
+          testID="usage-history-time-grouping"
+        />
         <Button
           variant="ghost"
           size="xs"
@@ -340,6 +348,8 @@ export function ProviderUsageHistorySection() {
       metricOptions,
       selectedServerIds,
       t,
+      timeGrouping,
+      timeGroupingOptions,
       windowDays,
       windowOptions,
     ],
@@ -365,13 +375,6 @@ export function ProviderUsageHistorySection() {
               onToggle={handleToggleChartDimension}
             />
           ))}
-          <SegmentedControl
-            size="xs"
-            options={lineShapeOptions}
-            value={lineShape}
-            onValueChange={setLineShape}
-            testID="usage-history-chart-shape"
-          />
         </View>
         <ProviderUsageHistoryBody
           view={view}
@@ -380,7 +383,7 @@ export function ProviderUsageHistorySection() {
           hosts={hosts}
           showCoverage={isMultiHost}
           metric={metric}
-          lineShape={lineShape}
+          timeGrouping={timeGrouping}
           sinceDay={usageWindow.sinceDay}
           untilDay={usageWindow.untilDay}
           onRetry={handleRefresh}
@@ -398,10 +401,6 @@ export function ProviderUsageHistorySection() {
               onToggleDimension={handleToggleDimension}
               criteria={sortCriteria}
               timeGrouping={timeGrouping}
-              showTimeGrouping={
-                dimensions.includes("day") || sortCriteria.some(({ field }) => field === "day")
-              }
-              onTimeGroupingChange={setTimeGrouping}
               onCriteriaChange={setSortCriteria}
             />
           )}
@@ -521,7 +520,7 @@ interface ProviderUsageHistoryBodyProps {
   hosts: readonly ProviderUsageHistoryHostInput[];
   showCoverage: boolean;
   metric: ProviderUsageHistoryMetric;
-  lineShape: ProviderUsageHistoryLineShape;
+  timeGrouping: TimeGrouping;
   sinceDay: string;
   untilDay: string;
   onRetry: () => void;
@@ -534,7 +533,7 @@ function ProviderUsageHistoryBody({
   hosts,
   showCoverage,
   metric,
-  lineShape,
+  timeGrouping,
   sinceDay,
   untilDay,
   onRetry,
@@ -591,7 +590,7 @@ function ProviderUsageHistoryBody({
       hosts={hosts}
       showCoverage={showCoverage}
       metric={metric}
-      lineShape={lineShape}
+      timeGrouping={timeGrouping}
       sinceDay={sinceDay}
       untilDay={untilDay}
     />
@@ -604,7 +603,7 @@ interface SummaryProps {
   hosts: readonly ProviderUsageHistoryHostInput[];
   showCoverage: boolean;
   metric: ProviderUsageHistoryMetric;
-  lineShape: ProviderUsageHistoryLineShape;
+  timeGrouping: TimeGrouping;
   sinceDay: string;
   untilDay: string;
 }
@@ -615,12 +614,15 @@ function Summary({
   hosts,
   showCoverage,
   metric,
-  lineShape,
+  timeGrouping,
   sinceDay,
   untilDay,
 }: SummaryProps) {
   const { t } = useTranslation();
-  const days = useMemo(() => enumerateDays(sinceDay, untilDay), [sinceDay, untilDay]);
+  const periods = useMemo(
+    () => enumeratePeriods(enumerateDays(sinceDay, untilDay), timeGrouping),
+    [sinceDay, timeGrouping, untilDay],
+  );
   const series = useMemo(
     () =>
       breakdown.rows.map((row) => ({
@@ -640,11 +642,11 @@ function Summary({
       <Headline totals={totals} metric={metric} />
       <View testID="usage-history-chart">
         <ProviderUsageHistoryChart
-          days={days}
+          periods={periods}
           daily={breakdown.daily}
           series={series}
           metric={metric}
-          lineShape={lineShape}
+          timeGrouping={timeGrouping}
         />
       </View>
       <View style={styles.figures} testID="usage-history-figures">
@@ -814,8 +816,6 @@ interface BreakdownProps {
   criteria: readonly BreakdownSortCriterion[];
   onCriteriaChange: (criteria: readonly BreakdownSortCriterion[]) => void;
   timeGrouping: TimeGrouping;
-  showTimeGrouping: boolean;
-  onTimeGroupingChange: (grouping: TimeGrouping) => void;
   dimensions: readonly BreakdownDimension[];
   onToggleDimension: (dimension: BreakdownDimension) => void;
   onMetricChange: (metric: ProviderUsageHistoryMetric) => void;
@@ -827,8 +827,6 @@ function Breakdown({
   criteria,
   onCriteriaChange,
   timeGrouping,
-  showTimeGrouping,
-  onTimeGroupingChange,
   dimensions,
   onToggleDimension,
   onMetricChange,
@@ -860,21 +858,6 @@ function Breakdown({
           />
         ))}
       </View>
-      {showTimeGrouping ? (
-        <View style={styles.breakdownControls}>
-          <Text style={styles.headerCell}>{t("settings.usageHistory.breakdown.timeGrouping")}</Text>
-          <SegmentedControl
-            value={timeGrouping}
-            onValueChange={onTimeGroupingChange}
-            options={(["day", "week", "month"] as const).map((value) => ({
-              value,
-              label: t(`settings.usageHistory.breakdown.${value}`),
-            }))}
-            size="xs"
-            testID="usage-history-time-grouping"
-          />
-        </View>
-      ) : null}
       <View style={styles.breakdownControls}>
         <Text style={styles.headerCell}>{t("settings.usageHistory.table.share")}</Text>
         <SegmentedControl

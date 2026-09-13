@@ -15,6 +15,22 @@ export function timePeriodStart(day: string, grouping: TimeGrouping): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * The period starts the given days fall into, oldest first. One per chart
+ * column and one per time-grouped table heading, so both read the same axis.
+ */
+export function enumeratePeriods(
+  days: readonly string[],
+  grouping: TimeGrouping,
+): readonly string[] {
+  const periods: string[] = [];
+  for (const day of days) {
+    const start = timePeriodStart(day, grouping);
+    if (periods[periods.length - 1] !== start) periods.push(start);
+  }
+  return periods;
+}
+
 export function timePeriodLabel(start: string, grouping: TimeGrouping): string {
   if (grouping === "day") return start;
   if (grouping === "month") return start.slice(0, 7);
@@ -84,7 +100,7 @@ export function deriveUsageBreakdown(
       tokenShare: 0,
     };
     const row = rows.get(key) ?? { ...empty };
-    const day = days.get(bucket.day) ?? new Map<string, BreakdownRow>();
+    const day = days.get(periodStart) ?? new Map<string, BreakdownRow>();
     const dailyRow = day.get(key) ?? { ...empty };
     const tokens =
       bucket.totals.uncachedInputTokens +
@@ -98,7 +114,7 @@ export function deriveUsageBreakdown(
     }
     rows.set(key, row);
     day.set(key, dailyRow);
-    days.set(bucket.day, day);
+    days.set(periodStart, day);
   }
   const ordered = [...rows.values()].sort((left, right) => left.key.localeCompare(right.key));
   for (const [index, row] of ordered.entries()) {
@@ -135,12 +151,18 @@ export function sortBreakdown(
   });
 }
 
+/**
+ * The chart's own dimensions. Time is the x axis, so it is never one of them —
+ * the grouping decides how wide a column is instead.
+ */
 export function deriveChartBreakdown(
   totals: ProviderUsageHistoryTotals,
   selected: readonly BreakdownDimension[],
+  timeGrouping: TimeGrouping,
 ): UsageBreakdown {
   return deriveUsageBreakdown(
     totals,
     selected.filter((dimension) => dimension !== "day"),
+    timeGrouping,
   );
 }
