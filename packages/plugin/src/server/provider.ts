@@ -79,7 +79,8 @@ export interface ProviderToolPolicy {
 
 export interface ProviderSessionConfig {
   cwd: string;
-  env: Readonly<Record<string, string>>;
+  /** A null value removes the variable from the provider's inherited environment. */
+  env: Readonly<Record<string, string | null>>;
   systemPrompt?: string;
   mcpServers: Readonly<Record<string, ProviderMcpServerConfig>>;
   toolPolicy?: ProviderToolPolicy;
@@ -704,7 +705,7 @@ const providerPermissionResponseSchema: z.ZodType<ProviderPermissionResponse> =
 const sessionConfigSchema = z
   .object({
     cwd: z.string(),
-    env: z.record(z.string(), z.string()),
+    env: z.record(z.string(), z.string().nullable()),
     systemPrompt: z.string().optional(),
     mcpServers: z.record(z.string(), mcpServerSchema),
     toolPolicy: toolPolicySchema.optional(),

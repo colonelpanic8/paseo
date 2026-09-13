@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { AgentSideConnection, PROTOCOL_VERSION, type Agent } from "@agentclientprotocol/sdk";
-import type { ProviderConnection, ProviderEvent, ProviderInput } from "./provider.js";
+import {
+  ProviderInputSchema,
+  type ProviderConnection,
+  type ProviderEvent,
+  type ProviderInput,
+} from "./provider.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { runAcpProvider, type AcpStreamMessage } from "./acp.js";
 
@@ -50,6 +55,15 @@ function openInput(
     history: "skip",
   };
 }
+
+it("represents removed launch environment variables as null on the provider boundary", () => {
+  expect(
+    ProviderInputSchema.parse({
+      ...openInput(),
+      config: { ...openInput().config, env: { KEEP: "value", REMOVE: null } },
+    }),
+  ).toMatchObject({ config: { env: { KEEP: "value", REMOVE: null } } });
+});
 
 async function waitForEvent(
   events: ProviderEvent[],
