@@ -5,7 +5,7 @@
  * host can't take a call live in Settings → Diagnostics, not here.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -27,6 +27,7 @@ import { useAssistants } from "@/assistants/assistant-queries";
 import { useAssistantSelectionStore } from "@/assistants/assistant-selection-store";
 import { AssistantsSheet } from "@/assistants/assistants-sheet";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
 import { resolveLiveVoiceStatusLabel } from "@/live-voice/live-voice-call-ui";
@@ -37,6 +38,12 @@ import {
   type LiveVoiceErrorInfo,
   type LiveVoicePhase,
 } from "@/live-voice/live-voice-runtime";
+import {
+  consumeLiveVoiceLauncherRequest,
+  hasLiveVoiceCall,
+  useLiveVoiceLauncherRequested,
+} from "@/live-voice/live-voice-launch";
+import { usePanelStore } from "@/stores/panel-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const ThemedAudioLines = withUnistyles(AudioLines);
@@ -318,13 +325,28 @@ function LiveVoiceStartMenuItems({
   );
 }
 
-export function LiveVoiceFooterButton() {
+export function LiveVoiceFooterButton({ active }: { active: boolean }) {
   const liveVoice = useLiveVoiceOptional();
   const availability = useLiveVoiceAvailability();
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
   const [isManagingAssistants, setIsManagingAssistants] = useState(false);
+  const isCompactLayout = useIsCompactFormFactor();
+  const isLauncherRequested = useLiveVoiceLauncherRequested();
+  const openAgentListForLayout = usePanelStore((state) => state.openAgentListForLayout);
+
+  useEffect(() => {
+    if (!isLauncherRequested) {
+      return;
+    }
+    openAgentListForLayout({ isCompact: isCompactLayout });
+    if (!active) {
+      return;
+    }
+    setIsOpen(true);
+    consumeLiveVoiceLauncherRequest();
+  }, [active, isCompactLayout, isLauncherRequested, openAgentListForLayout]);
 
   const availableHosts = availability.kind === "available" ? availability.hosts : [];
   const selectedHost =
@@ -357,7 +379,7 @@ export function LiveVoiceFooterButton() {
   }
 
   const { phase, serverId, isAudioBlocked, error, closedCause } = liveVoice;
-  const hasCall = phase !== "idle" || closedCause !== null;
+  const hasCall = hasLiveVoiceCall({ phase, closedCause });
   const iconMappings = resolveIconMappings({ phase, hasCall });
 
   return (
