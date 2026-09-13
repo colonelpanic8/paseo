@@ -785,6 +785,7 @@ export class VoiceAssistantWebSocketServer {
     this.pushNotifications = createPushNotifications({
       logger: pushLogger,
       filePath: join(paseoHome, "push-tokens.json"),
+      readNtfyTarget: () => this.daemonConfigStore.get().push?.ntfy ?? null,
     });
     this.pushNotificationSender = pushNotificationSender ?? this.pushNotifications;
 

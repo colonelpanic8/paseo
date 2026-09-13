@@ -209,7 +209,7 @@ set `PASEO_APP_VERSION` plus `PASEO_NATIVE_BUILD_VERSION_CODE` consistently
 for both commands. The assembly variant has its own package ID, so it can be
 installed alongside the production app.
 
-The flag must be present for both prebuild and Gradle because Gradle starts Metro for the release bundle. Keep the source build serial and daemon-free as shown above: compiling every Expo module can exhaust memory when Gradle workers run in parallel. The profile enables source-built Expo modules, excludes the proprietary camera, Firebase notification, and Expo development-client native modules, disables Gradle dependency metadata, and substitutes JavaScript stubs for camera and notifications. The resulting app supports direct and pasted-link pairing but not QR scanning or push notifications.
+The flag must be present for both prebuild and Gradle because Gradle starts Metro for the release bundle. Keep the source build serial and daemon-free as shown above: compiling every Expo module can exhaust memory when Gradle workers run in parallel. The profile enables source-built Expo modules, excludes the proprietary camera, Firebase notification, and Expo development-client native modules, disables Gradle dependency metadata, and substitutes JavaScript stubs for camera and notifications. The resulting app supports direct and pasted-link pairing but not QR scanning or Expo push notifications; configure the ntfy channel instead (see [push-notifications.md](push-notifications.md)).
 
 For a single-ABI APK, pass React Native's architecture property to Gradle:
 
