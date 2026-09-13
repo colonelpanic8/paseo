@@ -1,6 +1,6 @@
 import type { ProviderUsageHistoryBucket } from "../../server/messages.js";
 
-export type UsageProvider = "claude" | "codex";
+export type UsageProvider = "claude" | "codex" | "opencode";
 export type UsageTokenTotals = ProviderUsageHistoryBucket["totals"];
 
 export interface UsageRecord {
@@ -77,8 +77,10 @@ export function totalTokens(totals: UsageTokenTotals): number {
 
 /**
  * Transcripts are mostly tool output. This gate avoids parsing lines that cannot carry usage.
+ * OpenCode is read from its SQLite message table instead of JSONL, so it has no line gate.
  */
 export function mightCarryUsage(line: string, provider: UsageProvider): boolean {
+  if (provider === "opencode") return true;
   return provider === "claude" ? line.includes('"usage"') : line.includes('"token_count"');
 }
 
@@ -258,5 +260,59 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
     reportedCostUsd: null,
     // Events surviving fork-copy suppression are unique to this rollout.
     dedupeKey: null,
+  };
+}
+
+/**
+ * OpenCode persists every assistant turn as a row in the `message` table of the SQLite database in
+ * its data directory, with that turn's own token deltas inline. Unlike Claude and Codex there is
+ * nothing to dedupe across files: the message id is the table's primary key. `input` excludes both
+ * cached portions (a session's `tokens_cache_read` can exceed its `tokens_input`), so it maps
+ * straight onto uncached input.
+ */
+export function parseOpenCodeMessage(input: {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly data: unknown;
+}): UsageRecord | null {
+  if (input.id.length === 0) return null;
+  if (typeof input.data !== "object" || input.data === null) return null;
+  const message = input.data as Record<string, unknown>;
+  if (message["role"] !== "assistant") return null;
+
+  const tokens = objectField(message, "tokens");
+  if (tokens === null) return null;
+  const cache = objectField(tokens, "cache");
+
+  const time = objectField(message, "time");
+  const created = time === null ? null : time["created"];
+  if (typeof created !== "number" || !Number.isFinite(created) || created <= 0) return null;
+
+  const modelId = message["modelID"];
+  if (typeof modelId !== "string" || modelId.length === 0) return null;
+
+  const inputTokens = positiveInt(tokens["input"]);
+  const cachedInputTokens = positiveInt(cache?.["read"]);
+  const cacheCreationTokens = positiveInt(cache?.["write"]);
+  const outputTokens = positiveInt(tokens["output"]);
+  const totals: UsageTokenTotals = {
+    uncachedInputTokens: inputTokens,
+    cachedInputTokens,
+    cacheCreationTokens,
+    outputTokens,
+    // Reported inside output_tokens, surfaced separately for the token mix.
+    reasoningTokens: Math.min(outputTokens, positiveInt(tokens["reasoning"])),
+  };
+  if (totalTokens(totals) === 0) return null;
+
+  const cost = message["cost"];
+  return {
+    provider: "opencode",
+    timestampMs: Math.trunc(created),
+    model: modelId,
+    sessionId: input.sessionId,
+    totals,
+    reportedCostUsd: typeof cost === "number" && Number.isFinite(cost) ? cost : null,
+    dedupeKey: input.id,
   };
 }

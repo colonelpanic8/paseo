@@ -9,7 +9,11 @@ import {
 } from "./provider-homes.js";
 
 let root: string;
-const defaultHomes = { claude: "/defaults/claude", codex: "/defaults/codex" };
+const defaultHomes = {
+  claude: "/defaults/claude",
+  codex: "/defaults/codex",
+  opencode: "/defaults/opencode",
+};
 
 beforeEach(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "usage-homes-test-"));
@@ -24,12 +28,14 @@ describe("resolveUsageProviderKind", () => {
     const overrides = {
       "codex-ben": { extends: "codex" },
       "codex-ben-fast": { extends: "codex-ben" },
+      "opencode-work": { extends: "opencode" },
       "copilot-work": { extends: "copilot" },
       "acp-thing": { extends: "acp" },
       orphan: { label: "no extends" },
     };
     expect(resolveUsageProviderKind("codex-ben-fast", overrides)).toBe("codex");
     expect(resolveUsageProviderKind("claude", overrides)).toBe("claude");
+    expect(resolveUsageProviderKind("opencode-work", overrides)).toBe("opencode");
     expect(resolveUsageProviderKind("copilot-work", overrides)).toBe(null);
     expect(resolveUsageProviderKind("acp-thing", overrides)).toBe(null);
     expect(resolveUsageProviderKind("orphan", overrides)).toBe(null);
@@ -73,6 +79,12 @@ describe("resolveTranscriptHomes", () => {
         dir: path.join("/defaults/codex", "sessions"),
       },
       {
+        provider: "opencode",
+        providerId: "opencode",
+        home: "/defaults/opencode",
+        dir: "/defaults/opencode",
+      },
+      {
         provider: "codex",
         providerId: "codex-ben",
         label: "Codex (Ben)",
@@ -90,15 +102,35 @@ describe("resolveTranscriptHomes", () => {
   });
 
   it("keeps the default home for a provider that sets no home of its own", () => {
-    const [, , inherited] = resolveTranscriptHomes({
+    const [, , , inherited] = resolveTranscriptHomes({
       defaultHomes,
       overrides: { "codex-alt": { extends: "codex", env: { OTHER: "x" } } },
     });
     expect(inherited).toMatchObject({ providerId: "codex-alt", home: "/defaults/codex" });
   });
 
+  it("resolves an OpenCode home from its XDG base directory", () => {
+    const [, , builtin, configured] = resolveTranscriptHomes({
+      defaultHomes,
+      overrides: {
+        "opencode-work": {
+          extends: "opencode",
+          label: "OpenCode (Work)",
+          env: { XDG_DATA_HOME: "/xdg" },
+        },
+      },
+    });
+    expect(builtin).toMatchObject({ providerId: "opencode", home: "/defaults/opencode" });
+    expect(configured).toMatchObject({
+      provider: "opencode",
+      providerId: "opencode-work",
+      label: "OpenCode (Work)",
+      home: path.join("/xdg", "opencode"),
+    });
+  });
+
   it("expands a tilde home to an absolute path", () => {
-    const [, , expanded] = resolveTranscriptHomes({
+    const [, , , expanded] = resolveTranscriptHomes({
       defaultHomes,
       overrides: { "codex-tilde": { extends: "codex", env: { CODEX_HOME: "~/codex-alt" } } },
     });
@@ -110,7 +142,7 @@ describe("resolveTranscriptHomes", () => {
       defaultHomes,
       overrides: { "copilot-work": { extends: "copilot" }, "loop-a": { extends: "loop-a" } },
     });
-    expect(homes.map((home) => home.providerId)).toEqual(["claude", "codex"]);
+    expect(homes.map((home) => home.providerId)).toEqual(["claude", "codex", "opencode"]);
   });
 });
 
@@ -122,14 +154,18 @@ describe("dedupeTranscriptHomes", () => {
     await fs.symlink(path.join(root, "codex"), link, "dir");
 
     const homes = resolveTranscriptHomes({
-      defaultHomes: { claude: path.join(root, "claude"), codex: path.join(root, "codex") },
+      defaultHomes: {
+        claude: path.join(root, "claude"),
+        codex: path.join(root, "codex"),
+        opencode: path.join(root, "opencode"),
+      },
       overrides: {
         "codex-same": { extends: "codex", env: { CODEX_HOME: path.join(root, "codex") } },
         "codex-linked": { extends: "codex", env: { CODEX_HOME: link } },
       },
     });
     const deduped = await dedupeTranscriptHomes(homes);
-    expect(deduped.map((home) => home.providerId)).toEqual(["claude", "codex"]);
+    expect(deduped.map((home) => home.providerId)).toEqual(["claude", "codex", "opencode"]);
   });
 
   it("deduplicates a home whose transcript directory does not exist yet", async () => {
@@ -139,10 +175,14 @@ describe("dedupeTranscriptHomes", () => {
 
     const deduped = await dedupeTranscriptHomes(
       resolveTranscriptHomes({
-        defaultHomes: { claude: path.join(root, "claude"), codex: path.join(root, "codex") },
+        defaultHomes: {
+          claude: path.join(root, "claude"),
+          codex: path.join(root, "codex"),
+          opencode: path.join(root, "opencode"),
+        },
         overrides: { "codex-linked": { extends: "codex", env: { CODEX_HOME: link } } },
       }),
     );
-    expect(deduped.map((home) => home.providerId)).toEqual(["claude", "codex"]);
+    expect(deduped.map((home) => home.providerId)).toEqual(["claude", "codex", "opencode"]);
   });
 });

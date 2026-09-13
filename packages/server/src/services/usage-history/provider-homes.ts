@@ -5,19 +5,26 @@ import { ProviderOverrideSchema } from "@getpaseo/protocol/provider-config";
 import { expandTilde } from "../../utils/path.js";
 import type { UsageProvider } from "./transcripts.js";
 
-const USAGE_PROVIDERS: readonly UsageProvider[] = ["claude", "codex"];
+const USAGE_PROVIDERS: readonly UsageProvider[] = ["claude", "codex", "opencode"];
 
-const HOME_ENV_VAR: Record<UsageProvider, string> = {
+const HOME_ENV_VAR: Record<Exclude<UsageProvider, "opencode">, string> = {
   claude: "CLAUDE_CONFIG_DIR",
   codex: "CODEX_HOME",
 };
-const DEFAULT_HOME_BASENAME: Record<UsageProvider, string> = {
+/**
+ * OpenCode resolves its data directory from `XDG_DATA_HOME` rather than a dedicated variable, so
+ * a configured value names the base data dir and `opencode` is appended below.
+ */
+const OPENCODE_BASE_ENV_VAR = "XDG_DATA_HOME";
+const DEFAULT_HOME_BASENAME: Record<Exclude<UsageProvider, "opencode">, string> = {
   claude: ".claude",
   codex: ".codex",
 };
 const TRANSCRIPT_SUBDIR: Record<UsageProvider, string> = {
   claude: "projects",
   codex: "sessions",
+  // OpenCode's SQLite databases live directly in the data directory.
+  opencode: "",
 };
 /** One provider-owned transcript directory to scan. */
 export interface TranscriptHome {
@@ -63,7 +70,7 @@ function isUsageProvider(value: string): value is UsageProvider {
 
 /**
  * Follows `extends` until a transcript-keeping built-in is reached. Providers that land anywhere
- * else — copilot, opencode, pi, omp, acp — record no token usage, and a cycle resolves to nothing.
+ * else — copilot, pi, omp, acp — record no token usage, and a cycle resolves to nothing.
  */
 export function resolveUsageProviderKind(
   providerId: string,
@@ -88,9 +95,43 @@ function resolveKind(
   return null;
 }
 
-function defaultHome(provider: UsageProvider): string {
+function defaultHome(provider: Exclude<UsageProvider, "opencode">): string {
   return (
     process.env[HOME_ENV_VAR[provider]] ?? path.join(homedir(), DEFAULT_HOME_BASENAME[provider])
+  );
+}
+
+/** OpenCode's data directory follows `XDG_DATA_HOME`, defaulting to `~/.local/share/opencode`. */
+export function defaultOpenCodeDataDir(): string {
+  const base = process.env[OPENCODE_BASE_ENV_VAR]?.trim();
+  return path.join(
+    base !== undefined && base.length > 0
+      ? expandTilde(base)
+      : path.join(homedir(), ".local", "share"),
+    "opencode",
+  );
+}
+
+function resolveHomeDir(
+  provider: UsageProvider,
+  override: NormalizedOverride | undefined,
+  defaultHomes: Partial<Record<UsageProvider, string>> | undefined,
+): string {
+  if (provider === "opencode") {
+    const configuredBase = override?.env?.[OPENCODE_BASE_ENV_VAR]?.trim();
+    if (configuredBase !== undefined && configuredBase.length > 0) {
+      return path.resolve(path.join(expandTilde(configuredBase), "opencode"));
+    }
+    const fallback = defaultHomes?.[provider] ?? defaultOpenCodeDataDir();
+    return path.resolve(expandTilde(fallback));
+  }
+  const configuredHome = override?.env?.[HOME_ENV_VAR[provider]]?.trim();
+  return path.resolve(
+    expandTilde(
+      configuredHome !== undefined && configuredHome.length > 0
+        ? configuredHome
+        : (defaultHomes?.[provider] ?? defaultHome(provider)),
+    ),
   );
 }
 
@@ -109,14 +150,7 @@ export function resolveTranscriptHomes(
     if (claimed.has(providerId)) return;
     claimed.add(providerId);
     const override = overrides.get(providerId);
-    const configuredHome = override?.env?.[HOME_ENV_VAR[provider]]?.trim();
-    const home = path.resolve(
-      expandTilde(
-        configuredHome !== undefined && configuredHome.length > 0
-          ? configuredHome
-          : (input.defaultHomes?.[provider] ?? defaultHome(provider)),
-      ),
-    );
+    const home = resolveHomeDir(provider, override, input.defaultHomes);
     homes.push({
       provider,
       providerId,

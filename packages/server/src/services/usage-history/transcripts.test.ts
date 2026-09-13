@@ -3,6 +3,7 @@ import {
   initialCodexScanState,
   parseClaudeLine,
   parseCodexLine,
+  parseOpenCodeMessage,
   totalTokens,
 } from "./transcripts.js";
 
@@ -219,6 +220,63 @@ describe("parseCodexLine", () => {
         parseCodexLine(stamped("2026-08-01T05:00:00.200Z", tokenCount(100, 0, 10, 0)), state),
       ).not.toBeNull();
     });
+  });
+});
+
+describe("parseOpenCodeMessage", () => {
+  function message(overrides: Record<string, unknown> = {}): {
+    id: string;
+    sessionId: string;
+    data: unknown;
+  } {
+    return {
+      id: "msg_01",
+      sessionId: "ses_01",
+      data: {
+        role: "assistant",
+        modelID: "muse-spark-1.3-contributor-free",
+        providerID: "opencode",
+        cost: 0,
+        tokens: {
+          input: 11_473,
+          output: 13,
+          reasoning: 22,
+          cache: { read: 113, write: 7 },
+        },
+        time: { created: 1_789_076_095_036, completed: 1_789_076_096_709 },
+        ...overrides,
+      },
+    };
+  }
+
+  it("extracts token deltas with input kept out of the cached portions", () => {
+    const record = parseOpenCodeMessage(message());
+
+    expect(record).not.toBeNull();
+    expect(record?.provider).toBe("opencode");
+    expect(record?.model).toBe("muse-spark-1.3-contributor-free");
+    expect(record?.sessionId).toBe("ses_01");
+    expect(record?.timestampMs).toBe(1_789_076_095_036);
+    expect(record?.totals).toEqual({
+      uncachedInputTokens: 11_473,
+      cachedInputTokens: 113,
+      cacheCreationTokens: 7,
+      outputTokens: 13,
+      reasoningTokens: 13,
+    });
+    expect(record?.reportedCostUsd).toBe(0);
+    expect(record?.dedupeKey).toBe("msg_01");
+  });
+
+  it("ignores user messages and rows without usable tokens", () => {
+    expect(parseOpenCodeMessage(message({ role: "user" }))).toBeNull();
+    expect(parseOpenCodeMessage({ id: "msg_02", sessionId: "ses_01", data: null })).toBeNull();
+    expect(parseOpenCodeMessage({ id: "", sessionId: "ses_01", data: {} })).toBeNull();
+    const { tokens, ...withoutTokens } = message().data as Record<string, unknown>;
+    void tokens;
+    expect(
+      parseOpenCodeMessage({ id: "msg_03", sessionId: "ses_01", data: withoutTokens }),
+    ).toBeNull();
   });
 });
 

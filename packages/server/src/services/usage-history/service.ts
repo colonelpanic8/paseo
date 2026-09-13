@@ -21,9 +21,11 @@ import {
 } from "./scan-cache.js";
 import {
   dedupeTranscriptHomes,
+  defaultOpenCodeDataDir,
   resolveTranscriptHomes,
   type TranscriptHome,
 } from "./provider-homes.js";
+import { listOpenCodeDatabases, readOpenCodeDatabase } from "./opencode-reader.js";
 import { listTranscriptFiles, readTranscriptRecords } from "./transcript-reader.js";
 import type { UsageProvider, UsageRecord } from "./transcripts.js";
 
@@ -53,6 +55,7 @@ export interface UsageHistoryServiceOptions {
   logger: Logger;
   claudeConfigDir?: string;
   codexHome?: string;
+  opencodeDataDir?: string;
   /**
    * Reads `agents.providers` at scan time. Every configured provider extending a transcript-keeping
    * built-in owns a home, and a config change must take effect without a daemon restart.
@@ -152,6 +155,7 @@ export class UsageHistoryService {
         process.env["CLAUDE_CONFIG_DIR"] ??
         path.join(homedir(), ".claude"),
       codex: options.codexHome ?? process.env["CODEX_HOME"] ?? path.join(homedir(), ".codex"),
+      opencode: options.opencodeDataDir ?? defaultOpenCodeDataDir(),
     };
     this.readProviderOverrides = options.readProviderOverrides ?? (() => undefined);
     this.fetchApi = options.fetch ?? fetch;
@@ -194,7 +198,7 @@ export class UsageHistoryService {
 
     const [, scannedSources] = await Promise.all([
       this.ensureRates(false),
-      this.collectSources(windowStartMs),
+      this.collectSources(input, windowStartMs),
     ]);
     const aggregator = new UsageAggregator({ ...input, rates: this.rates });
     const sources: ProviderUsageHistorySource[] = [];
@@ -272,7 +276,10 @@ export class UsageHistoryService {
     };
   }
 
-  private async collectSources(windowStartMs: number): Promise<readonly ScannedSource[]> {
+  private async collectSources(
+    input: UsageHistoryReadInput,
+    windowStartMs: number,
+  ): Promise<readonly ScannedSource[]> {
     const homes = await dedupeTranscriptHomes(
       resolveTranscriptHomes({
         overrides: this.readProviderOverrides(),
@@ -283,6 +290,10 @@ export class UsageHistoryService {
     // Homes are deduplicated by directory, but one home nested inside another would still hand the
     // same transcript to two providers.
     const seenFiles = new Set<string>();
+    // SQL bounds are a prefilter with the same slack as the mtime gate; the aggregator places each
+    // record on its own local day and drops whatever falls outside the window.
+    const messageSinceMs = windowStartMs;
+    const messageUntilMs = Date.parse(`${input.untilDay}T00:00:00Z`) + DAY_MS + MTIME_SLACK_MS;
     for (const home of homes) {
       let stats;
       try {
@@ -307,6 +318,11 @@ export class UsageHistoryService {
           files: [],
           message: "No transcript directory on this environment.",
         });
+        continue;
+      }
+
+      if (home.provider === "opencode") {
+        scanned.push(await this.scanOpenCodeHome(home, seenFiles, messageSinceMs, messageUntilMs));
         continue;
       }
 
@@ -335,6 +351,51 @@ export class UsageHistoryService {
       scanned.push({ home, status: "ok", files, message: null });
     }
     return scanned;
+  }
+
+  /**
+   * OpenCode usage lives in SQLite databases, not JSONL transcripts, so its homes bypass the file
+   * scan and its cache: every read queries the message table directly. A database that cannot be
+   * read fails its home rather than scanning as empty, because its tokens would otherwise vanish
+   * from every total without a trace.
+   */
+  private async scanOpenCodeHome(
+    home: TranscriptHome,
+    seenFiles: Set<string>,
+    sinceMs: number,
+    untilMs: number,
+  ): Promise<ScannedSource> {
+    let databases;
+    try {
+      databases = await listOpenCodeDatabases(home.dir, sinceMs);
+    } catch (error) {
+      return {
+        home,
+        status: "failed",
+        files: [],
+        message: `Could not scan transcript directory: ${errorMessage(error)}`,
+      };
+    }
+    const files: ScannedFile[] = [];
+    for (const database of databases) {
+      if (seenFiles.has(database.path)) continue;
+      seenFiles.add(database.path);
+      const records = await readOpenCodeDatabase(database.path, {
+        logger: this.logger,
+        sinceMs,
+        untilMs,
+      });
+      if (records === null) {
+        return {
+          home,
+          status: "failed",
+          files: [],
+          message: `Could not read OpenCode database ${database.path}.`,
+        };
+      }
+      files.push({ path: database.path, records });
+    }
+    return { home, status: "ok", files, message: null };
   }
 
   private async readFileRecords(

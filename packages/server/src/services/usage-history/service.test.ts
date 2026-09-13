@@ -16,6 +16,7 @@ let home: string;
 let paseoHome: string;
 let claudeConfigDir: string;
 let codexHome: string;
+let opencodeDataDir: string;
 let transcript: string;
 
 const WINDOW = {
@@ -35,6 +36,7 @@ beforeEach(async () => {
   paseoHome = path.join(home, "paseo");
   claudeConfigDir = path.join(home, "claude");
   codexHome = path.join(home, "codex");
+  opencodeDataDir = path.join(home, "opencode");
   const transcriptDir = path.join(claudeConfigDir, "projects", "proj");
   await fs.mkdir(transcriptDir, { recursive: true });
   transcript = path.join(transcriptDir, "session.jsonl");
@@ -65,6 +67,7 @@ function makeService(
     paseoHome,
     claudeConfigDir,
     codexHome,
+    opencodeDataDir: options.opencodeDataDir ?? opencodeDataDir,
     logger: createTestLogger(),
     readProviderOverrides: options.readProviderOverrides ?? (() => options.overrides),
     fetch: options.fetch ?? (async () => Response.json(RATES_DOCUMENT)),
@@ -101,6 +104,64 @@ async function writeCodexTranscript(
     path.join(dir, `${session}.jsonl`),
     lines.map((line) => `${JSON.stringify(line)}\n`).join(""),
   );
+}
+
+/** An OpenCode data directory holding one channel database with the given assistant turns. */
+async function writeOpenCodeDatabase(
+  dataDir: string,
+  turns: readonly {
+    id: string;
+    sessionId: string;
+    model?: string;
+    input?: number;
+    output?: number;
+    cost?: number;
+  }[],
+): Promise<void> {
+  await fs.mkdir(dataDir, { recursive: true });
+  // Held in a variable so TypeScript skips module resolution: @types/node@20 has no
+  // node:sqlite typings yet, while the runtime (Node 22+) provides it.
+  const sqliteSpecifier: string = "node:sqlite";
+  const sqlite = (await import(sqliteSpecifier)) as unknown as {
+    DatabaseSync: new (path: string) => {
+      exec(sql: string): void;
+      prepare(sql: string): { run(...params: unknown[]): void };
+      close(): void;
+    };
+  };
+  const db = new sqlite.DatabaseSync(path.join(dataDir, "opencode-test.db"));
+  try {
+    db.exec(
+      "CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)",
+    );
+    const insert = db.prepare(
+      "INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)",
+    );
+    for (const turn of turns) {
+      const created = Date.parse("2026-08-01T10:00:00Z");
+      insert.run(
+        turn.id,
+        turn.sessionId,
+        created,
+        created,
+        JSON.stringify({
+          role: "assistant",
+          modelID: turn.model ?? "muse-spark-1.3-contributor-free",
+          providerID: "opencode",
+          cost: turn.cost ?? 0,
+          tokens: {
+            input: turn.input ?? 100,
+            output: turn.output ?? 10,
+            reasoning: 2,
+            cache: { read: 5, write: 0 },
+          },
+          time: { created },
+        }),
+      );
+    }
+  } finally {
+    db.close();
+  }
 }
 
 function outputTokensByProviderId(summary: {
@@ -328,6 +389,18 @@ describe("UsageHistoryService", () => {
         distinctSessions: 0,
         message: "No transcript directory on this environment.",
       },
+      {
+        provider: "opencode",
+        providerId: "opencode",
+        path: opencodeDataDir,
+        hostId: "test-host",
+        volumeId: "",
+        status: "missing",
+        scannedFiles: 0,
+        skippedFiles: 0,
+        distinctSessions: 0,
+        message: "No transcript directory on this environment.",
+      },
     ]);
   });
 
@@ -379,6 +452,13 @@ describe("UsageHistoryService", () => {
       {
         provider: "codex",
         providerId: "codex",
+        status: "missing",
+        scannedFiles: 0,
+        distinctSessions: 0,
+      },
+      {
+        provider: "opencode",
+        providerId: "opencode",
         status: "missing",
         scannedFiles: 0,
         distinctSessions: 0,
@@ -451,7 +531,11 @@ describe("UsageHistoryService", () => {
       },
     }).readSummary(WINDOW);
 
-    expect(summary.sources.map((source) => source.providerId)).toEqual(["claude", "codex"]);
+    expect(summary.sources.map((source) => source.providerId)).toEqual([
+      "claude",
+      "codex",
+      "opencode",
+    ]);
     expect(outputTokensByProviderId(summary)).toEqual({});
   });
 
@@ -475,6 +559,7 @@ describe("UsageHistoryService", () => {
     expect(summary.sources.map((source) => source.providerId)).toEqual([
       "claude",
       "codex",
+      "opencode",
       "codex-leaf",
     ]);
     expect(outputTokensByProviderId(summary)).toEqual({ "codex-leaf": 3 });
@@ -504,6 +589,42 @@ describe("UsageHistoryService", () => {
         2 * totalOutputTokens(separate[0] ?? { buckets: [] }),
     );
     expect(totalOutputTokens(combined)).toBe(5 + 11 + 23);
+  });
+
+  it("counts OpenCode assistant turns from its SQLite database", async () => {
+    await writeOpenCodeDatabase(opencodeDataDir, [
+      { id: "msg_01", sessionId: "ses_01", output: 10 },
+      { id: "msg_02", sessionId: "ses_01", output: 20 },
+      { id: "msg_03", sessionId: "ses_02", output: 5 },
+    ]);
+
+    const summary = await makeService().readSummary(WINDOW);
+
+    expect(summary.buckets).toHaveLength(1);
+    expect(summary.buckets[0]).toMatchObject({
+      day: "2026-08-01",
+      provider: "opencode",
+      providerId: "opencode",
+      model: "muse-spark-1.3-contributor-free",
+      costSource: "providerReported",
+      records: 3,
+      sessions: 2,
+    });
+    expect(summary.buckets[0]?.totals).toEqual({
+      uncachedInputTokens: 300,
+      cachedInputTokens: 15,
+      cacheCreationTokens: 0,
+      outputTokens: 35,
+      reasoningTokens: 6,
+    });
+    expect(summary.sources.find((source) => source.providerId === "opencode")).toMatchObject({
+      provider: "opencode",
+      path: opencodeDataDir,
+      status: "ok",
+      scannedFiles: 1,
+      skippedFiles: 0,
+      distinctSessions: 2,
+    });
   });
 
   it("rejects malformed, impossible, and reversed windows before scanning", async () => {
