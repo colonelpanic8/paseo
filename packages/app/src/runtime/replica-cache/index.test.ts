@@ -269,6 +269,52 @@ describe("ReplicaCache", () => {
     expect(restoredTimeline).toEqual(timeline());
   });
 
+  it.each(["2026-09-09T23:45:00.000Z", null])(
+    "preserves workspace activity %s across a client restart",
+    async (activityAt) => {
+      const storage = new MemoryStorage();
+      const writer = createCache(storage);
+      const workspace = normalizeWorkspaceDescriptor({ ...workspacePayload(), activityAt });
+      writer.commitDirectoryMutations(SERVER_ID, [
+        { kind: "workspace", type: "upsert", id: workspace.id, value: workspace },
+      ]);
+      await writer.flush();
+
+      const reader = createCache(storage);
+      const restoredDirectory = await reader.readDirectory(SERVER_ID);
+      const restoredWorkspace = await reader.readWorkspace(SERVER_ID, workspace.id);
+
+      expect(restoredDirectory.workspaces.get(workspace.id)?.activityAt).toEqual(
+        workspace.activityAt,
+      );
+      expect(restoredWorkspace?.workspace.activityAt).toEqual(workspace.activityAt);
+    },
+  );
+
+  it("refetches workspace rows from caches that discarded activity timestamps", async () => {
+    const storage = new MemoryStorage();
+    const writer = createCache(storage);
+    const checkpoint = {
+      agents: { generation: "agents", afterSeq: 12 },
+      workspaces: { generation: "workspaces", afterSeq: 34 },
+    };
+    commitDirectory(writer, SERVER_ID, directory(checkpoint));
+    await writer.flush();
+    const key = `${SERVER_ID}:workspace:workspace-1`;
+    const row = storage.rows.get(key)!;
+    const payload = JSON.parse(row.payload);
+    delete payload.version;
+    payload.activityAt = null;
+    storage.rows.set(key, { ...row, payload: JSON.stringify(payload) });
+
+    const restored = await createCache(storage).readDirectory(SERVER_ID);
+
+    expect(restored.workspaces.size).toBe(0);
+    expect(restored.checkpoint).toEqual({ agents: checkpoint.agents });
+    expect(restored.agents.has("agent-1")).toBe(true);
+    expect(restored.projects.has("project-1")).toBe(true);
+  });
+
   it("preserves pending timeline updates across directory baseline replacement", async () => {
     const storage = new MemoryStorage();
     const writer = createCache(storage);

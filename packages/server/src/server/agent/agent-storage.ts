@@ -50,6 +50,7 @@ const STORED_AGENT_SCHEMA = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lastActivityAt: z.string().optional(),
+  lastMessageAt: z.string().nullable().optional(),
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),

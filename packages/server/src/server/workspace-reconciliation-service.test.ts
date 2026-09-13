@@ -697,6 +697,7 @@ describe("WorkspaceReconciliationService", () => {
       displayName: "orphan",
       title: null,
       pinnedAt: null,
+      snoozeStatus: null,
       branch: null,
       worktreeRoot: null,
       baseBranch: null,

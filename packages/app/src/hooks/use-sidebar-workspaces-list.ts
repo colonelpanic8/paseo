@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
+import { shallow } from "zustand/shallow";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
-import { useWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks";
+import {
+  useHydratedWorkspaceServerIds,
+  useWorkspaceDirectoryServerIds,
+} from "@/stores/session-store-hooks";
 import { workspaceEqualityFns } from "@/stores/session-store-hooks/selectors";
 import { useHostProjects } from "@/projects/host-projects";
 import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
@@ -12,10 +16,13 @@ import {
   buildSidebarWorkspacePlacementModel,
   computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
+  deriveProjectStatus,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   type ProjectStatusSession,
   type SidebarProjectEntry,
+  type SidebarProjectStatus,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "./sidebar-workspaces-view-model";
@@ -30,7 +37,9 @@ export {
   buildSidebarWorkspacePlacementModel,
   computeSidebarOrderUpdates,
   deriveProjectStatusBucket,
+  deriveProjectStatus,
   deriveSidebarLoadingState,
+  resolveSidebarServerIds,
   shouldShowSidebarHostLabels,
   type SidebarLoadingState,
   type SidebarOrderUpdates,
@@ -38,6 +47,7 @@ export {
   type SidebarWorkspacePlacement,
   type SidebarWorkspacePlacementModel,
   type SidebarProjectEntry,
+  type SidebarProjectStatus,
   type SidebarStateBucket,
   type SidebarWorkspaceEntry,
 } from "./sidebar-workspaces-view-model";
@@ -53,10 +63,10 @@ export {
  * Pass `enabled: false` while the project is expanded: the child rows show their own dots
  * and the selector is pure cost.
  */
-export function useSidebarProjectStatusBucket(input: {
+export function useSidebarProjectStatus(input: {
   workspaces: readonly SidebarWorkspacePlacement[];
   enabled: boolean;
-}): SidebarStateBucket | null {
+}): SidebarProjectStatus | null {
   const { workspaces, enabled } = input;
   const pendingCreateAttempts = useStoreWithEqualityFn(
     useCreateFlowStore,
@@ -67,7 +77,7 @@ export function useSidebarProjectStatusBucket(input: {
   const selector = useCallback(
     (state: { sessions: Record<string, ProjectStatusSession | undefined> }) => {
       if (!enabled) return null;
-      return deriveProjectStatusBucket({
+      return deriveProjectStatus({
         workspaces,
         sessions: state.sessions,
         pendingCreateAttempts,
@@ -76,7 +86,7 @@ export function useSidebarProjectStatusBucket(input: {
     [enabled, pendingCreateAttempts, workspaces],
   );
 
-  return useStoreWithEqualityFn(useSessionStore, selector, Object.is);
+  return useStoreWithEqualityFn(useSessionStore, selector, shallow);
 }
 
 const EMPTY_ORDER: string[] = [];
@@ -108,24 +118,10 @@ export function useSidebarWorkspacesList(options?: {
   const reconcileHostFilters = useSidebarViewStore((state) => state.reconcileHostFilters);
   const isActive = options?.enabled !== false;
 
-  const serverIds = useMemo(() => {
-    if (hostFilters.length === 0) {
-      return allServerIds;
-    }
-    const selected = new Set(hostFilters);
-    const matched = allServerIds.filter((id) => selected.has(id));
-    // Registry has settled but none of the pinned hosts still exist — fall back to every
-    // host rather than leaving the sidebar empty.
-    if (hostRegistryLoaded && matched.length === 0) {
-      return allServerIds;
-    }
-    return matched;
-  }, [allServerIds, hostFilters, hostRegistryLoaded]);
-  useEffect(() => {
-    if (!isActive) return;
-    const releases = serverIds.map((serverId) => runtime.acquireDirectoryDemand(serverId));
-    return () => releases.forEach((release) => release());
-  }, [isActive, runtime, serverIds]);
+  const serverIds = useMemo(
+    () => resolveSidebarServerIds({ allServerIds, hostFilters, hostRegistryLoaded }),
+    [allServerIds, hostFilters, hostRegistryLoaded],
+  );
 
   useEffect(() => {
     if (!hostRegistryLoaded) {
@@ -136,6 +132,7 @@ export function useSidebarWorkspacesList(options?: {
 
   const persistedProjectOrder = useSidebarOrderStore((state) => state.projectOrder ?? EMPTY_ORDER);
 
+  const hydratedServerIds = useHydratedWorkspaceServerIds(serverIds);
   const directoryServerIds = useWorkspaceDirectoryServerIds(serverIds);
 
   const hostProjects = useHostProjects(directoryServerIds);
@@ -176,6 +173,8 @@ export function useSidebarWorkspacesList(options?: {
   const refreshAll = useCallback(() => {
     if (!isActive) return;
     for (const serverId of serverIds) {
+      const snapshot = runtime.getSnapshot(serverId);
+      if (snapshot?.connectionStatus !== "online") continue;
       void runtime.refreshDirectories(serverId).catch((error) => {
         console.error("[WorkspaceFetch][sidebar-refresh] failed", {
           serverId,
@@ -188,7 +187,7 @@ export function useSidebarWorkspacesList(options?: {
   const loadingState = deriveSidebarLoadingState({
     isActive,
     serverIds,
-    hydratedServerIds: directoryServerIds,
+    hydratedServerIds,
     hasProjects: projects.length > 0,
   });
 
