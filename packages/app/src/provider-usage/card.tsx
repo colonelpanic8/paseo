@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -41,10 +41,12 @@ export function ProviderUsageCard({
   usage,
   percentageDisplay,
   compact = false,
+  children,
 }: {
   usage: ProviderUsage;
   percentageDisplay: ProviderUsagePercentageDisplay;
   compact?: boolean;
+  children?: ReactNode;
 }) {
   const status = statusText(usage);
   const footer = footerText(usage);
@@ -120,6 +122,14 @@ export function ProviderUsageCard({
           ))}
         </View>
       ) : null}
+
+      {usage.bankedResets ? (
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Banked resets</Text>
+          <Text style={styles.detailValue}>{usage.bankedResets.availableCount} available</Text>
+        </View>
+      ) : null}
+      {children}
 
       {footer ? (
         <Text style={styles.footer} numberOfLines={1}>
