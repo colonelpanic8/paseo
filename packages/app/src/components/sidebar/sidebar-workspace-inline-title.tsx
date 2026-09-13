@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+/* oxlint-disable no-restricted-imports */
 import {
   Text,
   View,
@@ -9,6 +10,7 @@ import {
   type TextInputKeyPressEventData,
   type TextStyle,
 } from "react-native";
+/* oxlint-enable no-restricted-imports */
 import { StyleSheet } from "react-native-unistyles";
 import {
   EditingTextInput as TextInput,
