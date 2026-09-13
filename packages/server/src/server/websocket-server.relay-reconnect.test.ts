@@ -66,6 +66,8 @@ const sessionMock = vi.hoisted(() => {
     clearAgentTimelineSubscription = vi.fn((source: object) => {
       void this.delivery.detach(source);
     });
+    releaseLiveVoiceSocketResources = vi.fn();
+    hasActiveLiveVoiceCall = vi.fn(() => false);
     getClientActivity = vi.fn(() => null);
     wantsSourceEvent = (source: object) => !this.delivery.isModern(source);
     getSessionId = vi.fn(() => "mock-session-id");
@@ -255,6 +257,8 @@ function createServer(options?: {
     createStub<AgentManager>({
       subscribe: vi.fn(() => () => {}),
       setAgentAttentionCallback: vi.fn(),
+      onAgentClosing: vi.fn(() => () => {}),
+      hasPaseoMcpInjection: vi.fn(() => true),
       getAgent: vi.fn(() => null),
       getMetricsSnapshot: vi.fn(() => ({
         totalAgents: 0,
@@ -1007,6 +1011,26 @@ describe("relay external socket reconnect behavior", () => {
     await server.close();
   });
 
+  test("bounds reconnect grace even if a stale Live Voice call remains active", async () => {
+    const server = createServer();
+    const socket = new MockSocket();
+    await attachRelayAndHello({
+      server,
+      socket,
+      clientId: "cid-relay-live-voice",
+    });
+    const session = sessionMock.instances[0];
+    session.hasActiveLiveVoiceCall.mockReturnValue(true);
+
+    socket.emit("close", 1006, "");
+    await vi.advanceTimersByTimeAsync(90_000);
+
+    expect(session.releaseLiveVoiceSocketResources).toHaveBeenCalledWith(socket);
+    expect(session.cleanup).toHaveBeenCalledOnce();
+
+    await server.close();
+  });
+
   test("advertises current features in initial server_info", async () => {
     const server = createServer();
     const socket = new MockSocket();
@@ -1024,6 +1048,7 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.workspaceMarkUnread).toBe(true);
     expect(serverInfo.features?.["terminal-input-mode-replay"]).toBe(true);
     expect(serverInfo.features?.["terminal-size-ownership"]).toBe(true);
+    expect(serverInfo.features?.agentPaseoTools).toBe(true);
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
     expect(serverInfo.permissions).toEqual(DAEMON_PERMISSIONS);
     await server.close();
