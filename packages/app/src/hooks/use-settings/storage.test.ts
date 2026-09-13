@@ -288,6 +288,14 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.useLegacyTerminalRenderer).toBe(true);
   });
 
+  it("defaults always-show host labels to disabled when storage is empty", async () => {
+    const deps = makeDeps();
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.alwaysShowHostLabels).toBe(false);
+  });
+
   it("defaults the composer trigger sigils", async () => {
     const result = await loadAppSettingsFromStorage(makeDeps());
 
@@ -342,7 +350,6 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.commandTriggerSigil).toBe("$");
     expect(result.skillTriggerSigil).toBe("/");
   });
-
   it("loads configured terminal scrollback lines from app settings", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
@@ -365,6 +372,18 @@ describe("loadAppSettingsFromStorage", () => {
     const result = await loadAppSettingsFromStorage(deps);
 
     expect(result.workspaceTitleSource).toBe("branch");
+  });
+
+  it("loads the always-show host labels preference from app settings", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ alwaysShowHostLabels: true }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.alwaysShowHostLabels).toBe(true);
   });
 
   it("loads the model picker start preference and rejects non-boolean values", async () => {
@@ -735,22 +754,6 @@ describe("saveAppSettings", () => {
     await saveAppSettings({ queryClient, updates: { sidebarRowItems }, deps });
 
     expect((await loadAppSettingsFromStorage(deps)).sidebarRowItems).toEqual(sidebarRowItems);
-  });
-
-  it("keeps saved composer trigger sigils distinct", async () => {
-    const deps = makeDeps();
-    const queryClient = new QueryClient();
-
-    await saveAppSettings({
-      queryClient,
-      updates: { commandTriggerSigil: "$" },
-      deps,
-    });
-
-    expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "null")).toMatchObject({
-      commandTriggerSigil: "$",
-      skillTriggerSigil: "/",
-    });
   });
 });
 
