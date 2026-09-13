@@ -19,6 +19,7 @@ import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.j
 import { deriveProjectKey } from "../../project-key.js";
 import { areEquivalentPaths, createRealpathAwarePathMatcher } from "../../../utils/path.js";
 import type { UntrustedWorkspaceSource } from "../../workspace-automation-gate.js";
+import { withWorkspaceLifecycle } from "../../workspace-lifecycle.js";
 
 export interface ResolveOrCreateWorkspaceIdInput {
   createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
@@ -69,6 +70,7 @@ export interface WorkspaceProvisioningService {
   findOrCreateProjectForDirectory(cwd: string): Promise<PersistedProjectRecord>;
   ensureWorkspaceRecordUnarchived(
     workspace: PersistedWorkspaceRecord,
+    prepareDirectory?: () => Promise<void>,
   ): Promise<PersistedWorkspaceRecord>;
 }
 
@@ -114,7 +116,7 @@ export function createWorkspaceProvisioningService(deps: {
   serverId?: string;
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
-  workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "getSnapshot" | "peekSnapshot">;
+  workspaceGitService: Pick<WorkspaceGitService, "getCheckout">;
   logger: Logger;
   lifecycle?: PluginLifecycle;
 }): WorkspaceProvisioningService {
@@ -363,23 +365,19 @@ export function createWorkspaceProvisioningService(deps: {
     ).workspaceId;
   }
 
-  async function resolveRestoredAutoArchiveChangeRequestUrl(
+  async function ensureWorkspaceRecordUnarchived(
     workspace: PersistedWorkspaceRecord,
-  ): Promise<string | null> {
-    if (!workspace.archivedAt) {
-      return workspace.autoArchivedChangeRequestUrl;
-    }
-    const snapshot = await workspaceGitService.getSnapshot(workspace.cwd, {
-      force: true,
-      includeForge: true,
-      reason: "workspace-restore-auto-archive-latch",
+    prepareDirectory?: () => Promise<void>,
+  ): Promise<PersistedWorkspaceRecord> {
+    return withWorkspaceLifecycle({ registry: workspaceRegistry, workspace }, async () => {
+      await prepareDirectory?.();
+      const current = await workspaceRegistry.get(workspace.workspaceId);
+      if (!current) throw new Error(`Unknown workspace: ${workspace.workspaceId}`);
+      return unarchiveWorkspaceRecord(current);
     });
-    return snapshot.forge.pullRequest?.isMerged
-      ? snapshot.forge.pullRequest.url
-      : workspace.autoArchivedChangeRequestUrl;
   }
 
-  async function ensureWorkspaceRecordUnarchived(
+  async function unarchiveWorkspaceRecord(
     workspace: PersistedWorkspaceRecord,
   ): Promise<PersistedWorkspaceRecord> {
     const project = await projectRegistry.get(workspace.projectId);
@@ -389,8 +387,6 @@ export function createWorkspaceProvisioningService(deps: {
       workspace.archivedAt || project.archivedAt
         ? await workspaceGitService.getCheckout(workspace.cwd)
         : null;
-    const autoArchivedChangeRequestUrl =
-      await resolveRestoredAutoArchiveChangeRequestUrl(workspace);
     let next: PersistedWorkspaceRecord | null = null;
     let nextProject: PersistedProjectRecord | null = null;
     if (workspace.archivedAt && checkout) {
@@ -402,7 +398,6 @@ export function createWorkspaceProvisioningService(deps: {
       next = {
         ...(placementUpdate?.workspace ?? workspace),
         archivedAt: null,
-        autoArchivedChangeRequestUrl,
         updatedAt: timestamp,
       };
     }
@@ -437,7 +432,7 @@ export function createWorkspaceProvisioningService(deps: {
       }
       if (next) {
         rollbackSteps.push(() => workspaceRegistry.upsert(workspace));
-        await workspaceRegistry.upsert(next);
+        await workspaceRegistry.upsert(next, { restored: true });
       }
       return next ?? workspace;
     } catch (cause) {
