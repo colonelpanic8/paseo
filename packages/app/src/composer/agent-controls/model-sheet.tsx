@@ -407,6 +407,7 @@ export function CompactModelSheet({
           presentation="push"
           contentStyle={styles.sheetBody}
           testID="agent-controls-model-browser-sheet"
+          onOverlayKeyDown={modelBrowser.handleOverlayKeyDown}
         >
           <View
             style={[styles.modelViewport, styles.flexibleModelViewport]}
