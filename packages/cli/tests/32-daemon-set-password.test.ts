@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Command } from "commander";
-import { isBearerTokenValid } from "@getpaseo/server";
+import { isBearerTokenValid, resolvePaseoPaths } from "@getpaseo/server";
 import {
   runSetPasswordCommand,
   setDaemonPasswordInConfig,
@@ -196,6 +196,44 @@ try {
         true,
       );
       console.log("✓ an explicit --home remains flat at the XDG data path\n");
+
+      console.log("Test 6: XDG config honors a layered writable target");
+      const layeredRoot = join(freshHome, "layered");
+      const layeredConfigRoot = join(layeredRoot, "config");
+      const layeredDataRoot = join(layeredRoot, "data");
+      const layeredConfigDir = join(layeredConfigRoot, "paseo");
+      const machinePath = join(layeredConfigDir, "machine.json");
+      await mkdir(layeredConfigDir, { recursive: true });
+      await writeFile(
+        join(layeredConfigDir, "config.json"),
+        JSON.stringify({ imports: ["machine.json"], writeTo: "machine.json" }),
+      );
+      await writeFile(
+        machinePath,
+        JSON.stringify({ version: 1, features: { webUi: { enabled: true } } }),
+      );
+      process.env.XDG_CONFIG_HOME = layeredConfigRoot;
+      process.env.XDG_DATA_HOME = layeredDataRoot;
+
+      const paths = resolvePaseoPaths(process.env);
+      const layeredResult = await runSetPasswordCommand(
+        {
+          daemonTarget: { kind: "instance", home: paths.home, paths },
+          promptPassword: promptSequence(["xdg-layered-secret", "xdg-layered-secret"]),
+        },
+        {} as Command,
+      );
+      const machine = JSON.parse(await readFile(machinePath, "utf8"));
+      assert.strictEqual(layeredResult.data.configPath, machinePath);
+      assert.strictEqual(machine.features.webUi.enabled, true);
+      assert.strictEqual(
+        isBearerTokenValid({
+          password: machine.daemon.auth.password,
+          token: "xdg-layered-secret",
+        }),
+        true,
+      );
+      console.log("✓ XDG set-password preserves the layered writable target\n");
     } finally {
       restoreEnvironment(originalEnv);
     }
