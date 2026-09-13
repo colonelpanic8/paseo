@@ -1966,6 +1966,24 @@ export const ProviderUsageListRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+/**
+ * Historical token/cost usage read from the provider CLIs' own on-disk session
+ * transcripts. Distinct from `provider.usage.list`, which reports live
+ * subscription quota windows.
+ */
+export const ProviderUsageHistoryReadRequestMessageSchema = z.object({
+  type: z.literal("provider.usage_history.read.request"),
+  requestId: z.string(),
+  /** Inclusive first day of the window, `YYYY-MM-DD` in `timeZone`. */
+  sinceDay: z.string(),
+  /** Inclusive last day of the window, `YYYY-MM-DD` in `timeZone`. */
+  untilDay: z.string(),
+  /** IANA zone the daemon buckets days in. */
+  timeZone: z.string(),
+  /** Refetch the model rate table ahead of its TTL before pricing. */
+  refreshRates: z.boolean().optional(),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("resume_agent_request"),
   handle: AgentPersistenceHandleSchema,
@@ -3537,6 +3555,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProviderDiagnosticRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
   CodexBankedResetConsumeRequestMessageSchema,
+  ProviderUsageHistoryReadRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
@@ -3977,6 +3996,8 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         codexBankedResets: z.boolean().optional(),
+        // COMPAT(providerUsageHistory): added in v0.7.3, remove gate after 2027-03-07 once daemon floor >= v0.7.3.
+        providerUsageHistory: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: z.boolean().optional(),
         // COMPAT(agentThinkingUpdate): added in v0.2.4, remove gate after 2027-01-28.
@@ -6592,6 +6613,98 @@ export const ProviderUsageListResponseMessageSchema = z.object({
   }),
 });
 
+export const ProviderUsageHistoryCostSourceSchema = z.enum([
+  "providerReported",
+  "modelPriced",
+  "unpriced",
+]);
+
+/**
+ * `cachedInputTokens` and `cacheCreationTokens` are disjoint from
+ * `uncachedInputTokens`; summing all three gives total input. `reasoningTokens`
+ * is a subset of `outputTokens` and must never be added on top.
+ */
+export const ProviderUsageHistoryTokenTotalsSchema = z.object({
+  uncachedInputTokens: z.number(),
+  cachedInputTokens: z.number(),
+  cacheCreationTokens: z.number(),
+  outputTokens: z.number(),
+  reasoningTokens: z.number(),
+});
+
+/** One `(day, provider, model)` cell. `costUsd` is an API-equivalent estimate, not a bill. */
+export const ProviderUsageHistoryBucketSchema = z.object({
+  day: z.string(),
+  /** Base provider kind: `claude` or `codex`. Groups the chart series. */
+  provider: z.string(),
+  /**
+   * Configured provider id that owns the transcript home these tokens came
+   * from, e.g. `codex-colonel`. Absent for daemons that predate multi-home
+   * scanning; treat that as equal to `provider`.
+   */
+  providerId: z.string().optional(),
+  model: z.string(),
+  totals: ProviderUsageHistoryTokenTotalsSchema,
+  costUsd: z.number(),
+  cacheSavingsUsd: z.number(),
+  costSource: ProviderUsageHistoryCostSourceSchema,
+  records: z.number(),
+  unpricedRecords: z.number(),
+  sessions: z.number(),
+});
+
+export const ProviderUsageHistorySourceStatusSchema = z.enum(["ok", "missing", "failed"]);
+
+export const ProviderUsageHistorySourceSchema = z.object({
+  /** Base provider kind: `claude` or `codex`. */
+  provider: z.string(),
+  /** Configured provider id owning this transcript home, e.g. `codex-colonel`. */
+  providerId: z.string().optional(),
+  /** That provider's configured label, e.g. `Codex (Colonel)`. */
+  label: z.string().optional(),
+  path: z.string(),
+  /**
+   * Fingerprint of the physical transcript directory, for clients merging
+   * several hosts: `hostId` is the daemon's hostname and `volumeId` is the
+   * directory's `device:inode` (empty when it cannot be read). Two hosts on
+   * one machine, or a shared home, resolve the same directory and would
+   * otherwise be counted twice. Hostname alone is not enough: every Mac in
+   * a fleet resolves `/Users/<user>/.claude`.
+   */
+  hostId: z.string().optional(),
+  volumeId: z.string().optional(),
+  status: ProviderUsageHistorySourceStatusSchema,
+  scannedFiles: z.number(),
+  skippedFiles: z.number(),
+  /** Distinct transcript sessions in the window; bucket session counts overcount across days. */
+  distinctSessions: z.number(),
+  message: z.string().nullable(),
+});
+
+export const ProviderUsageHistoryPricingStatusSchema = z.enum(["fresh", "cached", "unavailable"]);
+
+export const ProviderUsageHistoryPricingSchema = z.object({
+  status: ProviderUsageHistoryPricingStatusSchema,
+  source: z.string(),
+  fetchedAt: z.string().nullable(),
+  knownModels: z.number(),
+});
+
+export const ProviderUsageHistoryReadResponseMessageSchema = z.object({
+  type: z.literal("provider.usage_history.read.response"),
+  payload: z.object({
+    requestId: z.string(),
+    readAt: z.string(),
+    timeZone: z.string(),
+    sinceDay: z.string(),
+    untilDay: z.string(),
+    buckets: z.array(ProviderUsageHistoryBucketSchema),
+    sources: z.array(ProviderUsageHistorySourceSchema),
+    pricing: ProviderUsageHistoryPricingSchema,
+    scanDurationMs: z.number(),
+  }),
+});
+
 const AgentSlashCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -7245,6 +7358,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   CodexBankedResetConsumeResponseMessageSchema,
+  ProviderUsageHistoryReadResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -7437,6 +7551,17 @@ export type ProviderDiagnosticResponseMessage = z.infer<
 export type CodexBankedReset = z.infer<typeof CodexBankedResetSchema>;
 export type CodexBankedResets = z.infer<typeof CodexBankedResetsSchema>;
 export type CodexBankedResetOutcome = z.infer<typeof CodexBankedResetOutcomeSchema>;
+export type ProviderUsageHistoryReadRequestMessage = z.infer<
+  typeof ProviderUsageHistoryReadRequestMessageSchema
+>;
+export type ProviderUsageHistoryReadResponseMessage = z.infer<
+  typeof ProviderUsageHistoryReadResponseMessageSchema
+>;
+export type ProviderUsageHistoryCostSource = z.infer<typeof ProviderUsageHistoryCostSourceSchema>;
+export type ProviderUsageHistoryTokenTotals = z.infer<typeof ProviderUsageHistoryTokenTotalsSchema>;
+export type ProviderUsageHistoryBucket = z.infer<typeof ProviderUsageHistoryBucketSchema>;
+export type ProviderUsageHistorySource = z.infer<typeof ProviderUsageHistorySourceSchema>;
+export type ProviderUsageHistoryPricing = z.infer<typeof ProviderUsageHistoryPricingSchema>;
 export type ProviderUsageTone = z.infer<typeof ProviderUsageToneSchema>;
 export type ProviderUsageStatus = z.infer<typeof ProviderUsageStatusSchema>;
 export type ProviderUsage = z.infer<typeof ProviderUsageSchema>;

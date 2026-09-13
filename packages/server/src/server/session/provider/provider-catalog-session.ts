@@ -20,6 +20,11 @@ import {
 } from "../../agent/agent-sdk-types.js";
 import type { ProviderAvailability } from "../../agent/agent-manager.js";
 import type { ProviderUsageService } from "../../../services/quota-fetcher/service.js";
+import {
+  UsageHistoryInvalidWindowError,
+  type UsageHistoryService,
+  validateUsageHistoryWindow,
+} from "../../../services/usage-history/service.js";
 import { expandTilde } from "../../../utils/path.js";
 
 // COMPAT(customModeIcons): the only mode icons known to clients before v0.1.84. Any
@@ -57,6 +62,7 @@ export interface ProviderCatalogSessionOptions {
   host: ProviderCatalogSessionHost;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
+  usageHistoryService: UsageHistoryService;
   logger: pino.Logger;
 }
 
@@ -71,6 +77,7 @@ export class ProviderCatalogSession {
   private readonly host: ProviderCatalogSessionHost;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly providerUsageService: ProviderUsageService;
+  private readonly usageHistoryService: UsageHistoryService;
   private readonly logger: pino.Logger;
   private unsubscribeSnapshotEvents: (() => void) | null = null;
 
@@ -78,6 +85,7 @@ export class ProviderCatalogSession {
     this.host = options.host;
     this.providerSnapshotManager = options.providerSnapshotManager;
     this.providerUsageService = options.providerUsageService;
+    this.usageHistoryService = options.usageHistoryService;
     this.logger = options.logger;
   }
 
@@ -536,6 +544,47 @@ export class ProviderCatalogSession {
           requestType: msg.type,
           error: `Failed to list provider usage: ${err.message}`,
           code: "provider_usage_list_failed",
+        },
+      });
+    }
+  }
+
+  async handleProviderUsageHistoryReadRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.usage_history.read.request" }>,
+  ): Promise<void> {
+    try {
+      validateUsageHistoryWindow(msg);
+    } catch (error) {
+      if (!(error instanceof UsageHistoryInvalidWindowError)) throw error;
+      this.host.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Invalid usage history window: ${error.message}`,
+          code: "provider_usage_history_invalid_window",
+        },
+      });
+      return;
+    }
+
+    try {
+      if (msg.refreshRates) await this.usageHistoryService.refreshRates();
+      const summary = await this.usageHistoryService.readSummary(msg);
+      this.host.emit({
+        type: "provider.usage_history.read.response",
+        payload: { requestId: msg.requestId, ...summary },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error({ err }, "Failed to read provider usage history");
+      this.host.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Failed to read provider usage history: ${err.message}`,
+          code: "provider_usage_history_read_failed",
         },
       });
     }
