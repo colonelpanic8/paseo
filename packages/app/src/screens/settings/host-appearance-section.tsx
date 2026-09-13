@@ -20,6 +20,7 @@ import {
   HOST_COLORS,
   hostColorValue,
   isCustomHostColor,
+  resolveHostColor,
   resolveHostBadgeDisplay,
   type CustomHostColor,
   type HostBadgeDisplay,
@@ -342,7 +343,7 @@ function BadgePreview({
         : {
             serverId: host.serverId,
             label: host.label,
-            color: host.appearance.color,
+            color: resolveHostColor(host),
             showLabel: badgeDisplay === "name",
           },
     [badgeDisplay, host.serverId, host.label, host.appearance.color],
