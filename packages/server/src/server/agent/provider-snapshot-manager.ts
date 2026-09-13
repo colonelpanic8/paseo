@@ -215,6 +215,8 @@ interface ProviderCatalog {
   result?: ProviderSnapshotRecord;
   stale?: boolean;
   load?: Promise<void>;
+  /** Whether the in-flight load was started by a forced refresh. */
+  forced?: boolean;
 }
 
 interface RegistryGeneration {
@@ -958,6 +960,9 @@ export class ProviderSnapshotManager {
     }
     this.publishTargets([snapshotCwd]);
     if (!force && (catalog.load || (catalog.result && !catalog.stale))) return catalog.load;
+    // A forced refresh joins a forced load already in flight instead of probing twice,
+    // but still supersedes an ordinary warm-up whose result predates the refresh.
+    if (force && catalog.forced && catalog.load) return catalog.load;
     catalog.stale = false;
 
     const current = catalog;
@@ -985,9 +990,12 @@ export class ProviderSnapshotManager {
         });
       })
       .finally(() => {
-        if (current.load === load) current.load = undefined;
+        if (current.load !== load) return;
+        current.load = undefined;
+        current.forced = undefined;
       });
     current.load = load;
+    current.forced = force;
     return load;
   }
 
