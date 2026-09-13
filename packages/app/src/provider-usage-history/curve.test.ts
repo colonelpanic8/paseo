@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bandAreaPath,
   curvePath,
   monotoneTangents,
   seriesLinePath,
@@ -92,4 +93,34 @@ describe("seriesLinePath", () => {
       expect(seriesLinePath(points([5]), shape)).toBe("");
     },
   );
+});
+
+describe("bandAreaPath", () => {
+  const lowerStart = { x: 0, y: 100 };
+  const lowerEnd = { x: 10, y: 80 };
+  const lower = [lowerStart, lowerEnd];
+  const lowerReversed = [lowerEnd, lowerStart];
+  const upper = [
+    { x: 0, y: 60 },
+    { x: 10, y: 30 },
+  ];
+
+  it("closes a band by retracing the boundary underneath it", () => {
+    expect(bandAreaPath(upper, lower, "linear")).toBe(
+      "M0.00,60.00 L10.00,30.00 L10.00,80.00 L0.00,100.00 Z",
+    );
+  });
+
+  it.each(["smooth", "linear", "step"] as const)(
+    "retraces the %s boundary exactly as its own band drew it",
+    (shape) => {
+      const area = bandAreaPath(upper, lower, shape);
+      const retrace = seriesLinePath(lowerReversed, shape);
+      expect(area.endsWith(` L${retrace.slice(1)} Z`)).toBe(true);
+    },
+  );
+
+  it("has no band to fill for a single day", () => {
+    expect(bandAreaPath([{ x: 0, y: 1 }], [{ x: 0, y: 2 }], "linear")).toBe("");
+  });
 });

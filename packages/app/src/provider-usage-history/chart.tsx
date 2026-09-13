@@ -15,10 +15,10 @@ import type { Theme } from "@/styles/theme";
 import {
   buildChartColumns,
   niceScale,
-  seriesPeak,
+  stackPeak,
   type ProviderUsageHistoryChartColumn,
 } from "./chart-data";
-import { seriesLinePath } from "./curve";
+import { bandAreaPath, seriesLinePath, type CurvePoint } from "./curve";
 import type { ProviderUsageHistoryDayTotals } from "./derive";
 import { identityForeground, type IdentityColorName } from "@/styles/identity-colors";
 import type { BreakdownRow } from "./breakdown";
@@ -32,7 +32,7 @@ const TICK_COUNT = 4;
 // Half a `fontSize.sm` line, so a tick label centers on its gridline.
 const TICK_LABEL_OFFSET = 8;
 const STROKE_WIDTH = 2;
-const AREA_OPACITY = 0.12;
+const AREA_OPACITY = 0.24;
 
 /**
  * Theme colors the SVG needs. Resolved once for the whole drawing through
@@ -94,6 +94,11 @@ interface SeriesPath {
   readonly area: string;
 }
 
+/**
+ * Stacked areas, one band per breakdown series. Each band measures from the one
+ * below it, so the top of the stack is the day's total and a small series stays
+ * visible instead of sitting underneath a larger one.
+ */
 export function ProviderUsageHistoryChart({
   days,
   daily,
@@ -118,30 +123,40 @@ export function ProviderUsageHistoryChart({
     () => buildChartColumns(days, daily, providers, metric),
     [daily, days, metric, providers],
   );
-  const scale = useMemo(() => niceScale(seriesPeak(columns), TICK_COUNT), [columns]);
+  const scale = useMemo(() => niceScale(stackPeak(columns), TICK_COUNT), [columns]);
   const stepX = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
 
   const paths = useMemo<readonly SeriesPath[]>(() => {
     if (plotWidth <= 0 || columns.length === 0) return [];
     const step = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
-    const built = providers.map((provider, providerIndex) => {
-      const line = seriesLinePath(
-        columns.map((column, dayIndex) => ({
-          x: dayIndex * step,
-          y: plotY(column.bands[providerIndex]?.value ?? 0, scale.max, plotHeight),
-        })),
-        lineShape,
+    // One boundary per stack level: level 0 is the baseline, level i + 1 is the
+    // top of series i. A band is drawn between two of these rather than
+    // smoothing its own top and bottom separately, so neighbouring bands share
+    // the identical boundary and cannot drift apart.
+    const running = columns.map(() => 0);
+    const boundaries: CurvePoint[][] = [
+      columns.map((_, dayIndex) => ({ x: dayIndex * step, y: plotY(0, scale.max, plotHeight) })),
+    ];
+    for (let seriesIndex = 0; seriesIndex < providers.length; seriesIndex += 1) {
+      boundaries.push(
+        columns.map((column, dayIndex) => {
+          const total = (running[dayIndex] ?? 0) + (column.bands[seriesIndex]?.value ?? 0);
+          running[dayIndex] = total;
+          return { x: dayIndex * step, y: plotY(total, scale.max, plotHeight) };
+        }),
       );
+    }
+
+    return providers.map((provider, seriesIndex) => {
+      const top = boundaries[seriesIndex + 1] ?? [];
+      const bottom = boundaries[seriesIndex] ?? [];
       return {
         provider,
-        colorName: series[providerIndex].colorName,
-        line,
-        area: line === "" ? "" : `${line} L${plotWidth},${plotHeight} L0,${plotHeight} Z`,
-        total: columns.reduce((sum, column) => sum + (column.bands[providerIndex]?.value ?? 0), 0),
+        colorName: series[seriesIndex].colorName,
+        line: seriesLinePath(top, lineShape),
+        area: bandAreaPath(top, bottom, lineShape),
       };
     });
-    // Paint the heavier series first so the lighter one is not buried.
-    return built.sort((left, right) => right.total - left.total);
   }, [columns, lineShape, plotWidth, providers, scale.max, plotHeight, series]);
 
   const format = metric === "cost" ? formatUsd : formatTokens;
@@ -280,7 +295,7 @@ function ChartSvg({
           strokeWidth={1}
         />
       ))}
-      {/* Fills first, then every stroke, so no series covers another's line. */}
+      {/* Fills first, then every stroke, so a band's fill never covers the boundary it shares with its neighbour. */}
       {paths.map((series) => (
         <Path
           key={series.provider}
