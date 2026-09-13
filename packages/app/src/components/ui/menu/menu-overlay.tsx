@@ -30,6 +30,7 @@ import {
   useOverlayLayer,
   useWebOverlayRegistration,
 } from "@/lib/overlay-root";
+import { LIST_SEARCH_DATASET, resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 import {
   computePosition,
   getTransformOrigin,
@@ -434,6 +435,7 @@ export function MenuOverlay({
         return true;
       }
 
+      const action = resolveListSearchKeyAction(event);
       const target = event.target instanceof Element ? event.target : null;
       const surface = target?.closest<HTMLElement>('[data-menu-surface="true"]');
       if (!surface) return false;
@@ -444,10 +446,18 @@ export function MenuOverlay({
       );
       if (items.length === 0) return false;
       const currentIndex = items.findIndex((item) => item === document.activeElement);
+
+      if (action === "submit" || event.key === " ") {
+        if (currentIndex < 0) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        items[currentIndex]?.click();
+        return true;
+      }
+
       let nextIndex: number | null = null;
-      if (event.key === "ArrowDown")
-        nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
-      if (event.key === "ArrowUp")
+      if (action === "next") nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
+      if (action === "previous")
         nextIndex =
           currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
       if (event.key === "Home") nextIndex = 0;
@@ -456,12 +466,6 @@ export function MenuOverlay({
         event.preventDefault();
         event.stopPropagation();
         items[nextIndex]?.focus();
-        return true;
-      }
-      if ((event.key === "Enter" || event.key === " ") && currentIndex >= 0) {
-        event.preventDefault();
-        event.stopPropagation();
-        items[currentIndex]?.click();
         return true;
       }
       return false;
@@ -485,6 +489,7 @@ export function MenuOverlay({
         }}
         ref={setWebOverlayScope}
         collapsable={false}
+        dataSet={LIST_SEARCH_DATASET}
         style={[
           styles.overlay,
           isWeb ? styles.overlayWeb : null,
