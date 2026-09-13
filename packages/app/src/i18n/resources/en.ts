@@ -2144,14 +2144,19 @@ export const en = {
         unreadableProviders: "Totals are incomplete: could not read transcripts for {{providers}}",
       },
       chart: {
-        titleCost: "Daily cost",
-        titleTokens: "Daily processed tokens",
-        total: "Total",
-        shape: {
-          smooth: "Smooth",
-          linear: "Linear",
-          step: "Step",
+        title: {
+          cost: {
+            day: "Daily cost",
+            week: "Weekly cost",
+            month: "Monthly cost",
+          },
+          tokens: {
+            day: "Daily processed tokens",
+            week: "Weekly processed tokens",
+            month: "Monthly processed tokens",
+          },
         },
+        total: "Total",
       },
       totals: {
         title: "Totals",
@@ -2164,7 +2169,6 @@ export const en = {
       breakdown: {
         week: "Week",
         month: "Month",
-        timeGrouping: "Time grouping",
         chart: "Chart breakdown",
         table: "Usage table",
         title: "Breakdown",
