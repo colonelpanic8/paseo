@@ -81,6 +81,7 @@ import {
 } from "./agent-run-state.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
+import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
 import {
   PASEO_MCP_SERVER_NAME,
   stripInternalPaseoMcpServer,
@@ -2583,6 +2584,13 @@ export class AgentManager {
       return result.turnId;
     } catch (error) {
       if (pendingRun.settled) {
+        throw error;
+      }
+      if (isStaleProviderSessionError(error)) {
+        pendingRun.start = { status: "failed", error: error.message };
+        agent.pendingReplacement = false;
+        if (!agent.activeForegroundTurnId) agent.lifecycle = "idle";
+        this.runs.settleForegroundRun(agentId, pendingRun.token);
         throw error;
       }
       agent.pendingReplacement = false;
