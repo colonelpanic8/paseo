@@ -76,6 +76,7 @@ export const PaseoConfigRawSchema = z
     worktree: PaseoWorktreeConfigRawSchema.optional(),
     scripts: z.record(z.string(), PaseoScriptEntryRawSchema).optional(),
     metadataGeneration: PaseoMetadataGenerationSchema.optional(),
+    agentEnv: z.string().optional(),
   })
   .passthrough();
 
@@ -92,6 +93,7 @@ export const PaseoConfigSchema = PaseoConfigRawSchema.extend({
   worktree: WorktreeConfigSchema.optional(),
   scripts: z.record(z.string(), ScriptEntrySchema).optional().catch({}),
   metadataGeneration: PaseoMetadataGenerationSchema.optional(),
+  agentEnv: z.string().optional().catch(undefined),
 })
   .passthrough()
   .catch({});
