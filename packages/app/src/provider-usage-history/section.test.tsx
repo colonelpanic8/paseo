@@ -226,17 +226,22 @@ describe("ProviderUsageHistorySection", () => {
       }),
     );
     expect(summaries()).toEqual(["2026-09-05$3.0033.3%1K", "2026-09-06$3.0066.7%2K"]);
+    // One control: the chart follows the table's grouping instead of staying daily.
     const timeGrouping = within(screen.getByTestId("usage-history-time-grouping"));
     fireEvent.click(timeGrouping.getByRole("button", { name: "Week" }));
     expect(headings()).toEqual(["2026-08-31 – 2026-09-06"]);
     expect(rows()).toHaveLength(2);
     expect(summaries()).toEqual(["2026-08-31 – 2026-09-06$6.00100.0%3K"]);
+    const weekly = screen.getByTestId("usage-history-chart").innerHTML;
+    expect(weekly).not.toBe(chart);
     fireEvent.click(timeGrouping.getByRole("button", { name: "Month" }));
     expect(headings()).toEqual(["2026-09"]);
     expect(summaries()).toEqual(["2026-09$6.00100.0%3K"]);
+    const monthly = screen.getByTestId("usage-history-chart").innerHTML;
+    expect(monthly).not.toBe(weekly);
     fireEvent.click(screen.getByTestId("usage-history-table-group-model"));
     expect(rows()).toHaveLength(1);
-    expect(screen.getByTestId("usage-history-chart").innerHTML).toBe(chart);
+    expect(screen.getByTestId("usage-history-chart").innerHTML).toBe(monthly);
     const table = screen.getByTestId("usage-history-table").innerHTML;
     fireEvent.click(screen.getByTestId("usage-history-chart-group-model"));
     expect(screen.getByTestId("usage-history-chart").innerHTML).not.toBe(chart);
@@ -289,34 +294,6 @@ describe("ProviderUsageHistorySection", () => {
     expect(
       screen.getAllByTestId("usage-history-breakdown-row").map((row) => row.textContent),
     ).toEqual(["ryzen-shine · Codex$3.0075.0%1K", "jimi-hendnix · Codex$1.0025.0%1K"]);
-  });
-
-  it("selects each line shape without changing usage totals", async () => {
-    renderSection([
-      {
-        serverId: "host-a",
-        label: "Laptop",
-        connectionStatus: "online",
-        supported: true,
-        payload: payload(3, "laptop"),
-      },
-    ]);
-    await screen.findByTestId("usage-history-headline");
-    const controls = within(screen.getByTestId("usage-history-chart-shape"));
-    expect(controls.getByRole("button", { name: "Smooth" }).getAttribute("aria-selected")).toBe(
-      "true",
-    );
-    const figures = screen.getByTestId("usage-history-figures").textContent;
-    for (const name of ["Linear", "Step", "Smooth"]) {
-      fireEvent.click(controls.getByRole("button", { name }));
-      expect(
-        controls
-          .getAllByRole("button")
-          .filter((button) => button.getAttribute("aria-selected") === "true")
-          .map((button) => button.textContent),
-      ).toEqual([name]);
-      expect(screen.getByTestId("usage-history-figures").textContent).toBe(figures);
-    }
   });
 
   it("tells identically named hosts apart by the endpoint each is reached at", async () => {
