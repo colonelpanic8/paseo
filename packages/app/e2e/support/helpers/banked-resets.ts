@@ -128,7 +128,8 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
         card.getByText("Banked reset used. Codex usage limits have been reset."),
       ).toBeVisible();
       await expect(card.getByText("0 available", { exact: true })).toBeVisible();
-      await expect(card.getByText("Used", { exact: true })).toBeVisible();
+      const resetRow = card.getByText("Referral reward", { exact: true }).locator("../..");
+      await expect(resetRow.getByText("Used", { exact: true })).toBeVisible();
       await expect(card.getByText("0%", { exact: true })).toBeVisible();
       expect(requests).toHaveLength(1);
     },
