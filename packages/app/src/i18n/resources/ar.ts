@@ -221,6 +221,13 @@ export const ar: TranslationResources = {
     empty: "ابدأ الدردشة مع هذا الوكيل...",
     scrollToBottom: "قم بالتمرير إلى الأسفل",
     historyLoadFailed: "تعذر تحميل سجل الوكيل",
+    find: {
+      placeholder: "البحث في المحادثة",
+      matchCount: "{{current}}/{{total}}",
+      previous: "التطابق السابق",
+      next: "التطابق التالي",
+      close: "إغلاق البحث",
+    },
     messageCapped: "تم اقتطاع هذه الرسالة ({{bytes}} بايت).",
     permission: {
       rejectedPlan: "خطة مرفوضة",
@@ -2305,6 +2312,7 @@ export const ar: TranslationResources = {
         selectHost: "تحديد المضيف",
         toggleFastMode: "تبديل الوضع السريع",
         togglePlanMode: "تبديل وضع الخطة",
+        findInConversation: "البحث في المحادثة",
       },
       helpNotes: {
         showKeyboardShortcuts: "متاح عندما لا يكون التركيز في حقل نص أو محطة طرفية.",
