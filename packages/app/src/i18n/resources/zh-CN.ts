@@ -1775,6 +1775,7 @@ export const zhCN: TranslationResources = {
     label: "实时语音",
     menu: {
       hosts: "主机",
+      contextProfiles: "上下文配置",
     },
     actions: {
       start: "开始实时语音",

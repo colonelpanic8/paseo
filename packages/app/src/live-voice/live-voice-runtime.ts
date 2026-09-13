@@ -81,6 +81,7 @@ export interface LiveVoiceDaemonClient {
   startLiveVoice(input: {
     negotiation: { kind: "webrtc_sdp"; offerSdp: string };
     assistantId?: string;
+    contextProfileId?: string;
     voice?: string;
     ambientAgentReports?: boolean;
     ambientAgentGuidance?: string;
@@ -151,7 +152,7 @@ export interface LiveVoiceRuntimeDeps {
 export interface LiveVoiceRuntime {
   subscribe(listener: () => void): () => void;
   getSnapshot(): LiveVoiceSnapshot;
-  start(serverId: string): Promise<void>;
+  start(serverId: string, options?: { contextProfileId?: string }): Promise<void>;
   /** Pending platform startup cannot be cancelled; its lease survives until it settles. */
   stop(): Promise<void>;
   /** Drive mute to an absolute value. No-op unless a call is active. */
@@ -285,6 +286,7 @@ interface LiveVoiceCall {
   client: LiveVoiceDaemonClient;
   pin: LiveVoiceConnectionPin | null;
   assistantId: string | null;
+  contextProfileId: string | null;
   leaseToken: AudioSessionLeaseToken | null;
   session: LiveVoiceSession | null;
   unsubscribe: (() => void) | null;
@@ -495,6 +497,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
           const result = await call.client.startLiveVoice({
             negotiation: { kind: "webrtc_sdp", offerSdp },
             ...(assistantId ? { assistantId } : {}),
+            ...(call.contextProfileId ? { contextProfileId: call.contextProfileId } : {}),
             ...(voice ? { voice } : {}),
             ...ambientStartFields,
             ...(callSettings?.disabledPromptComponents?.length
@@ -576,7 +579,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
     getSnapshot() {
       return snapshot;
     },
-    async start(serverId) {
+    async start(serverId, options) {
       if (snapshot.phase === "starting" || snapshot.phase === "active") {
         throw new LiveVoiceStartError({ code: "already_active", message: null });
       }
@@ -610,6 +613,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
         client,
         pin,
         assistantId,
+        contextProfileId: options?.contextProfileId ?? null,
         leaseToken: token,
         session: null,
         unsubscribe: null,
