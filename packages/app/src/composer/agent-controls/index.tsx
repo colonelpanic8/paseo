@@ -519,6 +519,58 @@ function buildOpenChangeHandler(
   };
 }
 
+function handleComposerKeyboardAction(
+  action: KeyboardActionDefinition,
+  options: {
+    disabled: boolean;
+    isActiveComposer: boolean;
+    canSelectModel: boolean;
+    canSelectThinking: boolean;
+    isCompact: boolean;
+    features?: AgentFeature[];
+    onSetFeature?: (featureId: string, value: unknown) => void;
+    onDropdownClose?: () => void;
+    setOpenSelector: (selector: AgentControlSelector) => void;
+    handleOpenSheet: (sheet: Exclude<ActiveSheet, null>) => void;
+  },
+): boolean {
+  const {
+    disabled,
+    isActiveComposer,
+    canSelectModel,
+    canSelectThinking,
+    isCompact,
+    features,
+    onSetFeature,
+    onDropdownClose,
+    setOpenSelector,
+    handleOpenSheet,
+  } = options;
+  if (disabled || !isActiveComposer) return false;
+  if (action.id === "message-input.model.pick") {
+    if (!canSelectModel) return false;
+    setOpenSelector("model");
+    return true;
+  }
+  if (action.id === "message-input.thinking.pick") {
+    if (!canSelectThinking) return false;
+    if (isCompact) {
+      handleOpenSheet("thinking");
+    } else {
+      setOpenSelector("thinking");
+    }
+    return true;
+  }
+  const toggleFeatureId = getToggleFeatureIdForAction(action.id);
+  if (!toggleFeatureId) return false;
+  const toggleFeature = features?.find((feature) => feature.id === toggleFeatureId);
+  if (toggleFeature?.type !== "toggle" || !onSetFeature) return false;
+  onSetFeature(toggleFeature.id, !toggleFeature.value);
+  onDropdownClose?.();
+  return true;
+}
+
+// oxlint-disable-next-line complexity
 function ControlledAgentControls({
   provider,
   providerOptions,
@@ -778,30 +830,19 @@ function ControlledAgentControls({
   );
 
   const handleKeyboardAction = useCallback(
-    (action: KeyboardActionDefinition): boolean => {
-      if (disabled || !isActiveComposer) return false;
-      if (action.id === "message-input.model.pick") {
-        if (!canSelectModel) return false;
-        setOpenSelector("model");
-        return true;
-      }
-      if (action.id === "message-input.thinking.pick") {
-        if (!canSelectThinking) return false;
-        if (isCompact) {
-          handleOpenSheet("thinking");
-        } else {
-          setOpenSelector("thinking");
-        }
-        return true;
-      }
-      const toggleFeatureId = getToggleFeatureIdForAction(action.id);
-      if (!toggleFeatureId) return false;
-      const toggleFeature = features?.find((feature) => feature.id === toggleFeatureId);
-      if (toggleFeature?.type !== "toggle" || !onSetFeature) return false;
-      onSetFeature(toggleFeature.id, !toggleFeature.value);
-      onDropdownClose?.();
-      return true;
-    },
+    (action: KeyboardActionDefinition) =>
+      handleComposerKeyboardAction(action, {
+        disabled,
+        isActiveComposer,
+        canSelectModel,
+        canSelectThinking,
+        isCompact,
+        features,
+        onSetFeature,
+        onDropdownClose,
+        setOpenSelector,
+        handleOpenSheet,
+      }),
     [
       canSelectModel,
       canSelectThinking,

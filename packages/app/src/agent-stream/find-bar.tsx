@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+/* oxlint-disable no-restricted-imports */
 import {
   Pressable,
   Text,
@@ -9,6 +10,7 @@ import {
   type PressableStateCallbackType,
   type TextInputKeyPressEventData,
 } from "react-native";
+/* oxlint-enable no-restricted-imports */
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   EditingTextInput as TextInput,
