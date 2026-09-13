@@ -15,6 +15,7 @@ import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.j
 import {
   AgentProfileSchema,
   AgentSkillSelectionSchema,
+  IdentityColorNameSchema,
   PluginIdSchema,
   PluginSourceSchema,
   TerminalProfileSchema,
@@ -354,6 +355,12 @@ export const PersistedConfigSchema = z
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
         agentProfiles: z.array(AgentProfileSchema).optional(),
+        appearance: z
+          .object({
+            color: IdentityColorNameSchema.optional(),
+          })
+          .strict()
+          .optional(),
         cors: z
           .object({
             allowedOrigins: z.array(z.string()).optional(),
