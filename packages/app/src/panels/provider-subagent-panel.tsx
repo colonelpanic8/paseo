@@ -12,7 +12,7 @@ import {
 import { ComposerTrackBar } from "@/composer/tracks";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
-import { usePaneContext } from "@/panels/pane-context";
+import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
 import { useSessionStore } from "@/stores/session-store";
 import { useSubagentsForParent } from "@/subagents/select";
@@ -109,6 +109,7 @@ function useProviderSubagentDescriptor(
 function ProviderSubagentPanel() {
   const { t } = useTranslation();
   const { serverId, target, openFileInWorkspace, openTab } = usePaneContext();
+  const { isInteractive } = usePaneFocus();
   invariant(target.kind === "provider_subagent", "ProviderSubagentPanel requires provider target");
   const key = providerSubagentKey(serverId, target.parentAgentId, target.subagentId);
   const streamId = `provider:${encodeURIComponent(target.parentAgentId)}:${encodeURIComponent(target.subagentId)}`;
@@ -258,6 +259,7 @@ function ProviderSubagentPanel() {
         pendingPermissions={EMPTY_PERMISSIONS}
         isAuthoritativeHistoryReady
         onOpenWorkspaceFile={openFileInWorkspace}
+        isPaneFocused={isInteractive}
         readOnly
         historyPagination={historyPagination}
         bottomOverlayTailClearance={childTrackClearance.tail}
