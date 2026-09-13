@@ -531,6 +531,12 @@ function resolveBrowserToolsEnabled(persisted: ReturnType<typeof loadPersistedCo
   return persisted.daemon?.browserTools?.enabled ?? false;
 }
 
+function resolvePushConfig(
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): Pick<PaseoDaemonConfig, "push"> {
+  return persisted.daemon?.push !== undefined ? { push: persisted.daemon.push } : {};
+}
+
 /**
  * Both profile lists stay `undefined` when absent rather than defaulting to an
  * empty array: for terminal profiles that is what selects the built-in
@@ -586,6 +592,7 @@ export type ResolvedDaemonSettings = Pick<
   | "git"
   | "autoArchiveAfterMerge"
   | "enableTerminalAgentHooks"
+  | "push"
   | "appendSystemPrompt"
   | "terminalProfiles"
   | "agentProfiles"
@@ -679,6 +686,7 @@ export function resolveReloadableConfig(
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted),
     git: resolveGitProcessConfig(env, persisted),
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
+    ...resolvePushConfig(persisted),
     skillSelection: persisted.agents?.skills?.selection,
     pluginsEnabled: persisted.pluginsEnabled ?? false,
     plugins: persisted.plugins,
