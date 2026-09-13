@@ -2043,14 +2043,19 @@ export const ru: TranslationResources = {
         unreadableProviders: "Итоги неполные: не удалось прочитать журналы сессий {{providers}}",
       },
       chart: {
-        titleCost: "Стоимость по дням",
-        titleTokens: "Обработанные токены по дням",
-        total: "Всего",
-        shape: {
-          smooth: "Плавно",
-          linear: "Линейно",
-          step: "Ступени",
+        title: {
+          cost: {
+            day: "Стоимость по дням",
+            week: "Стоимость по неделям",
+            month: "Стоимость по месяцам",
+          },
+          tokens: {
+            day: "Обработанные токены по дням",
+            week: "Обработанные токены по неделям",
+            month: "Обработанные токены по месяцам",
+          },
         },
+        total: "Всего",
       },
       totals: {
         title: "Итоги",
@@ -2063,7 +2068,6 @@ export const ru: TranslationResources = {
       breakdown: {
         week: "Неделя",
         month: "Месяц",
-        timeGrouping: "Группировка по времени",
         chart: "Разбивка графика",
         table: "Таблица использования",
         title: "Разбивка",

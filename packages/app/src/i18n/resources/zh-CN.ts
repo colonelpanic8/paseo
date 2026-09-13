@@ -1991,14 +1991,19 @@ export const zhCN: TranslationResources = {
         unreadableProviders: "汇总不完整：无法读取 {{providers}} 的会话记录",
       },
       chart: {
-        titleCost: "每日费用",
-        titleTokens: "每日处理 tokens",
-        total: "合计",
-        shape: {
-          smooth: "平滑",
-          linear: "直线",
-          step: "阶梯",
+        title: {
+          cost: {
+            day: "每日费用",
+            week: "每周费用",
+            month: "每月费用",
+          },
+          tokens: {
+            day: "每日处理 tokens",
+            week: "每周处理 tokens",
+            month: "每月处理 tokens",
+          },
         },
+        total: "合计",
       },
       totals: {
         title: "汇总",
@@ -2011,7 +2016,6 @@ export const zhCN: TranslationResources = {
       breakdown: {
         week: "周",
         month: "月",
-        timeGrouping: "时间分组",
         chart: "图表细分",
         table: "用量表格",
         title: "明细",

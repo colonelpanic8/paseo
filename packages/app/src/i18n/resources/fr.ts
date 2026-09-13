@@ -2066,14 +2066,19 @@ export const fr: TranslationResources = {
           "Les totaux sont incomplets : impossible de lire les transcriptions de {{providers}}",
       },
       chart: {
-        titleCost: "Coût quotidien",
-        titleTokens: "Jetons traités par jour",
-        total: "Total",
-        shape: {
-          smooth: "Lissé",
-          linear: "Linéaire",
-          step: "Paliers",
+        title: {
+          cost: {
+            day: "Coût quotidien",
+            week: "Coût hebdomadaire",
+            month: "Coût mensuel",
+          },
+          tokens: {
+            day: "Jetons traités par jour",
+            week: "Jetons traités par semaine",
+            month: "Jetons traités par mois",
+          },
         },
+        total: "Total",
       },
       totals: {
         title: "Totaux",
@@ -2086,7 +2091,6 @@ export const fr: TranslationResources = {
       breakdown: {
         week: "Semaine",
         month: "Mois",
-        timeGrouping: "Regroupement temporel",
         chart: "Répartition du graphique",
         table: "Tableau d’utilisation",
         title: "Répartition",

@@ -2031,14 +2031,19 @@ export const ja: TranslationResources = {
           "合計は不完全です: {{providers}} のセッション記録を読み取れませんでした",
       },
       chart: {
-        titleCost: "日別コスト",
-        titleTokens: "日別処理トークン",
-        total: "合計",
-        shape: {
-          smooth: "滑らか",
-          linear: "直線",
-          step: "階段",
+        title: {
+          cost: {
+            day: "日別コスト",
+            week: "週別コスト",
+            month: "月別コスト",
+          },
+          tokens: {
+            day: "日別処理トークン",
+            week: "週別処理トークン",
+            month: "月別処理トークン",
+          },
         },
+        total: "合計",
       },
       totals: {
         title: "合計",
@@ -2051,7 +2056,6 @@ export const ja: TranslationResources = {
       breakdown: {
         week: "週",
         month: "月",
-        timeGrouping: "期間のグループ化",
         chart: "グラフの内訳",
         table: "使用量の表",
         title: "内訳",

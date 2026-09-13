@@ -18,12 +18,18 @@ import {
   stackPeak,
   type ProviderUsageHistoryChartColumn,
 } from "./chart-data";
-import { bandAreaPath, seriesLinePath, type CurvePoint } from "./curve";
+import { bandAreaPath, curvePath, smoothCurve, type CurvePoint } from "./curve";
 import type { ProviderUsageHistoryDayTotals } from "./derive";
 import { identityForeground, type IdentityColorName } from "@/styles/identity-colors";
-import type { BreakdownRow } from "./breakdown";
-import type { ProviderUsageHistoryLineShape, ProviderUsageHistoryMetric } from "./types";
-import { formatDayShort, formatTokens, formatUsd, formatUsdCompact } from "./window";
+import type { BreakdownRow, TimeGrouping } from "./breakdown";
+import type { ProviderUsageHistoryMetric } from "./types";
+import {
+  formatPeriodLong,
+  formatPeriodShort,
+  formatTokens,
+  formatUsd,
+  formatUsdCompact,
+} from "./window";
 
 /** Headroom above the top gridline so a series at the peak keeps its full stroke. */
 const PLOT_TOP = 8;
@@ -80,11 +86,12 @@ function selectionReducer(state: ChartSelection, action: ChartSelectionAction): 
 }
 
 export interface ProviderUsageHistoryChartProps {
-  days: readonly string[];
+  /** One period start per column, oldest first. */
+  periods: readonly string[];
   daily: readonly ProviderUsageHistoryDayTotals[];
   series: readonly BreakdownRow[];
   metric: ProviderUsageHistoryMetric;
-  lineShape: ProviderUsageHistoryLineShape;
+  timeGrouping: TimeGrouping;
 }
 
 interface SeriesPath {
@@ -100,11 +107,11 @@ interface SeriesPath {
  * visible instead of sitting underneath a larger one.
  */
 export function ProviderUsageHistoryChart({
-  days,
+  periods,
   daily,
   series,
   metric,
-  lineShape,
+  timeGrouping,
 }: ProviderUsageHistoryChartProps) {
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
@@ -120,8 +127,8 @@ export function ProviderUsageHistoryChart({
   }, []);
 
   const columns = useMemo(
-    () => buildChartColumns(days, daily, providers, metric),
-    [daily, days, metric, providers],
+    () => buildChartColumns(periods, daily, providers, metric),
+    [daily, periods, metric, providers],
   );
   const scale = useMemo(() => niceScale(stackPeak(columns), TICK_COUNT), [columns]);
   const stepX = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
@@ -153,11 +160,11 @@ export function ProviderUsageHistoryChart({
       return {
         provider,
         colorName: series[seriesIndex].colorName,
-        line: seriesLinePath(top, lineShape),
-        area: bandAreaPath(top, bottom, lineShape),
+        line: curvePath(smoothCurve(top)),
+        area: bandAreaPath(top, bottom),
       };
     });
-  }, [columns, lineShape, plotWidth, providers, scale.max, plotHeight, series]);
+  }, [columns, plotWidth, providers, scale.max, plotHeight, series]);
 
   const format = metric === "cost" ? formatUsd : formatTokens;
   const formatTick = metric === "cost" ? formatUsdCompact : formatTokens;
@@ -165,10 +172,7 @@ export function ProviderUsageHistoryChart({
   const selectedIndex = columns.findIndex((column) => column.day === candidate);
   const selected = selectedIndex < 0 ? undefined : columns[selectedIndex];
 
-  const title =
-    metric === "cost"
-      ? t("settings.usageHistory.chart.titleCost")
-      : t("settings.usageHistory.chart.titleTokens");
+  const title = t(`settings.usageHistory.chart.title.${metric}.${timeGrouping}`);
 
   return (
     <View style={styles.container}>
@@ -179,7 +183,7 @@ export function ProviderUsageHistoryChart({
             ""
           ) : (
             <>
-              <Text style={styles.readoutDay}>{formatDayShort(selected.day)}</Text>
+              <Text style={styles.readoutDay}>{formatPeriodLong(selected.day, timeGrouping)}</Text>
               {selected.bands
                 .filter((band) => band.value > 0 || band.unpricedRecords > 0)
                 .map((band) => (
@@ -235,7 +239,7 @@ export function ProviderUsageHistoryChart({
                   left={cellLeft(index, stepX, plotWidth)}
                   width={cellWidth(index, stepX, plotWidth, columns.length)}
                   isSelected={column.day === candidate}
-                  label={`${formatDayShort(column.day)} ${format(column.total)}`}
+                  label={`${formatPeriodLong(column.day, timeGrouping)} ${format(column.total)}`}
                   onDispatch={dispatch}
                 />
               ))}
@@ -243,9 +247,15 @@ export function ProviderUsageHistoryChart({
       </View>
 
       <View style={styles.axisLabels}>
-        <Text style={styles.axisLabel}>{dayLabelAt(days, 0)}</Text>
-        <Text style={styles.axisLabel}>{dayLabelAt(days, Math.floor(days.length / 2))}</Text>
-        <Text style={styles.axisLabel}>{dayLabelAt(days, days.length - 1)}</Text>
+        <Text style={styles.axisLabel}>{periodLabelAt(periods, 0, timeGrouping)}</Text>
+        <Text style={styles.axisLabel}>
+          {periods.length > 2
+            ? periodLabelAt(periods, Math.floor(periods.length / 2), timeGrouping)
+            : ""}
+        </Text>
+        <Text style={styles.axisLabel}>
+          {periodLabelAt(periods, periods.length - 1, timeGrouping)}
+        </Text>
       </View>
       <ScrollView horizontal>
         <View style={styles.legend}>
@@ -346,9 +356,9 @@ function cellWidth(index: number, stepX: number, plotWidth: number, count: numbe
   return Math.max(0, right - cellLeft(index, stepX, plotWidth));
 }
 
-function dayLabelAt(days: readonly string[], index: number): string {
-  const day = days[index];
-  return day === undefined ? "" : formatDayShort(day);
+function periodLabelAt(periods: readonly string[], index: number, grouping: TimeGrouping): string {
+  const period = periods[index];
+  return period === undefined ? "" : formatPeriodShort(period, grouping);
 }
 
 interface ChartDayTargetProps {

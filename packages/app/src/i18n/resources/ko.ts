@@ -2022,14 +2022,19 @@ export const ko: TranslationResources = {
         unreadableProviders: "합계가 불완전합니다: {{providers}}의 세션 기록을 읽을 수 없습니다",
       },
       chart: {
-        titleCost: "일별 비용",
-        titleTokens: "일별 처리 토큰",
-        total: "합계",
-        shape: {
-          smooth: "부드럽게",
-          linear: "직선",
-          step: "계단",
+        title: {
+          cost: {
+            day: "일별 비용",
+            week: "주별 비용",
+            month: "월별 비용",
+          },
+          tokens: {
+            day: "일별 처리 토큰",
+            week: "주별 처리 토큰",
+            month: "월별 처리 토큰",
+          },
         },
+        total: "합계",
       },
       totals: {
         title: "합계",
@@ -2042,7 +2047,6 @@ export const ko: TranslationResources = {
       breakdown: {
         week: "주",
         month: "월",
-        timeGrouping: "기간별 그룹화",
         chart: "차트 분류",
         table: "사용량 표",
         title: "분석",

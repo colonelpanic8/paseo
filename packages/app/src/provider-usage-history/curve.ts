@@ -1,6 +1,5 @@
 /**
- * Path builders for the usage chart's area series: linear, step, and the
- * default monotone cubic.
+ * Monotone cubic interpolation for the usage chart's area series.
  *
  * Ordinary cubic smoothing overshoots: a quiet day between two busy ones is
  * drawn below zero, and a spike is drawn taller than it was. The Fritsch-Carlson
@@ -8,8 +7,6 @@
  *
  * @module curve
  */
-
-import type { ProviderUsageHistoryLineShape } from "./types";
 
 export interface CurvePoint {
   readonly x: number;
@@ -107,56 +104,6 @@ export function curvePath(segments: readonly CurveSegment[]): string {
   return path;
 }
 
-function pointAt(point: CurvePoint): string {
-  return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-}
-
-export function linearPath(points: readonly CurvePoint[]): string {
-  const [first, ...rest] = points;
-  if (first === undefined || rest.length === 0) return "";
-  return `M${pointAt(first)}${rest.map((point) => ` L${pointAt(point)}`).join("")}`;
-}
-
-/**
- * Each day holds its value across the strip it owns and changes halfway to the
- * next day: the same strip its hover target covers.
- */
-export function stepPath(points: readonly CurvePoint[]): string {
-  const first = points[0];
-  const last = points[points.length - 1];
-  if (first === undefined || last === undefined || points.length < 2) return "";
-  let path = `M${pointAt(first)}`;
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const from = points[index];
-    const to = points[index + 1];
-    if (from === undefined || to === undefined) continue;
-    const midX = ((from.x + to.x) / 2).toFixed(2);
-    path += ` L${midX},${from.y.toFixed(2)} L${midX},${to.y.toFixed(2)}`;
-  }
-  return `${path} L${pointAt(last)}`;
-}
-
-export function seriesLinePath(
-  points: readonly CurvePoint[],
-  shape: ProviderUsageHistoryLineShape,
-): string {
-  switch (shape) {
-    case "smooth":
-      return curvePath(smoothCurve(points));
-    case "linear":
-      return linearPath(points);
-    case "step":
-      return stepPath(points);
-  }
-}
-
-/**
- * A stacked band: forward along its top boundary, back along the boundary
- * underneath it. The lower boundary is retraced with the same builder and the
- * same points its own band drew, so neighbouring bands abut exactly instead of
- * drifting apart. The retrace keeps the band one subpath by continuing from the
- * forward path's last point rather than starting a second `M`.
- */
 /** `Array#reverse` mutates, and these point arrays are shared between bands. */
 function reversePoints(points: readonly CurvePoint[]): CurvePoint[] {
   const reversed: CurvePoint[] = [];
@@ -167,13 +114,9 @@ function reversePoints(points: readonly CurvePoint[]): CurvePoint[] {
   return reversed;
 }
 
-export function bandAreaPath(
-  top: readonly CurvePoint[],
-  bottom: readonly CurvePoint[],
-  shape: ProviderUsageHistoryLineShape,
-): string {
-  const forward = seriesLinePath(top, shape);
-  const back = seriesLinePath(reversePoints(bottom), shape);
+export function bandAreaPath(top: readonly CurvePoint[], bottom: readonly CurvePoint[]): string {
+  const forward = curvePath(smoothCurve(top));
+  const back = curvePath(smoothCurve(reversePoints(bottom)));
   if (forward === "" || back === "") return "";
   return `${forward} L${back.slice(1)} Z`;
 }

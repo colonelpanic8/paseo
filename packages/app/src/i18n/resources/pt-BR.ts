@@ -2046,14 +2046,19 @@ export const ptBR: TranslationResources = {
           "Os totais estão incompletos: não foi possível ler as transcrições de {{providers}}",
       },
       chart: {
-        titleCost: "Custo diário",
-        titleTokens: "Tokens processados por dia",
-        total: "Total",
-        shape: {
-          smooth: "Suave",
-          linear: "Linear",
-          step: "Degraus",
+        title: {
+          cost: {
+            day: "Custo diário",
+            week: "Custo semanal",
+            month: "Custo mensal",
+          },
+          tokens: {
+            day: "Tokens processados por dia",
+            week: "Tokens processados por semana",
+            month: "Tokens processados por mês",
+          },
         },
+        total: "Total",
       },
       totals: {
         title: "Totais",
@@ -2066,7 +2071,6 @@ export const ptBR: TranslationResources = {
       breakdown: {
         week: "Semana",
         month: "Mês",
-        timeGrouping: "Agrupamento por período",
         chart: "Detalhamento do gráfico",
         table: "Tabela de uso",
         title: "Detalhamento",

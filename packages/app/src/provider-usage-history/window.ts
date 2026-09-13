@@ -6,6 +6,8 @@
  * same way in every locale.
  */
 
+import type { TimeGrouping } from "./breakdown";
+
 export interface ProviderUsageHistoryWindow {
   readonly sinceDay: string;
   readonly untilDay: string;
@@ -89,6 +91,24 @@ export function formatDayShort(day: string): string {
   const instant = Date.parse(`${day}T00:00:00Z`);
   if (Number.isNaN(instant)) return day;
   return DAY_LABEL.format(instant);
+}
+
+const MONTH_LABEL = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" });
+
+/** Axis label for a period: `Sep 7` for a day or a week, `Sep` for a month. */
+export function formatPeriodShort(start: string, grouping: TimeGrouping): string {
+  const instant = Date.parse(`${start}T00:00:00Z`);
+  if (Number.isNaN(instant)) return start;
+  return grouping === "month" ? MONTH_LABEL.format(instant) : DAY_LABEL.format(instant);
+}
+
+/** The period a readout names, where an ambiguous `Sep 7` is not enough. */
+export function formatPeriodLong(start: string, grouping: TimeGrouping): string {
+  const instant = Date.parse(`${start}T00:00:00Z`);
+  if (Number.isNaN(instant)) return start;
+  if (grouping === "day") return DAY_LABEL.format(instant);
+  if (grouping === "month") return MONTH_LABEL.format(instant);
+  return `${DAY_LABEL.format(instant)} – ${DAY_LABEL.format(instant + 6 * DAY_MS)}`;
 }
 
 /** Inclusive day list between two `YYYY-MM-DD` bounds. */
