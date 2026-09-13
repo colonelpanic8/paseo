@@ -3,7 +3,7 @@ import { cancel, confirm, intro, isCancel, log, note, outro } from "@clack/promp
 import { Command, Option } from "commander";
 import path from "node:path";
 import {
-  readPersistedConfig as loadPersistedConfig,
+  loadPersistedConfig,
   savePersistedConfig,
   readDaemonInstance,
   waitForDaemonReady,
@@ -206,7 +206,7 @@ async function resolveAndPersistVoice(
 }
 
 function persistSetupChoices(paseoHome: string, options: OnboardOptions): void {
-  const persisted = loadPersistedConfig(paseoHome, { defaultsIfMissing: true });
+  const persisted = loadPersistedConfig(paseoHome);
   if (options.listen || options.port) {
     persisted.daemon = {
       ...persisted.daemon,
