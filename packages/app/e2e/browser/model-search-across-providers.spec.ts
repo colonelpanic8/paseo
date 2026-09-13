@@ -1,4 +1,4 @@
-import { test } from "../support/fixtures";
+import { expect, test } from "../support/fixtures";
 import {
   closeModelPicker,
   expectModelSearchEmptyState,
@@ -51,6 +51,43 @@ const LARGE_CATALOG = {
 };
 
 test.describe("Cross-provider model search", () => {
+  test("the All models preference opens the grouped catalog and keyboard selection closes it", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "@paseo:app-settings",
+        JSON.stringify({ modelPickerStartsWithAllModels: true }),
+      );
+    });
+    const provider = await seedModelProvider(STUDIO);
+    const workspace = await seedWorkspace({ repoPrefix: "model-browser-all-models-" });
+
+    try {
+      await gotoWorkspace(page, workspace.workspaceId);
+      await clickNewChat(page);
+      await expectComposerVisible(page);
+      await openModelPicker(page);
+
+      const picker = page.getByTestId("combobox-desktop-container");
+      await expect(picker.getByText(MOCK_PROVIDER_LABEL, { exact: true })).toBeVisible();
+      await expect(picker.getByText(STUDIO.label, { exact: true })).toBeVisible();
+
+      const search = page.getByTestId("model-search-input");
+      await search.fill("studio deep");
+      await page.keyboard.press("Control+n");
+      await page.keyboard.press("Enter");
+
+      await expect(picker).toHaveCount(0, { timeout: 30_000 });
+      await expect(
+        page.getByTestId("combined-model-selector").filter({ visible: true }).first(),
+      ).toContainText("Studio deep think");
+    } finally {
+      await workspace.cleanup();
+      await provider.restore();
+    }
+  });
+
   test("one query over the picker root reaches every provider and names each result's provider", async ({
     page,
   }) => {

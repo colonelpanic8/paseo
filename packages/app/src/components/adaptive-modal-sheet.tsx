@@ -3,7 +3,13 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Modal, Platform, Pressable, Text, View } from "react-native";
-import type { DimensionValue, StyleProp, ViewStyle } from "react-native";
+import type {
+  DimensionValue,
+  NativeSyntheticEvent,
+  StyleProp,
+  TextInputKeyPressEventData,
+  ViewStyle,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
@@ -30,6 +36,7 @@ import {
   getCompactSheetSafeAreaPadding,
 } from "@/components/adaptive-modal-sheet-layout";
 import { ScrollView } from "@/components/ui/scroll-view";
+import { listNavigationDataSet } from "@/keyboard/list-search-keys";
 import { isWeb } from "@/constants/platform";
 import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -42,6 +49,15 @@ export { AdaptiveTextInput, type AdaptiveTextInputProps } from "@/components/ada
 // match this padding.
 export const SHEET_HORIZONTAL_PADDING_SCALE = 6;
 
+export type SheetSearchKeyPressEvent = NativeSyntheticEvent<
+  TextInputKeyPressEventData & {
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+  }
+>;
+
 export interface SheetHeaderSearch {
   onChange: (value: string) => void;
   onFocus?: () => void;
@@ -50,6 +66,16 @@ export interface SheetHeaderSearch {
   placeholder?: string;
   autoFocus?: boolean;
   testID?: string;
+  /** Web: raw key events, so the search can drive its own result list. */
+  onKeyPress?: (event: SheetSearchKeyPressEvent) => void;
+  /** Native: Enter arrives here rather than through `onKeyPress`. */
+  onSubmit?: () => void;
+  /**
+   * Marks the field as owning the list-navigation keys (Ctrl+N/Ctrl+P, arrows,
+   * Enter) so global shortcuts stand down while it holds focus. See
+   * keyboard/list-search-keys.ts.
+   */
+  ownsListNavigation?: boolean;
 }
 
 export interface SheetHeaderBack {
@@ -358,7 +384,10 @@ export function SheetHeaderView({
         ) : null}
       </View>
       {search ? (
-        <View style={styles.searchRow}>
+        <View
+          style={styles.searchRow}
+          dataSet={listNavigationDataSet(Boolean(search.ownsListNavigation))}
+        >
           <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
@@ -368,6 +397,8 @@ export function SheetHeaderView({
             onChangeText={handleSearchChange}
             onFocus={search.onFocus}
             onBlur={search.onBlur}
+            onKeyPress={search.onKeyPress}
+            onSubmitEditing={search.onSubmit}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus={search.autoFocus}
@@ -417,7 +448,10 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
         </View>
       ) : null}
       {header.search ? (
-        <View style={styles.inlineSearchRow}>
+        <View
+          style={styles.inlineSearchRow}
+          dataSet={listNavigationDataSet(Boolean(header.search.ownsListNavigation))}
+        >
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
@@ -427,6 +461,8 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
             onChangeText={header.search.onChange}
             onFocus={header.search.onFocus}
             onBlur={header.search.onBlur}
+            onKeyPress={header.search.onKeyPress}
+            onSubmitEditing={header.search.onSubmit}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus={header.search.autoFocus}
@@ -462,6 +498,11 @@ export interface AdaptiveModalSheetProps {
   contentStyle?: StyleProp<ViewStyle>;
   /** Size compact sheet content to the live snap height instead of its largest snap point. */
   sizeContentToCurrentSnapPoint?: boolean;
+  /**
+   * Web: first refusal on keys while this sheet is the topmost overlay. Return
+   * true to consume the event (the sheet's own Escape handling is skipped).
+   */
+  onOverlayKeyDown?: (event: KeyboardEvent) => boolean;
   /** Re-establishes caller-owned contexts inside the compact bottom-sheet portal. */
   contextBridge?: ContextBridge | null;
 }
@@ -483,6 +524,7 @@ export function AdaptiveModalSheet({
   contentStyle,
   bodyStyle,
   sizeContentToCurrentSnapPoint = true,
+  onOverlayKeyDown,
   contextBridge = null,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
@@ -569,13 +611,14 @@ export function AdaptiveModalSheet({
 
   const handleWebOverlayKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      if (onOverlayKeyDown?.(event)) return true;
       if (event.key !== "Escape") return false;
       event.preventDefault();
       event.stopPropagation();
       onClose();
       return true;
     },
-    [onClose],
+    [onClose, onOverlayKeyDown],
   );
   const setWebOverlayScope = useWebOverlayRegistration({
     active: isWeb && !isMobile && visible,
