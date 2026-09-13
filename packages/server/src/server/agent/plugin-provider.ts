@@ -1619,7 +1619,14 @@ function mapSessionConfig(
 ): ProviderSessionConfig {
   return {
     cwd: config.cwd,
-    env: createProviderEnv({ baseEnv: {}, overlays: [launchContext?.env] }),
+    env: {
+      ...createProviderEnv({ baseEnv: {}, overlays: [launchContext?.env] }),
+      ...Object.fromEntries(
+        Object.entries(launchContext?.env ?? {})
+          .filter(([, value]) => value === undefined)
+          .map(([key]) => [key, null]),
+      ),
+    },
     systemPrompt: combineSystemPrompts(config.systemPrompt, config.daemonAppendSystemPrompt),
     mcpServers: { ...config.mcpServers },
     toolPolicy: config.toolPolicy
