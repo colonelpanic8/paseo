@@ -88,12 +88,22 @@ The installed tail carries `hasOlder`, so history skipped by a replacement remai
 ordinary backward pagination. A backward page is accepted only when it is adjacent to the current
 history start; a response requested from a pre-replacement range is stale and is discarded.
 
+A plan approval keeps the original proposal's tool-call identity through resolution and provider
+history replay. The pending approval UI can hide that tool from presentation, but the client model
+must retain its position. Creating a new history card on rejection places it after the prompt that
+rejected it; changing steer-event ordering would also put new assistant output before that prompt.
+
 ## Client replica lifetime
 
 The session projection remains host-scoped for as long as the host is registered. The viewed-timeline
 owner wraps cached preparation, network catch-up, accepted timeline application, and persistence
 behind one interface. React supplies transport and projection operations without selecting a cache
 path or issuing a separate persistence notification.
+
+Active-agent list reconciliation does not own transcript lifetime. An archived agent's fresh
+history response can arrive before the active-list response that omits it. Clearing history there
+would discard accepted rows while the viewed owner still considers them synchronized. Entity
+deletion clears the transcript; list membership changes do not.
 
 Removing the host from the registry is the destructive boundary: it stops the runtime and clears the
 session and host-scoped setup state together.
@@ -152,7 +162,7 @@ remaining page through the existing stream reducer. It must not append full proj
 live prefix.
 
 Every path that sends a message to an agent — composer send, dictation accept-and-send, queued
-send-now, and the automatic queue drain in `HostRuntime` — goes through
+send-now, and the host runtime's automatic queue drain — goes through
 `dispatchComposerAgentMessage` with a submission writer. There is no second transport for the same
 product action: calling `client.sendAgentMessage` directly skips the submitted row and the pending
 footer, and permanently drops attachments because the daemon does not echo them back.
@@ -196,9 +206,9 @@ fork positions retain the canonical `turnId` boundaries.
 The compatibility boundary for older daemons is snapshot normalization: running/idle status becomes an
 anonymous active turn or idle state once, and downstream code consumes the same activity shape. The app
 does not combine anonymous lifecycle events, timestamps, timeline rows, and resume coverage to infer a
-second running state. Disconnect and replica removal remain destructive close boundaries. Elapsed time
-comes only from turn liveness, never from submission records or whichever timeline rows happen to be
-mounted.
+second running state. Disconnect preserves the last replicated turn until cache or network hydration
+advances it; replica removal remains the destructive close boundary. Elapsed time comes only from turn
+liveness, never from submission records or whichever timeline rows happen to be mounted.
 
 The daemon records one canonical submitted user row at acceptance. Its wire `messageId` is the
 submission's `clientMessageId`, so the row is born with its final identity and remains immutable on

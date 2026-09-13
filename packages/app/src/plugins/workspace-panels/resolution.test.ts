@@ -8,8 +8,10 @@ function installed(): InstalledPlugin {
     id: "review",
     serverId: "host-1",
     clientBundle: "bundle",
+    lifetime: new AbortController(),
     queryClient: new QueryClient(),
     cleanup: () => {},
+    settingsScreens: [],
     surfaces: [],
     sidebarItems: [],
     workspacePanels: [
@@ -23,6 +25,7 @@ function installed(): InstalledPlugin {
       },
     ],
     commandCenterItems: [],
+    clientSlashCommands: [],
     attachmentSources: [],
     themes: [],
     timelineTransformers: [],
