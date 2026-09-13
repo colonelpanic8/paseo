@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveSidebarResizeHandleGeometry } from "./sidebar-resize-handle-layout";
+import {
+  resolveSidebarResizeGripOpacity,
+  resolveSidebarResizeHandleGeometry,
+} from "./sidebar-resize-handle-layout";
 
 const MIN_TOUCH_TARGET = 24;
 
@@ -17,5 +20,12 @@ describe("resolveSidebarResizeHandleGeometry", () => {
 
     expect(geometry.edgeOffset).toBe(-geometry.width / 2);
     expect(geometry.height).toBeNull();
+  });
+
+  it("keeps the touch grip visible before the drag begins", () => {
+    expect(resolveSidebarResizeGripOpacity(false)).toBeGreaterThan(0);
+    expect(resolveSidebarResizeGripOpacity(true)).toBeGreaterThan(
+      resolveSidebarResizeGripOpacity(false),
+    );
   });
 });

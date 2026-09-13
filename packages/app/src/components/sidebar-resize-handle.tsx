@@ -4,6 +4,7 @@ import { GestureDetector, type GestureType } from "react-native-gesture-handler"
 import { StyleSheet } from "react-native-unistyles";
 import {
   resolveSidebarResizeHandleGeometry,
+  resolveSidebarResizeGripOpacity,
   type SidebarResizeEdge,
 } from "@/components/sidebar-resize-handle-layout";
 import { isWeb } from "@/constants/platform";
@@ -101,7 +102,7 @@ function TouchResizeHandle({ edge, gesture, pressed, testID }: SidebarResizeHand
   const gripStyle = [
     styles.grip,
     edge === "left" ? styles.leftEdgeGrip : styles.rightEdgeGrip,
-    pressed ? styles.visibleGrip : styles.hiddenGrip,
+    { opacity: resolveSidebarResizeGripOpacity(pressed) },
   ];
 
   return (
@@ -154,12 +155,6 @@ const styles = StyleSheet.create((theme) => ({
     height: 36,
     borderRadius: 2,
     backgroundColor: theme.colors.foreground,
-  },
-  hiddenGrip: {
-    opacity: 0,
-  },
-  visibleGrip: {
-    opacity: 0.3,
   },
   leftEdgeGrip: {
     alignSelf: "flex-start",
