@@ -137,9 +137,12 @@ export function useLiveVoiceOptional(): LiveVoiceContextValue | null {
     }
     return {
       ...snapshot,
-      start: (serverId) => {
+      start: (serverId, options) => {
         const contextProfileId = getSelectedContextProfileId(serverId);
-        return runtime.start(serverId, contextProfileId ? { contextProfileId } : undefined);
+        return runtime.start(
+          serverId,
+          contextProfileId ? { ...options, contextProfileId } : options,
+        );
       },
       stop: runtime.stop,
       setMuted: runtime.setMuted,

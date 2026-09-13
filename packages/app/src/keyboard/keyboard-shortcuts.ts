@@ -1576,12 +1576,6 @@ function ignoresRepeat(binding: ShortcutBinding): boolean {
   return binding.repeat === false || binding.hold === true;
 }
 
-// A hold binding must ignore auto-repeat: the key going down again while it is
-// already held is the OS repeating, not a second press.
-function ignoresRepeat(binding: ShortcutBinding): boolean {
-  return binding.repeat === false || binding.hold === true;
-}
-
 function parseBinding(binding: ShortcutBinding): ParsedShortcutBinding {
   const parsedChord = parseBindingChord(binding.combo);
   const lastCombo = parsedChord.at(-1);
