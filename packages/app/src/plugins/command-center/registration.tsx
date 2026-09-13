@@ -1,23 +1,20 @@
-import { router, usePathname } from "expo-router";
+import { usePathname } from "expo-router";
 import { useMemo } from "react";
 import { useCommandCenterActions } from "@/command-center/provider";
 import { useToast } from "@/contexts/toast-context";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import {
-  useActiveWorkspaceSelection,
-  navigateToWorkspace,
-} from "@/stores/navigation-active-workspace-store";
+import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceExists } from "@/stores/session-store-hooks";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import type { PluginPanelLocation } from "@getpaseo/plugin";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 import { createPluginClientStateSource } from "../client-state/source";
-import { buildPluginSurfaceRoute, hostIdFromPathname } from "../routes";
+import { hostIdFromPathname } from "../routes";
 import { useInstalledPlugins } from "../registry";
 import { createPluginSurfaceRuntime } from "../surface-runtime";
 import { buildPluginCommandCenterContributions } from "./contributions";
 import { getFocusedAgentId } from "./context";
+import { createPluginNavigation } from "../navigation";
 
 export function PluginCommandCenterActions() {
   const pathname = usePathname();
@@ -56,41 +53,15 @@ export function PluginCommandCenterActions() {
     if (!client || !serverId || !stateSource) return [];
     return buildPluginCommandCenterContributions({
       plugins,
-      runtime(pluginId) {
-        const runtime = createPluginSurfaceRuntime(client, pluginId);
+      runtime(plugin) {
+        const runtime = createPluginSurfaceRuntime(client, plugin);
         if (!runtime) throw new Error("Plugin host is offline");
         return runtime;
       },
       state: stateSource,
       workspaceId: workspaceExists ? workspaceId : null,
       agentId: agentExists ? focusedAgentId : null,
-      navigation: {
-        openSurface(pluginId, surfaceId) {
-          router.push(
-            buildPluginSurfaceRoute(serverId, pluginId, { kind: "surface", id: surfaceId }),
-          );
-        },
-        openWorkspacePanel(pluginId, panelId, location) {
-          if (!workspaceId) throw new Error("No active workspace");
-          const placement = resolvePluginPanelPlacement(workspaceKey, location);
-          navigateToWorkspace({
-            serverId,
-            workspaceId,
-            target: { kind: "plugin", pluginId, panelId, context: "workspace" },
-            placement,
-          });
-        },
-        openAgentPanel(pluginId, panelId, agentId, location) {
-          if (!workspaceId) throw new Error("No active workspace");
-          const placement = resolvePluginPanelPlacement(workspaceKey, location);
-          navigateToWorkspace({
-            serverId,
-            workspaceId,
-            target: { kind: "plugin", pluginId, panelId, context: "agent", agentId },
-            placement,
-          });
-        },
-      },
+      navigation: createPluginNavigation({ serverId, workspaceId }),
       reportError(error) {
         toast.error(error instanceof Error ? error.message : String(error));
       },
@@ -105,7 +76,6 @@ export function PluginCommandCenterActions() {
     toast,
     workspaceExists,
     workspaceId,
-    workspaceKey,
   ]);
 
   useCommandCenterActions({
@@ -114,12 +84,4 @@ export function PluginCommandCenterActions() {
     actions,
   });
   return null;
-}
-
-function resolvePluginPanelPlacement(workspaceKey: string | null, location: PluginPanelLocation) {
-  if (location !== "explorer") return undefined;
-  if (!workspaceKey) throw new Error("No active workspace");
-  const paneId = useWorkspaceLayoutStore.getState().showExplorerSidebar(workspaceKey);
-  if (!paneId) throw new Error("Explorer is unavailable");
-  return { mode: "pane" as const, paneId };
 }
