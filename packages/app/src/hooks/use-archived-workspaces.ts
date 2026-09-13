@@ -1,15 +1,17 @@
 import { useEffect, useRef } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutationState, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/shallow";
 import { useFetchQueries } from "@/data/query";
 import { getHostRuntimeStore, useHostRuntimeConnectionStatuses } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 // Recently-archived workspaces are an undo affordance, not an archive browser.
 // The daemon caps its own response; this is the client-side ceiling on the merged
 // cross-host list so a many-host sidebar can't grow an unbounded tail.
 const ARCHIVED_WORKSPACE_LIMIT = 25;
 const ARCHIVED_WORKSPACES_STALE_TIME = 30_000;
+const RESTORE_MUTATION_KEY = ["archivedWorkspaceRestore"] as const;
 
 export interface ArchivedWorkspaceEntry {
   workspaceKey: string;
@@ -30,6 +32,17 @@ export function archivedWorkspacesQueryKey(serverId: string): [string, string] {
   return ["archivedWorkspaces", serverId];
 }
 
+export function archivedWorkspaceRestoreMutationKey(workspaceKey: string): [string, string] {
+  return [RESTORE_MUTATION_KEY[0], workspaceKey];
+}
+
+export function useRestoringArchivedWorkspaceKeys(): string[] {
+  return useMutationState({
+    filters: { mutationKey: RESTORE_MUTATION_KEY, status: "pending" },
+    select: (mutation) => mutation.options.mutationKey?.[1],
+  }).filter((key): key is string => typeof key === "string");
+}
+
 /**
  * Archived workspaces are deliberately kept out of the session store's workspace
  * map: everything that reads that map (project mode, switchers, counts) treats a
@@ -42,6 +55,7 @@ export function useArchivedWorkspaces({
   serverIds: readonly string[];
 }): ArchivedWorkspaceEntry[] {
   const queryClient = useQueryClient();
+  const restoringWorkspaceKeys = useRestoringArchivedWorkspaceKeys();
   // COMPAT(archivedWorkspacesList): added in v0.2.0, drop the gate when floor >= v0.2.0.
   // Single capability-detection site; hosts without the RPC simply contribute nothing.
   const supportedServerIds = useSessionStore(
@@ -65,7 +79,7 @@ export function useArchivedWorkspaces({
           throw new Error("Host disconnected");
         }
         const entries = await client.listArchivedWorkspaces();
-        return entries.map((entry) => ({
+        const fetched = entries.map((entry) => ({
           workspaceKey: `${serverId}:${entry.id}`,
           serverId,
           workspaceId: entry.id,
@@ -74,6 +88,10 @@ export function useArchivedWorkspaces({
           archivedAt: new Date(entry.archivedAt),
           phase: "archived" as const,
         }));
+        const cached = queryClient.getQueryData<ArchivedWorkspaceEntry[]>(
+          archivedWorkspacesQueryKey(serverId),
+        );
+        return mergeFetchedArchivedWorkspaces(fetched, cached);
       },
       enabled: connectionStatuses.get(serverId) === "online",
       staleTimeMs: ARCHIVED_WORKSPACES_STALE_TIME,
@@ -118,7 +136,7 @@ export function useArchivedWorkspaces({
   const displayedKeysRef = useRef<readonly string[]>([]);
   const ordered = holdArchivedWorkspaceOrder(
     displayedKeysRef.current,
-    mergeArchivedWorkspaces(sources),
+    mergeArchivedWorkspaces(sources, restoringWorkspaceKeys),
   );
   displayedKeysRef.current = ordered.map((entry) => entry.workspaceKey);
   return ordered;
@@ -137,16 +155,27 @@ export function shouldRefreshArchivedWorkspaces(
 
 export function mergeArchivedWorkspaces(
   sources: readonly ArchivedWorkspaceSource[],
+  restoringWorkspaceKeys: readonly string[] = [],
 ): ArchivedWorkspaceEntry[] {
+  const restoring = new Set(restoringWorkspaceKeys);
   const merged: ArchivedWorkspaceEntry[] = [];
   for (const source of sources) {
     if (source.isOnline && source.entries) {
-      merged.push(...source.entries);
+      merged.push(...source.entries.filter((entry) => !restoring.has(entry.workspaceKey)));
     }
   }
   return merged
     .sort((left, right) => compareArchivedWorkspaces(left, right))
     .slice(0, ARCHIVED_WORKSPACE_LIMIT);
+}
+
+export function mergeFetchedArchivedWorkspaces(
+  fetched: ArchivedWorkspaceEntry[],
+  cached: ArchivedWorkspaceEntry[] | undefined,
+): ArchivedWorkspaceEntry[] {
+  const archiving = cached?.filter((entry) => entry.phase === "archiving") ?? [];
+  const archivingKeys = new Set(archiving.map((entry) => entry.workspaceKey));
+  return [...archiving, ...fetched.filter((entry) => !archivingKeys.has(entry.workspaceKey))];
 }
 
 export async function beginArchivedWorkspaceTransition(input: {
@@ -176,6 +205,45 @@ export function settleArchivedWorkspaceTransition(input: {
       entry.workspaceKey === input.workspaceKey ? { ...entry, phase: "archived" } : entry,
     );
   });
+}
+
+// The mutation cache keeps pending restores hidden even when another action
+// refetches the host's archived list after this optimistic removal.
+export async function beginArchivedWorkspaceRestore(input: {
+  queryClient: QueryClient;
+  entry: ArchivedWorkspaceEntry;
+}): Promise<void> {
+  const queryKey = archivedWorkspacesQueryKey(input.entry.serverId);
+  await input.queryClient.cancelQueries({ queryKey });
+  input.queryClient.setQueryData<ArchivedWorkspaceEntry[]>(queryKey, (current = []) =>
+    current.filter((entry) => entry.workspaceKey !== input.entry.workspaceKey),
+  );
+}
+
+export async function settleArchivedWorkspaceRestore(input: {
+  queryClient: QueryClient;
+  entry: ArchivedWorkspaceEntry;
+  outcome: "restored" | "failed";
+}): Promise<void> {
+  const queryKey = archivedWorkspacesQueryKey(input.entry.serverId);
+  await input.queryClient.cancelQueries({ queryKey });
+  const workspaces = useSessionStore.getState().sessions[input.entry.serverId]?.workspaces;
+  const activeWorkspaceKey = resolveWorkspaceMapKeyByIdentity({
+    workspaces,
+    workspaceId: input.entry.workspaceId,
+  });
+  if (input.outcome === "failed" && !activeWorkspaceKey) {
+    input.queryClient.setQueryData<ArchivedWorkspaceEntry[]>(queryKey, (current = []) =>
+      current.some((entry) => entry.workspaceKey === input.entry.workspaceKey)
+        ? current
+        : [...current, input.entry],
+    );
+  } else {
+    input.queryClient.setQueryData<ArchivedWorkspaceEntry[]>(queryKey, (current = []) =>
+      current.filter((entry) => entry.workspaceKey !== input.entry.workspaceKey),
+    );
+  }
+  await input.queryClient.invalidateQueries({ queryKey });
 }
 
 // An archive still in flight was just triggered from this client, so it is the
