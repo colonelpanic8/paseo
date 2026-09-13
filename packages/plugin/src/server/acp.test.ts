@@ -7,7 +7,12 @@ import {
   type Agent,
   type SessionUpdate,
 } from "@agentclientprotocol/sdk";
-import type { ProviderConnection, ProviderEvent, ProviderInput } from "./provider.js";
+import {
+  ProviderInputSchema,
+  type ProviderConnection,
+  type ProviderEvent,
+  type ProviderInput,
+} from "./provider.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { runAcpProvider, type AcpStreamMessage } from "./acp.js";
 
@@ -55,6 +60,15 @@ function openInput(
     history: "skip",
   };
 }
+
+it("represents removed launch environment variables as null on the provider boundary", () => {
+  expect(
+    ProviderInputSchema.parse({
+      ...openInput(),
+      config: { ...openInput().config, env: { KEEP: "value", REMOVE: null } },
+    }),
+  ).toMatchObject({ config: { env: { KEEP: "value", REMOVE: null } } });
+});
 
 async function waitForEvent(
   events: ProviderEvent[],
@@ -234,6 +248,7 @@ const send = (message) => process.stdout.write(JSON.stringify(message) + "\\n");
 lines.on("line", (line) => {
   const message = JSON.parse(line);
   let result;
+  if (message.method === "session/new" && process.env.SESSION_TOKEN && process.env.REMOVE_ME) process.exit(1);
   if (message.method === "initialize") result = { protocolVersion: message.params.protocolVersion, agentCapabilities: { sessionCapabilities: { list: {} } } };
   else if (message.method === "session/new") result = { sessionId: "native", configOptions: [{ id: "model", name: "Model", category: "model", type: "select", currentValue: "resolved", options: [{ value: "resolved", name: process.env.SESSION_TOKEN || "probe" }] }] };
   else if (message.method === "session/list") result = { sessions: [] };
@@ -248,7 +263,11 @@ lines.on("line", (line) => {
     const connection = await registration.connect({
       versions: [1],
       capabilities: ["prompt.message", "session.list"],
-      launch: { command: process.execPath, args: [executable], env: { LAUNCH_TOKEN: "resolved" } },
+      launch: {
+        command: process.execPath,
+        args: [executable],
+        env: { LAUNCH_TOKEN: "resolved", REMOVE_ME: "inherited" },
+      },
     });
     const events: ProviderEvent[] = [];
     connection.onEvent((event) => events.push(event));
@@ -262,7 +281,7 @@ lines.on("line", (line) => {
         sessions: [],
       });
       const input = openInput();
-      input.config.env = { SESSION_TOKEN: "session" };
+      input.config.env = { SESSION_TOKEN: "session", REMOVE_ME: null };
       await connection.send(input);
       expect(await waitForEvent(events, (event) => event.type === "session.config")).toMatchObject({
         config: { models: [{ id: "resolved", label: "session" }] },
