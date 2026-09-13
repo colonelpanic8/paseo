@@ -171,11 +171,14 @@ function hostFilterLabel(
 export function ProviderUsageHistorySection() {
   const { t } = useTranslation();
   const [dimensions, setDimensions] = useState<readonly BreakdownDimension[]>(["model"]);
-  const [chartDimensions, setChartDimensions] = useState<readonly BreakdownDimension[]>(["model"]);
+  // No chart grouping by default: the graph opens as one total series, and the
+  // Host/Provider/Model buttons layer it on demand.
+  const [chartDimensions, setChartDimensions] = useState<readonly BreakdownDimension[]>([]);
   const [tableMetric, setTableMetric] = useState<ProviderUsageHistoryMetric>("cost");
   const [timeGrouping, setTimeGrouping] = useState<TimeGrouping>("day");
+  // Newest period first: the table opens chronological rather than ranked by cost.
   const [sortCriteria, setSortCriteria] = useState<readonly BreakdownSortCriterion[]>([
-    { field: "costUsd", direction: "descending" },
+    { field: "day", direction: "descending" },
   ]);
   const [metric, setMetric] = useState<ProviderUsageHistoryMetric>("cost");
   const [lineShape, setLineShape] = useState<ProviderUsageHistoryLineShape>("smooth");

@@ -5,11 +5,12 @@
  */
 
 /** Reading order across the chart, the summary rows, and the day table. */
-export const PROVIDER_ORDER = ["claude", "codex"] as const;
+export const PROVIDER_ORDER = ["claude", "codex", "opencode"] as const;
 
 const PROVIDER_LABELS: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
+  opencode: "OpenCode",
 };
 
 const KNOWN_PROVIDERS = new Set<string>(PROVIDER_ORDER);

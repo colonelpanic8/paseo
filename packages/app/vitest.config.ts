@@ -149,6 +149,11 @@ export default defineConfig({
         find: /^@gorhom\/bottom-sheet$/,
         replacement: path.resolve(__dirname, "test-stubs/gorhom-bottom-sheet.ts"),
       },
+      // Same story through the adaptive sheet's GestureHandlerRootView.
+      {
+        find: /^react-native-gesture-handler$/,
+        replacement: path.resolve(__dirname, "test-stubs/react-native-gesture-handler.ts"),
+      },
       {
         find: /^react-native-reanimated\/scripts\/validate-worklets-version$/,
         replacement: path.resolve(__dirname, "test-stubs/reanimated-validate-worklets-version.ts"),

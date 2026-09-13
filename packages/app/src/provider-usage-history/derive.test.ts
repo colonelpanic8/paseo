@@ -177,7 +177,7 @@ describe("deriveProviderUsageHistory", () => {
   it("orders providers canonically and reports both shares", () => {
     const totals = deriveProviderUsageHistory(onlyHost(SAMPLE));
 
-    expect(totals.providerOrder).toEqual(["claude", "codex"]);
+    expect(totals.providerOrder).toEqual(["claude", "codex", "opencode"]);
     expect(totals.providers.map((entry) => entry.provider)).toEqual(["claude", "codex"]);
     expect(totals.providers[0]?.costShare).toBeCloseTo(4 / 6);
     expect(totals.providers[1]?.tokenShare).toBeCloseTo(3_000 / 11_500);
@@ -193,7 +193,7 @@ describe("deriveProviderUsageHistory", () => {
       ),
     );
 
-    expect(totals.providerOrder).toEqual(["claude", "codex", "grok"]);
+    expect(totals.providerOrder).toEqual(["claude", "codex", "opencode", "grok"]);
     expect(totals.providers.map((entry) => entry.provider)).toEqual(["grok"]);
   });
 

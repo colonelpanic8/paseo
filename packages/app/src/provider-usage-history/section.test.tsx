@@ -243,6 +243,49 @@ describe("ProviderUsageHistorySection", () => {
     expect(screen.getByTestId("usage-history-table").innerHTML).toBe(table);
   });
 
+  it("opens the table sorted by day, newest first", async () => {
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        payload: payload(3, "ryzen-shine"),
+      },
+    ]);
+
+    await screen.findByTestId("usage-history-headline");
+    expect(
+      within(screen.getByTestId("usage-history-sort-0")).getByRole("button", { name: "Day" }),
+    ).toBeDefined();
+    expect(
+      screen
+        .getAllByTestId("usage-history-breakdown-row")
+        .map((row) => row.textContent?.split("$")[0]),
+    ).toEqual(["gpt-5 · 2026-09-06"]);
+  });
+
+  it("opens the chart as one total series with no grouping selected", async () => {
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        payload: payload(3, "ryzen-shine"),
+      },
+    ]);
+
+    await screen.findByTestId("usage-history-headline");
+    const chart = screen.getByTestId("usage-history-chart");
+    expect(within(chart).getByText("Total")).toBeDefined();
+    expect(within(chart).queryByText("Codex")).toBeNull();
+    // The layering switch is there for readers who want it; nothing is selected.
+    for (const dimension of ["host", "provider", "model"]) {
+      expect(screen.getByTestId(`usage-history-chart-group-${dimension}`)).toBeDefined();
+    }
+  });
+
   it("renders the hosts that answered and names the one that did not", async () => {
     renderSection([
       {
@@ -284,11 +327,14 @@ describe("ProviderUsageHistorySection", () => {
     fireEvent.click(screen.getByTestId("usage-history-table-group-provider"));
     expect(
       screen.getAllByTestId("usage-history-breakdown-row").map((row) => row.textContent),
-    ).toEqual(["Codex$4.00100.0%2K"]);
+    ).toEqual(["Codex · 2026-09-06$4.00100.0%2K"]);
     fireEvent.click(screen.getByTestId("usage-history-table-group-host"));
     expect(
       screen.getAllByTestId("usage-history-breakdown-row").map((row) => row.textContent),
-    ).toEqual(["ryzen-shine · Codex$3.0075.0%1K", "jimi-hendnix · Codex$1.0025.0%1K"]);
+    ).toEqual([
+      "ryzen-shine · Codex · 2026-09-06$3.0075.0%1K",
+      "jimi-hendnix · Codex · 2026-09-06$1.0025.0%1K",
+    ]);
   });
 
   it("selects each line shape without changing usage totals", async () => {
