@@ -28,6 +28,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { useInputFocus } from "@/hooks/use-input-focus";
+import { useHardwareKeyboardStore } from "@/stores/hardware-keyboard-store";
 import {
   BottomSheetScrollView,
   BottomSheetBackdrop,
@@ -50,7 +52,7 @@ import {
   shouldShowCustomComboboxOption,
 } from "./combobox-options";
 import type { ComboboxOptionModel } from "./combobox-options";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
@@ -62,7 +64,9 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { FloatingSurface } from "@/components/ui/floating";
+import { useListSearchHandler } from "@/keyboard/list-search-dispatcher";
 import { LIST_SEARCH_DATASET, resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
+import type { ListSearchKeyAction } from "@/keyboard/list-search-keys";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import {
   getOverlayRoot,
@@ -205,14 +209,9 @@ export function SearchInput({
   const { theme } = useUnistyles();
   const inputRef = useRef<EditingTextInputHandle>(null);
 
-  useEffect(() => {
-    if (autoFocus && IS_WEB && inputRef.current) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [autoFocus]);
+  const hardwareKeyboardConnected = useHardwareKeyboardStore((s) => s.connected);
+  const canFocus = IS_WEB || hardwareKeyboardConnected;
+  useInputFocus(inputRef, autoFocus && canFocus);
 
   return (
     <View style={styles.searchInputContainer}>
@@ -918,6 +917,28 @@ function dispatchDesktopKey(
   return false;
 }
 
+function useNativeComboboxListNavigation(input: DesktopKeyHandlerInput & { hasChildren: boolean }) {
+  const handle = useCallback(
+    (action: ListSearchKeyAction) => {
+      if (!input.isOpen || input.hasChildren || input.orderedVisibleOptions.length === 0) {
+        return false;
+      }
+      if (action === "submit") {
+        handleDesktopEnterKey(input);
+        return true;
+      }
+      handleDesktopArrowKey(input, action === "next" ? "ArrowDown" : "ArrowUp");
+      return true;
+    },
+    [input],
+  );
+  useListSearchHandler({
+    active: isNative && input.isOpen && !input.hasChildren,
+    priority: 50,
+    handle,
+  });
+}
+
 function resolveInitialActiveIndex(
   orderedVisibleOptions: ComboboxOption[],
   effectiveOptionsPosition: "below-search" | "above-search",
@@ -937,6 +958,7 @@ function resolveInitialActiveIndex(
 type BottomSheetVisibility = ReturnType<typeof useIsolatedBottomSheetVisibility>;
 
 interface MobileBodyProps {
+  isOpen: boolean;
   bottomSheetRef: BottomSheetVisibility["sheetRef"];
   snapPoints: string[];
   handleSheetChange: BottomSheetVisibility["handleSheetChange"];
@@ -966,6 +988,11 @@ interface MobileBodyProps {
   renderOption: RenderOptionFn | undefined;
   children: ReactNode;
   safeAreaBottom: number;
+}
+
+function useDismissTouchKeyboardOnOpen(isOpen: boolean, isMobile: boolean): void {
+  const hardwareKeyboardConnected = useHardwareKeyboardStore((state) => state.connected);
+  useDismissKeyboardOnOpen(isOpen, isMobile && !hardwareKeyboardConnected);
 }
 
 function MobileComboboxBody(props: MobileBodyProps): ReactElement {
@@ -1022,7 +1049,7 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
     >
       <View style={frameStyle}>
         {props.header ? (
-          <SheetHeaderView header={props.header} onClose={props.onClose} />
+          <SheetHeaderView header={props.header} onClose={props.onClose} active={props.isOpen} />
         ) : (
           <>
             <View style={styles.bottomSheetHeader}>
@@ -1036,7 +1063,7 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
                 placeholder={props.searchPlaceholder}
                 onChangeText={props.setSearchQueryWithCallback}
                 onSubmitEditing={props.handleSubmitSearch}
-                autoFocus={false}
+                autoFocus={props.isOpen}
                 useBottomSheetInput
                 resetKey={props.searchResetKey}
               />
@@ -1563,8 +1590,21 @@ export function Combobox({
     },
     [activeIndex, handleClose, handleSelect, isMobile, isOpen, orderedVisibleOptions],
   );
+  useNativeComboboxListNavigation({
+    isOpen,
+    isMobile,
+    orderedVisibleOptions,
+    activeIndex,
+    setActiveIndex,
+    handleSelect,
+    handleClose,
+    hasChildren: Boolean(children),
+  });
 
-  useDismissKeyboardOnOpen(isOpen, isMobile);
+  // With a hardware keyboard attached, SearchInput focuses on open — the
+  // dismiss-on-open pass would blur it again (Keyboard.dismiss blurs the
+  // focused input), so it only runs for touch use.
+  useDismissTouchKeyboardOnOpen(isOpen, isMobile);
 
   const handleIndicatorStyle = useMemo(
     () => ({ backgroundColor: theme.colors.palette.zinc[600] }),
@@ -1604,6 +1644,7 @@ export function Combobox({
   if (isMobile) {
     return (
       <MobileComboboxBody
+        isOpen={isOpen}
         bottomSheetRef={bottomSheetRef}
         snapPoints={snapPoints}
         handleSheetChange={handleSheetChange}

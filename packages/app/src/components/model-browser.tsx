@@ -55,6 +55,7 @@ import {
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
+import { useHardwareKeyboardStore } from "@/stores/hardware-keyboard-store";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -74,8 +75,10 @@ import {
 import {
   LIST_SEARCH_SELECTOR,
   resolveListSearchKeyAction,
+  type ListSearchKeyAction,
   type ListSearchKeyEvent,
 } from "@/keyboard/list-search-keys";
+import { useListSearchHandler } from "@/keyboard/list-search-dispatcher";
 
 const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
@@ -200,6 +203,7 @@ export interface ModelBrowserState {
   reset: () => void;
   drillDown: (providerId: string, providerLabel: string) => void;
   showAllModels: () => void;
+  handleListSearchAction: (action: ListSearchKeyAction) => boolean;
   handleOverlayKeyDown: (event: KeyboardEvent) => boolean;
 }
 
@@ -313,6 +317,7 @@ export function useModelBrowser({
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [searchResetKey, bumpSearchResetKey] = useReducer((key: number) => key + 1, 0);
   const hasProfiles = (profiles?.rows.length ?? 0) > 0;
+  const hardwareKeyboardConnected = useHardwareKeyboardStore((state) => state.connected);
 
   const initialView = useMemo(
     () =>
@@ -381,10 +386,8 @@ export function useModelBrowser({
     return filterAndRankModelRows(getProviderModelRows(provider), normalizedQuery);
   }, [isSearchFocused, items, normalizedQuery, providers, view]);
 
-  const handleListSearchKey = useCallback(
-    (event: ListSearchKeyEvent): boolean => {
-      const action = resolveListSearchKeyAction(event);
-      if (!action) return false;
+  const handleListSearchAction = useCallback(
+    (action: ListSearchKeyAction): boolean => {
       if (action === "submit") {
         const row = resolveModelSubmitRow(keyboardRows, highlightedKey);
         if (!row) return false;
@@ -401,6 +404,14 @@ export function useModelBrowser({
       return true;
     },
     [highlightedKey, keyboardRows, onSelect],
+  );
+
+  const handleListSearchKey = useCallback(
+    (event: ListSearchKeyEvent): boolean => {
+      const action = resolveListSearchKeyAction(event);
+      return action ? handleListSearchAction(action) : false;
+    },
+    [handleListSearchAction],
   );
 
   const handleOverlayKeyDown = useCallback(
@@ -421,9 +432,10 @@ export function useModelBrowser({
     [handleListSearchKey],
   );
 
-  const handleSearchSubmit = useCallback(() => {
-    handleListSearchKey({ key: "Enter" });
-  }, [handleListSearchKey]);
+  const handleSearchSubmit = useCallback(
+    () => handleListSearchAction("submit"),
+    [handleListSearchAction],
+  );
 
   const singleProviderView = providers.length === 1;
   const header = useMemo<SheetHeader>(() => {
@@ -436,7 +448,7 @@ export function useModelBrowser({
           onBlur: () => setIsSearchFocused(false),
           resetKey: `all:${searchResetKey}`,
           placeholder: t("modelSelector.searchAllPlaceholder"),
-          autoFocus: autoFocusSearch,
+          autoFocus: autoFocusSearch || hardwareKeyboardConnected,
           testID: "model-search-all-input",
           onKeyPress: handleSearchKeyPress,
           onSubmit: handleSearchSubmit,
@@ -453,7 +465,7 @@ export function useModelBrowser({
           onChange: handleSearchQueryChange,
           resetKey: `all-models:${searchResetKey}`,
           placeholder: t("modelSelector.searchAllPlaceholder"),
-          autoFocus: isWeb,
+          autoFocus: isWeb || hardwareKeyboardConnected,
           testID: "model-search-input",
           onKeyPress: handleSearchKeyPress,
           onSubmit: handleSearchSubmit,
@@ -489,7 +501,7 @@ export function useModelBrowser({
         onBlur: () => setIsSearchFocused(false),
         resetKey: `${view.providerId}:${searchResetKey}`,
         placeholder: t("modelSelector.searchPlaceholder"),
-        autoFocus: autoFocusSearch,
+        autoFocus: autoFocusSearch || hardwareKeyboardConnected,
         testID: "model-search-input",
         onKeyPress: handleSearchKeyPress,
         onSubmit: handleSearchSubmit,
@@ -501,6 +513,7 @@ export function useModelBrowser({
     handleSearchKeyPress,
     handleSearchQueryChange,
     handleSearchSubmit,
+    hardwareKeyboardConnected,
     providers,
     searchResetKey,
     serverId,
@@ -554,6 +567,7 @@ export function useModelBrowser({
     reset,
     drillDown,
     showAllModels,
+    handleListSearchAction,
     handleOverlayKeyDown,
   };
 }
@@ -841,6 +855,7 @@ function ModelRow({
 
   const description = showProviderLabel ? buildProviderQualifiedDescription(row) : row.description;
   const primary = profiledRows[profiledRows.length - 1];
+  const highlightRef = useScrollHighlightIntoView(isHighlighted);
 
   const handleCreateProfile = useCallback(() => {
     onCreateProfile?.({
@@ -936,6 +951,8 @@ function ModelRow({
 
   return (
     <View
+      ref={highlightRef}
+      collapsable={false}
       style={styles.modelRowHoverBoundary}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -1915,6 +1932,11 @@ export function ModelBrowser({
   rootBrowseContent,
   showProfilesSection,
 }: ModelBrowserProps) {
+  useListSearchHandler({
+    active: isNative && state.isSearchFocused,
+    priority: 90,
+    handle: state.handleListSearchAction,
+  });
   return (
     <ModelBrowserContent
       serverId={state.serverId}
@@ -1975,7 +1997,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   sectionHeadingText: {
     flex: 1,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
@@ -2029,17 +2051,17 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   browserRowLabel: {
-    fontSize: theme.fontSize.base,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
     flexShrink: 0,
   },
   browserRowLabelMuted: {
-    fontSize: theme.fontSize.base,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
   },
   browserRowDescription: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
@@ -2060,7 +2082,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   drillDownCount: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
   },
   rowStateInline: {
@@ -2095,11 +2117,11 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   emptyStateText: {
-    fontSize: theme.fontSize.base,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
     color: theme.colors.foreground,
   },
   virtualizedModelList: {
