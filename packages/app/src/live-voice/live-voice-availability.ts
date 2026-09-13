@@ -7,11 +7,39 @@ import {
   type LiveVoiceHostAvailability,
 } from "@/live-voice/live-voice-availability-policy";
 import {
+  getHostRuntimeStore,
   useHosts,
   useHostRuntimeConnectionStatuses,
 } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { getLiveVoiceContextProfileHostInfo } from "@/live-voice/live-voice-context-profile-selection";
+
+/** Availability read straight from stores for non-React consumers such as Wear. */
+export function readLiveVoiceHostAvailability(): LiveVoiceHostAvailability[] {
+  const sessions = useSessionStore.getState().sessions;
+  const store = getHostRuntimeStore();
+  return store.getHosts().map((host): LiveVoiceHostAvailability => {
+    const serverInfo = sessions[host.serverId]?.serverInfo ?? null;
+    return {
+      serverId: host.serverId,
+      label: host.label,
+      connectionStatus: store.getSnapshot(host.serverId)?.connectionStatus ?? "connecting",
+      version: serverInfo?.version ?? null,
+      supportsLiveVoice: serverInfo ? serverInfo.features?.liveVoice === true : null,
+      supportsVoiceCatalog: serverInfo?.features?.liveVoiceVoiceCatalog === true,
+      paseoToolsEnabled: serverInfo ? serverInfo.features?.agentPaseoTools !== false : null,
+      supportsAssistants: serverInfo?.features?.assistants === true,
+      contextProfiles: getLiveVoiceContextProfileHostInfo(serverInfo),
+    };
+  });
+}
+
+export function readLiveVoiceAvailability(): LiveVoiceAvailability {
+  return resolveLiveVoiceAvailability({
+    isPlatformSupported: isLiveVoiceSessionSupported,
+    hosts: readLiveVoiceHostAvailability(),
+  });
+}
 
 /**
  * Every configured host with the facts live voice availability is decided from,

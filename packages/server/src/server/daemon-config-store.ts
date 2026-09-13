@@ -1,6 +1,7 @@
 import {
   deepMerge,
   loadConfigStack,
+  loadPersistedConfig,
   restoreConfigWriteTarget,
   saveConfigStack,
   type ConfigStack,

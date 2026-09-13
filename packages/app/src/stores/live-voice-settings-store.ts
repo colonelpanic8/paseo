@@ -53,6 +53,7 @@ export const MAX_DEFAULT_WORKSPACE_DIRECTORY_LENGTH = 256;
 interface LiveVoiceSettingsState {
   /** The realtime voice to use for new calls; null leaves selection to the provider. */
   voice: string | null;
+  quickLaunchServerId: string | null;
   /**
    * Report agent sessions the call did not start — anything finishing, failing,
    * or asking for permission on any connected host.
@@ -80,6 +81,7 @@ interface LiveVoiceSettingsState {
   /** Last context-profile choice, scoped by daemon identity. */
   contextProfileIdsByHost: Record<string, string>;
   setVoice: (voice: string | null) => void;
+  setQuickLaunchServerId: (serverId: string | null) => void;
   setAmbientAgentReports: (enabled: boolean) => void;
   setAmbientAgentGuidance: (guidance: string) => void;
   setPromptComponentEnabled: (id: LiveVoiceOptionalPromptComponent, enabled: boolean) => void;
@@ -94,6 +96,7 @@ export const useLiveVoiceSettingsStore = create<LiveVoiceSettingsState>()(
   persist(
     (set) => ({
       voice: null,
+      quickLaunchServerId: null,
       // Off by default: it turns a call the user started for one thing into a
       // channel their whole machine can interrupt, which should be chosen.
       ambientAgentReports: false,
@@ -105,6 +108,7 @@ export const useLiveVoiceSettingsStore = create<LiveVoiceSettingsState>()(
       backendThinkingOptionId: null,
       contextProfileIdsByHost: {},
       setVoice: (voice) => set({ voice }),
+      setQuickLaunchServerId: (serverId) => set({ quickLaunchServerId: serverId }),
       setAmbientAgentReports: (enabled) => set({ ambientAgentReports: enabled }),
       setAmbientAgentGuidance: (guidance) =>
         set({ ambientAgentGuidance: guidance.slice(0, MAX_AMBIENT_AGENT_GUIDANCE_LENGTH) }),

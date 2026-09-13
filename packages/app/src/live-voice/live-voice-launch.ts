@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { LiveVoiceSnapshot } from "@/live-voice/live-voice-runtime";
+import type { LiveVoiceSnapshot, LiveVoiceStartOptions } from "@/live-voice/live-voice-runtime";
 import { LiveVoiceStartError } from "@/live-voice/live-voice-runtime";
 
 let isLauncherRequested = false;
@@ -56,13 +56,20 @@ export function isLiveVoiceCallActive(phase: LiveVoiceSnapshot["phase"]): boolea
   return phase === "starting" || phase === "active" || phase === "stopping";
 }
 
-export function startLiveVoiceCall(
-  start: (serverId: string) => Promise<void>,
-  serverId: string,
-): void {
-  void start(serverId).catch((error: unknown) => {
+interface StartLiveVoiceCallInput {
+  start: (serverId: string, options?: LiveVoiceStartOptions) => Promise<void>;
+  serverId: string;
+  options?: LiveVoiceStartOptions;
+  showLauncher: () => void;
+}
+
+export async function startLiveVoiceCall(input: StartLiveVoiceCallInput): Promise<void> {
+  try {
+    await input.start(input.serverId, input.options);
+  } catch (error) {
+    input.showLauncher();
     if (!(error instanceof LiveVoiceStartError)) {
       console.error("[LiveVoice] Failed to start session", error);
     }
-  });
+  }
 }
