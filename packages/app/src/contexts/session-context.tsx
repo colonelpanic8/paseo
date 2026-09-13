@@ -345,6 +345,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       serverId: serverInfo.serverId,
       hostname: serverInfo.hostname,
       version: serverInfo.version,
+      ...(serverInfo.build ? { build: serverInfo.build } : {}),
       ...(serverInfo.desktopManaged !== undefined
         ? { desktopManaged: serverInfo.desktopManaged }
         : {}),
@@ -585,6 +586,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           serverId: serverInfo.serverId,
           hostname: serverInfo.hostname,
           version: serverInfo.version,
+          ...(serverInfo.build ? { build: serverInfo.build } : {}),
           ...(serverInfo.desktopManaged !== undefined
             ? { desktopManaged: serverInfo.desktopManaged }
             : {}),
