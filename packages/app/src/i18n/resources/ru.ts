@@ -1830,6 +1830,7 @@ export const ru: TranslationResources = {
     label: "Живой голос",
     menu: {
       hosts: "Хост",
+      contextProfiles: "Профиль контекста",
     },
     actions: {
       start: "Начать живой голос",
