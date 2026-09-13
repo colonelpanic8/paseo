@@ -80,6 +80,7 @@ describe("applyLegacyDaemonWorkspaceOwnership", () => {
       serverId: SERVER_ID,
       hostname: null,
       version: "0.1.96",
+      worktreesRoot: null,
     });
     const cachedAgent = getSnapshotAgent(snapshot, "agent-running");
     snapshot.agents.set(cachedAgent.id, { ...cachedAgent, workspaceId: "/repo/app" });

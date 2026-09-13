@@ -54,6 +54,7 @@ function createServerInfo(): DaemonServerInfo {
     serverId: "server-1",
     hostname: "host",
     version: "1.0.0",
+    worktreesRoot: null,
     capabilities: {
       voice: {
         dictation: { enabled: true, reason: "" },
