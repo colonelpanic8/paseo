@@ -58,15 +58,11 @@ export function buildChartColumns(
 }
 
 /**
- * The tallest single provider-day. The chart layers its series rather than
- * stacking them, so each measures from zero and a combined peak would leave the
- * plot permanently half empty.
+ * The busiest day's total. The chart stacks its series, so every band sits on
+ * the one below it and the plot has to reach the combined peak.
  */
-export function seriesPeak(columns: readonly ProviderUsageHistoryChartColumn[]): number {
-  return columns.reduce(
-    (max, column) => column.bands.reduce((inner, band) => Math.max(inner, band.value), max),
-    0,
-  );
+export function stackPeak(columns: readonly ProviderUsageHistoryChartColumn[]): number {
+  return columns.reduce((max, column) => Math.max(max, column.total), 0);
 }
 
 function stepMultiple(normalized: number): number {
