@@ -7,6 +7,7 @@ import {
   DaemonInstanceError,
 } from "@getpaseo/server/daemon-control";
 import { readPersistedConfig, resolveConfigFromPersisted } from "@getpaseo/server/configuration";
+import type { PaseoPaths } from "@getpaseo/server";
 import { connectToDaemon, buildDaemonConnectionCommandError } from "../../utils/client.js";
 import { withOutput, toCommandError, type CommandOptions } from "../../output/index.js";
 import { addJsonAndDaemonHostOptions } from "../../utils/command-options.js";
@@ -23,7 +24,7 @@ export async function runStatusCommand(options: CommandOptions, _command: Comman
   const instance = target.kind === "instance" ? await readDaemonInstance(target.home) : null;
   const local =
     target.kind === "instance"
-      ? localStatus(target.home, instance)
+      ? localStatus(target.home, instance, target.paths)
       : { host: describeDaemonTarget(target) };
   const observed =
     target.kind === "endpoint" || instance?.listen
@@ -111,10 +112,14 @@ async function probeDaemonStatus(
   return { ...live, connectedDaemon, note };
 }
 
-function localStatus(home: string, instance: Awaited<ReturnType<typeof readDaemonInstance>>) {
+function localStatus(
+  home: string,
+  instance: Awaited<ReturnType<typeof readDaemonInstance>>,
+  paths?: PaseoPaths,
+) {
   const config = resolveConfigFromPersisted(
     home,
-    readPersistedConfig(home, { defaultsIfMissing: true }),
+    readPersistedConfig(home, { defaultsIfMissing: true }, paths),
     { env: {} },
   );
   let localDaemon = "stopped";
@@ -129,6 +134,6 @@ function localStatus(home: string, instance: Awaited<ReturnType<typeof readDaemo
     configuredListen: config.listen,
     localDaemon,
     desktopManaged: instance?.desktopManaged === true,
-    logPath: daemonLogPath(home),
+    logPath: daemonLogPath(home, paths),
   };
 }
