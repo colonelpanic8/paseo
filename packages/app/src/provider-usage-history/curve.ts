@@ -149,3 +149,31 @@ export function seriesLinePath(
       return stepPath(points);
   }
 }
+
+/**
+ * A stacked band: forward along its top boundary, back along the boundary
+ * underneath it. The lower boundary is retraced with the same builder and the
+ * same points its own band drew, so neighbouring bands abut exactly instead of
+ * drifting apart. The retrace keeps the band one subpath by continuing from the
+ * forward path's last point rather than starting a second `M`.
+ */
+/** `Array#reverse` mutates, and these point arrays are shared between bands. */
+function reversePoints(points: readonly CurvePoint[]): CurvePoint[] {
+  const reversed: CurvePoint[] = [];
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const point = points[index];
+    if (point !== undefined) reversed.push(point);
+  }
+  return reversed;
+}
+
+export function bandAreaPath(
+  top: readonly CurvePoint[],
+  bottom: readonly CurvePoint[],
+  shape: ProviderUsageHistoryLineShape,
+): string {
+  const forward = seriesLinePath(top, shape);
+  const back = seriesLinePath(reversePoints(bottom), shape);
+  if (forward === "" || back === "") return "";
+  return `${forward} L${back.slice(1)} Z`;
+}
