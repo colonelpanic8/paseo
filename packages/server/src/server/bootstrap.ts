@@ -581,6 +581,17 @@ function resolveReloadEnv(config: PaseoDaemonConfig): NodeJS.ProcessEnv {
   return config.configReload?.env ?? process.env;
 }
 
+function createInitialAgentEnvironment(
+  config: ResolvedDaemonSettings,
+): MutableDaemonConfig["agentEnvironment"] {
+  return {
+    entries: [...(config.agentEnvironment?.entries ?? DEFAULT_AGENT_ENVIRONMENT_ENTRIES)],
+    ...(config.agentEnvironment?.timeoutMs !== undefined
+      ? { timeoutMs: config.agentEnvironment.timeoutMs }
+      : {}),
+  };
+}
+
 function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): MutableDaemonConfig {
   const providers = config.providerOverrides ?? {};
 
@@ -613,12 +624,7 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
     skills: { selection: config.skillSelection },
-    agentEnvironment: {
-      entries: [...(config.agentEnvironment?.entries ?? DEFAULT_AGENT_ENVIRONMENT_ENTRIES)],
-      ...(config.agentEnvironment?.timeoutMs !== undefined
-        ? { timeoutMs: config.agentEnvironment.timeoutMs }
-        : {}),
-    },
+    agentEnvironment: createInitialAgentEnvironment(config),
   };
 
   if (config.terminalProfiles !== undefined) {
