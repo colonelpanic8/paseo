@@ -39,7 +39,9 @@ async function createClaudeConfigDirWithRawSettings(settings: string): Promise<s
   return configDir;
 }
 
-function createCatalogClient(claudeCodeVersion = "2.1.219"): ClaudeAgentClient {
+const CATALOG_CLIENT_VERSION = "2.1.219";
+
+function createCatalogClient(claudeCodeVersion = CATALOG_CLIENT_VERSION): ClaudeAgentClient {
   return new ClaudeAgentClient({
     logger: createTestLogger(),
     resolveVersion: async () => claudeCodeVersion,
@@ -109,6 +111,9 @@ describe("getClaudeModels", () => {
 
     expect(getClaudeModels("2.1.168").map((model) => model.id)).not.toContain("claude-fable-5");
     expect(getClaudeModels("2.1.169").map((model) => model.id)).toContain("claude-fable-5");
+
+    expect(getClaudeModels("2.1.256").map((model) => model.id)).not.toContain("claude-fable-5-1");
+    expect(getClaudeModels("2.1.257").map((model) => model.id)).toContain("claude-fable-5-1");
   });
 
   it("derives thinking options from model effort capabilities", () => {
@@ -176,6 +181,7 @@ describe("getClaudeModels", () => {
     ["claude-sonnet-5-20260101", true, "high"],
     ["claude-fable-5", false, "high"],
     ["claude-fable-5-1", false, "high"],
+    ["claude-fable-5-1[1m]", false, "high"],
     ["claude-haiku-4-5", false, undefined],
     ["openrouter/anthropic/claude-opus-4-8", false, undefined],
     [null, false, undefined],
@@ -216,7 +222,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
     });
 
     expect(models).toEqual([
-      ...getClaudeModels(),
+      ...getClaudeModels(CATALOG_CLIENT_VERSION),
       {
         provider: "claude",
         id: "us.anthropic.claude-opus-4-7[1m]",
@@ -268,7 +274,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       force: true,
     });
 
-    expect(models).toEqual(getClaudeModels());
+    expect(models).toEqual(getClaudeModels(CATALOG_CLIENT_VERSION));
   });
 
   it("falls back to hardcoded models when settings.json is malformed", async () => {
@@ -282,7 +288,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       force: true,
     });
 
-    expect(models).toEqual(getClaudeModels());
+    expect(models).toEqual(getClaudeModels(CATALOG_CLIENT_VERSION));
   });
 
   it("ignores empty env blocks and unexpected settings shapes", async () => {
@@ -302,7 +308,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       force: true,
     });
 
-    expect(models).toEqual(getClaudeModels());
+    expect(models).toEqual(getClaudeModels(CATALOG_CLIENT_VERSION));
   });
 
   it("deduplicates discovered settings models by ID", async () => {
@@ -323,7 +329,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
     });
 
     expect(models.map((model) => model.id)).toEqual([
-      ...getClaudeModels().map((model) => model.id),
+      ...getClaudeModels(CATALOG_CLIENT_VERSION).map((model) => model.id),
       "glm-5.1",
     ]);
   });
@@ -498,7 +504,7 @@ describe("Claude Fable 5 catalog", () => {
 });
 
 describe("Claude Fable 5.1 catalog", () => {
-  it("offers one Fable 5.1 entry with a 1M context window", () => {
+  it("offers a single Fable 5.1 entry with a 1M context window", () => {
     const fable51Models = getClaudeModels()
       .filter((model) => model.id.startsWith("claude-fable-5-1"))
       .map(({ id, label, contextWindowMaxTokens }) => ({ id, label, contextWindowMaxTokens }));
@@ -508,10 +514,39 @@ describe("Claude Fable 5.1 catalog", () => {
     ]);
   });
 
-  it("resolves suffixed and dated Fable 5.1 IDs to the catalog entry", () => {
+  it("offers every effort level including xhigh", () => {
+    const model = getClaudeModels().find((candidate) => candidate.id === "claude-fable-5-1");
+
+    expect(model?.thinkingOptions?.map((option) => option.id)).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      CLAUDE_ULTRACODE_THINKING_OPTION_ID,
+    ]);
+  });
+
+  it("resolves dated and 1M-suffixed Fable 5.1 IDs to the canonical catalog entry", () => {
     expect(findClaudeModel("claude-fable-5-1[1m]")?.id).toBe("claude-fable-5-1");
     expect(findClaudeModel("claude-fable-5-1-20260901")?.id).toBe("claude-fable-5-1");
     expect(findClaudeModel("claude-fable-5-1-20260901[1m]")?.id).toBe("claude-fable-5-1");
+    expect(findClaudeModel("us.anthropic.claude-fable-5-1")?.id).toBe("claude-fable-5-1");
+  });
+
+  it("keeps Fable 5 resolvable now that a dotted sibling exists", () => {
+    expect(findClaudeModel("claude-fable-5")?.id).toBe("claude-fable-5");
+    expect(findClaudeModel("claude-fable-5[1m]")?.id).toBe("claude-fable-5");
+    expect(findClaudeModel("us.anthropic.claude-fable-5")?.id).toBe("claude-fable-5");
+    expect(findClaudeModel("claude-fable-5-20260301[1m]")?.id).toBe("claude-fable-5");
+  });
+
+  it("does not collapse gateway-prefixed Fable 5.1 onto Fable 5", () => {
+    expect(normalizeClaudeRuntimeModelId("anthropic.claude-fable-5-1")).toBe("claude-fable-5-1");
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-fable-5-1[1m]")).toBe(
+      "claude-fable-5-1",
+    );
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-fable-5")).toBe("claude-fable-5");
   });
 });
 
