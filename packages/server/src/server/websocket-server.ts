@@ -37,6 +37,10 @@ import {
   type SessionOptions,
   type SessionRuntimeMetrics,
 } from "./session.js";
+import { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
+import { AssistantStore } from "./assistants/assistant-store.js";
+import { LiveVoiceDaemonContextProvider } from "./live-voice/live-voice-daemon-context.js";
+import { resolveLiveVoiceHostProfile } from "./agent/providers/live-voice-host-profiles.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import type { HubExecutionAgents } from "./hub/daemon-executions.js";
@@ -95,6 +99,9 @@ import {
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
 
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
+import { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
+import { LiveVoiceAgentNotifier } from "./live-voice/live-voice-agent-notifier.js";
 import type { DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import { DirectorySyncService } from "./directory-sync/index.js";
 import { OWNER_PERMISSIONS, type DaemonPermission } from "./authorization/index.js";
@@ -453,6 +460,8 @@ type SessionConnection = ReconnectableSessionConnection | PluginSessionConnectio
 
 interface SocketSessionOptions {
   clientId: string;
+  /** From admission only; the wire never names a principal. */
+  principalId: string;
   appVersion: string | null;
   clientCapabilities: Record<string, unknown> | null;
   permissions: readonly DaemonPermission[];
@@ -513,6 +522,23 @@ function requireWebSocketServices(params: {
   return { scheduleService, checkoutDiffManager };
 }
 
+function resolveLiveVoiceToolExecution(toolExecutor?: LiveVoiceToolExecutor): {
+  available: boolean;
+  executor: LiveVoiceToolExecutor;
+} {
+  if (toolExecutor !== undefined) {
+    return { available: true, executor: toolExecutor };
+  }
+  return {
+    available: false,
+    executor: new LiveVoiceToolExecutor({
+      createCatalog: async () => {
+        throw new Error("Live Voice routed tool execution is not configured");
+      },
+    }),
+  };
+}
+
 /**
  * WebSocket server that only accepts sockets + parses/forwards messages to the session layer.
  */
@@ -529,6 +555,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly daemonVersion: string;
   private readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   private readonly agentManager: AgentManager;
+  private readonly liveVoiceCoordinator: LiveVoiceCoordinator;
+  private readonly assistantStore: AssistantStore;
   private readonly agentStorage: AgentStorage;
   private readonly agentRequests: AgentRequests;
   private readonly projectRegistry: ProjectRegistry;
@@ -578,6 +606,10 @@ export class VoiceAssistantWebSocketServer {
   private readonly providerUsageService: ProviderUsageService;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
+  private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker;
+  private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor;
+  private readonly liveVoiceToolExecutionAvailable: boolean;
+  private readonly liveVoiceAgentNotifier: LiveVoiceAgentNotifier;
   private readonly hubRelationships: HubRelationshipManagement | null;
   private connectionLifecycle: "starting" | "accepting" | "stopping" = "accepting";
   private readonly advertiseDaemonStatusRpc: boolean;
@@ -627,6 +659,8 @@ export class VoiceAssistantWebSocketServer {
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
+    liveVoiceRouteBroker?: LiveVoiceRouteBroker,
+    liveVoiceToolExecutor?: LiveVoiceToolExecutor,
     hubRelationships?: HubRelationshipManagement | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
     pluginRuntime?: SessionOptions["pluginRuntime"],
@@ -645,6 +679,17 @@ export class VoiceAssistantWebSocketServer {
     this.daemonVersion = daemonVersion.trim();
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.browserToolsBroker = browserToolsBroker ?? null;
+    const liveVoiceToolExecution = resolveLiveVoiceToolExecution(liveVoiceToolExecutor);
+    this.liveVoiceToolExecutionAvailable = liveVoiceToolExecution.available;
+    this.liveVoiceRouteBroker = liveVoiceRouteBroker ?? new LiveVoiceRouteBroker();
+    this.liveVoiceToolExecutor = liveVoiceToolExecution.executor;
+    this.liveVoiceAgentNotifier = new LiveVoiceAgentNotifier({
+      agentManager,
+      agentStorage,
+      workspaceRegistry: () => this.workspaceRegistry,
+      projectRegistry: () => this.projectRegistry,
+      logger: this.logger,
+    });
     this.hubRelationships = hubRelationships ?? null;
     this.pluginRuntime = pluginRuntime;
     this.orchestrationSkills = orchestrationSkills;
@@ -699,6 +744,7 @@ export class VoiceAssistantWebSocketServer {
     });
     const unsubscribeChange = this.daemonConfigStore.onChange((config) => {
       this.broadcastDaemonConfigChanged(config);
+      this.broadcastCapabilitiesUpdate();
     });
     this.unsubscribeDaemonConfigChange = () => {
       unsubscribeProviderConfig();
@@ -720,6 +766,28 @@ export class VoiceAssistantWebSocketServer {
 
     this.providerUsageService = new ProviderUsageService({
       logger: this.logger,
+    });
+
+    // One store for the daemon; every read and write is keyed by the admitted
+    // principal, so sharing the instance never shares data across principals.
+    this.assistantStore = new AssistantStore(join(paseoHome, "assistants"));
+
+    // Daemon-global: a call belongs to the daemon, not to an agent, and each one
+    // runs on a hidden host session the coordinator spawns for it.
+    this.liveVoiceCoordinator = new LiveVoiceCoordinator({
+      agents: this.agentManager,
+      logger: this.logger,
+      hostProfile: resolveLiveVoiceHostProfile(),
+      routeBroker: this.liveVoiceRouteBroker,
+      assistantStore: this.assistantStore,
+      // Teaches the voice model what Paseo is and what is currently running. The
+      // host session carries Paseo's MCP tools, so this is what turns "can talk"
+      // into "can act on Paseo".
+      context: new LiveVoiceDaemonContextProvider({
+        agents: this.agentManager,
+        workspaces: this.workspaceRegistry,
+        logger: this.logger,
+      }),
     });
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
@@ -1014,6 +1082,14 @@ export class VoiceAssistantWebSocketServer {
     this.unsubscribeDaemonConfigChange = null;
     this.unsubscribeTerminalActivity?.();
     this.unsubscribeTerminalActivity = null;
+    this.liveVoiceCoordinator.dispose();
+    this.liveVoiceAgentNotifier.dispose();
+    // The coordinator's close path still has history writes in flight.
+    try {
+      await this.assistantStore.flush();
+    } catch (error) {
+      this.logger.error({ err: error }, "Failed to flush assistant history during shutdown");
+    }
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
       this.runtimeMetricsInterval = null;
@@ -1329,6 +1405,7 @@ export class VoiceAssistantWebSocketServer {
 
     const session = this.createSocketSession({
       clientId,
+      principalId: admission.principalId,
       appVersion,
       clientCapabilities,
       permissions: admission.permissions,
@@ -1403,6 +1480,7 @@ export class VoiceAssistantWebSocketServer {
     return new Session({
       browserToolsBroker: this.browserToolsBroker,
       clientId: options.clientId,
+      principalId: options.principalId,
       appVersion: options.appVersion,
       clientCapabilities: options.clientCapabilities,
       permissions: options.permissions,
@@ -1460,6 +1538,11 @@ export class VoiceAssistantWebSocketServer {
       voice: {
         turnDetection: () => this.speech?.resolveTurnDetection() ?? null,
       },
+      liveVoiceCoordinator: this.liveVoiceCoordinator,
+      liveVoiceRouteBroker: this.liveVoiceRouteBroker,
+      liveVoiceToolExecutor: this.liveVoiceToolExecutor,
+      liveVoiceAgentNotifier: this.liveVoiceAgentNotifier,
+      assistantStore: this.assistantStore,
       voiceBridge: {
         registerVoiceSpeakHandler: (agentId, handler) => {
           if (this.voiceSpeakHandlers.has(agentId))
@@ -1780,6 +1863,23 @@ export class VoiceAssistantWebSocketServer {
         canonicalSubmittedPrompts: true,
         // COMPAT(stableProjectIdentity): added in v0.1.109, remove gate after 2027-01-15.
         stableProjectIdentity: true,
+        // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
+        liveVoice: true,
+        // COMPAT(assistants): added in v0.7.2, remove after 2027-03-06.
+        assistants: true,
+        // COMPAT(liveVoiceVoiceCatalog): added in v0.2.6, remove after 2027-02-28.
+        liveVoiceVoiceCatalog: true,
+        // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
+        agentPaseoTools: this.agentManager.hasPaseoMcpInjection(),
+        // COMPAT(liveVoiceToolExecution): added in v0.2.5, remove after 2027-01-30.
+        liveVoiceToolExecution: this.liveVoiceToolExecutionAvailable,
+        // COMPAT(liveVoiceAgentNotifications): added in v0.2.6, remove after 2027-02-28.
+        liveVoiceAgentNotifications: this.liveVoiceToolExecutionAvailable,
+        // COMPAT(liveVoiceAmbientAgentReports): added in v0.2.6, remove after 2027-02-28.
+        // Same notifier, so it rides on the same availability.
+        liveVoiceAmbientAgentReports: this.liveVoiceToolExecutionAvailable,
+        // COMPAT(liveVoiceHostProvider): added in v0.3.0, remove after 2027-02-28.
+        liveVoiceHostProvider: resolveLiveVoiceHostProfile().provider,
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: true,
         // COMPAT(projectCustomIcon): added in v0.2.0, remove after 2027-01-20.
@@ -1921,6 +2021,10 @@ export class VoiceAssistantWebSocketServer {
     this.sessions.delete(ws);
     connection.sockets.delete(ws);
     connection.session.clearAgentTimelineSubscription(ws);
+    // Socket-scoped background-work watches cannot follow a replacement socket.
+    // Live Voice itself is session-scoped: on mobile the control socket may be
+    // suspended while native WebRTC remains healthy.
+    connection.session.releaseLiveVoiceSocketResources(ws);
     this.socketIdentities.delete(ws);
 
     if (connection.sockets.size === 0) {
@@ -1931,17 +2035,7 @@ export class VoiceAssistantWebSocketServer {
         return;
       }
       this.incrementRuntimeCounter("sessionDisconnectedWaitingReconnect");
-      if (connection.externalDisconnectCleanupTimeout) {
-        clearTimeout(connection.externalDisconnectCleanupTimeout);
-      }
-      const timeout = setTimeout(() => {
-        if (connection.externalDisconnectCleanupTimeout !== timeout) {
-          return;
-        }
-        connection.externalDisconnectCleanupTimeout = null;
-        void this.cleanupConnection(connection, "Client disconnected (grace timeout)");
-      }, EXTERNAL_SESSION_DISCONNECT_GRACE_MS);
-      connection.externalDisconnectCleanupTimeout = timeout;
+      this.scheduleExternalDisconnectCleanup(connection);
 
       connection.connectionLogger.info(
         {
@@ -1978,6 +2072,20 @@ export class VoiceAssistantWebSocketServer {
     if (!resolve) return;
     this.pluginSocketCleanup.delete(ws);
     resolve();
+  }
+
+  private scheduleExternalDisconnectCleanup(connection: ReconnectableSessionConnection): void {
+    if (connection.externalDisconnectCleanupTimeout) {
+      clearTimeout(connection.externalDisconnectCleanupTimeout);
+    }
+    const timeout = setTimeout(() => {
+      if (connection.externalDisconnectCleanupTimeout !== timeout) {
+        return;
+      }
+      connection.externalDisconnectCleanupTimeout = null;
+      void this.cleanupConnection(connection, "Client disconnected (grace timeout)");
+    }, EXTERNAL_SESSION_DISCONNECT_GRACE_MS);
+    connection.externalDisconnectCleanupTimeout = timeout;
   }
 
   private async cleanupConnection(

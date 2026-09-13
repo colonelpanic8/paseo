@@ -1,0 +1,200 @@
+import { useEffect, useRef } from "react";
+import {
+  addWearCommandListener,
+  drainPendingWearCommands,
+  getConnectedWearNodes,
+  isWearBridgeSupported,
+  publishWearLiveVoice,
+  publishWearProjectIcon,
+  publishWearSnapshot,
+  publishWearTranscript,
+} from "@getpaseo/expo-wear-bridge";
+
+import { useLiveVoiceRuntimeOptional } from "@/contexts/live-voice-context";
+import {
+  getLiveVoiceAudioRoutes,
+  setLiveVoiceAudioRoute,
+  setLiveVoiceWearNodeNames,
+  subscribeLiveVoiceAudioRoutes,
+  type LiveVoiceAudioRouteState,
+} from "@/live-voice/background-call-lifetime";
+import { readLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
+import { getDispatchAgentTarget, useDispatchSettingsStore } from "@/stores/dispatch-settings-store";
+import {
+  WearBridge,
+  type NewAgentConfig,
+  type WearAudioRouteController,
+  type WearLiveVoiceController,
+} from "./wear-bridge";
+import { providerLabel, type WearSnapshotInput } from "./wear-snapshot";
+
+/**
+ * Republish cadence for changes the store doesn't notify us about — mainly agent
+ * age, which is derived from wall-clock time rather than state. Snapshot publishing
+ * short-circuits when the payload is unchanged, so an idle tick costs almost nothing.
+ */
+const AGE_REFRESH_MS = 60_000;
+
+/**
+ * Mounts the phone half of the Wear bridge for the lifetime of the app.
+ *
+ * No-ops entirely when the native module is absent (iOS, web, F-Droid builds), so
+ * it is safe to call unconditionally.
+ */
+export function useWearBridge(): void {
+  const bridgeRef = useRef<WearBridge | null>(null);
+  // Stable for the provider's lifetime, so this only re-runs if Live Voice is
+  // torn down entirely — not on any call state change, which the bridge
+  // subscribes to itself.
+  const liveVoiceRuntime = useLiveVoiceRuntimeOptional();
+
+  useEffect(() => {
+    if (!isWearBridgeSupported) return;
+
+    const readState = (): WearSnapshotInput[] => {
+      const sessions = useSessionStore.getState().sessions;
+      return Object.entries(sessions).map(([serverId, session]) => ({
+        serverId,
+        agents: Array.from(session.agents.values()),
+        workspaces: session.workspaces,
+      }));
+    };
+
+    const resolveNewAgentConfig = (
+      serverId: string,
+      workspaceId: string,
+    ): NewAgentConfig | null => {
+      const session = useSessionStore.getState().sessions[serverId];
+      const workspace = session?.workspaces.get(workspaceId);
+      if (!session || !workspace) return null;
+
+      // Reuse whatever provider this workspace used most recently. The watch has no
+      // provider picker, and silently defaulting to a provider the user never chose
+      // for this workspace would be surprising.
+      const candidates = Array.from(session.agents.values())
+        .filter((agent) => agent.workspaceId === workspaceId && !agent.archivedAt)
+        .sort((left, right) => right.lastActivityAt.getTime() - left.lastActivityAt.getTime());
+
+      const provider = candidates[0]?.provider;
+      if (!provider) return null;
+
+      return { provider, cwd: workspace.workspaceDirectory };
+    };
+
+    const readDispatchTarget = () => {
+      const target = getDispatchAgentTarget();
+      if (!target) return null;
+      const agent = useSessionStore
+        .getState()
+        .sessions[target.serverId]?.agents.get(target.agentId);
+      const title = agent?.title?.trim();
+      let label: string | undefined;
+      if (title) {
+        label = title;
+      } else if (agent) {
+        label = providerLabel(agent.provider);
+      }
+      return {
+        ...target,
+        ...(label ? { label } : {}),
+      };
+    };
+
+    const liveVoice: WearLiveVoiceController | undefined = liveVoiceRuntime
+      ? {
+          subscribe: liveVoiceRuntime.subscribe,
+          getSnapshot: liveVoiceRuntime.getSnapshot,
+          readAvailability: readLiveVoiceAvailability,
+          start: liveVoiceRuntime.start,
+          stop: liveVoiceRuntime.stop,
+          toggleMute: liveVoiceRuntime.toggleMute,
+        }
+      : undefined;
+
+    let audioRouteState: LiveVoiceAudioRouteState | null = null;
+    const audioRouteListeners = new Set<() => void>();
+    const updateAudioRoutes = (next: LiveVoiceAudioRouteState | null): void => {
+      if (JSON.stringify(next) === JSON.stringify(audioRouteState)) return;
+      audioRouteState = next;
+      for (const listener of audioRouteListeners) listener();
+    };
+    const audioRoutes: WearAudioRouteController = {
+      subscribe: (listener) => {
+        audioRouteListeners.add(listener);
+        return () => audioRouteListeners.delete(listener);
+      },
+      getSnapshot: () => audioRouteState,
+      select: setLiveVoiceAudioRoute,
+    };
+
+    const refreshAudioRoutes = async (): Promise<void> => {
+      const nodes = await getConnectedWearNodes();
+      await setLiveVoiceWearNodeNames(nodes.map((node) => node.name));
+      updateAudioRoutes(await getLiveVoiceAudioRoutes());
+    };
+
+    const bridge = new WearBridge({
+      transport: {
+        publishSnapshot: publishWearSnapshot,
+        publishTranscript: publishWearTranscript,
+        publishProjectIcon: publishWearProjectIcon,
+        publishLiveVoice: publishWearLiveVoice,
+        addCommandListener: addWearCommandListener,
+        drainPendingCommands: drainPendingWearCommands,
+      },
+      readState,
+      getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
+      resolveNewAgentConfig,
+      readDispatchTarget,
+      ...(liveVoice ? { liveVoice } : {}),
+      audioRoutes,
+      logger: {
+        warn: (message, error) => console.warn(`[wear] ${message}`, error ?? ""),
+      },
+    });
+    bridgeRef.current = bridge;
+    void bridge.start();
+    const unsubscribeAudioRoutes = subscribeLiveVoiceAudioRoutes(updateAudioRoutes);
+    void refreshAudioRoutes();
+
+    // Any session-store change is a candidate for republishing; the bridge diffs the
+    // payload so unrelated changes cost one JSON build and nothing else.
+    const unsubscribeStore = useSessionStore.subscribe(() => {
+      void bridge.publish();
+    });
+    const unsubscribeDispatchSettings = useDispatchSettingsStore.subscribe(() => {
+      void bridge.publish();
+    });
+
+    // Live Voice availability also depends on connection status and the host
+    // list, which live in the host runtime store and change without any
+    // session-store write — a host flipping online or offline must reach the
+    // wrist, or the watch keeps showing the availability from app launch.
+    const hostRuntimeStore = getHostRuntimeStore();
+    const unsubscribeHostRuntime = hostRuntimeStore.subscribeAll(() => {
+      void bridge.publish();
+    });
+    const unsubscribeHostList = hostRuntimeStore.subscribeHostList(() => {
+      void bridge.publish();
+    });
+
+    const interval = setInterval(() => {
+      void bridge.publish();
+      void refreshAudioRoutes();
+    }, AGE_REFRESH_MS);
+
+    return () => {
+      clearInterval(interval);
+      unsubscribeStore();
+      unsubscribeDispatchSettings();
+      unsubscribeHostRuntime();
+      unsubscribeHostList();
+      unsubscribeAudioRoutes();
+      audioRouteListeners.clear();
+      bridge.stop();
+      bridgeRef.current = null;
+    };
+  }, [liveVoiceRuntime]);
+}
