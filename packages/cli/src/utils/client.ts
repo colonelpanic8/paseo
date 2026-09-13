@@ -5,7 +5,7 @@ import {
   type DaemonInstance,
   readLocalCredentialForTarget,
 } from "@getpaseo/server/daemon-control";
-import { describeDaemonTarget, type DaemonTarget } from "./daemon-target.js";
+import { describeDaemonTarget, localDaemonCommand, type DaemonTarget } from "./daemon-target.js";
 export type { DaemonTarget } from "./daemon-target.js";
 import {
   buildDaemonWebSocketUrl,
@@ -60,8 +60,7 @@ function describeConnectionRemedy(code: string, target: DaemonTarget): string {
     return "The daemon requires a password. Set PASEO_PASSWORD and retry.";
   if (code === "AUTH_FAILED")
     return "The daemon rejected the password. Check PASEO_PASSWORD and retry.";
-  if (target.kind === "instance")
-    return `Start with: paseo daemon start --home ${JSON.stringify(target.home)}`;
+  if (target.kind === "instance") return `Start with: ${localDaemonCommand("start", target)}`;
   return "Check the selected endpoint and credentials. SSH transport does not install or start the daemon.";
 }
 
@@ -187,6 +186,7 @@ async function connectSelectedDaemon(options: ConnectOptions): Promise<DaemonCli
           await waitForDaemonReady(options.target.home, {
             timeoutMs: timeout,
             instance: options.instance,
+            paths: options.target.paths,
           })
         ).listen;
   const home = resolveClientPaseoHome(options.target);

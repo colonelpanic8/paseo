@@ -276,7 +276,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   } else {
     await launchLocalDaemon({ home: paseoHome, paths, timeoutMs });
   }
-  const ready = await waitForDaemonReady(paseoHome, { timeoutMs });
+  const ready = await waitForDaemonReady(paseoHome, { timeoutMs, paths });
   log.message(`Daemon ready on ${ready.listen}`);
 
   if (options.relay === false) {
@@ -288,6 +288,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   let pairing = await resolveLocalPairingOffer({
     paseoHome,
+    paths,
     enableRelay: options.relay === true,
   });
 
@@ -299,7 +300,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
       if (richUi) outro("Paseo daemon is running.");
       return;
     }
-    pairing = await resolveLocalPairingOffer({ paseoHome, enableRelay: true });
+    pairing = await resolveLocalPairingOffer({ paseoHome, paths, enableRelay: true });
     log.success("Relay enabled");
   }
 

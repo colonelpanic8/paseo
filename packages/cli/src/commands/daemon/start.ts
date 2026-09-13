@@ -24,7 +24,7 @@ export async function runStart(options: CommandOptions, _command: Command) {
     home,
     pid: result.instance.pid,
     listen: result.instance.listen,
-    logPath: daemonLogPath(home),
+    logPath: daemonLogPath(home, options.daemonTarget.paths),
   };
   return {
     type: "single" as const,

@@ -217,8 +217,8 @@ async function runRegression({ page, userData, seedPath, artifactDir }) {
   assert(document?.version === 1, "get_client_settings returns the document");
 
   const seed = await page.evaluate(() => window.paseoDesktop.invoke("get_settings_seed"));
-  record("1c. XDG settings seed IPC round-trip", seed);
-  assert(seed?.path === seedPath, "get_settings_seed reads the XDG config file");
+  record("1c. settings seed IPC round-trip", seed);
+  assert(seed?.path === seedPath, "get_settings_seed reads the platform settings seed file");
   assert(
     seed?.app?.keyboardShortcutOverrides?.["toggle-sidebar"] === "ctrl+shift+b",
     "get_settings_seed returns the configured shortcut",
@@ -352,7 +352,10 @@ async function main() {
   const paseoHome = path.join(runtimeDir, "paseo-home");
   const userData = path.join(runtimeDir, "electron-user-data");
   const configHome = path.join(runtimeDir, "xdg-config");
-  const seedPath = path.join(configHome, "paseo", "settings-seed.json");
+  const seedPath =
+    process.platform === "linux"
+      ? path.join(configHome, "paseo", "settings-seed.json")
+      : path.join(userData, "settings-seed.json");
   fs.mkdirSync(paseoHome, { recursive: true });
   fs.mkdirSync(userData, { recursive: true });
   writeJson(seedPath, {
@@ -395,6 +398,7 @@ async function main() {
     // An inherited agent/client password makes the app wait on an auth prompt.
     delete commonEnv.PASEO_PASSWORD;
     delete commonEnv.PASEO_AGENT_ID;
+    delete commonEnv.PASEO_SETTINGS_SEED_FILE;
 
     const daemon = spawnLogged(
       "daemon",

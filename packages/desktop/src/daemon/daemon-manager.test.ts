@@ -14,6 +14,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   paseoHome: "",
+  paseoPaths: { home: "", config: "", data: "", state: "", cache: "", layout: "flat" },
   settings: {
     releaseChannel: "stable",
     daemon: {
@@ -60,6 +61,12 @@ vi.mock("electron-log/main", () => ({
 vi.mock("@getpaseo/server/daemon-control", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolvePaseoHome: () => mocks.paseoHome,
+}));
+
+vi.mock("@getpaseo/server", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolvePaseoPaths: () => mocks.paseoPaths,
+}));
   spawnProcess: mocks.spawnProcess,
 }));
 
@@ -97,6 +104,14 @@ describe("daemon-manager commands", () => {
   beforeEach(() => {
     fixtureRoot = mkdtempSync(path.join(tmpdir(), "paseo daemon manager "));
     mocks.paseoHome = path.join(fixtureRoot, "home");
+    mocks.paseoPaths = {
+      home: mocks.paseoHome,
+      config: mocks.paseoHome,
+      data: mocks.paseoHome,
+      state: mocks.paseoHome,
+      cache: mocks.paseoHome,
+      layout: "flat",
+    };
     mocks.appLogPath = path.join(fixtureRoot, "main.log");
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
     mocks.runExternalCliJsonCommand.mockReset();
@@ -188,6 +203,49 @@ describe("daemon-manager commands", () => {
     writeFileSync(lockPath, JSON.stringify({ ...lock, desktopManaged: false }));
     expect(await handler({ listen: "localhost:6799" })).toBeNull();
   });
+
+
+  it("forces the XDG daemon status probe to remain local", async () => {
+    mocks.paseoPaths = {
+      home: path.join(fixtureRoot, "xdg-data", "paseo"),
+      config: path.join(fixtureRoot, "xdg-config", "paseo"),
+      data: path.join(fixtureRoot, "xdg-data", "paseo"),
+      state: path.join(fixtureRoot, "xdg-data", "paseo"),
+      cache: path.join(fixtureRoot, "xdg-data", "paseo"),
+      layout: "xdg",
+    };
+    mkdirSync(mocks.paseoPaths.home, { recursive: true });
+    writeFileSync(
+      path.join(mocks.paseoPaths.home, "paseo.pid"),
+      JSON.stringify({
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+        hostname: hostname(),
+        uid: process.getuid?.() ?? 0,
+        listen: "127.0.0.1:6799",
+        desktopManaged: true,
+      }),
+    );
+    mocks.runExternalCliJsonCommand.mockResolvedValue({ localDaemon: "stopped" });
+    const previousHost = process.env.PASEO_HOST;
+    const previousConfigHome = process.env.XDG_CONFIG_HOME;
+    process.env.PASEO_HOST = "wss://remote.example.test";
+    process.env.XDG_CONFIG_HOME = path.join(fixtureRoot, "xdg-config");
+    try {
+      await createDaemonCommandHandlers().desktop_daemon_status();
+    } finally {
+      if (previousHost === undefined) delete process.env.PASEO_HOST;
+      else process.env.PASEO_HOST = previousHost;
+      if (previousConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+      else process.env.XDG_CONFIG_HOME = previousConfigHome;
+    }
+
+    expect(mocks.runExternalCliJsonCommand).toHaveBeenCalledWith(["daemon", "status", "--json"], {
+      env: expect.objectContaining({ XDG_CONFIG_HOME: path.join(fixtureRoot, "xdg-config") }),
+    });
+    expect(mocks.runExternalCliJsonCommand.mock.calls[0]?.[1]?.env.PASEO_HOST).toBeUndefined();
+  });
+
 });
 
 describe("desktop stops and terminals", () => {

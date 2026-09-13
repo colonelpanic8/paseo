@@ -66,3 +66,11 @@ export function describeDaemonTarget(target: DaemonTarget): string {
     return "<invalid endpoint>";
   }
 }
+
+export function localDaemonCommand(
+  action: "start" | "reload",
+  target: Extract<DaemonTarget, { kind: "instance" }>,
+): string {
+  const selector = target.paths?.layout === "xdg" ? "" : ` --home ${JSON.stringify(target.home)}`;
+  return `paseo daemon ${action}${selector}`;
+}
