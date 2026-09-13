@@ -5,10 +5,13 @@ How an agent or terminal that needs attention reaches a phone that is not connec
 ## Pipeline
 
 1. The agent manager reports attention with a reason: `finished`, `permission`, or `error` (`packages/protocol/src/agent-attention-notification.ts`). Terminals report `finished` and `needs_input` through `packages/server/src/server/websocket-server.ts`.
-2. `computeNotificationPlan` in `packages/server/src/server/agent-attention-policy.ts` picks one delivery from client presence. Every connected client sends a `client_heartbeat` with `lastActivityAt`; on desktop that comes from the system idle timer, not from the app being open.
+2. `computeNotificationPlan` in `packages/server/src/server/agent-attention-policy.ts` picks one delivery from client presence. Every connected client sends a `client_heartbeat` with `lastActivityAt`; on desktop that comes from Electron's `powerMonitor.getSystemIdleTime()`, so any input anywhere on that machine counts, not just using Paseo.
    - A visible client focused on that agent or terminal: nothing.
-   - Any client active in the last 3 minutes: in-app notification to the most recent one only.
+   - Any client active within the presence window (3 minutes by default): in-app notification to the most recent one only.
    - Otherwise: push. `error` never pushes.
+
+   `daemon.push.presenceThresholdMs` moves that window and `daemon.push.ignorePresence` pushes regardless of who is present. Do not emulate the second with a zero threshold: the in-app recipient is chosen from the clients that pass the presence check, so a zero window silences the desktop notification instead of adding a push to it.
+
 3. `createPushNotifications` in `packages/server/src/server/push/index.ts` delivers to every configured channel at once.
 
 ## Channels
