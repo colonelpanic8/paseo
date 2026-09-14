@@ -1,16 +1,18 @@
-import { useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useFetchQueries } from "@/data/query";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHostRuntimeConnectionStatuses } from "@/runtime/host-runtime";
 import type { ProviderUsageHistoryHostInput } from "./merge";
 import type { ProviderUsageHistoryPayload, ProviderUsageHistoryWindowDays } from "./types";
-import { makeWindow, type ProviderUsageHistoryWindow } from "./window";
+import { makeWindow, msUntilNextLocalDay, type ProviderUsageHistoryWindow } from "./window";
 
 // A cold scan walks every transcript in the window, so re-reading on every
 // mount would be minutes of work for numbers that move once per session.
 export const PROVIDER_USAGE_HISTORY_STALE_TIME_MS = 5 * 60 * 1000;
+/** A timer that lands a hair before midnight re-arms itself; the slack keeps that rare. */
+const DAY_ROLLOVER_SLACK_MS = 1000;
 
 /** A host the page asks for usage. Named separately so the query fan-out never sees a profile. */
 export interface ProviderUsageHistoryHostRef {
@@ -38,6 +40,11 @@ export interface UseProviderUsageHistoryResult {
   refresh: () => Promise<void>;
 }
 
+interface HostQueryResults {
+  hosts: readonly ProviderUsageHistoryHostInput[];
+  isFetching: boolean;
+}
+
 /**
  * Reads usage history from every given host at once. One query per host, keyed
  * the way the single-host page keyed it, so switching the host filter reuses
@@ -51,8 +58,18 @@ export function useProviderUsageHistory(
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
+  // The window is anchored to the day the page opened and re-anchored once
+  // local midnight passes, so a page left open keeps asking for today.
+  const [clock, setClock] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setClock(new Date()),
+      msUntilNextLocalDay(clock) + DAY_ROLLOVER_SLACK_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [clock]);
   // Aliased: `window` is the global on web.
-  const usageWindow = useMemo(() => makeWindow(windowDays), [windowDays]);
+  const usageWindow = useMemo(() => makeWindow(windowDays, clock), [clock, windowDays]);
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const connectionStatuses = useHostRuntimeConnectionStatuses(serverIds);
   const features = useHostFeatureMap(serverIds, "providerUsageHistory");
@@ -87,27 +104,44 @@ export function useProviderUsageHistory(
     [connectionStatuses, features, serverIds],
   );
 
-  const results = useFetchQueries<ProviderUsageHistoryPayload>(
+  // Combined by the query layer, which structurally shares the result: the host
+  // list keeps its identity across renders until a host's answer changes, so the
+  // page can derive its report from it exactly once per answer.
+  const combine = useCallback(
+    (results: UseQueryResult<ProviderUsageHistoryPayload, Error>[]): HostQueryResults => ({
+      hosts: hosts.map((host, index): ProviderUsageHistoryHostInput => {
+        const base = { serverId: host.serverId, hostName: host.name };
+        if (connectionStatuses.get(host.serverId) !== "online") {
+          return { ...base, status: "offline" };
+        }
+        if (features.get(host.serverId) !== true) return { ...base, status: "unsupported" };
+        const result = results[index];
+        if (result?.isError) return { ...base, status: "error" };
+        if (result?.data) return { ...base, status: "ready", payload: result.data };
+        return { ...base, status: "pending" };
+      }),
+      isFetching: results.some((result) => result.isFetching),
+    }),
+    [connectionStatuses, features, hosts],
+  );
+
+  const { hosts: hostStates, isFetching } = useFetchQueries<
+    ProviderUsageHistoryPayload,
+    HostQueryResults
+  >(
     hosts.map((host) => ({
       queryKey: providerUsageHistoryQueryKey(host.serverId, usageWindow),
       queryFn: () => read(host.serverId, false),
       dataShape: "value",
       enabled: fetchableServerIds.includes(host.serverId),
       staleTimeMs: PROVIDER_USAGE_HISTORY_STALE_TIME_MS,
+      // A remount inside the stale window reuses the answer instead of rescanning.
+      refetchOnMount: true,
       refetchOnReconnect: false,
       refetchOnWindowFocus: false,
     })),
+    combine,
   );
-
-  const hostStates = hosts.map((host, index): ProviderUsageHistoryHostInput => {
-    const base = { serverId: host.serverId, hostName: host.name };
-    if (connectionStatuses.get(host.serverId) !== "online") return { ...base, status: "offline" };
-    if (features.get(host.serverId) !== true) return { ...base, status: "unsupported" };
-    const result = results[index];
-    if (result?.isError) return { ...base, status: "error" };
-    if (result?.data) return { ...base, status: "ready", payload: result.data };
-    return { ...base, status: "pending" };
-  });
 
   // The rate table is fetched from the network by the daemon, so an explicit
   // refresh is the only place that pays for it.
@@ -129,7 +163,7 @@ export function useProviderUsageHistory(
   return {
     hosts: hostStates,
     window: usageWindow,
-    isFetching: results.some((result) => result.isFetching),
+    isFetching,
     refresh,
   };
 }
