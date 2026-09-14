@@ -7,6 +7,8 @@ import type {
 import { timelineItemIdentity } from "@getpaseo/protocol/timeline-identity";
 import type { AgentAttachment, AgentStreamEventPayload } from "@getpaseo/protocol/messages";
 import type { AttachmentMetadata } from "@/attachments/types";
+import type { AssistantQuestion } from "@/timeline/assistant-questions";
+import { readAssistantQuestions } from "@/timeline/assistant-questions";
 import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
 
@@ -604,7 +606,7 @@ function preserveReplacementHead(
       : `${tailAssistant.text}${liveAssistant.text}`;
     const head = [
       ...unreconciledHead.slice(0, liveAssistantIndex),
-      { ...liveAssistant, text },
+      { ...liveAssistant, text, ...mergedAssistantQuestions(liveAssistant, tailAssistant) },
       ...unreconciledHead.slice(liveAssistantIndex + 1),
     ];
     return {
@@ -619,7 +621,11 @@ function preserveReplacementHead(
 
   const head = [
     ...unreconciledHead.slice(0, liveAssistantIndex),
-    { ...liveAssistant, text: tailAssistant.text },
+    {
+      ...liveAssistant,
+      text: tailAssistant.text,
+      ...mergedAssistantQuestions(liveAssistant, tailAssistant),
+    },
     ...unreconciledHead.slice(liveAssistantIndex + 1),
   ];
   return {
@@ -627,6 +633,14 @@ function preserveReplacementHead(
     head,
     acknowledgedClientMessageIds: [],
   };
+}
+
+function mergedAssistantQuestions(
+  primary: AssistantMessageItem,
+  fallback: AssistantMessageItem,
+): { questions?: AssistantQuestion[] } {
+  const questions = primary.questions ?? fallback.questions;
+  return questions ? { questions } : {};
 }
 
 export function replaceWithCanonicalStream(
@@ -720,6 +734,7 @@ export interface AssistantMessageItem {
    */
   model?: string;
   thinkingOptionId?: string;
+  questions?: AssistantQuestion[];
 }
 
 export interface TimelinePosition {
@@ -875,6 +890,14 @@ function markThoughtReady(item: ThoughtItem): ThoughtItem {
   };
 }
 
+function hasAssistantQuestions(questions: AssistantQuestion[] | undefined): boolean {
+  return Boolean(questions?.length);
+}
+
+function hasAssistantDisplayContent(hasText: boolean, hasQuestions: boolean): boolean {
+  return hasText || hasQuestions;
+}
+
 export function handoffCreatedAgentUserMessageToStream(params: {
   tail: StreamItem[];
   head: StreamItem[];
@@ -984,13 +1007,14 @@ function applyAssistantAttribution(
   state: StreamItem[],
   messageId: string,
   attributionFields: AssistantMessageAttribution,
+  questionsPatch?: Pick<AssistantMessageItem, "questions">,
 ): StreamItem[] {
   for (let index = state.length - 1; index >= 0; index -= 1) {
     const entry = state[index];
     if (entry.kind !== "assistant_message" || entry.messageId !== messageId) {
       continue;
     }
-    const updated: AssistantMessageItem = { ...entry, ...attributionFields };
+    const updated: AssistantMessageItem = { ...entry, ...attributionFields, ...questionsPatch };
     return [...state.slice(0, index), updated, ...state.slice(index + 1)];
   }
   return state;
@@ -1005,12 +1029,15 @@ function appendAssistantMessage(
   reservedItemIds?: ReadonlySet<string>,
   timelineCursor?: TimelinePosition,
   attribution?: AssistantMessageAttribution,
+  questions?: AssistantQuestion[],
 ): StreamItem[] {
   const attributionFields = toAttributionFields(attribution);
   const { chunk, hasContent } = normalizeChunk(text);
-  if (isEmptyAssistantUpdateWithoutAttribution(chunk, attributionFields)) {
+  const hasQuestions = hasAssistantQuestions(questions);
+  if (isEmptyAssistantUpdateWithoutAttribution(chunk, attributionFields) && !hasQuestions) {
     return state;
   }
+  const questionsPatch = questions ? { questions } : undefined;
 
   const extend = findAssistantRowToExtend(state, source, messageId);
   if (extend) {
@@ -1020,15 +1047,16 @@ function appendAssistantMessage(
       timestamp,
       ...(timelineCursor ? { timelineCursor } : {}),
       ...attributionFields,
+      ...questionsPatch,
     };
     return [...state.slice(0, extend.index), updated, ...state.slice(extend.index + 1)];
   }
 
   if (chunk === "" && messageId !== undefined) {
-    return applyAssistantAttribution(state, messageId, attributionFields);
+    return applyAssistantAttribution(state, messageId, attributionFields, questionsPatch);
   }
 
-  if (!hasContent) {
+  if (!hasAssistantDisplayContent(hasContent, hasQuestions)) {
     return state;
   }
 
@@ -1039,6 +1067,7 @@ function appendAssistantMessage(
     id: entryId,
     ...(messageId ? { messageId } : {}),
     ...(timelineCursor ? { timelineCursor } : {}),
+    ...questionsPatch,
     text: chunk,
     timestamp,
     ...attributionFields,
@@ -1598,6 +1627,7 @@ function reduceTimelineEvent(
           reservedItemIds,
           timelineCursor,
           { model: item.model, thinkingOptionId: item.thinkingOptionId },
+          readAssistantQuestions(item),
         ),
       );
     case "reasoning":
@@ -1898,8 +1928,10 @@ function promoteCompletedAssistantBlocks(params: { tail: StreamItem[]; head: Str
   const firstBlockIndex = activeItem.blockIndex ?? 0;
   const completedBlocks = blocks.slice(0, -1);
   const liveBlock = `${blocks[blocks.length - 1] ?? ""}${getTrailingNewlineSuffix(activeItem.text)}`;
+  // Questions belong to the message, not to each block, so they ride the last block only.
+  const { questions: activeQuestions, ...activeBlockBase } = activeItem;
   const promotedItems = completedBlocks.map<AssistantMessageItem>((block, offset) => ({
-    ...activeItem,
+    ...activeBlockBase,
     id: createAssistantBlockId({
       groupId: blockGroupId,
       blockIndex: firstBlockIndex + offset,
@@ -1911,7 +1943,8 @@ function promoteCompletedAssistantBlocks(params: { tail: StreamItem[]; head: Str
 
   const nextTail = flushHeadToTail(params.tail, promotedItems);
   const liveItem: AssistantMessageItem = {
-    ...activeItem,
+    ...activeBlockBase,
+    ...(activeQuestions ? { questions: activeQuestions } : {}),
     id: createAssistantBlockId({
       groupId: blockGroupId,
       blockIndex: firstBlockIndex + completedBlocks.length,
