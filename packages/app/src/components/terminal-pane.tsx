@@ -3,7 +3,7 @@ import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import Animated, { runOnJS, useAnimatedReaction } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Keyboard as KeyboardIcon, KeyboardOff as KeyboardOffIcon } from "lucide-react-native";
 import type { TerminalKeyInput } from "@getpaseo/protocol/terminal-key-input";
@@ -15,6 +15,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
+import { useSettledKeyboardShift } from "@/hooks/keyboard-shift-context";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import {
@@ -58,6 +59,7 @@ import {
   createTerminalResizeDebouncer,
   type TerminalResizeRequest,
 } from "./terminal-resize-debouncer";
+import { createTerminalKeyboardRefitScheduler } from "./terminal-pane-keyboard-refit";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import {
@@ -89,7 +91,6 @@ interface TerminalPaneProps {
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
 }
 
-const TERMINAL_REFIT_DELAYS_MS = [0, 48, 144, 320];
 const TERMINAL_RESIZE_DEBOUNCE_MS = 100;
 
 const MODIFIER_LABELS = {
@@ -223,12 +224,14 @@ export function TerminalPane({
   const mobileView = usePanelStore((state) => state.mobilePanel.target);
   const showMobileAgentList = usePanelStore((state) => state.showMobileAgentList);
   const swipeGesturesEnabled = isMobile;
-  const { shift: keyboardShift, style: keyboardPaddingStyle } = useKeyboardShiftStyle({
+  const { style: keyboardPaddingStyle } = useKeyboardShiftStyle({
     mode: "padding",
     enabled: isMobile,
   });
-  const [keyboardInset, setKeyboardInset] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  // The padding animation stays on the UI thread; JS only learns the inset once the keyboard lands.
+  const settledKeyboardShift = useSettledKeyboardShift();
+  const keyboardInset = isMobile ? settledKeyboardShift : 0;
+  const isKeyboardVisible = keyboardInset > 0;
 
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -262,7 +265,6 @@ export function TerminalPane({
   const [modifiers, setModifiers] = useState<ModifierState>(EMPTY_MODIFIERS);
   const [hasSelection, setHasSelection] = useState(false);
   const [hasClipboardText, setHasClipboardText] = useState(false);
-  const [isKeyboardToggleVisible, setIsKeyboardToggleVisible] = useState(false);
   const [focusRequestToken, setFocusRequestToken] = useState(0);
   const [resizeRequestToken, setResizeRequestToken] = useState(0);
   useBlockMobilePanelOpenGestures(isMobile && isWorkspaceFocused && isPaneFocused && hasSelection);
@@ -272,7 +274,6 @@ export function TerminalPane({
   terminalPresentedRef.current = isTerminalPresented;
   const inputModeRef = useRef<TerminalInputModeState>(DEFAULT_TERMINAL_INPUT_MODE_STATE);
   const pendingTerminalInputRef = useRef<PendingTerminalInput[]>([]);
-  const keyboardRefitTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const lastAutoFocusKeyRef = useRef<string | null>(null);
   const paneFocusResizeClaimRef = useRef(EMPTY_FOCUS_CLAIM_STATE);
   const initialSnapshot = workspaceTerminalSession.snapshots.get({ terminalId });
@@ -298,15 +299,7 @@ export function TerminalPane({
 
   useEffect(() => {
     void refreshClipboardAvailability();
-  }, [refreshClipboardAvailability, isAppActivelyVisible]);
-
-  useEffect(() => {
-    void refreshClipboardAvailability();
-  }, [keyboardInset, refreshClipboardAvailability]);
-
-  useEffect(() => {
-    setIsKeyboardToggleVisible(isKeyboardVisible);
-  }, [isKeyboardVisible]);
+  }, [refreshClipboardAvailability, isAppActivelyVisible, isKeyboardVisible]);
 
   const handleSelectionChange = useCallback((nextHasSelection: boolean) => {
     setHasSelection(nextHasSelection);
@@ -402,52 +395,22 @@ export function TerminalPane({
     terminalId,
   ]);
 
-  const clearKeyboardRefitTimeouts = useCallback(() => {
-    if (keyboardRefitTimeoutsRef.current.length === 0) {
-      return;
-    }
-    for (const handle of keyboardRefitTimeoutsRef.current) {
-      clearTimeout(handle);
-    }
-    keyboardRefitTimeoutsRef.current = [];
-  }, []);
-
-  const pulseKeyboardRefits = useCallback(() => {
-    clearKeyboardRefitTimeouts();
-    requestTerminalReflow();
-    keyboardRefitTimeoutsRef.current = TERMINAL_REFIT_DELAYS_MS.map((delayMs, index) =>
-      setTimeout(() => {
-        requestTerminalReflow();
-        if (index === TERMINAL_REFIT_DELAYS_MS.length - 1) {
-          emulatorRef.current?.claimSize();
-        }
-      }, delayMs),
-    );
-  }, [clearKeyboardRefitTimeouts, requestTerminalReflow]);
-
-  const handleKeyboardChange = useCallback(
-    (nextShift: number) => {
-      setKeyboardInset(isMobile ? nextShift : 0);
-      setIsKeyboardVisible(nextShift > 0);
-      pulseKeyboardRefits();
-    },
-    [isMobile, pulseKeyboardRefits],
+  const keyboardRefitScheduler = useMemo(
+    () =>
+      createTerminalKeyboardRefitScheduler({
+        requestReflow: requestTerminalReflow,
+        claimSize: () => emulatorRef.current?.claimSize(),
+        setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+        clearTimeout: (handle) => clearTimeout(handle),
+      }),
+    [requestTerminalReflow],
   );
+
+  useEffect(() => () => keyboardRefitScheduler.cancel(), [keyboardRefitScheduler]);
 
   useEffect(() => {
-    return () => clearKeyboardRefitTimeouts();
-  }, [clearKeyboardRefitTimeouts]);
-
-  useAnimatedReaction(
-    () => Math.round(keyboardShift.value),
-    (next, prev) => {
-      if (next === prev) {
-        return;
-      }
-      runOnJS(handleKeyboardChange)(next);
-    },
-    [handleKeyboardChange],
-  );
+    keyboardRefitScheduler.pulse();
+  }, [keyboardInset, keyboardRefitScheduler]);
 
   const handleStreamExit = useStableEvent((exitedTerminalId: string) => {
     workspaceTerminalSession.snapshots.clear({ terminalId: exitedTerminalId });
@@ -856,17 +819,13 @@ export function TerminalPane({
   }, [refreshClipboardAvailability]);
 
   const handleKeyboardToggle = useCallback(() => {
-    if (isKeyboardToggleVisible) {
-      setIsKeyboardToggleVisible(false);
+    if (isKeyboardVisible) {
       emulatorRef.current?.blur();
-      requestTerminalReflow();
-      return;
+    } else {
+      emulatorRef.current?.showKeyboard();
     }
-
-    setIsKeyboardToggleVisible(true);
-    emulatorRef.current?.showKeyboard();
     requestTerminalReflow();
-  }, [isKeyboardToggleVisible, requestTerminalReflow]);
+  }, [isKeyboardVisible, requestTerminalReflow]);
 
   const handleInputModeChange = useCallback((state: TerminalInputModeState) => {
     inputModeRef.current = state;
@@ -999,7 +958,7 @@ export function TerminalPane({
           <KeyboardToggleButton
             key={controlId}
             iconColor={keyboardToggleIconColor}
-            isKeyboardVisible={isKeyboardToggleVisible}
+            isKeyboardVisible={isKeyboardVisible}
             onToggle={handleKeyboardToggle}
           />
         );
