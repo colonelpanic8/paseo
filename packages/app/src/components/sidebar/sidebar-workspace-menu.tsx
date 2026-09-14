@@ -16,6 +16,7 @@ import {
 import { isWeb } from "@/constants/platform";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
@@ -83,6 +84,8 @@ export interface SidebarWorkspaceMenuProps {
   workspaceKey: string;
   serverId?: string;
   workspaceId?: string;
+  /** Drives the clear-attention item's label: a failed workspace dismisses, an unread one reads. */
+  statusBucket?: SidebarStateBucket;
   workspaceLabels?: readonly string[];
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
@@ -132,6 +135,7 @@ function SidebarWorkspaceMenuItems({
   workspaceKey,
   serverId,
   workspaceId,
+  statusBucket,
   onCopyPath,
   onCopyBranchName,
   onRename,
@@ -195,7 +199,7 @@ function SidebarWorkspaceMenuItems({
           leading={markAsReadLeadingIcon}
           onSelect={onMarkAsRead}
         >
-          Mark as read
+          {statusBucket === "failed" ? "Dismiss error" : "Mark as read"}
         </WorkspaceMenuItem>
       ) : null}
       {onMarkAsUnread ? (
@@ -253,6 +257,7 @@ export function SidebarWorkspaceMenu({
   workspaceKey,
   serverId,
   workspaceId,
+  statusBucket,
   workspaceLabels,
   onCopyPath,
   onCopyBranchName,
@@ -299,6 +304,7 @@ export function SidebarWorkspaceMenu({
           workspaceKey={workspaceKey}
           serverId={serverId}
           workspaceId={workspaceId}
+          statusBucket={statusBucket}
           workspaceLabels={workspaceLabels}
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
@@ -333,6 +339,7 @@ export function SidebarWorkspaceContextMenu({
   hostBadgeLabel,
   serviceSummary,
   workspaceKey,
+  statusBucket,
   onCopyPath,
   onCopyBranchName,
   onRename,
@@ -410,6 +417,7 @@ export function SidebarWorkspaceContextMenu({
         <SidebarWorkspaceMenuItems
           surface="context"
           workspaceKey={workspaceKey}
+          statusBucket={statusBucket ?? workspace.statusBucket}
           serverId={workspaceTarget.serverId}
           workspaceId={workspaceTarget.workspaceId}
           workspaceLabels={workspaceTarget.labels}
