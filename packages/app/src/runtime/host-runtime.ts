@@ -823,6 +823,9 @@ export class HostRuntimeController {
   }
 
   async runProbeCycleNow(): Promise<void> {
+    if (!this.started) {
+      return;
+    }
     if (this.probeCycleInFlight) {
       return this.probeCycleInFlight;
     }
@@ -1488,6 +1491,7 @@ interface AgentDirectoryRefreshInput {
 
 export class HostRuntimeStore {
   private controllers = new Map<string, HostRuntimeController>();
+  private unsubscribeByController = new Map<HostRuntimeController, () => void>();
   private serverListeners = new Map<string, Set<() => void>>();
   private globalListeners = new Set<() => void>();
   private hostListListeners = new Set<() => void>();
@@ -2255,6 +2259,8 @@ export class HostRuntimeStore {
         continue;
       }
       this.controllers.delete(serverId);
+      this.unsubscribeByController.get(controller)?.();
+      this.unsubscribeByController.delete(controller);
       this.lastConnectionStatusByServer.delete(serverId);
       this.connectionStatusStartedAtByServer.delete(serverId);
       this.directorySyncByServer.get(serverId)?.dispose();
@@ -2306,12 +2312,13 @@ export class HostRuntimeStore {
       const initialSnapshot = controller.getSnapshot();
       this.lastConnectionStatusByServer.set(host.serverId, initialSnapshot.connectionStatus);
       this.connectionStatusStartedAtByServer.set(host.serverId, Date.now());
-      controller.subscribe(() => {
+      const unsubscribe = controller.subscribe(() => {
         const snapshot = controller.getSnapshot();
         this.syncSessionReplica(snapshot.serverId, snapshot);
         this.syncDirectoryConnection(snapshot.serverId);
         this.emit(snapshot.serverId);
       });
+      this.unsubscribeByController.set(controller, unsubscribe);
       void controller
         .start(
           initialConnection
