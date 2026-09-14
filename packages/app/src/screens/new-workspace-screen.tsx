@@ -16,6 +16,9 @@ import {
   resolveComposerAttachmentSubmitFormat,
   splitComposerAttachmentsForSubmit,
 } from "@/composer/attachments/submit";
+import { dispatchComposerAgentMessage } from "@/composer/actions";
+import { createMessageSubmissionWriter } from "@/composer/submission/writer";
+import { encodeImages } from "@/utils/encode-images";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -56,7 +59,12 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { normalizeWorkspaceDescriptor, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
-import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
+import {
+  buildDraftStoreKey,
+  buildNewWorkspaceDraftKey,
+  generateDraftId,
+} from "@/stores/draft-keys";
+import { useDraftStore } from "@/stores/draft-store";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { isActiveCreateFlowForDraft, useCreateFlowStore } from "@/stores/create-flow-store";
 import {
@@ -102,7 +110,9 @@ import { useAgentControlCommandCenterActions } from "@/command-center/agent-cont
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
+  createNativeForkInWorkspace,
   getWorkspaceNamingAttachments,
+  sendNativeForkPrompt,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
 import {
@@ -1014,6 +1024,7 @@ interface CreateChatAgentInput {
   payload: MessagePayload;
   composerState: ReturnType<typeof useAgentInputDraft>["composerState"];
   forkDraftSetup?: PendingWorkspaceDraftSetup | null;
+  destinationSourceDirectory: string | null;
   ensureWorkspace: (input: {
     cwd: string;
     prompt: string;
@@ -1051,6 +1062,7 @@ function buildWorkspaceDraftSetupFromComposer(input: {
 
 function buildWorkspaceDraftSetupForCreatedWorkspace(input: {
   forkDraftSetup: PendingWorkspaceDraftSetup | null | undefined;
+  destinationSourceDirectory: string | null;
   workspaceDirectory: string;
   provider: AgentProvider;
   composerState: NewWorkspaceComposerState;
@@ -1062,6 +1074,7 @@ function buildWorkspaceDraftSetupForCreatedWorkspace(input: {
     cwd: remapDraftCwdToWorkspace({
       cwd: input.forkDraftSetup.setup.cwd,
       sourceDirectory: input.forkDraftSetup.sourceDirectory,
+      destinationSourceDirectory: input.destinationSourceDirectory,
       workspaceDirectory: input.workspaceDirectory,
     }),
     provider: input.provider,
@@ -1109,6 +1122,7 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<SubmitOu
   });
   const initialSetup = buildWorkspaceDraftSetupForCreatedWorkspace({
     forkDraftSetup: input.forkDraftSetup,
+    destinationSourceDirectory: input.destinationSourceDirectory,
     workspaceDirectory: ensuredWorkspace.workspaceDirectory,
     provider,
     composerState,
@@ -2239,12 +2253,77 @@ export function NewWorkspaceScreen({
     ],
   );
 
+  const clearChatDraft = chatDraft.clear;
   const handleSubmitNewWorkspace = useCallback(
     async (payload: MessagePayload) => {
       try {
         setErrorMessage(null);
         await composerState?.persistFormPreferences();
         await updateFormPreferences({ launchTarget });
+        if (forkDraftSetup?.nativeFork) {
+          if (forkDraftSetup.nativeFork.serverId !== selectedServerId) {
+            throw new Error(t("message.actions.forkUnavailable"));
+          }
+          setPendingAction("chat");
+          const forkClient = withConnectedClient();
+          const { attachments: forkNamingAttachments } = splitComposerAttachmentsForSubmit(
+            payload.attachments,
+            {
+              format: resolveComposerAttachmentSubmitFormat({
+                supportsForgeAttachments: supportsForgeSearch,
+              }),
+            },
+          );
+          const forked = await createNativeForkInWorkspace({
+            client: forkClient,
+            agentId: forkDraftSetup.nativeFork.agentId,
+            boundaryMessageId: forkDraftSetup.nativeFork.boundaryMessageId,
+            sourceCwd: forkDraftSetup.setup.cwd,
+            sourceDirectory: forkDraftSetup.sourceDirectory,
+            destinationSourceDirectory: selectedSourceDirectory,
+            prompt: payload.text,
+            namingAttachments: getWorkspaceNamingAttachments(forkNamingAttachments),
+            ensureWorkspace,
+            failureMessage: t("message.actions.forkFailed"),
+          });
+          useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId: draftId ?? "" });
+          clearChatDraft("sent");
+          navigateToWorkspace({
+            serverId: selectedServerId,
+            workspaceId: forked.workspaceId,
+            target: { kind: "agent", agentId: forked.agentId },
+          });
+          // The fork exists and the user is looking at it, so a failed first
+          // send reports on that agent — which is also where the unsent content
+          // is restored — instead of failing this screen back into a re-fork.
+          await sendNativeForkPrompt({
+            text: payload.text,
+            attachments: payload.attachments,
+            send: ({ text, attachments }) =>
+              dispatchComposerAgentMessage({
+                client: forkClient,
+                agentId: forked.agentId,
+                text,
+                attachments,
+                attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
+                  supportsForgeAttachments: supportsForgeSearch,
+                }),
+                encodeImages,
+                submission: createMessageSubmissionWriter(selectedServerId),
+              }),
+            restoreDraft: (draft) =>
+              useDraftStore.getState().saveDraftInput({
+                draftKey: buildDraftStoreKey({
+                  serverId: selectedServerId,
+                  agentId: forked.agentId,
+                }),
+                draft,
+              }),
+          }).catch((error) => {
+            toast.error(toErrorMessage(error));
+          });
+          return;
+        }
         if (isEmptyWorkspaceSubmission(payload)) {
           setPendingAction("empty");
           let outcome: SubmitOutcome = "background";
@@ -2273,9 +2352,10 @@ export function NewWorkspaceScreen({
           payload,
           composerState,
           forkDraftSetup,
+          destinationSourceDirectory: selectedSourceDirectory,
           ensureWorkspace,
           serverId: selectedServerId,
-          clearDraft: chatDraft.clear,
+          clearDraft: clearChatDraft,
           draftKey,
           draftId,
           draftContextScopeKey,
@@ -2301,13 +2381,14 @@ export function NewWorkspaceScreen({
       composerState,
       draftContextScopeKey,
       draftId,
-      chatDraft.clear,
+      clearChatDraft,
       draftKey,
       ensureWorkspace,
       forkDraftSetup,
       isStillOnCreateScreen,
       launchTarget,
       selectedServerId,
+      selectedSourceDirectory,
       supportsForgeSearch,
       t,
       toast,
