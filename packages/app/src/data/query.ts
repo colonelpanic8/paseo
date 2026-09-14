@@ -60,10 +60,11 @@ export function useFetchQuery<
   return useQuery(fetchQueryOptions(input), queryClient);
 }
 
-export function useFetchQueries<TData>(
+export function useFetchQueries<TData, TCombined = UseQueryResult<TData, Error>[]>(
   inputs: FetchQueryInput<TData, Error, TData, QueryKey>[],
-): UseQueryResult<TData, Error>[] {
-  return useQueries({ queries: inputs.map((input) => fetchQueryOptions(input)) });
+  combine?: (results: UseQueryResult<TData, Error>[]) => TCombined,
+): TCombined {
+  return useQueries({ queries: inputs.map((input) => fetchQueryOptions(input)), combine });
 }
 
 function replicaQueryOptions<
