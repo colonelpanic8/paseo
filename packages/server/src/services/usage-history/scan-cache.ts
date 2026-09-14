@@ -2,7 +2,7 @@ import path from "node:path";
 import { GUARD_LENGTH, type TranscriptParsePosition } from "./transcript-reader.js";
 import type { CodexScanState, UsageProvider, UsageRecord } from "./transcripts.js";
 
-export const USAGE_SCAN_CACHE_VERSION = 3;
+export const USAGE_SCAN_CACHE_VERSION = 4;
 
 export interface CachedFile {
   readonly size: number;
@@ -300,17 +300,38 @@ export function pruneScanCache(cache: ScanCache, options: PruneOptions): number 
   return removed;
 }
 
-/** A shared set lets resumed base, appended lines, and tail dedupe as one file. */
+/**
+ * A shared set lets resumed base, appended lines, and tail dedupe as one file.
+ *
+ * Records for one message are contiguous within a file, and the base-then-appended order is the
+ * file's own order, so a repeat inside one pass is a later content block of the same message. In
+ * subagent transcripts that later block carries the real `output_tokens` where the earlier ones
+ * carried a streaming partial, so the repeat replaces the kept record when it reports more output.
+ * Input and cache figures never differ between the blocks. A key already seen by an earlier pass
+ * is dropped outright.
+ */
 export function dedupeWithinFile(
   records: readonly UsageRecord[],
   seen: Set<string> = new Set(),
 ): readonly UsageRecord[] {
   const kept: UsageRecord[] = [];
+  const keptIndexes = new Map<string, number>();
   for (const record of records) {
-    if (record.dedupeKey !== null) {
-      if (seen.has(record.dedupeKey)) continue;
-      seen.add(record.dedupeKey);
+    if (record.dedupeKey === null) {
+      kept.push(record);
+      continue;
     }
+    const keptIndex = keptIndexes.get(record.dedupeKey);
+    if (keptIndex !== undefined) {
+      const current = kept[keptIndex];
+      if (current !== undefined && record.totals.outputTokens > current.totals.outputTokens) {
+        kept[keptIndex] = record;
+      }
+      continue;
+    }
+    if (seen.has(record.dedupeKey)) continue;
+    seen.add(record.dedupeKey);
+    keptIndexes.set(record.dedupeKey, kept.length);
     kept.push(record);
   }
   return kept;
