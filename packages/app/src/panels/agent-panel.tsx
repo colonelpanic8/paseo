@@ -456,6 +456,8 @@ function DraftPanel() {
   } = usePaneContext();
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "draft", "DraftPanel requires draft target");
+  const runtimeClient = useHostRuntimeClient(serverId);
+  const hostUnavailable = useHostUnavailableState(serverId);
 
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
@@ -466,6 +468,10 @@ function DraftPanel() {
     },
     [retargetCurrentTab, serverId],
   );
+
+  if (!runtimeClient) {
+    return <AgentSessionUnavailableState {...hostUnavailable} />;
+  }
 
   return (
     <WorkspaceDraftAgentTab
@@ -564,6 +570,30 @@ type AgentLookupState =
   | { tag: "not_found"; message: string }
   | { tag: "error"; message: string };
 
+interface HostUnavailableState {
+  serverLabel: string;
+  connectionStatus: HostRuntimeConnectionStatus;
+  lastError: string | null;
+  isUnknownDaemon: boolean;
+  t: TFunction;
+}
+
+function useHostUnavailableState(serverId: string | null): HostUnavailableState {
+  const { t } = useTranslation();
+  const daemons = useHosts();
+  const runtimeServerId = serverId ?? "";
+  const runtimeConnectionStatus = useHostRuntimeConnectionStatus(runtimeServerId);
+  const lastError = useHostRuntimeLastError(runtimeServerId);
+  const daemon = serverId ? (daemons.find((entry) => entry.serverId === serverId) ?? null) : null;
+  const serverLabel = daemon?.label ?? serverId ?? t("agentPanel.unavailable.selectedHost");
+  const isUnknownDaemon = Boolean(serverId && !daemon);
+  const connectionStatus: HostRuntimeConnectionStatus =
+    isUnknownDaemon && runtimeConnectionStatus === "connecting"
+      ? "offline"
+      : runtimeConnectionStatus;
+  return { serverLabel, connectionStatus, lastError, isUnknownDaemon, t };
+}
+
 function AgentPanelContent({
   serverId,
   workspaceId,
@@ -577,15 +607,12 @@ function AgentPanelContent({
   isPaneFocused: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
-  const { t } = useTranslation();
   const resolvedAgentId = agentId.trim() || undefined;
   const resolvedServerId = serverId.trim() || undefined;
-  const daemons = useHosts();
   const runtimeServerId = resolvedServerId ?? "";
   const runtimeClient = useHostRuntimeClient(runtimeServerId);
   const runtimeIsConnected = useHostRuntimeIsConnected(runtimeServerId);
-  const runtimeConnectionStatus = useHostRuntimeConnectionStatus(runtimeServerId);
-  const runtimeLastError = useHostRuntimeLastError(runtimeServerId);
+  const hostUnavailable = useHostUnavailableState(resolvedServerId ?? null);
   const hasCachedAgent = useSessionStore((state) => {
     if (!resolvedServerId || !resolvedAgentId) return false;
     const session = state.sessions[resolvedServerId];
@@ -594,30 +621,10 @@ function AgentPanelContent({
     );
   });
 
-  const connectionServerId = resolvedServerId ?? null;
-  const daemon = connectionServerId
-    ? (daemons.find((entry) => entry.serverId === connectionServerId) ?? null)
-    : null;
-  const serverLabel =
-    daemon?.label ?? connectionServerId ?? t("agentPanel.unavailable.selectedHost");
-  const isUnknownDaemon = Boolean(connectionServerId && !daemon);
-  const connectionStatus: HostRuntimeConnectionStatus =
-    isUnknownDaemon && runtimeConnectionStatus === "connecting"
-      ? "offline"
-      : runtimeConnectionStatus;
-  const lastConnectionError = runtimeLastError;
-
   if (!resolvedServerId || (!runtimeClient && !hasCachedAgent)) {
-    return (
-      <AgentSessionUnavailableState
-        serverLabel={serverLabel}
-        connectionStatus={connectionStatus}
-        lastError={lastConnectionError}
-        isUnknownDaemon={isUnknownDaemon}
-        t={t}
-      />
-    );
+    return <AgentSessionUnavailableState {...hostUnavailable} />;
   }
+  const connectionStatus = hostUnavailable.connectionStatus;
 
   return (
     <AgentPanelBody
@@ -1776,15 +1783,9 @@ function AgentSessionUnavailableState({
   serverLabel,
   connectionStatus,
   lastError,
-  isUnknownDaemon = false,
+  isUnknownDaemon,
   t,
-}: {
-  serverLabel: string;
-  connectionStatus: HostRuntimeConnectionStatus;
-  lastError: string | null;
-  isUnknownDaemon?: boolean;
-  t: TFunction;
-}) {
+}: HostUnavailableState) {
   if (isUnknownDaemon) {
     return (
       <View style={styles.container}>
