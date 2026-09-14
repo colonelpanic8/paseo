@@ -119,7 +119,8 @@ export function DraggableList<T>({
       scrollEnabled={scrollEnabled}
       extraData={extraData}
       simultaneousHandlers={simultaneousHandlers}
-      dragGestureHostPresented={gestureHostPresented}
+      // @ts-expect-error - gestureHostPresented is consumed by the native gesture patch.
+      gestureHostPresented={gestureHostPresented}
       // Higher activation distance reduces accidental drag capture while nested
       // lists are inside a scroll container.
       activationDistance={20}
