@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Agent } from "@/stores/session-store";
-import { pickAttentionAgent, shouldClearAgentAttention } from "@/utils/agent-attention";
+import {
+  pickAttentionAgent,
+  resolveAgentScreenFocus,
+  shouldClearAgentAttention,
+} from "@/utils/agent-attention";
 
 function createAgent(input: Partial<Agent> & Pick<Agent, "id">): Agent {
   const { id, ...rest } = input;
@@ -140,6 +144,48 @@ describe("shouldClearAgentAttention", () => {
         hasDeferredFocusEntryClear: true,
       }),
     ).toBe(true);
+  });
+});
+
+describe("resolveAgentScreenFocus", () => {
+  it("treats the compact sidebar as covering the selected agent", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: true,
+        isPaneFocused: true,
+        mobilePanelTarget: "agent-list",
+      }),
+    ).toBe(false);
+  });
+
+  it("focuses the selected agent when the compact sidebar closes", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: true,
+        isPaneFocused: true,
+        mobilePanelTarget: "agent",
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores compact panel state in the wide layout", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: false,
+        isPaneFocused: true,
+        mobilePanelTarget: "agent-list",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps inactive tabs unfocused", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: true,
+        isPaneFocused: false,
+        mobilePanelTarget: "agent",
+      }),
+    ).toBe(false);
   });
 });
 

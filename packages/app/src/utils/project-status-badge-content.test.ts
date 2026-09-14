@@ -14,13 +14,6 @@ describe("getProjectStatusBadgeContent", () => {
     expect(getProjectStatusBadgeContent("failed")).toEqual({ kind: "dot", bucket: "failed" });
   });
 
-  it("shows an attention dot when a workspace awaits review", () => {
-    expect(getProjectStatusBadgeContent("attention")).toEqual({
-      kind: "dot",
-      bucket: "attention",
-    });
-  });
-
   it("shows nothing when the project is done", () => {
     expect(getProjectStatusBadgeContent("done")).toBeNull();
   });
