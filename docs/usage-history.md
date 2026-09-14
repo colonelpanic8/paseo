@@ -25,8 +25,8 @@ RPC: `provider.usage_history.read.request` / `.response`, gated on `server_info.
 
 ## Counting rules that are easy to break
 
-- **Claude repeats `usage` per content block.** Every record for one assistant message carries the same complete usage object. The parser keys on `message.id:requestId` and the aggregator keeps the first. Summing without this overcounts by more than 2x.
-- **Resumed and forked Claude sessions copy history forward**, so the same key appears in several files. Dedupe is global across the scan, not per file.
+- **Claude repeats `usage` per content block.** The parser keys on `message.id:requestId`. In a main-session transcript every block carries the same complete usage object, and summing without dedupe overcounts by more than 2x. In a subagent transcript (`agent-*.jsonl`) the early blocks carry a streaming-partial `output_tokens` and the last block carries the real count; input and cache figures are identical across blocks. Within one file `dedupeWithinFile` keeps the block reporting the most output. Keeping the first block undercounted subagent output by about 99% on one corpus (954 tokens kept out of 105,294).
+- **Resumed and forked Claude sessions copy history forward**, so the same key appears in several files. The aggregator keeps the first file's record, which is safe because a copied history carries the full block set and so the same maximum. Dedupe is global across the scan, not per file.
 - **Codex `token_count` carries deltas in `last_token_usage`** and re-emits an unchanged event on some stream boundaries. Consecutive identical payloads are dropped. `input_tokens` is inclusive of the cached portion.
 - **Codex forked and subagent rollouts open with the parent's history re-stamped to the fork instant.** The parser drops the leading burst until the first event that is more than a second after its predecessor.
 - **Reasoning tokens are a subset of output tokens.** Total processed tokens is uncached input + cached input + cache creation + output. Never add reasoning on top.
