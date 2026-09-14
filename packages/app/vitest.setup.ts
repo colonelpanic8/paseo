@@ -1,10 +1,25 @@
 // @ts-nocheck
+import { registerHooks } from "node:module";
 import { vi } from "vitest";
 import React from "react";
 
 const globalWithTestShims = globalThis as typeof globalThis & Record<string, unknown>;
 
 globalWithTestShims.__DEV__ = false;
+
+// src/i18n/i18next.ts loads locale bundles with Metro-style extensionless `require()` calls.
+// Vitest hands `require` to Node, which strips the TypeScript types but only resolves `.ts`
+// when the specifier names the extension.
+const i18nSourceUrl = new URL("./src/i18n/", import.meta.url).href;
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const isExtensionlessRelative = specifier.startsWith(".") && !/\.[cm]?[jt]sx?$/.test(specifier);
+    if (isExtensionlessRelative && context.parentURL?.startsWith(i18nSourceUrl)) {
+      return { ...nextResolve(`${specifier}.ts`, context), format: "module-typescript" };
+    }
+    return nextResolve(specifier, context);
+  },
+});
 
 // JSDOM has no CSS media-query engine. Give native-web libraries the browser API
 // with no active preferences; responsive behavior is exercised in Chromium.
