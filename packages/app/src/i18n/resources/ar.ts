@@ -1795,6 +1795,7 @@ export const ar: TranslationResources = {
     label: "صوت مباشر",
     menu: {
       hosts: "المضيف",
+      contextProfiles: "ملف السياق",
     },
     actions: {
       start: "بدء الصوت المباشر",
