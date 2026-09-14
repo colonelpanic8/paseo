@@ -559,12 +559,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         toolCallDetailLevel,
       ],
     );
-    const projectedPlugins = useMemo(
-      () => ({
-        tail: projectPluginTimelineItems(projectedToolCalls.tail, transformTimelineItem),
-        head: projectPluginTimelineItems(projectedToolCalls.head, transformTimelineItem),
-      }),
-      [projectedToolCalls.head, projectedToolCalls.tail, transformTimelineItem],
+    const projectedTail = useMemo(
+      () => projectPluginTimelineItems(projectedToolCalls.tail, transformTimelineItem),
+      [projectedToolCalls.tail, transformTimelineItem],
+    );
+    const projectedHead = useMemo(
+      () => projectPluginTimelineItems(projectedToolCalls.head, transformTimelineItem),
+      [projectedToolCalls.head, transformTimelineItem],
     );
     const {
       start: historyWindowStart,
@@ -573,7 +574,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       loadOlder,
     } = useStreamHistoryWindow({
       agentId,
-      items: projectedPlugins.tail,
+      items: projectedTail,
       loadRemoteOlder,
     });
     const isLoadingOlder = remoteIsLoadingOlder;
@@ -584,8 +585,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       return buildAgentStreamRenderModel({
         isTurnActive,
         activeTurnStartedAt: effectiveTurnPresentation.startedAt,
-        tail: projectedPlugins.tail,
-        head: projectedPlugins.head,
+        tail: projectedTail,
+        head: projectedHead,
         platform: isWeb ? "web" : "native",
         isMobileBreakpoint: isMobile,
         historyStart: historyWindowStart,
@@ -593,8 +594,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     }, [
       isMobile,
       isTurnActive,
-      projectedPlugins.head,
-      projectedPlugins.tail,
+      projectedHead,
+      projectedTail,
       effectiveTurnPresentation.startedAt,
       historyWindowStart,
     ]);
@@ -618,12 +619,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
-    const visibleHistoryItemIds = useMemo(
-      () =>
-        new Set(
-          [...baseRenderModel.history, ...baseRenderModel.segments.liveHead].map((item) => item.id),
-        ),
-      [baseRenderModel.history, baseRenderModel.segments.liveHead],
+    const mountedHistoryItemIds = useMemo(
+      () => new Set(baseRenderModel.history.map((item) => item.id)),
+      [baseRenderModel.history],
     );
     const chatOutline = useChatOutline({
       agentId,
@@ -634,7 +632,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       enabled: supportsChatOutline && chatOutlineEnabled,
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
-      visibleItemIds: visibleHistoryItemIds,
+      mountedHistoryItemIds,
       revealLoadedItem: revealLoadedHistory,
     });
 
