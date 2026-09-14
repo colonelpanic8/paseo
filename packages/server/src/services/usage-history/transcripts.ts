@@ -83,8 +83,10 @@ export function mightCarryUsage(line: string, provider: UsageProvider): boolean 
 }
 
 /**
- * Claude writes one record per assistant content block, repeating the parent message's complete
- * usage. Callers drop repeats by `dedupeKey` and keep the first.
+ * Claude writes one record per assistant content block, repeating the parent message's usage.
+ * Main-session transcripts repeat it verbatim; subagent transcripts (`agent-*.jsonl`) report a
+ * streaming-partial `output_tokens` on the early blocks and the real count on the last. Callers
+ * collapse repeats by `dedupeKey` with `dedupeWithinFile`, which keeps the largest output count.
  */
 export function parseClaudeLine(line: string): UsageRecord | null {
   const record = parseJsonObject(line);
