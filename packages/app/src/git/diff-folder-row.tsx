@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { View, Text, type LayoutChangeEvent, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { DiffStat } from "@/components/diff-stat";
@@ -70,9 +70,6 @@ export function DiffFolderRow({
   const handleSelect = useCallback(() => {
     onSelect(dirPath);
   }, [dirPath, onSelect]);
-  const [isHovered, setIsHovered] = useState(false);
-  const showNameHover = useCallback(() => setIsHovered(true), []);
-  const hideNameHover = useCallback(() => setIsHovered(false), []);
 
   const handlePress = useCallback(() => {
     const selection = isWeb ? window.getSelection() : null;
@@ -135,6 +132,37 @@ export function DiffFolderRow({
     [collapsed, isSelected],
   );
 
+  const renderRowContent = useCallback(
+    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
+      <>
+        <View style={leftStyle}>
+          <View style={styles.chevronSlot}>
+            <TreeChevron expanded={!collapsed} />
+          </View>
+          <Text
+            style={[
+              styles.folderName,
+              workspaceTreeRowStyles.name,
+              hovered && workspaceTreeRowStyles.nameHovered,
+            ]}
+            numberOfLines={1}
+            testID={testID ? `${testID}-name` : undefined}
+          >
+            {displayName}
+          </Text>
+        </View>
+        <View style={styles.right}>
+          <DiffStat
+            additions={additions}
+            deletions={deletions}
+            testID={testID ? `${testID}-stat` : undefined}
+          />
+        </View>
+      </>
+    ),
+    [additions, collapsed, deletions, displayName, leftStyle, testID],
+  );
+
   return (
     <View style={styles.container} onLayout={handleLayout} testID={testID}>
       <ContextMenu>
@@ -143,36 +171,12 @@ export function DiffFolderRow({
           onLongPress={handleSelect}
           onContextMenu={handleSelect}
           style={pressableStyle}
-          onHoverIn={showNameHover}
-          onHoverOut={hideNameHover}
           accessibilityRole="button"
           accessibilityState={accessibilityState}
           aria-selected={isSelected}
           testID={testID ? `${testID}-toggle` : undefined}
         >
-          <View style={leftStyle}>
-            <View style={styles.chevronSlot}>
-              <TreeChevron expanded={!collapsed} />
-            </View>
-            <Text
-              style={[
-                styles.folderName,
-                workspaceTreeRowStyles.name,
-                isHovered && workspaceTreeRowStyles.nameHovered,
-              ]}
-              numberOfLines={1}
-              testID={testID ? `${testID}-name` : undefined}
-            >
-              {displayName}
-            </Text>
-          </View>
-          <View style={styles.right}>
-            <DiffStat
-              additions={additions}
-              deletions={deletions}
-              testID={testID ? `${testID}-stat` : undefined}
-            />
-          </View>
+          {renderRowContent}
         </ContextMenuTrigger>
         <FileActionsContextMenuContent
           fileKind="directory"

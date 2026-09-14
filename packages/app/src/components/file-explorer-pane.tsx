@@ -254,9 +254,6 @@ function TreeRowItem({
   onDeleteEntry,
   testID,
 }: TreeRowItemProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const showNameHover = useCallback(() => setIsHovered(true), []);
-  const hideNameHover = useCallback(() => setIsHovered(false), []);
   const isDirectory = entry.kind === "directory";
   const dragSourceRef = useWorkspaceFileDragSource({
     enabled: !isDirectory,
@@ -285,6 +282,32 @@ function TreeRowItem({
       (Boolean(hovered) || pressed || isSelected) && workspaceTreeRowStyles.active,
     ],
     [depth, isSelected],
+  );
+
+  const renderRowContent = useCallback(
+    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
+      <View ref={dragSourceRef} style={styles.entryInfo}>
+        <View style={styles.entryIcon}>
+          {isDirectory ? (
+            <DirectoryChevronIcon loading={loading} expanded={isExpanded} />
+          ) : (
+            <MaterialFileIcon fileName={entry.name} size={WORKSPACE_TREE_ICON_SIZE} />
+          )}
+        </View>
+        <Text
+          style={[
+            styles.entryName,
+            workspaceTreeRowStyles.name,
+            hovered && workspaceTreeRowStyles.nameHovered,
+          ]}
+          numberOfLines={1}
+          testID={testID ? `${testID}-name` : undefined}
+        >
+          {entry.name}
+        </Text>
+      </View>
+    ),
+    [dragSourceRef, entry.name, isDirectory, isExpanded, loading, testID],
   );
 
   const handleCopy = useCallback(() => {
@@ -346,32 +369,11 @@ function TreeRowItem({
         onLongPress={handleSelect}
         onContextMenu={handleSelect}
         style={pressableStyle}
-        onHoverIn={showNameHover}
-        onHoverOut={hideNameHover}
         accessibilityState={accessibilityState}
         aria-selected={isSelected}
         testID={testID}
       >
-        <View ref={dragSourceRef} style={styles.entryInfo}>
-          <View style={styles.entryIcon}>
-            {isDirectory ? (
-              <DirectoryChevronIcon loading={loading} expanded={isExpanded} />
-            ) : (
-              <MaterialFileIcon fileName={entry.name} size={WORKSPACE_TREE_ICON_SIZE} />
-            )}
-          </View>
-          <Text
-            style={[
-              styles.entryName,
-              workspaceTreeRowStyles.name,
-              isHovered && workspaceTreeRowStyles.nameHovered,
-            ]}
-            numberOfLines={1}
-            testID={testID ? `${testID}-name` : undefined}
-          >
-            {entry.name}
-          </Text>
-        </View>
+        {renderRowContent}
       </ContextMenuTrigger>
       <FileActionsContextMenuContent
         fileKind={entry.kind}
