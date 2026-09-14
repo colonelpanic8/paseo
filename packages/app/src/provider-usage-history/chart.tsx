@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useState } from "react";
+import { memo, useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
 import Svg, { Line, Path } from "react-native-svg";
@@ -90,8 +90,11 @@ interface SeriesPath {
  * Layered — not stacked — smooth areas, one per provider. Stacking answers "what
  * did everything cost together", which the headline already says; layering
  * answers "which provider is this", which is the only question the chart is for.
+ *
+ * Memoized: the summary re-renders on every fetch flag flip and the paths are
+ * the expensive part.
  */
-export function ProviderUsageHistoryChart({
+export const ProviderUsageHistoryChart = memo(function ProviderUsageHistoryChart({
   days,
   daily,
   providers,
@@ -114,28 +117,10 @@ export function ProviderUsageHistoryChart({
   const scale = useMemo(() => niceScale(seriesPeak(columns), TICK_COUNT), [columns]);
   const stepX = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
 
-  const paths = useMemo<readonly SeriesPath[]>(() => {
-    if (plotWidth <= 0 || columns.length === 0) return [];
-    const step = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
-    const built = providers.map((provider, providerIndex) => {
-      const line = curvePath(
-        smoothCurve(
-          columns.map((column, dayIndex) => ({
-            x: dayIndex * step,
-            y: plotY(column.bands[providerIndex]?.value ?? 0, scale.max),
-          })),
-        ),
-      );
-      return {
-        provider,
-        line,
-        area: line === "" ? "" : `${line} L${plotWidth},${PLOT_HEIGHT} L0,${PLOT_HEIGHT} Z`,
-        total: columns.reduce((sum, column) => sum + (column.bands[providerIndex]?.value ?? 0), 0),
-      };
-    });
-    // Paint the heavier series first so the lighter one is not buried.
-    return built.sort((left, right) => right.total - left.total);
-  }, [columns, plotWidth, providers, scale.max]);
+  const paths = useMemo(
+    () => buildSeriesPaths({ columns, providers, plotWidth, max: scale.max }),
+    [columns, plotWidth, providers, scale.max],
+  );
 
   const format = metric === "cost" ? formatUsd : formatTokens;
   const formatTick = metric === "cost" ? formatUsdCompact : formatTokens;
@@ -222,6 +207,41 @@ export function ProviderUsageHistoryChart({
       </View>
     </View>
   );
+});
+
+interface SeriesPathsInput {
+  columns: readonly ProviderUsageHistoryChartColumn[];
+  providers: readonly string[];
+  plotWidth: number;
+  max: number;
+}
+
+function buildSeriesPaths({
+  columns,
+  providers,
+  plotWidth,
+  max,
+}: SeriesPathsInput): readonly SeriesPath[] {
+  if (plotWidth <= 0 || columns.length === 0) return [];
+  const step = columns.length < 2 ? 0 : plotWidth / (columns.length - 1);
+  const built = providers.map((provider, providerIndex) => {
+    const line = curvePath(
+      smoothCurve(
+        columns.map((column, dayIndex) => ({
+          x: dayIndex * step,
+          y: plotY(column.bands[providerIndex]?.value ?? 0, max),
+        })),
+      ),
+    );
+    return {
+      provider,
+      line,
+      area: line === "" ? "" : `${line} L${plotWidth},${PLOT_HEIGHT} L0,${PLOT_HEIGHT} Z`,
+      total: columns.reduce((sum, column) => sum + (column.bands[providerIndex]?.value ?? 0), 0),
+    };
+  });
+  // Paint the heavier series first so the lighter one is not buried.
+  return built.sort((left, right) => right.total - left.total);
 }
 
 interface ChartSvgProps {

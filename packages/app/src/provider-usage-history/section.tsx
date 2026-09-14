@@ -221,8 +221,14 @@ export function ProviderUsageHistorySection() {
     [t],
   );
 
-  const view = usageHistoryView({ hosts, isFetching });
-  const report = view.kind === "ready" ? mergeProviderUsageHistory(hosts) : null;
+  const view = useMemo(() => usageHistoryView({ hosts, isFetching }), [hosts, isFetching]);
+  // Derived once per answer, not once per render: a metric toggle or a fetch
+  // flag flip must not re-fold every bucket of every host.
+  const isReady = view.kind === "ready";
+  const report = useMemo(
+    () => (isReady ? mergeProviderUsageHistory(hosts) : null),
+    [hosts, isReady],
+  );
   // Totals and Breakdown are their own sections, so they only exist once there
   // is something to break down.
   const activeReport = report !== null && report.daily.length > 0 ? report : null;
