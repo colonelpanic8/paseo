@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  type ComponentProps,
-  type PropsWithChildren,
-  type ReactElement,
-  type Ref,
-} from "react";
+import { useCallback, type ComponentProps, type ReactElement, type Ref } from "react";
 import {
   View,
   type GestureResponderEvent,
@@ -108,19 +102,17 @@ export function ContextMenuTrigger({
   onContextMenu,
   triggerRef,
   ...props
-}: PropsWithChildren<
-  Omit<PressableProps, "style"> & {
-    highlightStyle?: StyleProp<ViewStyle>;
-    style?: TriggerStyleProp;
-    enabled?: boolean;
-    enabledOnMobile?: boolean;
-    enabledOnWeb?: boolean;
-    longPressDelayMs?: number;
-    onContextMenu?: (event: unknown) => void;
-    triggerRef?: Ref<View | null>;
-    contextOnly?: boolean;
-  }
->): ReactElement {
+}: Omit<PressableProps, "style"> & {
+  highlightStyle?: StyleProp<ViewStyle>;
+  style?: TriggerStyleProp;
+  enabled?: boolean;
+  enabledOnMobile?: boolean;
+  enabledOnWeb?: boolean;
+  longPressDelayMs?: number;
+  onContextMenu?: (event: unknown) => void;
+  triggerRef?: Ref<View | null>;
+  contextOnly?: boolean;
+}): ReactElement {
   const ctx = useMenuContext("ContextMenuTrigger");
 
   const shouldEnableOnThisPlatform = enabled && (isWeb ? enabledOnWeb : enabledOnMobile);
@@ -202,7 +194,7 @@ export function ContextMenuTrigger({
         onContextMenu={handleContextMenu}
         style={contextOnlyStyle}
       >
-        {children}
+        {typeof children === "function" ? children({ pressed: false }) : children}
       </View>
     );
   }
