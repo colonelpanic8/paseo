@@ -79,7 +79,7 @@ import {
   groupProfilesByProviderModel,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
-  resolveModelBrowserScrolling,
+  clampModelBrowserScrolling,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
 import {
@@ -1512,6 +1512,7 @@ function ModelRowList({
 
 function AllModelsList({
   items,
+  serverId,
   selectedProvider,
   selectedModel,
   highlightedKey,
@@ -1524,6 +1525,7 @@ function AllModelsList({
   scrolling,
 }: {
   items: ModelBrowserListItem[];
+  serverId: string | null;
   selectedProvider: string;
   selectedModel: string;
   highlightedKey: string | null;
@@ -1551,6 +1553,7 @@ function AllModelsList({
       return (
         <SelectableModelRow
           row={item.row}
+          serverId={serverId}
           isSelected={item.row.provider === selectedProvider && item.row.modelId === selectedModel}
           isHighlighted={item.row.favoriteKey === highlightedKey}
           showProviderLabel={item.showProvider}
@@ -1596,7 +1599,7 @@ function AllModelsList({
 
   if (isCompact && isNative) {
     return (
-      <BottomSheetFlatList
+      <SheetFlatList
         data={items}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
@@ -1819,6 +1822,7 @@ function ModelBrowserContent({
     return (
       <AllModelsList
         items={items}
+        serverId={serverId}
         selectedProvider={selectedProvider}
         selectedModel={selectedModel}
         highlightedKey={highlightedKey}
@@ -1982,7 +1986,7 @@ export function ModelBrowser({
       onShowAllModels={state.showAllModels}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
-      scrolling={resolveModelBrowserScrolling(scrolling, insideBottomSheet)}
+      scrolling={clampModelBrowserScrolling(scrolling, insideBottomSheet)}
       searchAllOnFocus={searchAllOnFocus}
       rootBrowseContent={rootBrowseContent}
       showProfilesSection={showProfilesSection}
