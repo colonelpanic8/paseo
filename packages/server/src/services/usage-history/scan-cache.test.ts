@@ -100,7 +100,7 @@ describe("scan cache round trip", () => {
 
   it("rejects previous versions and corrupt or foreign documents", () => {
     const encoded = encodeScanCache(cacheWith([["/a.jsonl", 100, [record()]]]));
-    expect(decodeScanCache({ ...encoded, version: 2 }).size).toBe(0);
+    expect(decodeScanCache({ ...encoded, version: 3 }).size).toBe(0);
     expect(decodeScanCache(null).size).toBe(0);
     expect(decodeScanCache("nonsense").size).toBe(0);
   });
@@ -217,14 +217,34 @@ describe("pruneScanCache", () => {
 });
 
 describe("dedupeWithinFile", () => {
-  it("keeps the first record per dedupe key", () => {
+  it("keeps one record per dedupe key, the one reporting the most output", () => {
     const kept = dedupeWithinFile([
       record({ totals: { ...record().totals, outputTokens: 1 } }),
-      record({ totals: { ...record().totals, outputTokens: 999 } }),
+      record({ totals: { ...record().totals, outputTokens: 1 } }),
+      record({ totals: { ...record().totals, outputTokens: 336 } }),
       record({ dedupeKey: "msg_2:" }),
     ]);
     expect(kept).toHaveLength(2);
-    expect(kept[0]?.totals.outputTokens).toBe(1);
+    expect(kept[0]?.totals.outputTokens).toBe(336);
+    expect(kept[1]?.dedupeKey).toBe("msg_2:");
+  });
+
+  it("keeps the first of identical repeats in place", () => {
+    const first = record({ totals: { ...record().totals, outputTokens: 50 } });
+    const kept = dedupeWithinFile([
+      first,
+      record({ totals: { ...record().totals, outputTokens: 50 } }),
+      record({ totals: { ...record().totals, outputTokens: 50 } }),
+    ]);
+    expect(kept).toEqual([first]);
+  });
+
+  it("drops a key an earlier pass already kept, even when it reports more output", () => {
+    const seen = new Set<string>();
+    dedupeWithinFile([record({ totals: { ...record().totals, outputTokens: 1 } })], seen);
+    expect(
+      dedupeWithinFile([record({ totals: { ...record().totals, outputTokens: 999 } })], seen),
+    ).toHaveLength(0);
   });
 
   it("keeps every record without a dedupe key", () => {
