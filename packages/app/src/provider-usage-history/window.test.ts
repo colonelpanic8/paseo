@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   enumerateDays,
+  msUntilNextLocalDay,
   formatCount,
   formatDayShort,
   formatPercent,
@@ -110,4 +111,11 @@ it("preserves fractional cost ticks instead of repeating rounded labels", () => 
     "$2",
   ]);
   expect(formatUsdCompact(0.00001)).toBe("$0.00001");
+});
+
+describe("msUntilNextLocalDay", () => {
+  it("measures to the next local midnight", () => {
+    expect(msUntilNextLocalDay(new Date(2026, 8, 14, 23, 59, 0, 0))).toBe(60_000);
+    expect(msUntilNextLocalDay(new Date(2026, 8, 14, 0, 0, 0, 0))).toBe(86_400_000);
+  });
 });
