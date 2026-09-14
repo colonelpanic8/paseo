@@ -2240,6 +2240,7 @@ export const ru: TranslationResources = {
         jumpToTab: "Перейти на вкладку",
         previousWorkspace: "Предыдущее рабочее пространство",
         nextWorkspace: "Следующее рабочее пространство",
+        nextReadyWaitingWorkspace: "Следующее готовое или ожидающее рабочее пространство",
         previousTab: "Предыдущая вкладка",
         nextTab: "Следующая вкладка",
         splitPaneRight: "Разделить панель справа",
