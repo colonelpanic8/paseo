@@ -17,6 +17,7 @@ import {
   type LiveVoiceDaemonClient,
   type LiveVoiceRuntime,
   type LiveVoiceSnapshot,
+  type LiveVoiceStartOptions,
 } from "@/live-voice/live-voice-runtime";
 import { registerLiveVoiceRouteAuthority } from "@/live-voice/live-voice-route-authority";
 import { attachLiveVoiceCues } from "@/live-voice/live-voice-cues";
@@ -53,7 +54,7 @@ const ambientWatchDeps: LiveVoiceAmbientWatchDeps = {
 };
 
 interface LiveVoiceContextValue extends LiveVoiceSnapshot {
-  start: (serverId: string) => Promise<void>;
+  start: (serverId: string, options?: LiveVoiceStartOptions) => Promise<void>;
   stop: () => Promise<void>;
   setMuted: (muted: boolean) => void;
   toggleMute: () => void;

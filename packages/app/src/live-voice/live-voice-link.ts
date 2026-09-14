@@ -5,6 +5,7 @@ import type {
 
 export interface LiveVoiceLink {
   host: string | null;
+  assistant: string | null;
 }
 
 export type LiveVoiceLinkHostDecision =
@@ -14,7 +15,9 @@ export type LiveVoiceLinkHostDecision =
 
 export interface ResolveLiveVoiceLinkHostInput {
   link: LiveVoiceLink;
+  defaultHost?: string | null;
   isHostBootstrapReady: boolean;
+  isAppVisible: boolean;
   availability: LiveVoiceAvailability;
   hosts: LiveVoiceHostAvailability[];
 }
@@ -36,7 +39,8 @@ export function parseLiveVoiceLink(url: string): LiveVoiceLink | null {
   }
 
   const host = parsed.searchParams.get("host")?.trim() || null;
-  return { host };
+  const assistant = parsed.searchParams.get("assistant")?.trim() || null;
+  return { host, assistant };
 }
 
 function isHostEligibilityPending(host: LiveVoiceHostAvailability): boolean {
@@ -49,22 +53,26 @@ function isHostEligibilityPending(host: LiveVoiceHostAvailability): boolean {
 export function resolveLiveVoiceLinkHost(
   input: ResolveLiveVoiceLinkHostInput,
 ): LiveVoiceLinkHostDecision {
-  const requestedHost = input.link.host
-    ? (input.hosts.find((host) => host.serverId === input.link.host) ?? null)
+  if (!input.isAppVisible) {
+    return { kind: "wait" };
+  }
+  const requestedHostId = input.link.host ?? input.defaultHost ?? null;
+  const requestedHost = requestedHostId
+    ? (input.hosts.find((host) => host.serverId === requestedHostId) ?? null)
     : null;
   if (requestedHost && isHostEligibilityPending(requestedHost)) {
     return { kind: "wait" };
   }
 
   if (input.availability.kind === "available") {
-    const requestedAvailableHost = input.link.host
-      ? (input.availability.hosts.find((host) => host.serverId === input.link.host) ?? null)
+    const requestedAvailableHost = requestedHostId
+      ? (input.availability.hosts.find((host) => host.serverId === requestedHostId) ?? null)
       : null;
     if (requestedAvailableHost) {
       return { kind: "start", serverId: requestedAvailableHost.serverId };
     }
 
-    const isRequestedHostStillUnknown = input.link.host !== null && requestedHost === null;
+    const isRequestedHostStillUnknown = requestedHostId !== null && requestedHost === null;
     if (isRequestedHostStillUnknown && !input.isHostBootstrapReady) {
       return { kind: "wait" };
     }

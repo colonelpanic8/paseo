@@ -145,14 +145,22 @@ export interface LiveVoiceRuntimeDeps {
    * them anyway, so they are not sent.
    */
   assistant?: {
-    read(serverId: string): string | undefined;
+    read(serverId: string, override?: LiveVoiceAssistantOverride): string | undefined;
   };
+}
+
+/** `undefined` defers to the launcher's selection; `null` forces a legacy call. */
+export type LiveVoiceAssistantOverride = string | null | undefined;
+
+export interface LiveVoiceStartOptions {
+  assistantId?: LiveVoiceAssistantOverride;
+  contextProfileId?: string;
 }
 
 export interface LiveVoiceRuntime {
   subscribe(listener: () => void): () => void;
   getSnapshot(): LiveVoiceSnapshot;
-  start(serverId: string, options?: { contextProfileId?: string }): Promise<void>;
+  start(serverId: string, options?: LiveVoiceStartOptions): Promise<void>;
   /** Pending platform startup cannot be cancelled; its lease survives until it settles. */
   stop(): Promise<void>;
   /** Drive mute to an absolute value. No-op unless a call is active. */
@@ -589,7 +597,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
       if (!deps.isSessionSupported) failStart(serverId, { code: "unsupported", message: null });
       let assistantId: string | null;
       try {
-        assistantId = deps.assistant?.read(serverId) ?? null;
+        assistantId = deps.assistant?.read(serverId, options?.assistantId) ?? null;
       } catch (error) {
         failStart(serverId, error instanceof LiveVoiceStartError ? error.info : toErrorInfo(error));
       }
