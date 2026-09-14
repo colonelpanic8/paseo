@@ -34,6 +34,10 @@ const MAX_PENDING_SCANS = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
 const RATES_REFRESH_FLOOR_MS = 60 * 1000;
+/** A failed fetch with nothing to fall back on must not cost every scan a 10 second timeout. */
+const RATES_RETRY_BACKOFF_MS = 5 * 60 * 1000;
+/** Any active session dirties the cache, so inline writes would serialize it on nearly every scan. */
+const SCAN_CACHE_PERSIST_DELAY_MS = 5 * 1000;
 
 /** mtime filtering needs to admit sessions written just before the first local midnight. */
 const MTIME_SLACK_MS = 36 * 60 * 60 * 1000;
@@ -62,6 +66,7 @@ export interface UsageHistoryServiceOptions {
   now?: () => number;
   /** Reported on every source so a multi-host client can tell directories apart. */
   hostId?: string;
+  scanCachePersistDelayMs?: number;
 }
 
 interface RateSnapshot {
@@ -138,8 +143,11 @@ export class UsageHistoryService {
   private readonly fileCache: ScanCache = new Map();
   private scanCacheLoad: Promise<void> | null = null;
   private cacheDirty = false;
+  private persistTimer: NodeJS.Timeout | null = null;
+  private readonly persistDelayMs: number;
   private rates: RateTable = new Map();
   private ratesFetchedAtMs: number | null = null;
+  private ratesAttemptedAtMs: number | null = null;
   private ratesStatus: ProviderUsageHistoryPricing["status"] = "unavailable";
   private ratesLock: Promise<void> = Promise.resolve();
   private readonly inflightScans = new Map<string, Promise<UsageHistorySummary>>();
@@ -160,6 +168,7 @@ export class UsageHistoryService {
     this.scanCachePath = path.join(persistenceDir, "scan-cache.json");
     this.hostId = options.hostId ?? hostname();
     this.ratesCachePath = path.join(persistenceDir, "model-rates.json");
+    this.persistDelayMs = options.scanCachePersistDelayMs ?? SCAN_CACHE_PERSIST_DELAY_MS;
   }
 
   readSummary(input: UsageHistoryReadInput): Promise<UsageHistorySummary> {
@@ -185,6 +194,15 @@ export class UsageHistoryService {
   async refreshRates(): Promise<ProviderUsageHistoryPricing> {
     await this.ensureRates(true);
     return this.pricing();
+  }
+
+  /** Writes any pending cache changes now instead of after the debounce; for shutdown. */
+  async flushScanCache(): Promise<void> {
+    if (this.persistTimer !== null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    await this.persistScanCache();
   }
 
   private async scanSummary(input: UsageHistoryReadInput): Promise<UsageHistorySummary> {
@@ -255,8 +273,7 @@ export class UsageHistoryService {
       windowStartMs,
       retentionCutoffMs: startedAtMs - CACHE_RETENTION_MS,
     });
-    if (removed > 0) this.cacheDirty = true;
-    await this.persistScanCache();
+    if (removed > 0) this.markScanCacheDirty();
 
     const aggregated = aggregator.finish();
     const finishedAtMs = this.now();
@@ -374,7 +391,7 @@ export class UsageHistoryService {
       position: parsed.position,
     };
     this.fileCache.set(filePath, entry);
-    this.cacheDirty = true;
+    this.markScanCacheDirty();
     return combineRecords(entry);
   }
 
@@ -393,6 +410,16 @@ export class UsageHistoryService {
     } catch {
       // Missing or corrupt state only makes the first scan cold.
     }
+  }
+
+  private markScanCacheDirty(): void {
+    this.cacheDirty = true;
+    if (this.persistTimer !== null) return;
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      void this.persistScanCache();
+    }, this.persistDelayMs);
+    this.persistTimer.unref();
   }
 
   private async persistScanCache(): Promise<void> {
@@ -429,6 +456,10 @@ export class UsageHistoryService {
         }
       }
     }
+
+    const retryAfterMs = force ? RATES_REFRESH_FLOOR_MS : RATES_RETRY_BACKOFF_MS;
+    if (this.ratesAttemptedAtMs !== null && nowMs - this.ratesAttemptedAtMs < retryAfterMs) return;
+    this.ratesAttemptedAtMs = nowMs;
 
     let document: unknown;
     try {
