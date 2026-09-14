@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import {
+  Keyboard,
+  Platform,
+  ScrollView,
+  StyleSheet as RNStyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { KeyboardTranslateView } from "@/components/keyboard-translate-view";
@@ -28,6 +35,7 @@ import { requestWorkspaceDraftAgent } from "@/composer/draft/create-agent-reques
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 import {
+  completeWorkspaceDraftCreation,
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
 } from "@/composer/draft/workspace-tab-core";
@@ -501,11 +509,17 @@ export function WorkspaceDraftAgentTab({
         hostDisconnectedMessage: t("workspace.terminal.hostDisconnected"),
         selectModelMessage: t("workspaceSetup.errors.selectModel"),
       }),
-    onCreateSuccess: ({ result }) => {
-      clearDraftInput("sent");
-      clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
-      useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
-      onCreated(result);
+    onCreateSuccess: async ({ result }) => {
+      await completeWorkspaceDraftCreation({
+        platform: Platform.OS,
+        result,
+        clearDraftState: () => {
+          clearDraftInput("sent");
+          clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
+          useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
+        },
+        onCreated,
+      });
     },
   });
   const turnPresentation = useMemo(
