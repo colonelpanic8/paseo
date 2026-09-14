@@ -6,16 +6,51 @@ import {
   normalizeCustomHostColor,
   normalizeStoredHostAppearance,
   resolveHostBadgeDisplay,
+  resolveHostColor,
   selectHostBadges,
 } from "@/hosts/appearance";
+import { deriveIdentityColorName } from "@/styles/identity-colors";
 
 function host(
   serverId: string,
   label: string,
   appearance = defaultHostAppearance(),
+  declaredColor: HostAppearanceSource["declaredColor"] = null,
 ): HostAppearanceSource {
-  return { serverId, label, appearance };
+  return { serverId, label, appearance, declaredColor };
 }
+
+describe("resolveHostColor", () => {
+  it("derives a color from the server id when nobody chose one", () => {
+    expect(
+      resolveHostColor({
+        serverId: "alpha",
+        appearance: defaultHostAppearance(),
+        declaredColor: null,
+      }),
+    ).toBe(deriveIdentityColorName("alpha"));
+  });
+
+  it("prefers the color the host declares over the derived one", () => {
+    expect(
+      resolveHostColor({
+        serverId: "alpha",
+        appearance: defaultHostAppearance(),
+        declaredColor: "red",
+      }),
+    ).toBe("red");
+  });
+
+  it("lets a device override the host's declared color", () => {
+    expect(
+      resolveHostColor({
+        serverId: "alpha",
+        appearance: { color: "teal", badgeDisplay: null },
+        declaredColor: "red",
+      }),
+    ).toBe("teal");
+  });
+});
 
 describe("normalizeStoredHostAppearance", () => {
   it("defaults when the stored registry predates the field or holds junk", () => {
@@ -149,7 +184,7 @@ describe("selectHostBadges", () => {
     expect(badges.get("beta")).toEqual({
       serverId: "beta",
       label: "Beta",
-      color: "none",
+      color: deriveIdentityColorName("beta"),
       showLabel: true,
     });
   });
@@ -166,6 +201,15 @@ describe("selectHostBadges", () => {
       color: "teal",
       showLabel: false,
     });
+  });
+
+  it("draws the host's declared color when the device has not chosen", () => {
+    const badges = selectHostBadges({
+      hosts: [host("alpha", "Alpha", defaultHostAppearance(), "amber")],
+      localServerId: null,
+      enabled: true,
+    });
+    expect(badges.get("alpha")?.color).toBe("amber");
   });
 
   it("falls back to the server id when the label is blank", () => {
