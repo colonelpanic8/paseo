@@ -1,5 +1,6 @@
 import { SessionDelivery } from "./session/owned-subscriptions/index.js";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import path from "node:path";
 import type { Server as HTTPServer } from "http";
 import type pino from "pino";
 import type { AgentManager } from "./agent/agent-manager.js";
@@ -243,6 +244,7 @@ function createServer(options?: {
   speechReadiness?: SpeechReadinessSnapshot | null;
   logger?: ReturnType<typeof createLogger>;
   startPaused?: boolean;
+  worktreesRoot?: string;
 }) {
   const speechReadiness = options?.speechReadiness ?? null;
   const daemonConfigStore = {
@@ -319,6 +321,9 @@ function createServer(options?: {
     undefined,
     undefined,
     createProviderSnapshotManagerStub().manager,
+    options?.worktreesRoot
+      ? { listen: null, worktreesRoot: options.worktreesRoot, getRelayConfig: () => null }
+      : undefined,
   );
 }
 
@@ -1052,6 +1057,36 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
     expect(serverInfo.permissions).toEqual(DAEMON_PERMISSIONS);
     expect(serverInfo.features?.agentPurposeSummary).toBe(true);
+    await server.close();
+  });
+
+  test("reports the default worktrees root in initial server_info", async () => {
+    const server = createServer();
+    const socket = new MockSocket();
+
+    const serverInfo = await attachRelayAndHello({
+      server,
+      socket,
+      clientId: "cid-default-worktrees-root",
+    });
+
+    // Resolved the way the daemon resolves it, so the expectation holds on Windows
+    // too, where `/tmp/paseo-test` resolves onto the current drive.
+    expect(serverInfo.worktreesRoot).toBe(path.join(path.resolve("/tmp/paseo-test"), "worktrees"));
+    await server.close();
+  });
+
+  test("reports a configured worktrees root in initial server_info", async () => {
+    const server = createServer({ worktreesRoot: "/mnt/scratch/paseo-trees" });
+    const socket = new MockSocket();
+
+    const serverInfo = await attachRelayAndHello({
+      server,
+      socket,
+      clientId: "cid-custom-worktrees-root",
+    });
+
+    expect(serverInfo.worktreesRoot).toBe(path.resolve("/mnt/scratch/paseo-trees"));
     await server.close();
   });
 
