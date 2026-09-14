@@ -10,6 +10,7 @@ import {
   formatUsd,
   formatUsdCompact,
   makeWindow,
+  msUntilNextLocalDay,
 } from "./window";
 
 // The window is expressed in the viewer's zone, so pin one that observes DST.
@@ -121,5 +122,17 @@ describe("period labels", () => {
     expect(formatPeriodShort("2026-09-01", "month")).toBe("Sep");
     // A week's axis label is its first day, so the readout spells out the rest.
     expect(formatPeriodLong("2026-09-07", "week")).toBe("Sep 7 – Sep 13");
+  });
+});
+
+describe("msUntilNextLocalDay", () => {
+  it("measures to the next local midnight", () => {
+    expect(msUntilNextLocalDay(new Date(2026, 8, 14, 23, 59, 0, 0))).toBe(60_000);
+    expect(msUntilNextLocalDay(new Date(2026, 8, 14, 0, 0, 0, 0))).toBe(86_400_000);
+  });
+
+  it("follows a local day that daylight saving time shortens", () => {
+    // New York springs forward on 2026-03-08, a 23-hour day.
+    expect(msUntilNextLocalDay(new Date(2026, 2, 8, 0, 0, 0, 0))).toBe(23 * 3_600_000);
   });
 });
