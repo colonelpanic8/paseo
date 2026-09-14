@@ -31,14 +31,16 @@ type FetchQueryInput<TQueryFnData, TError, TData, TQueryKey extends QueryKey> = 
 > & {
   dataShape: "list" | "value";
   queryFn: QueryFnOption<TQueryFnData, TError, TData, TQueryKey>;
-  staleTimeMs: number;
   /**
    * Fetch queries refetch on every mount by default so a screen never shows a stale
    * answer. `true` refetches only once `staleTimeMs` has elapsed, for reads that are
    * expensive to answer and change slowly.
    */
   refetchOnMount?: true | "always";
-};
+} & (
+    | { staleTimeMs: number; immutableWhen?: never }
+    | { staleTimeMs?: never; immutableWhen: (data: TQueryFnData) => boolean }
+  );
 
 export function useReplicaQuery<
   TQueryFnData,
@@ -95,7 +97,7 @@ function replicaQueryOptions<
   };
 }
 
-function fetchQueryOptions<
+export function fetchQueryOptions<
   TQueryFnData,
   TError = Error,
   TData = TQueryFnData,
@@ -103,11 +105,18 @@ function fetchQueryOptions<
 >(
   input: FetchQueryInput<TQueryFnData, TError, TData, TQueryKey>,
 ): UseQueryOptions<TQueryFnData, TError, TData, TQueryKey> {
-  if (!Number.isFinite(input.staleTimeMs)) {
+  if (!input.immutableWhen && !Number.isFinite(input.staleTimeMs)) {
     throw new Error("Fetch queries must declare a finite staleTimeMs.");
   }
 
-  const { dataShape, meta, staleTimeMs, refetchOnMount = "always", ...options } = input;
+  const {
+    dataShape,
+    meta,
+    staleTimeMs,
+    immutableWhen,
+    refetchOnMount = "always",
+    ...options
+  } = input;
   return {
     ...options,
     ...(dataShape === "list" ? { placeholderData: keepPreviousData } : {}),
@@ -118,7 +127,10 @@ function fetchQueryOptions<
         dataShape,
       },
     },
-    refetchOnMount,
-    staleTime: staleTimeMs,
+    refetchOnMount: immutableWhen ? true : refetchOnMount,
+    staleTime: immutableWhen
+      ? (query) =>
+          query.state.data !== undefined && immutableWhen(query.state.data) ? Infinity : 0
+      : staleTimeMs,
   };
 }

@@ -56,6 +56,7 @@ import {
   LoopStopResponseSchema,
 } from "./loop/rpc-schemas.js";
 import {
+  BROWSER_AUTOMATION_COMMAND_NAMES,
   BrowserAutomationExecuteRequestSchema,
   BrowserAutomationExecuteResponseSchema,
 } from "./browser-automation/rpc-schemas.js";
@@ -1036,7 +1037,7 @@ const WorkspaceLabelSyncCursorSchema = z.object({
 export const WorkspaceLabelListRequestSchema = z.object({
   type: z.literal("workspace.label.list.request"),
   requestId: z.string(),
-  subscribe: z.object({ subscriptionId: z.string() }),
+  subscribe: z.object({ subscriptionId: z.string().optional() }).optional(),
   sync: WorkspaceLabelSyncCursorSchema.optional(),
 });
 export const WorkspaceLabelAssignmentSetRequestSchema = z.object({
@@ -2134,7 +2135,14 @@ export const CheckoutStatusRequestSchema = z.object({
 
 export const SubscribeCheckoutDiffRequestSchema = z.object({
   type: z.literal("subscribe_checkout_diff_request"),
-  subscriptionId: z.string(),
+  subscriptionId: z.string().optional(),
+  cwd: z.string(),
+  compare: CheckoutDiffCompareSchema,
+  requestId: z.string(),
+});
+
+export const CheckoutDiffGetRequestSchema = z.object({
+  type: z.literal("checkout.diff.get.request"),
   cwd: z.string(),
   compare: CheckoutDiffCompareSchema,
   requestId: z.string(),
@@ -2611,6 +2619,12 @@ export const WorkspaceClearAttentionRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspaceMarkUnreadRequestSchema = z.object({
+  type: z.literal("workspace.mark_unread.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+
 // Highlighted diff token schema
 // Note: style can be a compound class name (e.g., "heading meta") from the syntax highlighter
 const HighlightTokenSchema = z.object({
@@ -2704,7 +2718,7 @@ export const FileSubscribeRequestSchema = z.object({
   type: z.literal("fs.file.subscribe.request"),
   cwd: z.string(),
   path: z.string(),
-  subscriptionId: z.string(),
+  subscriptionId: z.string().optional(),
   requestId: z.string(),
 });
 
@@ -2859,6 +2873,7 @@ export const ListTerminalsRequestSchema = z.object({
 
 export const SubscribeTerminalsRequestSchema = z.object({
   type: z.literal("subscribe_terminals_request"),
+  requestId: z.string().optional(),
   cwd: z.string(),
   workspaceId: z.string().optional(),
 });
@@ -3058,7 +3073,63 @@ export const HubExecutionControlRequestSchema = z.object({
 
 export type HubExecutionControlRequest = z.infer<typeof HubExecutionControlRequestSchema>;
 
+// These connection event streams have no directory bootstrap or timeline membership.
+export const SessionEventSubscriptionSchema = z.enum([
+  "project.update",
+  "providers_snapshot_update",
+  "agent_attention_required",
+  "agent_permission_request",
+  "agent_permission_resolved",
+  "checkout_status_update",
+  "script_status_update",
+  "workspace_setup_progress",
+  "agent.provider_subagents.update",
+  "terminal_attention_required",
+  "status.server_info",
+  "status.daemon_config_changed",
+  "status.plugin_catalog_changed",
+  "status.plugin_settings_changed",
+  "activity_log",
+  "hub.execution.agent.update",
+  "hub.execution.agent.stream",
+]);
+export type SessionEventSubscription = z.infer<typeof SessionEventSubscriptionSchema>;
+export const SessionEventsSetSubscriptionRequestSchema = z.object({
+  type: z.literal("session.events.set_subscription.request"),
+  requestId: z.string(),
+  events: z.array(SessionEventSubscriptionSchema),
+  notifications: z.boolean().optional(),
+});
+export const SessionEventsSetSubscriptionResponseSchema = z.object({
+  type: z.literal("session.events.set_subscription.response"),
+  payload: z.object({ requestId: z.string(), subscriptionId: z.string().optional() }),
+});
+
+export const BrowserHostRegisterRequestSchema = z.object({
+  type: z.literal("browser.host.register.request"),
+  requestId: z.string(),
+  hostKind: z.string().min(1),
+  supportedCommands: z.array(z.enum(BROWSER_AUTOMATION_COMMAND_NAMES)).min(1),
+});
+export const BrowserHostRegisterResponseSchema = z.object({
+  type: z.literal("browser.host.register.response"),
+  payload: z.object({ requestId: z.string(), subscriptionId: z.string() }),
+});
+
+export const SubscriptionReleaseRequestSchema = z.object({
+  type: z.literal("subscription.release.request"),
+  requestId: z.string(),
+  subscriptionId: z.string(),
+});
+export const SubscriptionReleaseResponseSchema = z.object({
+  type: z.literal("subscription.release.response"),
+  payload: z.object({ requestId: z.string(), subscriptionId: z.string() }),
+});
+
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+  BrowserHostRegisterRequestSchema,
+  SubscriptionReleaseRequestSchema,
+  SessionEventsSetSubscriptionRequestSchema,
   HubExecutionAgentCreateRequestSchema,
   HubExecutionAgentValidateRequestSchema,
   HubExecutionControlRequestSchema,
@@ -3158,6 +3229,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentRewindRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
   CheckoutStatusRequestSchema,
+  CheckoutDiffGetRequestSchema,
   SubscribeCheckoutDiffRequestSchema,
   UnsubscribeCheckoutDiffRequestSchema,
   CheckoutCommitRequestSchema,
@@ -3202,6 +3274,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ArchiveWorkspaceRequestSchema,
   WorkspaceCreateRequestSchema,
   WorkspaceClearAttentionRequestSchema,
+  WorkspaceMarkUnreadRequestSchema,
   FileExplorerRequestSchema,
   FileSubscribeRequestSchema,
   FileUnsubscribeRequestSchema,
@@ -3264,6 +3337,7 @@ export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
 // ============================================================================
 
 export const ActivityLogPayloadSchema = z.object({
+  subscriptionId: z.string().optional(),
   id: z.string(),
   timestamp: z.coerce.date(),
   type: z.enum(["transcript", "assistant", "tool_call", "tool_result", "error", "system"]),
@@ -3530,6 +3604,8 @@ export const ServerInfoStatusPayloadSchema = z
         providerSubagentNesting: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: z.boolean().optional(),
+        // COMPAT(workspaceMarkUnread): added in v0.5.0, remove after 2027-08-20.
+        workspaceMarkUnread: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -3557,6 +3633,8 @@ export const ServerInfoStatusPayloadSchema = z
         forgeProviders: z.boolean().optional(),
         // COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
         selectiveAgentTimeline: z.boolean().optional(),
+        explicitEventSubscriptions: z.boolean().optional(),
+        ownedSubscriptions: z.boolean().optional(),
         // COMPAT(canonicalSubmittedPrompts): added in v0.2.6, remove gate after 2027-01-30.
         canonicalSubmittedPrompts: z.boolean().optional(),
         // COMPAT(agentTurnIdentity): accept peers that observed pre-release v0.2.6 through 2027-01-31.
@@ -3925,6 +4003,7 @@ export const AgentUpdateMessageSchema = z.object({
   type: z.literal("agent_update"),
   payload: z.discriminatedUnion("kind", [
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("upsert"),
       agent: AgentSnapshotPayloadSchema,
       project: ProjectPlacementPayloadSchema.nullable().optional(),
@@ -3932,6 +4011,7 @@ export const AgentUpdateMessageSchema = z.object({
       seq: z.number().int().positive().optional(),
     }),
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("remove"),
       agentId: z.string(),
       generation: z.string().optional(),
@@ -3943,6 +4023,7 @@ export const AgentUpdateMessageSchema = z.object({
 export const AgentStreamMessageSchema = z.object({
   type: z.literal("agent_stream"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     agentId: z.string(),
     event: AgentStreamEventPayloadSchema,
     timestamp: z.string(),
@@ -4089,12 +4170,14 @@ export const WorkspaceUpdateMessageSchema = z.object({
   type: z.literal("workspace_update"),
   payload: z.discriminatedUnion("kind", [
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("upsert"),
       workspace: WorkspaceDescriptorPayloadSchema,
       generation: z.string().optional(),
       seq: z.number().int().positive().optional(),
     }),
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("remove"),
       id: z.string(),
       // COMPAT(workspaceProjects): added in v0.1.97, drop the optional gate when floor >= v0.1.97.
@@ -4123,6 +4206,7 @@ export const WorkspaceLabelListResponseSchema = z.object({
   type: z.literal("workspace.label.list.response"),
   payload: z.object({
     requestId: z.string(),
+    subscriptionId: z.string().optional(),
     labels: z.array(WorkspaceLabelDefinitionSchema),
     sync: WorkspaceLabelSyncMetadataSchema,
   }),
@@ -4131,6 +4215,7 @@ export const WorkspaceLabelUpdateSchema = z.object({
   type: z.literal("workspace.label.update"),
   payload: z.discriminatedUnion("kind", [
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("upsert"),
       label: WorkspaceLabelDefinitionSchema,
       previousName: z.string().optional(),
@@ -4138,6 +4223,7 @@ export const WorkspaceLabelUpdateSchema = z.object({
       seq: z.number().int().positive(),
     }),
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("remove"),
       name: z.string(),
       generation: z.string(),
@@ -4180,12 +4266,14 @@ export const ProjectUpdateMessageSchema = z.object({
   type: z.literal("project.update"),
   payload: z.discriminatedUnion("kind", [
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("upsert"),
       project: WorkspaceProjectDescriptorPayloadSchema,
       generation: z.string().optional(),
       seq: z.number().int().positive().optional(),
     }),
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("remove"),
       projectId: z.string(),
       generation: z.string().optional(),
@@ -4206,6 +4294,7 @@ export const ProjectListResponseMessageSchema = z.object({
 export const ScriptStatusUpdateMessageSchema = z.object({
   type: z.literal("script_status_update"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     workspaceId: z.string(),
     scripts: z.array(WorkspaceScriptPayloadSchema),
   }),
@@ -4214,6 +4303,7 @@ export const ScriptStatusUpdateMessageSchema = z.object({
 export const WorkspaceSetupProgressMessageSchema = z.object({
   type: z.literal("workspace_setup_progress"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     workspaceId: z.string(),
     status: z.enum(["running", "completed", "failed", "blocked"]),
     detail: WorktreeSetupDetailPayloadSchema,
@@ -4475,6 +4565,7 @@ export const FetchAgentTimelineResponseMessageSchema = z.object({
 export const AgentTimelineReplacementMessageSchema = z.object({
   type: z.literal("agent.timeline.replacement"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     agentId: z.string(),
     epoch: z.string(),
   }),
@@ -4563,10 +4654,12 @@ export const ProviderSubagentUpdateMessageSchema = z.object({
   type: z.literal("agent.provider_subagents.update"),
   payload: z.discriminatedUnion("kind", [
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("upsert"),
       subagent: ProviderSubagentDescriptorPayloadSchema,
     }),
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("timeline"),
       parentAgentId: z.string(),
       subagentId: z.string(),
@@ -4577,6 +4670,7 @@ export const ProviderSubagentUpdateMessageSchema = z.object({
       epoch: z.string(),
     }),
     z.object({
+      subscriptionId: z.string().optional(),
       kind: z.literal("remove"),
       parentAgentId: z.string(),
       subagentId: z.string(),
@@ -4587,6 +4681,7 @@ export const ProviderSubagentUpdateMessageSchema = z.object({
 export const SetAgentTimelineSubscriptionResponseMessageSchema = z.object({
   type: z.literal("agent.timeline.set_subscription.response"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     agentIds: z.array(z.string()),
     requestId: z.string(),
   }),
@@ -4595,6 +4690,7 @@ export const SetAgentTimelineSubscriptionResponseMessageSchema = z.object({
 export const AgentAttentionRequiredMessageSchema = z.object({
   type: z.literal("agent_attention_required"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     agentId: z.string(),
     reason: z.enum(["finished", "error", "permission"]),
     timestamp: z.string(),
@@ -4672,6 +4768,17 @@ export const WorkspaceClearAttentionResponseSchema = z.object({
         error: z.string().nullable(),
       }),
     ),
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const WorkspaceMarkUnreadResponseSchema = z.object({
+  type: z.literal("workspace.mark_unread.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    markedAgentId: z.string().nullable(),
     success: z.boolean(),
     error: z.string().nullable(),
   }),
@@ -4867,6 +4974,7 @@ export const WriteProjectConfigResponseMessageSchema = z.object({
 export const AgentPermissionRequestMessageSchema = z.object({
   type: z.literal("agent_permission_request"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     agentId: z.string(),
     request: AgentPermissionRequestPayloadSchema,
   }),
@@ -4875,6 +4983,7 @@ export const AgentPermissionRequestMessageSchema = z.object({
 export const AgentPermissionResolvedMessageSchema = z.object({
   type: z.literal("agent_permission_resolved"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     agentId: z.string(),
     requestId: z.string(),
     resolution: AgentPermissionResponseSchema,
@@ -5115,6 +5224,7 @@ const CheckoutPrStatusPayloadSchema = z.object({
 });
 
 const CheckoutStatusUpdateMetadataSchema = z.object({
+  subscriptionId: z.string().optional(),
   prStatus: CheckoutPrStatusPayloadSchema.optional(),
 });
 
@@ -5141,6 +5251,13 @@ const CheckoutDiffSubscriptionPayloadSchema = z.object({
 export const SubscribeCheckoutDiffResponseSchema = z.object({
   type: z.literal("subscribe_checkout_diff_response"),
   payload: CheckoutDiffSubscriptionPayloadSchema.extend({
+    requestId: z.string(),
+  }),
+});
+
+export const CheckoutDiffGetResponseSchema = z.object({
+  type: z.literal("checkout.diff.get.response"),
+  payload: CheckoutDiffSubscriptionPayloadSchema.omit({ subscriptionId: true }).extend({
     requestId: z.string(),
   }),
 });
@@ -5909,6 +6026,7 @@ export const GetProvidersSnapshotResponseMessageSchema = z.object({
 export const ProvidersSnapshotUpdateMessageSchema = z.object({
   type: z.literal("providers_snapshot_update"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     cwd: z.string().optional(),
     entries: z.array(ProviderSnapshotEntrySchema),
     compactSnapshot: CompactProviderSnapshotSchema.optional(),
@@ -6166,6 +6284,9 @@ export const ListTerminalsResponseSchema = z.object({
 export const TerminalsChangedSchema = z.object({
   type: z.literal("terminals_changed"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
+    requestId: z.string().optional(),
+    workspaceId: z.string().optional(),
     cwd: z.string(),
     terminals: z.array(TerminalInfoSchema.omit({ cwd: true })),
   }),
@@ -6195,6 +6316,7 @@ export const SubscribeTerminalResponseSchema = z.object({
     z.object({
       terminalId: z.string(),
       slot: z.number().int().min(0).max(255),
+      subscriptionId: z.string().optional(),
       error: z.null(),
       requestId: z.string(),
     }),
@@ -6228,13 +6350,17 @@ export const CaptureTerminalResponseSchema = z.object({
 export const TerminalStreamExitSchema = z.object({
   type: z.literal("terminal_stream_exit"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     terminalId: z.string(),
+    // Observation failure; the underlying terminal process may still be running.
+    error: z.string().optional(),
   }),
 });
 
 export const TerminalAttentionRequiredSchema = z.object({
   type: z.literal("terminal_attention_required"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     serverId: z.string().optional(),
     terminalId: z.string(),
     cwd: z.string(),
@@ -6313,6 +6439,7 @@ export const HubExecutionControlResponseSchema = z.object({
 export const HubExecutionAgentUpdateSchema = z.object({
   type: z.literal("hub.execution.agent.update"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     executionId: z.string(),
     agentId: z.string(),
     agent: AgentSnapshotPayloadSchema,
@@ -6322,6 +6449,7 @@ export const HubExecutionAgentUpdateSchema = z.object({
 export const HubExecutionAgentStreamSchema = z.object({
   type: z.literal("hub.execution.agent.stream"),
   payload: z.object({
+    subscriptionId: z.string().optional(),
     executionId: z.string(),
     agentId: z.string(),
     event: AgentStreamEventPayloadSchema,
@@ -6531,6 +6659,9 @@ export const AgentSkillsImportLegacySelectionResponseSchema = z.object({
 });
 
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+  BrowserHostRegisterResponseSchema,
+  SubscriptionReleaseResponseSchema,
+  SessionEventsSetSubscriptionResponseSchema,
   HubExecutionAgentCreateResponseSchema,
   HubExecutionAgentValidateResponseSchema,
   HubExecutionControlResponseSchema,
@@ -6617,6 +6748,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ClearAgentAttentionResponseMessageSchema,
   WorkspaceCreateResponseSchema,
   WorkspaceClearAttentionResponseSchema,
+  WorkspaceMarkUnreadResponseSchema,
   SendAgentMessageResponseMessageSchema,
   SetVoiceModeResponseMessageSchema,
   DaemonGetStatusResponseSchema,
@@ -6654,6 +6786,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CloseItemsResponseSchema,
   CheckoutStatusResponseSchema,
   CheckoutStatusUpdateSchema,
+  CheckoutDiffGetResponseSchema,
   SubscribeCheckoutDiffResponseSchema,
   CheckoutDiffUpdateSchema,
   CheckoutCommitResponseSchema,
@@ -7129,6 +7262,7 @@ export type ProjectGithubCloneRequest = z.infer<typeof ProjectGithubCloneRequest
 export type ProjectGithubCloneProtocol = z.infer<typeof ProjectGithubCloneProtocolSchema>;
 export type ArchiveWorkspaceRequest = z.infer<typeof ArchiveWorkspaceRequestSchema>;
 export type WorkspaceClearAttentionRequest = z.infer<typeof WorkspaceClearAttentionRequestSchema>;
+export type WorkspaceMarkUnreadRequest = z.infer<typeof WorkspaceMarkUnreadRequestSchema>;
 export type FileExplorerRequest = z.infer<typeof FileExplorerRequestSchema>;
 export type FileExplorerResponse = z.infer<typeof FileExplorerResponseSchema>;
 export type FileVersion = z.infer<typeof FileVersionSchema>;
@@ -7223,6 +7357,7 @@ export const WSHelloMessageSchema = z.object({
     .object({
       voice: z.boolean().optional(),
       pushNotifications: z.boolean().optional(),
+      [CLIENT_CAPS.explicitEventSubscriptions]: z.boolean().optional(),
       [CLIENT_CAPS.allProviders]: z.boolean().optional(),
       [CLIENT_CAPS.reasoningMergeEnum]: z.boolean().optional(),
       [CLIENT_CAPS.selectiveAgentTimeline]: z.boolean().optional(),
