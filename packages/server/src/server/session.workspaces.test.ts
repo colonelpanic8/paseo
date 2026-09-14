@@ -285,6 +285,7 @@ function makeStoredAgent(input: {
   updatedAt: string;
   requiresAttention?: boolean;
   attentionReason?: StoredAgentRecord["attentionReason"];
+  lastStatus?: StoredAgentRecord["lastStatus"];
   workspaceId?: string;
   labels?: Record<string, string>;
 }): StoredAgentRecord {
@@ -299,7 +300,7 @@ function makeStoredAgent(input: {
     lastUserMessageAt: null,
     title: null,
     labels: input.labels ?? {},
-    lastStatus: "closed",
+    lastStatus: input.lastStatus ?? "closed",
     lastModeId: null,
     config: { provider: "codex", cwd: input.cwd },
     runtimeInfo: { provider: "codex", sessionId: null },
@@ -588,6 +589,7 @@ function createSessionForWorkspaceTests(
     archiveSnapshot: async () => ({}),
     unarchiveSnapshot: async () => true,
     clearAgentAttention: async () => {},
+    dismissAgentError: async () => false,
     markAgentUnread: async () => {},
     notifyAgentState: () => {},
     ...options.agentManager,
@@ -1759,6 +1761,85 @@ test("workspace clear attention clears stored-only agents and responds", async (
   if (agentUpdate.payload.kind === "upsert") {
     expect(agentUpdate.payload.agent.requiresAttention).toBe(false);
   }
+});
+
+test("workspace clear attention dismisses a failed agent that no longer requires attention", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: REPO_CWD,
+    projectId: REPO_CWD,
+    cwd: REPO_CWD,
+    kind: "directory",
+    displayName: "repo",
+    createdAt: "2026-03-30T15:00:00.000Z",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  const project = createPersistedProjectRecord({
+    projectId: REPO_CWD,
+    rootPath: REPO_CWD,
+    kind: "non_git",
+    displayName: "repo",
+    createdAt: "2026-03-30T15:00:00.000Z",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  let storedRecord = makeStoredAgent({
+    id: "stored-agent-failed",
+    cwd: REPO_CWD,
+    updatedAt: "2026-03-30T15:00:00.000Z",
+    lastStatus: "error",
+    requiresAttention: false,
+  });
+  const dismissed: string[] = [];
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => emitted.push(message),
+    agentManager: {
+      dismissAgentError: async (agentId: string) => {
+        if (agentId !== storedRecord.id || storedRecord.lastStatus !== "error") {
+          return false;
+        }
+        dismissed.push(agentId);
+        storedRecord = { ...storedRecord, lastStatus: "closed" };
+        return true;
+      },
+    },
+  });
+
+  session.workspaceRegistry.list = async () => [workspace];
+  session.workspaceRegistry.get = async (id: string) =>
+    id === workspace.workspaceId ? workspace : null;
+  session.projectRegistry.list = async () => [project];
+  session.projectRegistry.get = async (id: string) => (id === project.projectId ? project : null);
+  session.agentStorage.get = async (agentId: string) =>
+    agentId === storedRecord.id ? storedRecord : null;
+  session.agentStorage.upsert = async (record: unknown) => {
+    storedRecord = record as StoredAgentRecord;
+  };
+  session.listAgentPayloads = async () => [
+    makeAgent({
+      id: storedRecord.id,
+      cwd: storedRecord.cwd,
+      workspaceId: workspace.workspaceId,
+      status: "error",
+      updatedAt: storedRecord.updatedAt,
+      requiresAttention: false,
+    }),
+  ];
+
+  await session.handleMessage({
+    type: "workspace.clear_attention.request",
+    workspaceId: workspace.workspaceId,
+    requestId: "req-1",
+  });
+
+  expect(dismissed).toEqual([storedRecord.id]);
+  expect(storedRecord.lastStatus).toBe("closed");
+  expect(findByType(emitted, "workspace.clear_attention.response").payload).toMatchObject({
+    requestId: "req-1",
+    workspaceId: workspace.workspaceId,
+    clearedAgentIds: [storedRecord.id],
+    success: true,
+    error: null,
+  });
 });
 
 test("workspace clear attention responds with an error instead of timing out", async () => {
