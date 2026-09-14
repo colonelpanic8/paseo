@@ -2172,6 +2172,7 @@ export const es: TranslationResources = {
           claude: "claudio",
           ghostty: "fantasmal",
           pureBlack: "Negro puro",
+          material: "Material You",
           auto: "Sistema",
         },
       },

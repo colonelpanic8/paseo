@@ -113,7 +113,13 @@ import {
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
-import { getNextThemePreference } from "@/styles/theme";
+import {
+  ALL_THEME_PREFERENCES,
+  getNextThemePreference,
+  STATIC_THEME_PREFERENCES,
+} from "@/styles/theme";
+import { applyDynamicColor } from "@/styles/dynamic-color/apply-dynamic-color";
+import { isDynamicColorAvailable } from "@/styles/dynamic-color/palette";
 import { useSessionStore } from "@/stores/session-store";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
 import type { HostProfile } from "@/types/host-connection";
@@ -470,7 +476,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const { width: viewportWidth } = useWindowDimensions();
 
   const cycleTheme = useCallback(() => {
-    void updateSettings({ theme: getNextThemePreference(settings.theme) });
+    const available = isDynamicColorAvailable() ? ALL_THEME_PREFERENCES : STATIC_THEME_PREFERENCES;
+    void updateSettings({ theme: getNextThemePreference(settings.theme, available) });
   }, [settings.theme, updateSettings]);
 
   const isCompactLayout = useIsCompactFormFactor();
@@ -996,7 +1003,10 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") {
         void flushDraftPersistStorage();
+        return;
       }
+      // The wallpaper may have changed while we were away.
+      applyDynamicColor();
     });
     return () => subscription.remove();
   }, []);

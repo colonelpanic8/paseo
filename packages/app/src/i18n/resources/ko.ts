@@ -2132,6 +2132,7 @@ export const ko: TranslationResources = {
           claude: "Claude",
           ghostty: "Ghostty",
           pureBlack: "순수 검정",
+          material: "Material You",
           auto: "시스템",
         },
       },

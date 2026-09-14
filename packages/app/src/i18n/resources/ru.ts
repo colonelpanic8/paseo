@@ -2158,6 +2158,7 @@ export const ru: TranslationResources = {
           claude: "Claude",
           ghostty: "Ghostty",
           pureBlack: "Абсолютно чёрная",
+          material: "Material You",
           auto: "Системная",
         },
       },

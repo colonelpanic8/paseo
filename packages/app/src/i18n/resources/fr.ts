@@ -2176,6 +2176,7 @@ export const fr: TranslationResources = {
           claude: "Claude",
           ghostty: "Fantôme",
           pureBlack: "Noir pur",
+          material: "Material You",
           auto: "Système",
         },
       },

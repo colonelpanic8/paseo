@@ -2121,6 +2121,7 @@ export const ar: TranslationResources = {
           claude: "كلود",
           ghostty: "شبحي",
           pureBlack: "أسود خالص",
+          material: "Material You",
           auto: "نظام",
         },
       },

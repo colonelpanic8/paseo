@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  ALL_THEME_PREFERENCES,
   darkPureBlackTheme,
   darkTheme,
   FONT_SIZE,
   getNextThemePreference,
   lightTheme,
+  STATIC_THEME_PREFERENCES,
   THEME_OPTIONS,
 } from "./theme";
 
@@ -30,14 +32,20 @@ describe("Theme catalog", () => {
       "light",
       "dark",
       "auto",
+      "material",
       "zinc",
       "midnight",
       "claude",
       "ghostty",
       "pureBlack",
     ]);
-    expect(getNextThemePreference("dark")).toBe("auto");
-    expect(getNextThemePreference("pureBlack")).toBe("light");
+    expect(getNextThemePreference("dark", ALL_THEME_PREFERENCES)).toBe("auto");
+    expect(getNextThemePreference("pureBlack", ALL_THEME_PREFERENCES)).toBe("light");
+  });
+
+  it("cycles past Material You on a device that cannot render it", () => {
+    expect(STATIC_THEME_PREFERENCES).not.toContain("material");
+    expect(getNextThemePreference("auto", STATIC_THEME_PREFERENCES)).toBe("zinc");
   });
 });
 

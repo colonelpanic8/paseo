@@ -305,7 +305,8 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
   };
 }
 
-const lightSemanticColors = buildLightSemanticColors({
+// The authored light palette, and the reference ladder the dynamic light tint pins to.
+export const paseoLightTint: LightThemeConfig = {
   surface0: "#ffffff",
   surface1: "#fafafa",
   surface2: "#f4f4f5",
@@ -327,7 +328,9 @@ const lightSemanticColors = buildLightSemanticColors({
   terminalBlack: "#1a1a1e",
   terminalBrightBlack: "#3f3f46",
   ring: "#18181b",
-});
+};
+
+const lightSemanticColors = buildLightSemanticColors(paseoLightTint);
 
 // ---------------------------------------------------------------------------
 // Dark theme variant builder
@@ -440,8 +443,9 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// Paseo — subtle teal-green tint (default)
-const paseoDarkColors = buildDarkSemanticColors({
+// Paseo — subtle teal-green tint (default). Exported because it is also the reference
+// ladder the dynamic dark tint pins its lightness to.
+export const paseoDarkTint: DarkThemeConfig = {
   surface0: "#181B1A",
   surface1: "#1E2120",
   surface2: "#272A29",
@@ -458,7 +462,9 @@ const paseoDarkColors = buildDarkSemanticColors({
   destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
   terminalBlack: "#141716",
   terminalBrightBlack: "#434645",
-});
+};
+
+const paseoDarkColors = buildDarkSemanticColors(paseoDarkTint);
 
 // Zinc — neutral gray, no tint
 const zincDarkColors = buildDarkSemanticColors({
@@ -752,6 +758,13 @@ export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSema
 
 export const lightTheme = buildLightTheme(lightSemanticColors);
 
+// Material You — the wallpaper-derived pair. Both are registered with the authored Paseo
+// tints and patched in place by `applyDynamicColor()` once the native palette is read; see
+// styles/dynamic-color/apply-dynamic-color.ts. Registering placeholders is not optional —
+// Unistyles only accepts themes declared at `StyleSheet.configure` time.
+export const darkMaterialTheme = buildDarkTheme(paseoDarkColors);
+export const lightMaterialTheme = buildLightTheme(lightSemanticColors);
+
 // Keep compatibility with existing code
 export const theme = darkTheme;
 
@@ -771,6 +784,16 @@ export const THEME_OPTIONS = [
     swatch: "#2D8B62",
   },
   { name: "auto", group: "primary" },
+  // Android 12+ only. The swatch is a placeholder; the picker paints the live wallpaper
+  // accent instead (see styles/dynamic-color/swatch.ts).
+  {
+    name: "material",
+    group: "dynamic",
+    unistylesName: "materialDark",
+    theme: darkMaterialTheme,
+    swatch: "#20744A",
+    requires: "dynamicColor",
+  },
   {
     name: "zinc",
     group: "variant",
@@ -833,11 +856,22 @@ type ThemeSwatches = {
   [Name in ThemeName]: Extract<ConcreteThemeOption, { name: Name }>["swatch"];
 };
 
+// `material` is one picker entry backed by two registered themes, like the plugin pair.
+// Unistyles' adaptive mode only ever switches the keys literally named `light` and `dark`
+// (cxx/core/UnistylesState.cpp), so a theme that follows the system scheme under any other
+// name has to register both halves and pick between them itself.
+export const MATERIAL_THEME_PREFERENCE = "material";
+export const MATERIAL_THEME_NAMES = {
+  light: "materialLight",
+  dark: "materialDark",
+} as const;
+
 type RegisteredThemes = {
   [Option in ConcreteThemeOption as Option["unistylesName"]]: Option["theme"];
 } & {
   pluginLight: typeof lightTheme;
   pluginDark: typeof darkTheme;
+  materialLight: typeof lightMaterialTheme;
 };
 
 export const THEME_TO_UNISTYLES = Object.fromEntries(
@@ -854,10 +888,24 @@ export const REGISTERED_THEMES = {
   ),
   [PLUGIN_THEME_NAMES.light]: lightTheme,
   [PLUGIN_THEME_NAMES.dark]: darkTheme,
+  [MATERIAL_THEME_NAMES.light]: lightMaterialTheme,
 } as RegisteredThemes;
 
-export function getNextThemePreference(current: ThemePreference): ThemePreference {
-  const currentIndex = THEME_OPTIONS.findIndex((option) => option.name === current);
-  const nextIndex = (currentIndex + 1) % THEME_OPTIONS.length;
-  return THEME_OPTIONS[nextIndex]?.name ?? THEME_OPTIONS[0].name;
+/** Preferences to offer on a device without dynamic color: every platform but Android 12+. */
+export const STATIC_THEME_PREFERENCES: readonly ThemePreference[] = THEME_OPTIONS.filter(
+  (option) => !("requires" in option),
+).map((option) => option.name);
+
+export const ALL_THEME_PREFERENCES: readonly ThemePreference[] = THEME_OPTIONS.map(
+  (option) => option.name,
+);
+
+export function getNextThemePreference(
+  current: ThemePreference,
+  available: readonly ThemePreference[],
+): ThemePreference {
+  if (available.length === 0) return current;
+  const currentIndex = available.indexOf(current);
+  const nextIndex = (currentIndex + 1) % available.length;
+  return available[nextIndex] ?? available[0];
 }

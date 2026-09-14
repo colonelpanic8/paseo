@@ -2242,6 +2242,7 @@ export const en = {
           claude: "Claude",
           ghostty: "Ghostty",
           pureBlack: "Pure black",
+          material: "Material You",
           auto: "System",
         },
       },

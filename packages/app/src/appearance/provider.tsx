@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
+import { useColorScheme } from "react-native";
 import { UnistylesRuntime } from "react-native-unistyles";
 import { DEFAULT_THEME_PREFERENCE, useAppSettings, type AppSettings } from "@/hooks/use-settings";
 import {
@@ -6,7 +7,14 @@ import {
   usePluginThemeCatalog,
   type PluginThemeOption,
 } from "@/plugins/themes";
-import { PLUGIN_THEME_NAMES, PLUGIN_THEME_PREFERENCE, THEME_TO_UNISTYLES } from "@/styles/theme";
+import {
+  MATERIAL_THEME_NAMES,
+  MATERIAL_THEME_PREFERENCE,
+  PLUGIN_THEME_NAMES,
+  PLUGIN_THEME_PREFERENCE,
+  THEME_TO_UNISTYLES,
+} from "@/styles/theme";
+import { isDynamicColorAvailable } from "@/styles/dynamic-color/palette";
 import { applyAppearance } from "./apply";
 
 interface ContributedThemes {
@@ -18,11 +26,12 @@ interface ContributedThemes {
 interface ApplyThemeInput {
   preference: AppSettings["theme"];
   contributedTheme: PluginThemeOption | null;
+  colorScheme: "light" | "dark";
 }
 
 const ContributedThemesContext = createContext<ContributedThemes | null>(null);
 
-function applyTheme({ preference, contributedTheme }: ApplyThemeInput): void {
+function applyTheme({ preference, contributedTheme, colorScheme }: ApplyThemeInput): void {
   if (contributedTheme) {
     const themeName = PLUGIN_THEME_NAMES[contributedTheme.theme.colorScheme];
     UnistylesRuntime.updateTheme(themeName, () => contributedTheme.theme);
@@ -33,6 +42,17 @@ function applyTheme({ preference, contributedTheme }: ApplyThemeInput): void {
 
   const builtInPreference =
     preference === PLUGIN_THEME_PREFERENCE ? DEFAULT_THEME_PREFERENCE : preference;
+  // Material You is the one built-in preference that follows the system scheme without being
+  // `auto`, so like the plugin pair it selects its own half rather than using adaptive mode.
+  if (builtInPreference === MATERIAL_THEME_PREFERENCE) {
+    if (isDynamicColorAvailable()) {
+      UnistylesRuntime.setAdaptiveThemes(false);
+      UnistylesRuntime.setTheme(MATERIAL_THEME_NAMES[colorScheme]);
+      return;
+    }
+    UnistylesRuntime.setAdaptiveThemes(true);
+    return;
+  }
   if (builtInPreference === "auto") {
     UnistylesRuntime.setAdaptiveThemes(true);
     return;
@@ -45,6 +65,7 @@ function applyTheme({ preference, contributedTheme }: ApplyThemeInput): void {
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { settings, updateSettings, isLoading } = useAppSettings();
   const options = usePluginThemeCatalog();
+  const systemColorScheme = useColorScheme();
   const selected = useMemo(() => {
     if (settings.theme !== PLUGIN_THEME_PREFERENCE) return null;
     return options.find((option) => option.id === settings.pluginThemeId) ?? null;
@@ -52,7 +73,11 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isLoading) return;
-    applyTheme({ preference: settings.theme, contributedTheme: selected });
+    applyTheme({
+      preference: settings.theme,
+      contributedTheme: selected,
+      colorScheme: systemColorScheme === "light" ? "light" : "dark",
+    });
     applyAppearance({
       uiFontFamily: settings.uiFontFamily,
       monoFontFamily: settings.monoFontFamily,
@@ -64,6 +89,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, [
     isLoading,
     selected,
+    systemColorScheme,
     settings.theme,
     settings.uiFontFamily,
     settings.monoFontFamily,

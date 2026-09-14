@@ -2139,6 +2139,7 @@ export const ja: TranslationResources = {
           claude: "Claude",
           ghostty: "Ghostty",
           pureBlack: "ピュアブラック",
+          material: "Material You",
           auto: "システム",
         },
       },

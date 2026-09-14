@@ -43,6 +43,8 @@ import {
   type Theme,
 } from "@/styles/theme";
 import { isNative } from "@/constants/platform";
+import { isDynamicColorAvailable } from "@/styles/dynamic-color/palette";
+import { dynamicAccentSwatch } from "@/styles/dynamic-color/swatch";
 import type { PluginThemeOption } from "@/plugins/themes";
 import { settingsStyles } from "@/styles/settings";
 import { AppearancePreview } from "./appearance-preview";
@@ -103,10 +105,18 @@ function ThemeLeading({ themeValue }: ThemeLeadingProps) {
       return <ThemedMoon size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
     case "auto":
       return <ThemedMonitor size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+    case "material":
+      return <ThemeSwatch color={dynamicAccentSwatch() ?? THEME_SWATCHES.material} />;
     default:
       return <ThemeSwatch color={THEME_SWATCHES[themeValue]} />;
   }
 }
+
+// Availability cannot change while the app is running — it is the OS version and the
+// platform — so the list is settled once here rather than per render.
+const VISIBLE_THEME_OPTIONS = isDynamicColorAvailable()
+  ? THEME_OPTIONS
+  : THEME_OPTIONS.filter((option) => option.name !== "material");
 
 interface ThemeSwatchProps {
   color: string;
@@ -196,8 +206,8 @@ function ThemeRow({
           <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
-          {THEME_OPTIONS.map((option, index) => {
-            const previousOption = THEME_OPTIONS[index - 1];
+          {VISIBLE_THEME_OPTIONS.map((option, index) => {
+            const previousOption = VISIBLE_THEME_OPTIONS[index - 1];
             return (
               <Fragment key={option.name}>
                 {previousOption && previousOption.group !== option.group ? (

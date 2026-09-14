@@ -245,7 +245,19 @@ New status pills use `<StatusBadge>`. Identity, shortcut, and interactive link b
 
 ---
 
-## 14. Forbidden
+## 14. Theme variants
+
+A variant is a tint, not a palette. `buildDarkSemanticColors` and `buildLightSemanticColors` in `packages/app/src/styles/theme.ts` take a config of about twenty colors — five surfaces, two muted foregrounds, two borders, the accent pair, destructive, two terminal blacks — and derive every other token from it. Zinc, Midnight, Claude, Ghostty and Pure black are that config filled in five different ways. Adding a variant means adding a config and a `THEME_OPTIONS` entry, never a new set of tokens.
+
+Status colors are not part of the tint. The status and status-dot families are generated as one set against a known surface lightness, with a contrast floor the dot band is built to clear; the comments in `theme.ts` own the rule. A variant that moves surface lightness invalidates them, so variants move hue and keep the ladder.
+
+**Material You** is the one variant whose config is computed rather than authored. Android hands the app a tonal palette derived from the wallpaper, and the app pins it to Paseo's ladder: the wallpaper supplies hue and chroma, `paseoDarkTint` and `paseoLightTint` supply lightness. Sampling at raw Android tones instead would band the surfaces — Android steps in tens where Paseo steps in twos — and break the status families along with it. `packages/app/src/styles/dynamic-color/tone.ts` owns the sampling.
+
+It is Android 12 and up, and it is the only `THEME_OPTIONS` entry carrying both a light and a dark theme. Unistyles' adaptive mode only switches the themes named `light` and `dark`, so the pair is selected against the system color scheme in `packages/app/src/appearance/provider.tsx` rather than through `setAdaptiveThemes` — the same shape the plugin theme pair uses. The picker hides the entry, and the cycle shortcut skips it, wherever there is no palette to read.
+
+---
+
+## 15. Forbidden
 
 - `fontWeight.medium` on row titles, body text, button labels, badge text, or `<SidebarCallout>` titles. Medium is reserved for the structural-label tier described in §3 — section labels, modal/sheet titles, dense metadata emphasis, and tight action labels. Anything else is `normal`. `<ScreenTitle>` is responsive `400/300` and is never overridden.
 - `<Pressable>` wrapping `<Text>` to make a button. `<Button>` exists.
@@ -266,7 +278,7 @@ New status pills use `<StatusBadge>`. Identity, shortcut, and interactive link b
 
 ---
 
-## 15. Canonical surfaces by pattern
+## 16. Canonical surfaces by pattern
 
 | Pattern                                             | Reference                                                                                                                                                                                                                                                                                                |
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
