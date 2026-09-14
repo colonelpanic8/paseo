@@ -7,6 +7,7 @@ import {
   editPersistedConfig,
 } from "@getpaseo/server";
 import { connectToDaemon } from "../../utils/client.js";
+import { localDaemonCommand } from "../../utils/daemon-target.js";
 import { withOutput, type CommandOptions } from "../../output/index.js";
 
 function redact(value: unknown): unknown {
@@ -34,15 +35,18 @@ function result(data: Record<string, unknown>) {
   };
 }
 
-function homeOf(options: CommandOptions) {
+function instanceTargetOf(options: CommandOptions) {
   if (options.daemonTarget.kind !== "instance")
     throw new Error("Configuration edits require --home");
-  return options.daemonTarget.home;
+  return options.daemonTarget;
 }
 
-async function applySaved(home: string, options: CommandOptions) {
-  const nextCommand = `paseo daemon start --home ${JSON.stringify(home)}`;
-  const instance = await readDaemonInstance(home);
+async function applySaved(
+  target: Extract<CommandOptions["daemonTarget"], { kind: "instance" }>,
+  options: CommandOptions,
+) {
+  const nextCommand = localDaemonCommand("start", target);
+  const instance = await readDaemonInstance(target.home);
   if (!instance?.listen)
     return result({
       action: "saved",
@@ -58,7 +62,7 @@ async function applySaved(home: string, options: CommandOptions) {
       action: "saved",
       applied: false,
       message: "Saved; not applied to a running daemon",
-      nextCommand: `paseo daemon reload --home ${JSON.stringify(home)}`,
+      nextCommand: localDaemonCommand("reload", target),
     });
   }
   try {
@@ -77,7 +81,8 @@ export function daemonConfigCommand(): Command {
   );
   addLocalDaemonOptions(config.command("get [path]")).action(
     withOutput(async (field: string | undefined, options: CommandOptions, _command: Command) => {
-      const persisted = readPersistedConfig(homeOf(options));
+      const target = instanceTargetOf(options);
+      const persisted = readPersistedConfig(target.home, {}, target.paths);
       const value = field ? getPersistedConfigValue(persisted, field) : persisted;
       return result({
         source: "configured",
@@ -102,14 +107,16 @@ export function daemonConfigCommand(): Command {
             /* Unquoted input is a string. */
           }
         }
-        editPersistedConfig(homeOf(options), field, { value });
-        return applySaved(homeOf(options), options);
+        const target = instanceTargetOf(options);
+        editPersistedConfig(target.home, field, { value }, target.paths);
+        return applySaved(target, options);
       }),
     );
   addLocalDaemonOptions(config.command("unset <path>")).action(
     withOutput(async (field: string, options: CommandOptions, _command: Command) => {
-      editPersistedConfig(homeOf(options), field, { unset: true });
-      return applySaved(homeOf(options), options);
+      const target = instanceTargetOf(options);
+      editPersistedConfig(target.home, field, { unset: true }, target.paths);
+      return applySaved(target, options);
     }),
   );
   return config;
