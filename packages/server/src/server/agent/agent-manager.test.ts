@@ -7806,6 +7806,98 @@ test("clearAgentAttention on errored agent stays cleared until a new error trans
   expect(persistedAfterSecondFailure?.attentionReason).toBe("error");
 });
 
+test("dismissAgentError clears the failed state and a later failure raises it again", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-dismiss-error-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+
+  class FailingSession extends TestAgentSession {
+    private attempt = 0;
+
+    override async startTurn(): Promise<{ turnId: string }> {
+      this.attempt += 1;
+      const attempt = this.attempt;
+      const turnId = `fail-turn-${attempt}`;
+      setTimeout(() => {
+        this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
+        this.pushEvent({
+          type: "turn_failed",
+          provider: this.provider,
+          error: `boom-${attempt}`,
+          turnId,
+        });
+      }, 0);
+      return { turnId };
+    }
+  }
+
+  class FailingClient implements AgentClient {
+    readonly provider = "codex" as const;
+    readonly capabilities = TEST_CAPABILITIES;
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+
+    async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      return new FailingSession(config);
+    }
+
+    async resumeSession(config?: Partial<AgentSessionConfig>): Promise<AgentSession> {
+      return new FailingSession({
+        provider: "codex",
+        cwd: config?.cwd ?? process.cwd(),
+      });
+    }
+  }
+
+  const manager = new AgentManager({
+    clients: {
+      codex: new FailingClient(),
+    },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000131",
+  });
+
+  const agent = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      title: "Dismiss error test",
+    },
+    undefined,
+    { workspaceId: undefined },
+  );
+
+  await expect(manager.runAgent(agent.id, "fail once")).rejects.toThrow("boom-1");
+  await manager.flush();
+
+  expect(await manager.dismissAgentError(agent.id)).toBe(true);
+  await manager.flush();
+
+  const afterDismiss = manager.getAgent(agent.id);
+  expect(afterDismiss?.lifecycle).toBe("idle");
+  expect(afterDismiss?.attention).toEqual({ requiresAttention: false });
+  expect(afterDismiss?.lastError).toBe("boom-1");
+
+  const persistedAfterDismiss = await storage.get(agent.id);
+  expect(persistedAfterDismiss?.lastStatus).toBe("idle");
+  expect(persistedAfterDismiss?.requiresAttention).toBe(false);
+
+  expect(await manager.dismissAgentError(agent.id)).toBe(false);
+
+  await expect(manager.runAgent(agent.id, "fail again")).rejects.toThrow("boom-2");
+  await manager.flush();
+
+  const afterSecondFailure = manager.getAgent(agent.id);
+  expect(afterSecondFailure?.lifecycle).toBe("error");
+  expect(afterSecondFailure?.attention).toMatchObject({
+    requiresAttention: true,
+    attentionReason: "error",
+  });
+});
+
 test("streamAgent clears pending run when startTurn fails before a turn id exists", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-start-turn-failure-"));
   const storagePath = join(workdir, "agents");
