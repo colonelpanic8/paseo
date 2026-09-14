@@ -997,6 +997,7 @@ function StatusWorkspaceActionSlot({
           <SidebarWorkspaceMenu
             {...kebab.menuProps}
             workspaceKey={workspace.workspaceKey}
+            statusBucket={workspace.statusBucket}
             serverId={workspace.serverId}
             workspaceId={workspace.workspaceId}
             workspaceLabels={workspace.labels}
