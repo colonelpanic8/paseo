@@ -2021,6 +2021,9 @@ export const fr: TranslationResources = {
         "Prompt ajouté au compositeur. L’hôte est hors ligne, il n’a donc pas été envoyé.",
       sendFailed: "Impossible d’envoyer le prompt : {{message}}",
     },
+    shortcuts: {
+      resume: "Reprendre {{name}}",
+    },
   },
   settings: {
     title: "Paramètres",
