@@ -1941,6 +1941,18 @@ export const ptBR: TranslationResources = {
       skippedFiles:
         "{{count}} arquivos compartilhados foram ignorados. O Paseo aceita texto e imagens.",
     },
+    links: {
+      unknownHost: "Nenhum host chamado {{serverId}} está configurado neste dispositivo.",
+      noHosts: "Adicione um host antes de abrir links do Paseo.",
+      ambiguousHost: "Há vários hosts configurados. Adicione serverId ao link.",
+      missingAgent: "O link não indica um agente.",
+      missingWorkspace: "O link não indica um espaço de trabalho.",
+      promptSent: "Prompt enviado.",
+      sendDisabled:
+        "Prompt adicionado ao compositor. Ative “Enviar prompts de links” em Configurações para enviá-lo sem confirmação.",
+      hostOffline: "Prompt adicionado ao compositor. O host está offline, então não foi enviado.",
+      sendFailed: "Não foi possível enviar o prompt: {{message}}",
+    },
   },
   settings: {
     title: "Configurações",
@@ -2078,6 +2090,11 @@ export const ptBR: TranslationResources = {
           overview: "Resumo",
           detailed: "Detalhes completos",
         },
+      },
+      linkPromptSend: {
+        label: "Enviar prompts de links",
+        description:
+          "Permitir que links paseo:// e outros apps enviem um prompt a um agente sem confirmação",
       },
       language: {
         label: "Idioma",

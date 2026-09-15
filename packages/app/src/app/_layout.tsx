@@ -909,6 +909,8 @@ function RootStack() {
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />
+      <Stack.Screen name="agent" />
+      <Stack.Screen name="workspace" />
       <Stack.Screen name="settings/hosts/[serverId]/index" />
       <Stack.Screen name="settings/hosts/[serverId]/[hostSection]" />
       <Stack.Screen name="settings/hosts/[serverId]/plugins/[pluginId]/[screenId]" />
