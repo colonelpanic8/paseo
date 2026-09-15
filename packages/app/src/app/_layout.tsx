@@ -132,6 +132,7 @@ import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notif
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { PluginCatalogSync } from "@/plugins";
 import { AndroidIntentListener } from "@/intents/android-intent-listener";
+import { AndroidResumeShortcutSync } from "@/intents/android-resume-shortcut-sync";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -675,6 +676,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
         <DesktopWindowControlsSync />
         <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
         {isNative ? <AndroidIntentListener /> : null}
+        {isNative ? <AndroidResumeShortcutSync /> : null}
         <HostSessionManager />
         <FaviconStatusSync />
         {children}

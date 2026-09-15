@@ -1952,6 +1952,9 @@ export const ru: TranslationResources = {
       hostOffline: "Запрос добавлен в редактор. Хост не в сети, поэтому он не отправлен.",
       sendFailed: "Не удалось отправить запрос: {{message}}",
     },
+    shortcuts: {
+      resume: "Продолжить {{name}}",
+    },
   },
   settings: {
     title: "Настройки",

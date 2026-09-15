@@ -1968,6 +1968,9 @@ export const es: TranslationResources = {
         "Instrucción añadida al compositor. El host está desconectado, así que no se envió.",
       sendFailed: "No se pudo enviar la instrucción: {{message}}",
     },
+    shortcuts: {
+      resume: "Reanudar {{name}}",
+    },
   },
   settings: {
     title: "Ajustes",

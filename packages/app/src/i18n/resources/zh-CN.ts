@@ -1898,6 +1898,9 @@ export const zhCN: TranslationResources = {
       hostOffline: "提示已添加到编辑器。主机离线，因此未发送。",
       sendFailed: "无法发送提示：{{message}}",
     },
+    shortcuts: {
+      resume: "继续 {{name}}",
+    },
   },
   settings: {
     title: "设置",

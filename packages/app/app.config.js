@@ -3,6 +3,7 @@ const path = require("node:path");
 const pkg = require("./package.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
+const withAndroidShortcuts = require("./plugins/with-android-shortcuts");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
 const { getNativeReleaseVersion } = require("./native-release-version");
@@ -152,6 +153,7 @@ export default {
       "expo-router",
       withPasteInput,
       [withAndroidAsyncStorageSize, 64],
+      withAndroidShortcuts,
       ...buildProfile.cameraPlugins,
       [
         "expo-splash-screen",
