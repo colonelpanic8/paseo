@@ -1594,6 +1594,7 @@ export const ja: TranslationResources = {
     profiles: "プロファイル",
     providers: "プロバイダー",
     model: "モデル",
+    allModels: "すべてのモデル",
     editProfiles: "編集",
     editProfilesLabel: "エージェントプロファイルを編集",
     createProfile: "プロファイルを作成",
@@ -2084,6 +2085,11 @@ export const ja: TranslationResources = {
       autoExpandReasoning: {
         label: "常に思考プロセスを展開",
         description: "デフォルトでAIのエージェント思考・推論ブロックを完全に展開して表示します",
+      },
+      modelPickerAllModels: {
+        label: "モデルセレクターをすべてのモデルで開く",
+        description:
+          "プロバイダー一覧を表示する代わりに、すべてのプロバイダーの全モデルを1つの検索可能なリストとしてモデルセレクターを開始します",
       },
       toolCallDetail: {
         label: "ツール呼び出しの表示",
