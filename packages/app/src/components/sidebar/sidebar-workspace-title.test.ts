@@ -4,10 +4,17 @@ import {
   resolveSidebarWorkspacePrimaryLabel,
 } from "@/components/sidebar/sidebar-workspace-title";
 
+const worktree = {
+  name: "Investigate search",
+  currentBranch: "fix/search",
+  workspaceDirectory: "/home/dev/.paseo/worktrees/0yll5i1q/unkempt-alpacka",
+  workspaceKind: "worktree" as const,
+};
+
 describe("resolveSidebarWorkspacePrimaryLabel", () => {
   it("uses the workspace name in title mode", () => {
     const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search" },
+      workspace: worktree,
       workspaceTitleSource: "title",
     });
 
@@ -16,7 +23,7 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
 
   it("uses the branch name in branch mode", () => {
     const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search" },
+      workspace: worktree,
       workspaceTitleSource: "branch",
     });
 
@@ -25,18 +32,74 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
 
   it("falls back to the workspace name in branch mode without a branch", () => {
     const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Local folder", currentBranch: null },
+      workspace: { ...worktree, name: "Local folder", currentBranch: null },
       workspaceTitleSource: "branch",
     });
 
     expect(label).toBe("Local folder");
+  });
+
+  it("uses the trailing path segment in worktree mode", () => {
+    const label = resolveSidebarWorkspacePrimaryLabel({
+      workspace: worktree,
+      workspaceTitleSource: "worktree",
+    });
+
+    expect(label).toBe("unkempt-alpacka");
+  });
+
+  it("ignores a trailing separator on the worktree directory", () => {
+    const label = resolveSidebarWorkspacePrimaryLabel({
+      workspace: { ...worktree, workspaceDirectory: "/home/dev/worktrees/abc/tidy-heron/" },
+      workspaceTitleSource: "worktree",
+    });
+
+    expect(label).toBe("tidy-heron");
+  });
+
+  it("reads Windows worktree paths", () => {
+    const label = resolveSidebarWorkspacePrimaryLabel({
+      workspace: { ...worktree, workspaceDirectory: "C:\\dev\\worktrees\\abc\\tidy-heron" },
+      workspaceTitleSource: "worktree",
+    });
+
+    expect(label).toBe("tidy-heron");
+  });
+
+  it("keeps the workspace name for kinds that have no worktree slug", () => {
+    for (const workspaceKind of ["directory", "local_checkout", "checkout"] as const) {
+      const label = resolveSidebarWorkspacePrimaryLabel({
+        workspace: { ...worktree, workspaceKind, name: "Main checkout" },
+        workspaceTitleSource: "worktree",
+      });
+
+      expect(label).toBe("Main checkout");
+    }
+  });
+
+  it("falls back to the workspace name when the directory is missing or blank", () => {
+    for (const workspaceDirectory of [undefined, "", "   ", "/"]) {
+      const label = resolveSidebarWorkspacePrimaryLabel({
+        workspace: { ...worktree, workspaceDirectory, name: "Unresolved" },
+        workspaceTitleSource: "worktree",
+      });
+
+      expect(label).toBe("Unresolved");
+    }
   });
 });
 
 describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
   it("includes the visible host badge with the workspace title", () => {
     const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
+        statusBucket: "done",
+        readyToReview: false,
+      },
       workspaceTitleSource: "title",
       hostBadgeLabel: "Build host",
     });
@@ -49,7 +112,10 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
       workspace: {
         name: "Investigate search",
         currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
         statusBucket: "running",
+        readyToReview: false,
       },
       workspaceTitleSource: "branch",
       leadingProjectName: "Search project",
@@ -65,12 +131,35 @@ describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
 
   it("omits the idle status from the workspace label", () => {
     const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
+        statusBucket: "done",
+        readyToReview: false,
+      },
       workspaceTitleSource: "title",
       leadingProjectName: "Search project",
       hostBadgeLabel: "Build host",
     });
 
     expect(label).toBe("Search project, Investigate search, Build host");
+  });
+
+  it("announces ready to review independently from the workspace status", () => {
+    const label = resolveSidebarWorkspaceAccessibilityLabel({
+      workspace: {
+        name: "Investigate search",
+        currentBranch: "fix/search",
+        workspaceDirectory: "/tmp/search",
+        workspaceKind: "checkout" as const,
+        statusBucket: "running",
+        readyToReview: true,
+      },
+      workspaceTitleSource: "title",
+    });
+
+    expect(label).toBe("Investigate search, Working, Ready to review");
   });
 });
