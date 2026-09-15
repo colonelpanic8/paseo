@@ -2,7 +2,7 @@ import { Command, Option } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { startDaemonInstance, resolvePaseoHome } from "@getpaseo/server";
+import { startDaemonInstance, resolvePaseoHome, type PaseoPaths } from "@getpaseo/server";
 const require = createRequire(import.meta.url);
 function resolveServerRunnerFromDir(currentDir: string): string | null {
   const packageJsonPath = path.join(currentDir, "package.json");
@@ -42,6 +42,7 @@ function resolveDaemonRunnerEntry(): string {
 
 export async function launchLocalDaemon(options: {
   home: string;
+  paths?: PaseoPaths;
   timeoutMs?: number;
   foreground?: boolean;
 }) {
@@ -52,7 +53,8 @@ export async function launchLocalDaemon(options: {
   try {
     const entry = resolveDaemonRunnerEntry();
     return await startDaemonInstance({
-      home: resolvePaseoHome({ PASEO_HOME: options.home }),
+      home: options.paths?.home ?? resolvePaseoHome({ ...process.env, PASEO_HOME: options.home }),
+      paths: options.paths,
       command: process.execPath,
       args: [...(entry.endsWith(".ts") ? ["--import", "tsx"] : []), entry],
       env: process.env,
