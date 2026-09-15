@@ -17,6 +17,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import {
   DEFAULT_IOS_KEYBOARD_INSET_MIN_HEIGHT,
   resolveKeyboardShift,
+  reserveKeyboardLayoutShift,
   shouldReconcileHiddenKeyboardEnd,
 } from "@/hooks/keyboard-shift-policy";
 import {
@@ -34,6 +35,7 @@ export function KeyboardShiftProvider({ children }: { children: ReactNode }) {
   const bottomInset = useSharedValue(insets.bottom);
   const isIos = Platform.OS === "ios";
   const isMoving = useSharedValue(false);
+  const layoutShift = useSharedValue(0);
   const [settledShift, setSettledShift] = useState(0);
   const publishSettledShift = useCallback((nextShift: number) => {
     setSettledShift((currentShift) => (currentShift === nextShift ? currentShift : nextShift));
@@ -56,12 +58,36 @@ export function KeyboardShiftProvider({ children }: { children: ReactNode }) {
 
   useGenericKeyboardHandler(
     {
-      onStart: () => {
+      onStart: (event) => {
         "worklet";
+        const target = resolveKeyboardShift({
+          rawKeyboardHeight: event.height,
+          keyboardProgress: event.height > 0 ? 1 : 0,
+          bottomInset: bottomInset.value,
+          isIos,
+          iosMinHeight: DEFAULT_IOS_KEYBOARD_INSET_MIN_HEIGHT,
+        });
+        layoutShift.value = reserveKeyboardLayoutShift({
+          current: layoutShift.value,
+          target,
+          phase: "start",
+        });
         isMoving.value = true;
       },
       onEnd: (event) => {
         "worklet";
+        const target = resolveKeyboardShift({
+          rawKeyboardHeight: event.height,
+          keyboardProgress: event.progress,
+          bottomInset: bottomInset.value,
+          isIos,
+          iosMinHeight: DEFAULT_IOS_KEYBOARD_INSET_MIN_HEIGHT,
+        });
+        layoutShift.value = reserveKeyboardLayoutShift({
+          current: layoutShift.value,
+          target,
+          phase: "end",
+        });
         if (isIos && shouldReconcileHiddenKeyboardEnd(event)) {
           keyboardHeight.value = 0;
           keyboardProgress.value = 0;
@@ -69,7 +95,7 @@ export function KeyboardShiftProvider({ children }: { children: ReactNode }) {
         isMoving.value = false;
       },
     },
-    [isIos, isMoving, keyboardHeight, keyboardProgress],
+    [bottomInset, isIos, isMoving, keyboardHeight, keyboardProgress, layoutShift],
   );
 
   useAnimatedReaction(
@@ -85,10 +111,11 @@ export function KeyboardShiftProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       shift,
+      layoutShift,
       isMoving,
       bottomInset,
     }),
-    [bottomInset, isMoving, shift],
+    [bottomInset, isMoving, layoutShift, shift],
   );
 
   return createElement(
