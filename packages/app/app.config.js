@@ -4,6 +4,7 @@ const pkg = require("./package.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withAndroidShortcuts = require("./plugins/with-android-shortcuts");
+const withAssistantProvider = require("./plugins/with-assistant-provider");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
 const withAndroidScroll = require("./modules/paseo-scroll/app.plugin");
@@ -156,6 +157,7 @@ export default {
       withAndroidScroll,
       [withAndroidAsyncStorageSize, 64],
       withAndroidShortcuts,
+      withAssistantProvider,
       ...buildProfile.cameraPlugins,
       [
         "expo-splash-screen",
