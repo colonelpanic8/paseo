@@ -42,6 +42,8 @@ import type {
   FileExplorerResponse,
   FileVersion,
   FileWriteResult,
+  FetchAgentsRequestMessage,
+  FetchAgentsResponseMessage,
   FetchAgentTimelineResponseMessage,
   AgentForkContextResponseMessage,
   AgentForkNativeResponseMessage,
@@ -707,11 +709,8 @@ export interface DaemonPairingOfferOptions {
   timeout?: number;
 }
 type DaemonUpdateResponse = z.infer<typeof DaemonUpdateResponseSchema>;
-type FetchAgentsPayload = Extract<
-  SessionOutboundMessage,
-  { type: "fetch_agents_response" }
->["payload"];
-type FetchAgentsRequest = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
+type FetchAgentsPayload = FetchAgentsResponseMessage["payload"];
+type FetchAgentsRequest = FetchAgentsRequestMessage;
 export type FetchAgentsOptions = Omit<FetchAgentsRequest, "type" | "requestId"> & {
   signal?: AbortSignal;
   requestId?: string;
