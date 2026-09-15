@@ -1914,6 +1914,11 @@ export const ko: TranslationResources = {
       saveAccessibility: "리뷰 댓글 저장",
     },
   },
+  intents: {
+    share: {
+      skippedFiles: "공유된 파일 {{count}}개를 건너뛰었습니다. Paseo는 텍스트와 이미지만 받습니다.",
+    },
+  },
   settings: {
     title: "설정",
     loading: "설정 불러오는 중...",

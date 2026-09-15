@@ -1951,6 +1951,11 @@ export const es: TranslationResources = {
       saveAccessibility: "Guardar comentario de revisión",
     },
   },
+  intents: {
+    share: {
+      skippedFiles: "Se omitieron {{count}} archivos compartidos. Paseo acepta texto e imágenes.",
+    },
+  },
   settings: {
     title: "Ajustes",
     loading: "Cargando configuración...",

@@ -1883,6 +1883,11 @@ export const zhCN: TranslationResources = {
       saveAccessibility: "保存 review 评论",
     },
   },
+  intents: {
+    share: {
+      skippedFiles: "已跳过 {{count}} 个共享文件。Paseo 只接受文本和图片。",
+    },
+  },
   settings: {
     title: "设置",
     loading: "正在加载设置...",

@@ -23,6 +23,7 @@ import {
 } from "@/provider-selection/provider-selection";
 import { useDraftStore } from "@/stores/draft-store";
 import { toDraftInputIfReady } from "@/stores/draft-store/state";
+import { mergePendingPrompt, usePendingPromptStore } from "@/intents/pending-prompt-store";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb } from "@/constants/platform";
 
@@ -213,6 +214,19 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
       cancelled = true;
     };
   }, [draftKey, publishTextReplacement]);
+
+  const hasPendingPrompt = usePendingPromptStore((state) => Boolean(state.byDraftKey[draftKey]));
+  useEffect(() => {
+    if (!isHydrated || !hasPendingPrompt) {
+      return;
+    }
+    const pending = usePendingPromptStore.getState().take(draftKey);
+    if (!pending) {
+      return;
+    }
+    saveDraft((current) => mergePendingPrompt(current, pending));
+    publishTextReplacement(useDraftStore.getState().getDraftInput(draftKey)?.text ?? "");
+  }, [draftKey, hasPendingPrompt, isHydrated, publishTextReplacement, saveDraft]);
 
   const providerSelection = useMemo<ProviderSelectionState>(
     () => ({
