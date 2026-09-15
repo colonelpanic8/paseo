@@ -1964,6 +1964,12 @@ export const ptBR: TranslationResources = {
       saveAccessibility: "Salvar comentário de revisão",
     },
   },
+  intents: {
+    share: {
+      skippedFiles:
+        "{{count}} arquivos compartilhados foram ignorados. O Paseo aceita texto e imagens.",
+    },
+  },
   settings: {
     title: "Configurações",
     loading: "Carregando configurações...",

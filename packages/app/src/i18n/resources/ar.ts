@@ -1931,6 +1931,11 @@ export const ar: TranslationResources = {
       saveAccessibility: "حفظ تعليق المراجعة",
     },
   },
+  intents: {
+    share: {
+      skippedFiles: "تم تخطي {{count}} من الملفات المشتركة. يقبل Paseo النصوص والصور فقط.",
+    },
+  },
   settings: {
     title: "إعدادات",
     loading: "جارٍ تحميل الإعدادات...",

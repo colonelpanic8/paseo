@@ -1956,6 +1956,11 @@ export const en = {
       saveAccessibility: "Save review comment",
     },
   },
+  intents: {
+    share: {
+      skippedFiles: "{{count}} shared files were skipped. Paseo accepts text and images.",
+    },
+  },
   settings: {
     title: "Settings",
     loading: "Loading settings...",

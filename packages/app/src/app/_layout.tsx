@@ -130,6 +130,7 @@ import {
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { PluginCatalogSync } from "@/plugins";
+import { AndroidIntentListener } from "@/intents/android-intent-listener";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -670,6 +671,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
       <VoiceProvider>
         <DesktopWindowControlsSync />
         <OfferLinkListener />
+        {isNative ? <AndroidIntentListener /> : null}
         <HostSessionManager />
         <FaviconStatusSync />
         {children}
