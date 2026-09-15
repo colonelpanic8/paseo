@@ -2537,6 +2537,11 @@ export const fr: TranslationResources = {
       },
       sidebar: {
         title: "Barre latérale",
+        alwaysShowHostLabels: {
+          title: "Toujours afficher les étiquettes d’hôte",
+          description:
+            "Affiche les étiquettes d’hôte même lorsque tous les espaces de travail visibles sont sur cet appareil",
+        },
         description: "Choisissez les éléments affichés en haut de la barre latérale et leur ordre",
         moveUp: "Déplacer vers le haut",
         moveDown: "Déplacer vers le bas",
@@ -2692,6 +2697,15 @@ export const fr: TranslationResources = {
         color: {
           label: "Couleur",
           accessibilityLabel: "Couleur, {{value}}",
+          custom: {
+            action: "Personnalisée…",
+            title: "Couleur personnalisée",
+            submit: "Appliquer",
+            invalid: "Saisissez une couleur hexadécimale comme #368080.",
+            panelAccessibility: "Saturation et luminosité",
+            hueAccessibility: "Teinte",
+            hexAccessibility: "Couleur hexadécimale",
+          },
           options: {
             none: "Par défaut",
             violet: "Violet",
