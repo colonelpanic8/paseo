@@ -1,4 +1,7 @@
-import { createAgentRequestsStub } from "./test-utils/session-stubs.js";
+import {
+  createMessageReceiptsStub,
+  createTestCreationService,
+} from "./test-utils/session-stubs.js";
 import { execSync } from "child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -376,7 +379,8 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
   const messages = options.messages ?? [];
 
   const sessionOptions: SessionOptions = {
-    agentRequests: createAgentRequestsStub(),
+    messageReceipts: createMessageReceiptsStub(),
+    creationService: createTestCreationService(),
     clientId: options.clientId ?? "test-client",
     clientCapabilities: options.clientCapabilities,
     onMessage: (message) => messages.push(message),
