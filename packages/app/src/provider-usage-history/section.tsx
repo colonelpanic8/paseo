@@ -276,14 +276,27 @@ export function ProviderUsageHistorySection() {
         : deriveChartBreakdown(activeReport, chartDimensions, timeGrouping),
     [activeReport, chartDimensions, timeGrouping],
   );
-  const breakdown = useMemo(() => {
-    if (activeReport === null) return null;
-    const tableDimensions = sortCriteria.some(({ field }) => field === "day")
-      ? [...dimensions, "day" as const]
-      : dimensions;
-    const grouped = deriveUsageBreakdown(activeReport, tableDimensions, timeGrouping);
-    return { ...grouped, rows: sortBreakdown(grouped.rows, sortCriteria) };
-  }, [activeReport, dimensions, sortCriteria, timeGrouping]);
+  // Sorting by day needs the day as a group, but the grouping itself is
+  // independent of the sort order, so reversing a sort only reorders rows.
+  const sortsByDay = sortCriteria.some(({ field }) => field === "day");
+  const tableDimensions = useMemo(
+    () => (sortsByDay ? [...dimensions, "day" as const] : dimensions),
+    [dimensions, sortsByDay],
+  );
+  const groupedBreakdown = useMemo(
+    () =>
+      activeReport === null
+        ? null
+        : deriveUsageBreakdown(activeReport, tableDimensions, timeGrouping),
+    [activeReport, tableDimensions, timeGrouping],
+  );
+  const breakdown = useMemo(
+    () =>
+      groupedBreakdown === null
+        ? null
+        : { ...groupedBreakdown, rows: sortBreakdown(groupedBreakdown.rows, sortCriteria) },
+    [groupedBreakdown, sortCriteria],
+  );
 
   const busy = view.kind === "loading" || (view.kind === "ready" && view.isRefreshing);
   const isMultiHost = hostRefs.length > 1;
