@@ -616,11 +616,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     // Matches are computed over the projected items, i.e. what the stream
     // actually renders, in display order (tail then live head on web).
     const findSearchItems = useMemo(() => {
-      if (projectedToolCalls.head.length === 0) {
-        return projectedToolCalls.tail;
+      if (presentation.head.length === 0) {
+        return presentation.tail;
       }
-      return [...projectedToolCalls.tail, ...projectedToolCalls.head];
-    }, [projectedToolCalls.head, projectedToolCalls.tail]);
+      return [...presentation.tail, ...presentation.head];
+    }, [presentation.head, presentation.tail]);
     const find = useSessionFind({
       agentId,
       items: findSearchItems,
