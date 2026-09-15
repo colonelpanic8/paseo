@@ -30,6 +30,7 @@ import {
   useOverlayLayer,
   useWebOverlayRegistration,
 } from "@/lib/overlay-root";
+import { getNextActiveIndex } from "@/components/ui/combobox-keyboard";
 import { LIST_SEARCH_DATASET, resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 import {
   computePosition,
@@ -446,7 +447,6 @@ export function MenuOverlay({
       );
       if (items.length === 0) return false;
       const currentIndex = items.findIndex((item) => item === document.activeElement);
-
       if (action === "submit" || event.key === " ") {
         if (currentIndex < 0) return false;
         event.preventDefault();
@@ -454,12 +454,14 @@ export function MenuOverlay({
         items[currentIndex]?.click();
         return true;
       }
-
       let nextIndex: number | null = null;
-      if (action === "next") nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
-      if (action === "previous")
-        nextIndex =
-          currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
+      if (action === "next" || action === "previous") {
+        nextIndex = getNextActiveIndex({
+          currentIndex,
+          itemCount: items.length,
+          key: action === "next" ? "ArrowDown" : "ArrowUp",
+        });
+      }
       if (event.key === "Home") nextIndex = 0;
       if (event.key === "End") nextIndex = items.length - 1;
       if (nextIndex !== null) {
