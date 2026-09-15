@@ -2452,6 +2452,63 @@ export class AgentManager {
     }
   }
 
+  /**
+   * Drop the failed state of an agent whose last turn errored, without prompting it.
+   * The failure itself is kept — the timeline entry, `lastError`, and `lastFailure` all
+   * survive. Only the two signals that keep the agent, and the workspace it rolls up
+   * into, rendering as failed are reset. A later failure re-raises both.
+   *
+   * Returns whether anything changed.
+   */
+  async dismissAgentError(agentId: string): Promise<boolean> {
+    const liveAgent = this.agents.get(agentId);
+    if (liveAgent) {
+      const mutableAgent = liveAgent;
+      const hasErrorAttention =
+        mutableAgent.attention.requiresAttention &&
+        mutableAgent.attention.attentionReason === "error";
+      const nextLifecycle: ActiveManagedAgent["lifecycle"] | null =
+        mutableAgent.lifecycle === "error" && !this.hasInFlightRun(agentId) ? "idle" : null;
+      if (!nextLifecycle && !hasErrorAttention) {
+        return false;
+      }
+      if (nextLifecycle) {
+        mutableAgent.lifecycle = nextLifecycle;
+      }
+      if (hasErrorAttention) {
+        mutableAgent.attention = { requiresAttention: false };
+      }
+      await this.persistSnapshot(mutableAgent);
+      this.emitState(mutableAgent, { persist: false });
+      return true;
+    }
+
+    const registry = this.requireRegistry();
+    const record = await registry.get(agentId);
+    if (!record || record.internal || record.archivedAt) {
+      return false;
+    }
+    const hasErrorAttention =
+      record.requiresAttention === true && record.attentionReason === "error";
+    const hasErrorLifecycle = record.lastStatus === "error";
+    if (!hasErrorLifecycle && !hasErrorAttention) {
+      return false;
+    }
+    const nextRecord: StoredAgentRecord = {
+      ...record,
+      updatedAt: this.nextStoredUpdatedAt(record),
+      // A record with no live runtime rests at "closed", which is what
+      // dispatchStoredAgentState reports for it anyway.
+      ...(hasErrorLifecycle ? { lastStatus: "closed" as const } : {}),
+      ...(hasErrorAttention
+        ? { requiresAttention: false, attentionReason: null, attentionTimestamp: null }
+        : {}),
+    };
+    await registry.upsert(nextRecord);
+    this.dispatchStoredAgentState(nextRecord);
+    return true;
+  }
+
   async markAgentUnread(agentId: string): Promise<void> {
     const liveAgent = this.agents.get(agentId);
     if (liveAgent) {
