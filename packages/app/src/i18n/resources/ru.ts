@@ -2067,6 +2067,11 @@ export const ru: TranslationResources = {
       saveAccessibility: "Сохранить комментарий к ревью",
     },
   },
+  intents: {
+    share: {
+      skippedFiles: "Пропущено файлов: {{count}}. Paseo принимает только текст и изображения.",
+    },
+  },
   settings: {
     title: "Настройки",
     loading: "Загрузка настроек...",
