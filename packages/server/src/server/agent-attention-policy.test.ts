@@ -223,6 +223,68 @@ describe("computeNotificationPlan", () => {
       }),
     ).toEqual({ inAppRecipientIndex: null, shouldPush: true });
   });
+
+  it("treats a client as away sooner with a shorter presence threshold", () => {
+    const recent = state({ lastActivityAtMs: nowMs - 45_000 });
+
+    expect(
+      computeNotificationPlan({
+        allStates: [recent],
+        focusTarget: { kind: "agent", id: "agent-1" },
+        pushEligible: true,
+        nowMs,
+        presenceThresholdMs: 30_000,
+      }),
+    ).toEqual({ inAppRecipientIndex: null, shouldPush: true });
+
+    expect(
+      computeNotificationPlan({
+        allStates: [recent],
+        focusTarget: { kind: "agent", id: "agent-1" },
+        pushEligible: true,
+        nowMs,
+        presenceThresholdMs: 60_000,
+      }),
+    ).toEqual({ inAppRecipientIndex: 0, shouldPush: false });
+  });
+
+  it("keeps in-app delivery while pushing when presence is ignored", () => {
+    const present = state({ lastActivityAtMs: presentAtMs });
+
+    expect(
+      computeNotificationPlan({
+        allStates: [present],
+        focusTarget: { kind: "agent", id: "agent-1" },
+        pushEligible: true,
+        nowMs,
+        ignorePresence: true,
+      }),
+    ).toEqual({ inAppRecipientIndex: 0, shouldPush: true });
+  });
+
+  it("pushes past a focused client when presence is ignored, but never for an ineligible reason", () => {
+    const focused = state({ focusedAgentId: "agent-1", lastActivityAtMs: presentAtMs });
+
+    expect(
+      computeNotificationPlan({
+        allStates: [focused],
+        focusTarget: { kind: "agent", id: "agent-1" },
+        pushEligible: true,
+        nowMs,
+        ignorePresence: true,
+      }),
+    ).toEqual({ inAppRecipientIndex: null, shouldPush: true });
+
+    expect(
+      computeNotificationPlan({
+        allStates: [focused],
+        focusTarget: { kind: "agent", id: "agent-1" },
+        pushEligible: false,
+        nowMs,
+        ignorePresence: true,
+      }),
+    ).toEqual({ inAppRecipientIndex: null, shouldPush: false });
+  });
 });
 
 describe("isPushEligibleAttentionReason", () => {
