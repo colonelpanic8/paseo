@@ -656,7 +656,7 @@ export function WorkspaceDraftAgentTab({
     [composerState.agentControls, handleDropdownCloseFocus, isSubmitting],
   );
   return (
-    <ComposerViewport style={styles.container} bottomInset={insets.bottom}>
+    <ComposerViewport style={styles.container} bottomInset={screenBottomInset}>
       <FileDropZone style={styles.container}>
         <View style={styles.contentContainer}>
           {isSubmitting && draftAgent ? (
