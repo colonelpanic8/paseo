@@ -1500,6 +1500,65 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       keys: ["mod", "shift", "Space"],
     },
   },
+
+  // Live Voice mute works everywhere a call can follow you — including while
+  // typing — because muting is exactly what you reach for mid-keystroke when
+  // someone walks in. Terminal keeps first refusal on its own keys.
+  {
+    id: "live-voice-mute-toggle-cmd-shift-l-mac",
+    action: "live-voice.mute.toggle",
+    combo: "Cmd+Shift+L",
+    repeat: false,
+    when: { mac: true, commandCenter: false, terminal: false },
+    help: {
+      id: "live-voice-mute-toggle",
+      section: "agent-input",
+      label: "Mute/unmute live voice",
+    },
+  },
+  {
+    id: "live-voice-mute-toggle-ctrl-shift-l-non-mac",
+    action: "live-voice.mute.toggle",
+    combo: "Ctrl+Shift+L",
+    repeat: false,
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "live-voice-mute-toggle",
+      section: "agent-input",
+      label: "Mute/unmute live voice",
+    },
+  },
+
+  // Hold-to-invert rather than a second mute toggle: whichever state the call is
+  // in, holding the chord gives you the other one for exactly as long as you
+  // hold it. That is push-to-talk on a muted call and push-to-mute on a live one,
+  // without the user having to remember which mode they are in.
+  {
+    id: "live-voice-mute-hold-invert-cmd-shift-space-mac",
+    action: "live-voice.mute.hold-invert",
+    combo: "Cmd+Shift+Space",
+    hold: true,
+    when: { mac: true, commandCenter: false, terminal: false },
+    help: {
+      id: "live-voice-mute-hold-invert",
+      section: "agent-input",
+      label: "Hold to invert live voice mute",
+      note: "Push-to-talk while muted, push-to-mute while live.",
+    },
+  },
+  {
+    id: "live-voice-mute-hold-invert-ctrl-shift-space-non-mac",
+    action: "live-voice.mute.hold-invert",
+    combo: "Ctrl+Shift+Space",
+    hold: true,
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "live-voice-mute-hold-invert",
+      section: "agent-input",
+      label: "Hold to invert live voice mute",
+      note: "Push-to-talk while muted, push-to-mute while live.",
+    },
+  },
 ];
 
 // --- Parse bindings at module load ---
@@ -1509,6 +1568,12 @@ export const UNASSIGNED_COMBO = null;
 
 export function parseBindingChord(combo: string): KeyCombo[] {
   return combo === "" ? [] : parseChordString(combo);
+}
+
+// A hold binding must ignore auto-repeat: the key going down again while it is
+// already held is the OS repeating, not a second press.
+function ignoresRepeat(binding: ShortcutBinding): boolean {
+  return binding.repeat === false || binding.hold === true;
 }
 
 // A hold binding must ignore auto-repeat: the key going down again while it is
