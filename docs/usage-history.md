@@ -6,16 +6,18 @@
 
 The daemon scans the provider CLIs' own session transcripts on disk, not Paseo's agent records:
 
-| Provider    | Directory                                          | Usage carrier                                                           |
-| ----------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| Claude Code | `<home>/projects/**/*.jsonl` (default `~/.claude`) | `type: "assistant"` records, `message.usage`                            |
-| Codex       | `<home>/sessions/**/*.jsonl` (default `~/.codex`)  | `token_count` events; the model comes from the preceding `turn_context` |
+| Provider    | Directory                                                             | Usage carrier                                                           |
+| ----------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Claude Code | `<home>/projects/**/*.jsonl` (default `~/.claude`)                    | `type: "assistant"` records, `message.usage`                            |
+| Codex       | `<home>/{sessions,archived_sessions}/**/*.jsonl` (default `~/.codex`) | `token_count` events; the model comes from the preceding `turn_context` |
 
 Reading the CLI's files means usage is complete even for turns that never went through Paseo. It also means the page only knows about providers that keep a transcript with token counts. Copilot, OpenCode, and Pi are absent for that reason, not by policy. Adding one is a new parser in `packages/server/src/services/usage-history/transcripts.ts` plus a kind in `provider-homes.ts`.
 
 ## One home per configured provider
 
 The scan enumerates a transcript home for **every configured provider**, not just the two defaults. A user can run several accounts of the same kind by extending a built-in provider with its own `CLAUDE_CONFIG_DIR` or `CODEX_HOME` (see [custom-providers.md](custom-providers.md)), and each of those homes holds its own transcripts. Reading only `process.env` and the default home is the bug this replaced: on a machine with three extra homes it reported less than half the real Codex usage, and looked healthy while doing it.
+
+Codex archives a finished rollout by moving it from `sessions` into `archived_sessions`, so the archive holds the only copy and on a long-lived home is the larger half of the corpus. Both directories are scanned, as separate sources of the same configured provider. Which models the omission hit was arbitrary — whichever ones the user tended to finish and close rather than leave running — so the page looked plausible while reporting a fraction of one model's real usage.
 
 The base kind is resolved by following `extends` transitively; anything that does not land on `claude` or `codex` keeps no token transcripts and is skipped. Homes are deduplicated by `realpath`, because two configured providers may point at one directory and would otherwise double count every token in it. Built-in defaults are always scanned, even when the provider is disabled, since past usage is still real. Each scan re-reads the current configuration, so adding a provider takes effect without a daemon restart.
 
