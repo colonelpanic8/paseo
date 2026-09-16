@@ -111,6 +111,33 @@ Paseo uses these paths under the configured OpenAI base URL:
 - voice mode STT: `/v1/audio/transcriptions`
 - voice mode TTS: `/v1/audio/speech`
 
+## Live Voice Profiles
+
+A Live Voice call is configured by a profile and remembered in a thread. Profiles created in the app live on the daemon; you can also declare profiles in `config.json`, which is the right choice when a machine's configuration is managed for it. Declared profiles are read-only in the app and shared by every paired device.
+
+```json
+{
+  "version": 1,
+  "liveVoice": {
+    "defaultContextProfile": "life",
+    "contextProfiles": [
+      {
+        "id": "life",
+        "label": "Life",
+        "files": ["~/org/AGENTS.md", "~/org/planning/context.org"],
+        "instructions": "Route anything I want to remember into my inbox."
+      },
+      { "id": "work", "label": "Work", "voice": "cedar" }
+    ]
+  }
+}
+```
+
+- `id` is a lowercase slug; the app shows it as `cfg_<id>`.
+- `files` are absolute or `~`-rooted paths the daemon reads at call start. Each file is capped at 12 KB and the set at 32 KB; a file that cannot be read is skipped with a log line.
+- `instructions`, `context`, `voice`, `backendModel`, and `backendThinkingOptionId` match the fields of a profile created in the app.
+- `defaultContextProfile` applies when a call names no profile. It must name a declared profile.
+
 ## Environment Variables
 
 - `PASEO_VOICE_LLM_PROVIDER`, voice agent provider override
