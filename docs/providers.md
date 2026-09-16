@@ -103,7 +103,14 @@ V2.0.4 also removed the activation endpoint that gated a cold location, and a co
 
 Paseo installs its OpenCode tool bridge through `OPENCODE_CONFIG_CONTENT`. V1 accepts a plugin file; v2 silently skips configured files and requires a package directory with a server entry point. Both versions use the daemon's private loopback bridge for caller-scoped tools. Bridge context lives only in daemon memory and is removed when the Paseo session closes. The content-addressed plugin artifacts contain no session data or secrets. V2 also needs this plugin when native Paseo tools are disabled: its prompt API has no structured-output format, so the plugin supplies a schema-validated final-answer tool.
 
-An agent with custom environment variables or user-configured MCP servers gets a dedicated OpenCode server. V2 supports session environment, but its MCP configuration remains location-scoped, so separate servers still prevent one agent from changing another agent's MCP setup. Configure custom MCP with `mcp.add`; do not follow it with `mcp.connect`, which only toggles config-backed servers.
+
+OpenCode reads its model catalogue once per process from a cache file it refreshes in the
+background, so a running server keeps answering with the catalogue it booted with and asking it
+again can never reveal a newly published model. The OpenCode catalogue key is a fingerprint of the
+files that decide that catalogue — the model cache, stored credentials, and the global and project
+config — and a discovery that sees a changed fingerprint replaces the server instead of asking the
+old one again. A model OpenCode adds upstream therefore arrives on the next revalidation, with no
+Paseo change.
 
 OpenCode owns user message IDs. Do not pass Paseo-generated IDs to OpenCode prompt APIs; let OpenCode create `msg*` IDs and record the user timeline item from the `message.updated` event.
 
@@ -159,7 +166,12 @@ that were still active when the deadline expired.
 
 Catalogue results stay cached by identity until explicit refresh or a change to that provider's configuration.
 Keys are resolved on each read so project configuration can select a different cached catalogue.
-Selector opening may read a loading or stale query, but does not force provider probing.
+A snapshot read also revalidates in the background: providers that publish a key have it resolved
+again, so a catalogue whose inputs moved is discovered again and one that did not costs a key
+lookup. A published catalogue older than six hours is discovered again outright, because a provider
+that only rewrites its sources while it runs cannot report a change on its own. Providers without a
+key keep their result until an explicit refresh. Selector opening may read a loading or stale query;
+the client never forces a probe.
 
 Saved provider/model choices are user intent. Catalogue failure must not erase them or substitute
 another model. Creation reads the caller's host and directory directly; an earlier global snapshot
