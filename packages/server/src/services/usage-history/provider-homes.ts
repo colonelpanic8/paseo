@@ -15,9 +15,14 @@ const DEFAULT_HOME_BASENAME: Record<UsageProvider, string> = {
   claude: ".claude",
   codex: ".codex",
 };
-const TRANSCRIPT_SUBDIR: Record<UsageProvider, string> = {
-  claude: "projects",
-  codex: "sessions",
+/**
+ * Codex moves a finished rollout out of `sessions` into `archived_sessions`, so the archive is not
+ * a copy and holds the larger half of a long-lived home. Scanning only `sessions` reports a
+ * fraction of real usage, weighted toward whichever models the user happens to leave running.
+ */
+const TRANSCRIPT_SUBDIRS: Record<UsageProvider, readonly string[]> = {
+  claude: ["projects"],
+  codex: ["sessions", "archived_sessions"],
 };
 /** One provider-owned transcript directory to scan. */
 export interface TranscriptHome {
@@ -29,7 +34,7 @@ export interface TranscriptHome {
   readonly label?: string;
   /** The provider home, e.g. `~/.codex-colonelpanic8`. */
   readonly home: string;
-  /** The transcript directory inside that home. */
+  /** One transcript directory inside that home. A provider with several gets one entry each. */
   readonly dir: string;
 }
 
@@ -117,13 +122,15 @@ export function resolveTranscriptHomes(
           : (input.defaultHomes?.[provider] ?? defaultHome(provider)),
       ),
     );
-    homes.push({
-      provider,
-      providerId,
-      label: override?.label,
-      home,
-      dir: path.join(home, TRANSCRIPT_SUBDIR[provider]),
-    });
+    for (const subdir of TRANSCRIPT_SUBDIRS[provider]) {
+      homes.push({
+        provider,
+        providerId,
+        label: override?.label,
+        home,
+        dir: path.join(home, subdir),
+      });
+    }
   };
 
   // Past usage under a default home is still real, so it is scanned even when disabled.

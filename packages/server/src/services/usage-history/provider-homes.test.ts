@@ -74,10 +74,23 @@ describe("resolveTranscriptHomes", () => {
       },
       {
         provider: "codex",
+        providerId: "codex",
+        home: "/defaults/codex",
+        dir: path.join("/defaults/codex", "archived_sessions"),
+      },
+      {
+        provider: "codex",
         providerId: "codex-ben",
         label: "Codex (Ben)",
         home: "/ben",
         dir: path.join("/ben", "sessions"),
+      },
+      {
+        provider: "codex",
+        providerId: "codex-ben",
+        label: "Codex (Ben)",
+        home: "/ben",
+        dir: path.join("/ben", "archived_sessions"),
       },
       {
         provider: "claude",
@@ -90,18 +103,21 @@ describe("resolveTranscriptHomes", () => {
   });
 
   it("keeps the default home for a provider that sets no home of its own", () => {
-    const [, , inherited] = resolveTranscriptHomes({
+    const inherited = resolveTranscriptHomes({
       defaultHomes,
       overrides: { "codex-alt": { extends: "codex", env: { OTHER: "x" } } },
-    });
-    expect(inherited).toMatchObject({ providerId: "codex-alt", home: "/defaults/codex" });
+    }).filter((home) => home.providerId === "codex-alt");
+    expect(inherited).toMatchObject([
+      { home: "/defaults/codex", dir: path.join("/defaults/codex", "sessions") },
+      { home: "/defaults/codex", dir: path.join("/defaults/codex", "archived_sessions") },
+    ]);
   });
 
   it("expands a tilde home to an absolute path", () => {
-    const [, , expanded] = resolveTranscriptHomes({
+    const expanded = resolveTranscriptHomes({
       defaultHomes,
       overrides: { "codex-tilde": { extends: "codex", env: { CODEX_HOME: "~/codex-alt" } } },
-    });
+    }).find((home) => home.providerId === "codex-tilde");
     expect(expanded?.home).toBe(path.join(process.env["HOME"] ?? os.homedir(), "codex-alt"));
   });
 
@@ -110,7 +126,17 @@ describe("resolveTranscriptHomes", () => {
       defaultHomes,
       overrides: { "copilot-work": { extends: "copilot" }, "loop-a": { extends: "loop-a" } },
     });
-    expect(homes.map((home) => home.providerId)).toEqual(["claude", "codex"]);
+    expect(homes.map((home) => home.providerId)).toEqual(["claude", "codex", "codex"]);
+  });
+
+  it("gives Codex both its live and its archived rollout directory", () => {
+    const codex = resolveTranscriptHomes({ defaultHomes }).filter(
+      (home) => home.provider === "codex",
+    );
+    expect(codex.map((home) => home.dir)).toEqual([
+      path.join("/defaults/codex", "sessions"),
+      path.join("/defaults/codex", "archived_sessions"),
+    ]);
   });
 });
 
@@ -129,7 +155,11 @@ describe("dedupeTranscriptHomes", () => {
       },
     });
     const deduped = await dedupeTranscriptHomes(homes);
-    expect(deduped.map((home) => home.providerId)).toEqual(["claude", "codex"]);
+    expect(deduped.map((home) => home.dir)).toEqual([
+      path.join(root, "claude", "projects"),
+      real,
+      path.join(root, "codex", "archived_sessions"),
+    ]);
   });
 
   it("deduplicates a home whose transcript directory does not exist yet", async () => {
@@ -143,6 +173,10 @@ describe("dedupeTranscriptHomes", () => {
         overrides: { "codex-linked": { extends: "codex", env: { CODEX_HOME: link } } },
       }),
     );
-    expect(deduped.map((home) => home.providerId)).toEqual(["claude", "codex"]);
+    expect(deduped.map((home) => home.dir)).toEqual([
+      path.join(root, "claude", "projects"),
+      path.join(root, "codex", "sessions"),
+      path.join(root, "codex", "archived_sessions"),
+    ]);
   });
 });
