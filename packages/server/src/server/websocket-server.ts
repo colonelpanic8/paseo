@@ -42,7 +42,11 @@ import {
   type SessionRuntimeMetrics,
 } from "./session.js";
 import { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
-import { AssistantStore } from "./assistants/assistant-store.js";
+import {
+  VoiceProfileStore,
+  type DeclaredVoiceProfiles,
+} from "./voice-profiles/voice-profile-store.js";
+import { VoiceThreadStore } from "./voice-profiles/voice-thread-store.js";
 import { LiveVoiceDaemonContextProvider } from "./live-voice/live-voice-daemon-context.js";
 import { resolveLiveVoiceHostProfile } from "./agent/providers/live-voice-host-profiles.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
@@ -167,6 +171,7 @@ interface WebSocketServerConfig {
   daemonStatusRpc?: boolean;
   relayConfig?: boolean;
   startPaused?: boolean;
+  liveVoiceProfiles?: DeclaredVoiceProfiles | undefined;
 }
 
 type WebSocketRuntimeMetrics = SessionRuntimeMetrics & CheckoutDiffMetrics;
@@ -562,7 +567,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   private readonly agentManager: AgentManager;
   private readonly liveVoiceCoordinator: LiveVoiceCoordinator;
-  private readonly assistantStore: AssistantStore;
+  private readonly voiceProfileStore: VoiceProfileStore;
+  private readonly voiceThreadStore: VoiceThreadStore;
   private readonly agentStorage: AgentStorage;
   private readonly messageReceipts: MessageReceipts;
   private readonly creationService: CreationService;
@@ -799,9 +805,14 @@ export class VoiceAssistantWebSocketServer {
       });
     });
 
-    // One store for the daemon; every read and write is keyed by the admitted
-    // principal, so sharing the instance never shares data across principals.
-    this.assistantStore = new AssistantStore(join(paseoHome, "assistants"));
+    // One store each for the daemon; every read and write is keyed by the
+    // admitted principal, so sharing the instances never shares data across
+    // principals. Config-declared profiles ride along as read-only entries.
+    this.voiceProfileStore = new VoiceProfileStore(
+      join(paseoHome, "voice"),
+      wsConfig.liveVoiceProfiles,
+    );
+    this.voiceThreadStore = new VoiceThreadStore(join(paseoHome, "voice"));
 
     // Daemon-global: a call belongs to the daemon, not to an agent, and each one
     // runs on a hidden host session the coordinator spawns for it.
@@ -810,7 +821,8 @@ export class VoiceAssistantWebSocketServer {
       logger: this.logger,
       hostProfile: resolveLiveVoiceHostProfile(),
       routeBroker: this.liveVoiceRouteBroker,
-      assistantStore: this.assistantStore,
+      profileStore: this.voiceProfileStore,
+      threadStore: this.voiceThreadStore,
       // Teaches the voice model what Paseo is and what is currently running. The
       // host session carries Paseo's MCP tools, so this is what turns "can talk"
       // into "can act on Paseo".
@@ -818,6 +830,7 @@ export class VoiceAssistantWebSocketServer {
         agents: this.agentManager,
         workspaces: this.workspaceRegistry,
         logger: this.logger,
+        paseoHome,
       }),
     });
 
@@ -1139,9 +1152,9 @@ export class VoiceAssistantWebSocketServer {
     this.liveVoiceAgentNotifier.dispose();
     // The coordinator's close path still has history writes in flight.
     try {
-      await this.assistantStore.flush();
+      await Promise.all([this.voiceThreadStore.flush(), this.voiceProfileStore.flush()]);
     } catch (error) {
-      this.logger.error({ err: error }, "Failed to flush assistant history during shutdown");
+      this.logger.error({ err: error }, "Failed to flush voice thread history during shutdown");
     }
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
@@ -1595,7 +1608,8 @@ export class VoiceAssistantWebSocketServer {
       liveVoiceRouteBroker: this.liveVoiceRouteBroker,
       liveVoiceToolExecutor: this.liveVoiceToolExecutor,
       liveVoiceAgentNotifier: this.liveVoiceAgentNotifier,
-      assistantStore: this.assistantStore,
+      voiceProfileStore: this.voiceProfileStore,
+      voiceThreadStore: this.voiceThreadStore,
       voiceBridge: {
         registerVoiceSpeakHandler: (agentId, handler) => {
           if (this.voiceSpeakHandlers.has(agentId))
@@ -2010,8 +2024,8 @@ export class VoiceAssistantWebSocketServer {
         stableProjectIdentity: true,
         // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
         liveVoice: true,
-        // COMPAT(assistants): added in v0.7.2, remove after 2027-03-06.
-        assistants: true,
+        // COMPAT(voiceProfiles): added in v0.8.1, remove after 2027-03-16.
+        voiceProfiles: true,
         // COMPAT(liveVoiceVoiceCatalog): added in v0.2.6, remove after 2027-02-28.
         liveVoiceVoiceCatalog: true,
         // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
