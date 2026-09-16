@@ -78,8 +78,9 @@ async function writeCodexTranscript(
   providerHome: string,
   session: string,
   outputTokens: number,
+  subdir = "sessions",
 ): Promise<void> {
-  const dir = path.join(providerHome, "sessions", "2026", "08", "01");
+  const dir = path.join(providerHome, subdir, "2026", "08", "01");
   await fs.mkdir(dir, { recursive: true });
   const lines = [
     { type: "session_meta", timestamp: "2026-08-01T10:00:00Z", payload: { id: session } },
@@ -328,6 +329,18 @@ describe("UsageHistoryService", () => {
         distinctSessions: 0,
         message: "No transcript directory on this environment.",
       },
+      {
+        provider: "codex",
+        providerId: "codex",
+        path: path.join(codexHome, "archived_sessions"),
+        hostId: "test-host",
+        volumeId: "",
+        status: "missing",
+        scannedFiles: 0,
+        skippedFiles: 0,
+        distinctSessions: 0,
+        message: "No transcript directory on this environment.",
+      },
     ]);
   });
 
@@ -360,14 +373,17 @@ describe("UsageHistoryService", () => {
     });
     expect(summary.buckets.every((bucket) => bucket.provider !== "codex-ben")).toBe(true);
     expect(
-      summary.sources.map((source) => ({
-        provider: source.provider,
-        providerId: source.providerId,
-        label: source.label,
-        status: source.status,
-        scannedFiles: source.scannedFiles,
-        distinctSessions: source.distinctSessions,
-      })),
+      // Every Codex home also reports an archived-rollout directory; this test is about attribution.
+      summary.sources
+        .filter((source) => !source.path.endsWith("archived_sessions"))
+        .map((source) => ({
+          provider: source.provider,
+          providerId: source.providerId,
+          label: source.label,
+          status: source.status,
+          scannedFiles: source.scannedFiles,
+          distinctSessions: source.distinctSessions,
+        })),
     ).toEqual([
       {
         provider: "claude",
@@ -412,7 +428,21 @@ describe("UsageHistoryService", () => {
     }).readSummary(WINDOW);
 
     expect(outputTokensByProviderId(summary)).toEqual({ "codex-one": 17 });
-    expect(summary.sources.filter((source) => source.path.startsWith(sharedHome))).toHaveLength(1);
+    expect(
+      summary.sources.filter((source) => source.path === path.join(sharedHome, "sessions")),
+    ).toHaveLength(1);
+  });
+
+  it("counts rollouts Codex has archived out of its sessions directory", async () => {
+    const archivedHome = path.join(home, "codex-archived");
+    await writeCodexTranscript(archivedHome, "session-live", 4);
+    await writeCodexTranscript(archivedHome, "session-archived", 31, "archived_sessions");
+
+    const summary = await makeService({
+      overrides: { "codex-archived": { extends: "codex", env: { CODEX_HOME: archivedHome } } },
+    }).readSummary(WINDOW);
+
+    expect(outputTokensByProviderId(summary)).toEqual({ "codex-archived": 35 });
   });
 
   it("reports a configured home that does not exist without suppressing the others", async () => {
@@ -451,7 +481,10 @@ describe("UsageHistoryService", () => {
       },
     }).readSummary(WINDOW);
 
-    expect(summary.sources.map((source) => source.providerId)).toEqual(["claude", "codex"]);
+    expect([...new Set(summary.sources.map((source) => source.providerId))]).toEqual([
+      "claude",
+      "codex",
+    ]);
     expect(outputTokensByProviderId(summary)).toEqual({});
   });
 
@@ -472,7 +505,7 @@ describe("UsageHistoryService", () => {
       },
     }).readSummary(WINDOW);
 
-    expect(summary.sources.map((source) => source.providerId)).toEqual([
+    expect([...new Set(summary.sources.map((source) => source.providerId))]).toEqual([
       "claude",
       "codex",
       "codex-leaf",
