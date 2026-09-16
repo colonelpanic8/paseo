@@ -135,27 +135,36 @@ generation. The daemon retains only the latest projection per entity and bounded
 event log. A missing, expired, or previous-generation cursor receives a full snapshot. Projects are
 independent records; a project with no workspaces does not need a workspace placeholder.
 
-#### Durable assistants
+#### Live Voice profiles and threads
 
-Assistants are their own principal-scoped records, independent of projects and
-workspaces. A template supplies a copy of the initial configuration; editing or
-deleting it never changes an existing assistant. The launcher selects an instance
-on a host, and its settings override per-call voice, instructions, and backend
-model settings. The backend thinking setting is not a control for the realtime
-speaking model's reasoning effort.
+A profile is configuration: instructions, standing context, context files, voice,
+and the backend action model. A thread is memory: the journal one line of calls
+accumulates. Starting a call names at most one of each; the daemon opens a new
+thread under the profile when none is continued, so the user never creates a
+thread by hand. A thread references its profile by id and resolves it at call
+start, so editing a profile applies to every thread's next call.
 
-Each call still creates an ephemeral provider host. The daemon saves finalized
-speech and call boundaries, then seeds a fresh realtime conversation from the
-assistant's configured context, user-written summary, and recent unsummarized
+Profiles come from two sources and a client sees one merged list. User profiles
+are principal-scoped records edited over `voice.profile.*`. Config profiles are
+declared in the daemon's `config.json` under `liveVoice.contextProfiles`, carry
+`cfg_` ids, are read-only over the wire, and are shared by every principal; that
+is what makes them the right home for a machine-managed setup. The daemon's
+`defaultContextProfile` applies whenever a start request names no profile.
+
+Each call still creates an ephemeral provider host. The daemon reads the profile's
+context files (bounded per file and in total), saves finalized speech and call
+boundaries to the thread, and seeds a fresh realtime conversation from the
+profile's context, the thread's user-written summary, and its recent unsummarized
 history. Speech keeps its original role. This restores text context, not the
 provider's internal session or audio state. A disconnected call can have an
 incomplete final utterance. History outside the startup budget remains readable;
-see [data-model.md](data-model.md#assistant-records-and-history) for retention.
+see [data-model.md](data-model.md#voice-profile-and-thread-records) for retention.
 
-One assistant can have one active call across its owner's devices. Configuration
-edits and compaction affect the next call. Deleting an assistant closes its call
-and removes its local history; independently delegated project work keeps running.
-Provider-owned rollouts are outside that deletion boundary.
+One thread can have one active call across its owner's devices. Profile edits
+and compaction affect the next call. Deleting a thread closes its call and removes
+its local history; deleting a profile leaves its threads in place and they
+continue unconfigured. Independently delegated project work keeps running, and
+provider-owned rollouts are outside that deletion boundary.
 
 Subscription-backed fire-and-forget execution is not implemented. The inspected
 Codex WebSocket realtime path requires API-key authentication; WebRTC uses the

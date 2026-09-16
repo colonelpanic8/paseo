@@ -24,7 +24,7 @@ import {
 } from "@getpaseo/protocol/binary-frames/index";
 import { Session } from "./session.js";
 import { OWNER_PERMISSIONS, type DaemonPermission } from "./authorization/index.js";
-import { AssistantStoreError } from "./assistants/assistant-store.js";
+import { VoiceThreadStoreError } from "./voice-profiles/voice-thread-store.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import { StructuredAgentFallbackError } from "./agent/agent-response-loop.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
@@ -335,7 +335,8 @@ interface SessionForTestOptions {
   liveVoiceToolExecutor?: LiveVoiceToolExecutor;
   liveVoiceAgentNotifier?: LiveVoiceAgentNotifier;
   principalId?: string;
-  assistantStore?: SessionOptions["assistantStore"];
+  voiceProfileStore?: SessionOptions["voiceProfileStore"];
+  voiceThreadStore?: SessionOptions["voiceThreadStore"];
   downloadTokenStore?: SessionOptions["downloadTokenStore"];
   pushNotifications?: SessionOptions["pushNotifications"];
   messages?: unknown[];
@@ -454,7 +455,8 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     liveVoiceToolExecutor: options.liveVoiceToolExecutor,
     liveVoiceAgentNotifier: options.liveVoiceAgentNotifier,
     principalId: options.principalId,
-    assistantStore: options.assistantStore,
+    voiceProfileStore: options.voiceProfileStore,
+    voiceThreadStore: options.voiceThreadStore,
     serverId: options.serverId,
     daemonVersion: options.daemonVersion,
     daemonRuntimeConfig: options.daemonRuntimeConfig,
@@ -6230,37 +6232,48 @@ test("provider snapshots preserve versionless visibility while capabilities upda
   expect(references.compactSnapshot!.entries[0]!.modes![0]!.icon).toBe("ShieldCheck");
 });
 
-describe("assistant RPCs", () => {
-  const assistantId = `ast_${"a".repeat(32)}`;
+describe("voice profile RPCs", () => {
+  const threadId = `thr_${"a".repeat(32)}`;
 
-  function createAssistantStoreStub() {
+  function createStores() {
     return {
-      list: vi.fn().mockResolvedValue([]),
-      get: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-      compact: vi.fn(),
-      listTemplates: vi.fn(),
-      saveTemplate: vi.fn(),
-      deleteTemplate: vi.fn(),
+      profiles: {
+        list: vi.fn().mockResolvedValue([]),
+        defaultProfileId: null,
+        save: vi.fn(),
+        delete: vi.fn(),
+        find: vi.fn(),
+      },
+      threads: {
+        list: vi.fn().mockResolvedValue([]),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        compact: vi.fn(),
+        delete: vi.fn(),
+      },
     };
   }
 
-  function asAssistantStore(
-    stub: ReturnType<typeof createAssistantStoreStub>,
-  ): NonNullable<SessionOptions["assistantStore"]> {
-    return stub as unknown as NonNullable<SessionOptions["assistantStore"]>;
+  function storeOptions(stores: ReturnType<typeof createStores>) {
+    return {
+      voiceProfileStore: stores.profiles as unknown as NonNullable<
+        SessionOptions["voiceProfileStore"]
+      >,
+      voiceThreadStore: stores.threads as unknown as NonNullable<
+        SessionOptions["voiceThreadStore"]
+      >,
+    };
   }
 
-  test("scopes the store to the admitted principal and replies only to the source", async () => {
+  test("scopes the stores to the admitted principal and replies only to the source", async () => {
     const source = {};
     const messages: SessionOutboundMessage[] = [];
     const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
-    const store = createAssistantStoreStub();
+    const stores = createStores();
     const session = createSessionForTest({
       principalId: "device-a",
-      assistantStore: asAssistantStore(store),
+      ...storeOptions(stores),
       messages,
       targetedMessages,
     });
@@ -6268,21 +6281,21 @@ describe("assistant RPCs", () => {
     // A principal named on the wire must never win over admission.
     await session.handleMessage(
       {
-        type: "assistant.list.request",
+        type: "voice.profile.list.request",
         requestId: "list-1",
         principalId: "owner",
       } as unknown as SessionInboundMessage,
       source,
     );
 
-    expect(store.list).toHaveBeenCalledWith("device-a");
+    expect(stores.profiles.list).toHaveBeenCalledWith("device-a");
     expect(messages).toEqual([]);
     expect(targetedMessages).toEqual([
       {
         source,
         message: {
-          type: "assistant.list.response",
-          payload: { requestId: "list-1", assistants: [] },
+          type: "voice.profile.list.response",
+          payload: { requestId: "list-1", profiles: [], defaultProfileId: null },
         },
       },
     ]);
@@ -6291,20 +6304,22 @@ describe("assistant RPCs", () => {
   test("surfaces store errors as correlated rpc_error with the store's code", async () => {
     const source = {};
     const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
-    const store = createAssistantStoreStub();
-    store.get.mockRejectedValue(new AssistantStoreError("not_found", "Assistant not found"));
+    const stores = createStores();
+    stores.threads.get.mockRejectedValue(
+      new VoiceThreadStoreError("not_found", "Thread not found"),
+    );
     const session = createSessionForTest({
       principalId: "device-a",
-      assistantStore: asAssistantStore(store),
+      ...storeOptions(stores),
       targetedMessages,
     });
 
     await session.handleMessage(
-      { type: "assistant.get.request", requestId: "get-1", assistantId, limit: 20 },
+      { type: "voice.thread.get.request", requestId: "get-1", threadId, limit: 20 },
       source,
     );
 
-    expect(store.get).toHaveBeenCalledWith("device-a", assistantId, { limit: 20 });
+    expect(stores.threads.get).toHaveBeenCalledWith("device-a", threadId, { limit: 20 });
     expect(targetedMessages).toEqual([
       {
         source,
@@ -6312,8 +6327,8 @@ describe("assistant RPCs", () => {
           type: "rpc_error",
           payload: {
             requestId: "get-1",
-            requestType: "assistant.get.request",
-            error: "Assistant not found",
+            requestType: "voice.thread.get.request",
+            error: "Thread not found",
             code: "not_found",
           },
         },
@@ -6323,84 +6338,109 @@ describe("assistant RPCs", () => {
 
   test("fails closed when the session has no admitted principal", async () => {
     const messages: SessionOutboundMessage[] = [];
-    const store = createAssistantStoreStub();
-    const session = createSessionForTest({ assistantStore: asAssistantStore(store), messages });
+    const stores = createStores();
+    const session = createSessionForTest({ ...storeOptions(stores), messages });
 
     await session.handleMessage({
-      type: "assistant.create.request",
-      requestId: "create-1",
+      type: "voice.profile.save.request",
+      requestId: "save-1",
       name: "Work",
+      configuration: {
+        instructions: "",
+        context: "",
+        files: [],
+        voice: null,
+        backendModel: null,
+        backendThinkingOptionId: null,
+      },
     });
 
-    expect(store.create).not.toHaveBeenCalled();
+    expect(stores.profiles.save).not.toHaveBeenCalled();
     expect(messages).toEqual([
       {
         type: "rpc_error",
         payload: {
-          requestId: "create-1",
-          requestType: "assistant.create.request",
-          error: "Assistant ownership is unavailable.",
+          requestId: "save-1",
+          requestType: "voice.profile.save.request",
+          error: "Profile ownership is unavailable.",
           code: "unauthorized",
         },
       },
     ]);
   });
 
-  test("lets a read-only principal list assistants but not mutate them", async () => {
+  test("lets a read-only principal list threads but not mutate them", async () => {
     const messages: SessionOutboundMessage[] = [];
-    const store = createAssistantStoreStub();
+    const stores = createStores();
     const session = createSessionForTest({
       principalId: "viewer",
       permissions: ["workspace.read"],
-      assistantStore: asAssistantStore(store),
+      ...storeOptions(stores),
       messages,
     });
 
     await session.handleMessage({
-      type: "assistant.delete.request",
+      type: "voice.thread.delete.request",
       requestId: "delete-1",
-      assistantId,
+      threadId,
     });
-    await session.handleMessage({ type: "assistant.list.request", requestId: "list-2" });
+    await session.handleMessage({ type: "voice.thread.list.request", requestId: "list-2" });
 
-    expect(store.delete).not.toHaveBeenCalled();
-    expect(store.list).toHaveBeenCalledWith("viewer");
+    expect(stores.threads.delete).not.toHaveBeenCalled();
+    expect(stores.threads.list).toHaveBeenCalledWith("viewer");
     expect(messages).toEqual([
       {
         type: "rpc_error",
         payload: {
           requestId: "delete-1",
-          requestType: "assistant.delete.request",
-          error: "Session is not authorized for assistant.delete.request",
+          requestType: "voice.thread.delete.request",
+          error: "Session is not authorized for voice.thread.delete.request",
           code: "access_denied",
         },
       },
-      { type: "assistant.list.response", payload: { requestId: "list-2", assistants: [] } },
+      { type: "voice.thread.list.response", payload: { requestId: "list-2", threads: [] } },
     ]);
   });
 
-  test("hands the coordinator the assistant id and the trusted principal", async () => {
+  test("hands the coordinator the memory fields, the trusted principal, and returns the thread", async () => {
     const start = vi.fn().mockResolvedValue({
       accepted: true,
       liveSessionId: "live-session-1",
       answerSdp: "answer-sdp",
+      threadId,
     });
+    const messages: SessionOutboundMessage[] = [];
     const session = createSessionForTest({
       principalId: "device-a",
       liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
+      messages,
     });
 
     await session.handleMessage({
       type: "voice.live.start.request",
       requestId: "start-1",
       negotiation: { kind: "webrtc_sdp", offerSdp: "offer-sdp" },
-      assistantId,
+      profileId: "cfg_work",
+      newThread: true,
     });
 
     expect(start).toHaveBeenCalledTimes(1);
     expect(start.mock.calls[0]?.[0]).toMatchObject({
-      assistantId,
+      profileId: "cfg_work",
+      newThread: true,
       owner: { principalId: "device-a" },
     });
+    expect(messages).toEqual([
+      {
+        type: "voice.live.start.response",
+        payload: {
+          requestId: "start-1",
+          accepted: true,
+          liveSessionId: "live-session-1",
+          threadId,
+          negotiation: { kind: "webrtc_sdp", answerSdp: "answer-sdp" },
+        },
+      },
+    ]);
   });
 });

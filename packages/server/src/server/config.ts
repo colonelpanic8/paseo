@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { resolvePaseoNodeEnv } from "./paseo-env.js";
 import { z } from "zod";
 import { resolveConfiguredPath } from "../utils/path.js";
+import type { VoiceProfile } from "@getpaseo/protocol/voice-profiles";
+import type { DeclaredVoiceProfiles } from "./voice-profiles/voice-profile-store.js";
 
 import type { PaseoDaemonConfig } from "./bootstrap.js";
 import {
@@ -410,6 +412,36 @@ function resolveVoiceLlmConfig(
   };
 }
 
+function resolveLiveVoiceProfiles(
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): DeclaredVoiceProfiles | undefined {
+  const configured = persisted.liveVoice;
+  if (!configured?.contextProfiles?.length) return undefined;
+  const declaredAt = new Date().toISOString();
+  const profiles: VoiceProfile[] = configured.contextProfiles.map((profile) => ({
+    id: `cfg_${profile.id}`,
+    name: profile.label ?? profile.id,
+    source: "config",
+    configuration: {
+      instructions: profile.instructions ?? "",
+      context: profile.context ?? "",
+      files: profile.files ?? [],
+      voice: profile.voice ?? null,
+      backendModel: profile.backendModel ?? null,
+      backendThinkingOptionId: profile.backendThinkingOptionId ?? null,
+    },
+    revision: 1,
+    createdAt: declaredAt,
+    updatedAt: declaredAt,
+  }));
+  return {
+    profiles,
+    defaultProfileId: configured.defaultContextProfile
+      ? `cfg_${configured.defaultContextProfile}`
+      : null,
+  };
+}
+
 function resolveCorsAllowedOrigins(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
@@ -634,6 +666,7 @@ export function resolveConfigFromPersisted(
     voiceLlmProvider: voiceLlm.provider,
     voiceLlmProviderExplicit: voiceLlm.providerExplicit,
     voiceLlmModel: voiceLlm.model,
+    liveVoiceProfiles: resolveLiveVoiceProfiles(persisted),
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
     metadataGeneration: persisted.agents?.metadataGeneration,

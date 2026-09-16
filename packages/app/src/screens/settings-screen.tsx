@@ -105,7 +105,7 @@ import {
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
 import { resolveLiveVoiceUnavailableMessage } from "@/live-voice/live-voice-unavailable-message";
 import { useLiveVoiceVoiceOptions } from "@/hooks/use-live-voice-voice-options";
-import { AssistantsSheet } from "@/assistants/assistants-sheet";
+import { VoiceProfilesSheet } from "@/voice-profiles/voice-profiles-sheet";
 import { useLiveVoiceBackendModelOptions } from "@/live-voice/live-voice-backend-model-catalog";
 import {
   LIVE_VOICE_OPTIONAL_PROMPT_COMPONENTS,
@@ -546,23 +546,23 @@ function VoiceSection() {
   const { t } = useTranslation();
   return (
     <SettingsSection title={t("settings.sections.voice")}>
-      <AssistantsSettingsCard />
+      <VoiceProfilesSettingsCard />
       <LiveVoiceSettingsCard />
     </SettingsSection>
   );
 }
 
 /**
- * Entry to the assistants manager. The per-call settings in the card below
- * remain the defaults for legacy calls; an assistant selected in the Live
- * voice menu brings its own voice, instructions, and action model.
+ * Entry to the profiles and threads manager. The per-call settings in the
+ * card below apply only to a call no profile configures; a profile brings its
+ * own voice, instructions, and action model.
  */
-function AssistantsSettingsCard() {
+function VoiceProfilesSettingsCard() {
   const { t } = useTranslation();
   const hosts = useLiveVoiceHostAvailability();
   const [isManaging, setIsManaging] = useState(false);
   const capableHost = hosts.find(
-    (host) => host.connectionStatus === "online" && host.supportsAssistants === true,
+    (host) => host.connectionStatus === "online" && host.supportsVoiceProfiles === true,
   );
   const handleOpen = useCallback(() => setIsManaging(true), []);
   const handleClose = useCallback(() => setIsManaging(false), []);
@@ -571,24 +571,24 @@ function AssistantsSettingsCard() {
     return null;
   }
   return (
-    <View style={[settingsStyles.card, styles.assistantsCard]}>
-      <AssistantsSheet
+    <View style={[settingsStyles.card, styles.voiceProfilesCard]}>
+      <VoiceProfilesSheet
         visible={isManaging}
         onClose={handleClose}
         initialServerId={capableHost.serverId}
       />
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{t("assistants.settings.title")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("assistants.settings.description")}</Text>
+          <Text style={settingsStyles.rowTitle}>{t("voiceProfiles.settings.title")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("voiceProfiles.settings.description")}</Text>
         </View>
         <Button
           variant="secondary"
           size="sm"
           onPress={handleOpen}
-          testID="settings-manage-assistants"
+          testID="settings-manage-voice-profiles"
         >
-          {t("assistants.settings.manage")}
+          {t("voiceProfiles.settings.manage")}
         </Button>
       </View>
     </View>
@@ -2206,7 +2206,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create((theme) => ({
-  assistantsCard: {
+  voiceProfilesCard: {
     marginBottom: theme.spacing[3],
   },
   loadingContainer: {

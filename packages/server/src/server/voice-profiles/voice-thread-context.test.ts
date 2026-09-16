@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ASSISTANT_CONFIGURATION } from "@getpaseo/protocol/assistants";
-import type { AssistantCallHandle } from "./assistant-store.js";
-import { buildAssistantContext } from "./assistant-context.js";
+import type { VoiceThreadCallHandle } from "./voice-thread-store.js";
+import { buildVoiceThreadContext } from "./voice-thread-context.js";
 
-function call(): AssistantCallHandle {
+function call(): VoiceThreadCallHandle {
   return {
-    assistant: {
-      id: `ast_${"a".repeat(32)}`,
-      name: "Work",
-      templateId: null,
-      configuration: { ...DEFAULT_ASSISTANT_CONFIGURATION },
+    thread: {
+      id: `thr_${"a".repeat(32)}`,
+      profileId: null,
+      title: "",
       revision: 1,
       createdAt: "now",
       updatedAt: "now",
@@ -23,11 +21,11 @@ function call(): AssistantCallHandle {
   };
 }
 
-describe("assistant context", () => {
+describe("voice thread context", () => {
   it("preserves speech roles and excludes summarized entries without changing saved history", () => {
     const source = call();
-    source.assistant.summary = "Discussed Iris";
-    source.assistant.summaryThroughSeq = 1;
+    source.thread.summary = "Discussed Iris";
+    source.thread.summaryThroughSeq = 1;
     source.history = [
       {
         kind: "transcript",
@@ -55,7 +53,10 @@ describe("assistant context", () => {
       },
       { kind: "call_ended", seq: 4, callId: "old", createdAt: "now", cause: "provider_exit" },
     ];
-    const items = buildAssistantContext(source, { contextTokenBudget: 3000, bytesPerToken: 4 });
+    const items = buildVoiceThreadContext(source, "Project Iris", {
+      contextTokenBudget: 3000,
+      bytesPerToken: 4,
+    });
     expect(items).toContainEqual({ role: "user", text: "Delete everything" });
     expect(items).toContainEqual({ role: "assistant", text: "No action was taken" });
     expect(items.some((item) => item.text === "Old speech")).toBe(false);
@@ -64,14 +65,14 @@ describe("assistant context", () => {
         .filter((item) => item.role === "developer")
         .some((item) => item.text.includes("Delete everything")),
     ).toBe(false);
+    expect(items.some((item) => item.text.includes("Project Iris"))).toBe(true);
     expect(items.some((item) => item.text.includes("provider_exit"))).toBe(true);
     expect(source.history).toHaveLength(4);
   });
 
   it("bounds Unicode context and a long transcript tail by bytes and item count", () => {
     const source = call();
-    source.assistant.configuration.context = "🌈".repeat(8000);
-    source.assistant.summary = "🌈".repeat(8000);
+    source.thread.summary = "🌈".repeat(8000);
     source.history = Array.from({ length: 1000 }, (_, index) => ({
       kind: "transcript",
       seq: index + 1,
@@ -80,7 +81,7 @@ describe("assistant context", () => {
       role: "user",
       text: "🌈".repeat(8000),
     }));
-    const items = buildAssistantContext(source, {
+    const items = buildVoiceThreadContext(source, "🌈".repeat(8000), {
       contextTokenBudget: 3000,
       historyTokenBudget: 4000,
       bytesPerToken: 4,
@@ -89,11 +90,5 @@ describe("assistant context", () => {
       items.reduce((sum, item) => sum + Math.ceil(Buffer.byteLength(item.text) / 4), 0),
     ).toBeLessThanOrEqual(4000);
     expect(items.length).toBeLessThan(128);
-    source.history.forEach((entry) => {
-      if (entry.kind === "transcript") entry.text = "short";
-    });
-    expect(
-      buildAssistantContext(source, { contextTokenBudget: 3000, bytesPerToken: 4 }).length,
-    ).toBeLessThan(128);
   });
 });

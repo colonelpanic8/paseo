@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSISTANT_REQUEST_SCHEMAS, ASSISTANT_RESPONSE_SCHEMAS } from "./assistants.js";
+import { VOICE_PROFILE_REQUEST_SCHEMAS, VOICE_PROFILE_RESPONSE_SCHEMAS } from "./voice-profiles.js";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
@@ -1131,9 +1131,17 @@ export const VoiceLiveStartRequestSchema = z.object({
   type: z.literal("voice.live.start.request"),
   requestId: z.string(),
   negotiation: VoiceLiveStartNegotiationSchema,
-  // COMPAT(assistantCalls): added in v0.7.2, remove legacy ephemeral calls after 2027-03-06.
-  // Instance configuration overrides voice, instructions, and backend settings below.
-  assistantId: z.string().optional(),
+  /**
+   * Which profile configures this call. The daemon resolves the profile's
+   * voice, instructions, and backend settings itself and ignores the per-call
+   * overrides below when one is named. Absent uses the daemon's default profile
+   * if it has one.
+   */
+  profileId: z.string().optional(),
+  /** Continue this thread's memory. Takes precedence over `newThread`. */
+  threadId: z.string().optional(),
+  /** Open a new thread under the profile so the call is remembered. */
+  newThread: z.boolean().optional(),
   voice: z.string().optional(),
   /**
    * The client will report agents this call did not start, so the model should
@@ -2241,6 +2249,8 @@ export const VoiceLiveStartResponseSchema = z.object({
     requestId: z.string(),
     accepted: z.boolean(),
     liveSessionId: z.string().optional(),
+    /** The thread this call writes to, whether continued or newly opened. */
+    threadId: z.string().optional(),
     negotiation: VoiceLiveAnswerNegotiationSchema.optional(),
     errorCode: z.string().optional(),
     errorMessage: z.string().optional(),
@@ -3334,7 +3344,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterRequestSchema,
   SubscriptionReleaseRequestSchema,
   SessionEventsSetSubscriptionRequestSchema,
-  ...ASSISTANT_REQUEST_SCHEMAS,
+  ...VOICE_PROFILE_REQUEST_SCHEMAS,
   HubExecutionAgentCreateRequestSchema,
   HubExecutionAgentValidateRequestSchema,
   HubExecutionControlRequestSchema,
@@ -3876,8 +3886,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentConfigApply: z.boolean().optional(),
         // COMPAT(liveVoice): added in v0.2.5, remove after 2027-01-30.
         liveVoice: z.boolean().optional(),
-        // COMPAT(assistants): added in v0.7.2, optional until daemon floor after 2027-03-06.
-        assistants: z.boolean().optional(),
+        // COMPAT(voiceProfiles): added in v0.8.1, optional until daemon floor after 2027-03-16.
+        voiceProfiles: z.boolean().optional(),
         // COMPAT(liveVoiceVoiceCatalog): added in v0.2.6, remove after 2027-02-28.
         liveVoiceVoiceCatalog: z.boolean().optional(),
         // COMPAT(agentPaseoTools): added in v0.2.6, remove after 2027-02-28.
@@ -6877,7 +6887,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterResponseSchema,
   SubscriptionReleaseResponseSchema,
   SessionEventsSetSubscriptionResponseSchema,
-  ...ASSISTANT_RESPONSE_SCHEMAS,
+  ...VOICE_PROFILE_RESPONSE_SCHEMAS,
   HubExecutionAgentCreateResponseSchema,
   HubExecutionAgentValidateResponseSchema,
   HubExecutionControlResponseSchema,

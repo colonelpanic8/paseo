@@ -218,35 +218,28 @@ describe("DaemonClient Live Voice cross-host routing", () => {
   });
 });
 
-describe("DaemonClient assistants", () => {
-  test("correlates assistant pages without mixing simultaneous requests", async () => {
+describe("DaemonClient voice threads", () => {
+  test("correlates thread pages without mixing simultaneous requests", async () => {
     const { client, harness } = await createConnectedClient();
-    const assistantId = `ast_${"a".repeat(32)}`;
-    const first = client.getAssistant({
-      assistantId,
+    const threadId = `thr_${"a".repeat(32)}`;
+    const first = client.getVoiceThread({
+      threadId,
       beforeSeq: 8,
       limit: 2,
       requestId: "page-old",
     });
-    const second = client.listAssistants({ requestId: "list-current" });
+    const second = client.listVoiceThreads({ requestId: "list-current" });
     expect(parseSentMessage(harness.sent[0])).toEqual({
-      type: "assistant.get.request",
+      type: "voice.thread.get.request",
       requestId: "page-old",
-      assistantId,
+      threadId,
       beforeSeq: 8,
       limit: 2,
     });
-    const assistant = {
-      id: assistantId,
-      name: "Work",
-      templateId: null,
-      configuration: {
-        instructions: "",
-        context: "",
-        voice: null,
-        backendModel: null,
-        backendThinkingOptionId: null,
-      },
+    const thread = {
+      id: threadId,
+      profileId: "cfg_work",
+      title: "Release planning",
       revision: 1,
       createdAt: "now",
       updatedAt: "now",
@@ -255,14 +248,14 @@ describe("DaemonClient assistants", () => {
       lastSeq: 8,
     };
     harness.receive({
-      type: "assistant.list.response",
-      payload: { requestId: "list-current", assistants: [assistant] },
+      type: "voice.thread.list.response",
+      payload: { requestId: "list-current", threads: [thread] },
     });
     harness.receive({
-      type: "assistant.get.response",
+      type: "voice.thread.get.response",
       payload: {
         requestId: "page-old",
-        assistant,
+        thread,
         history: [
           {
             kind: "call_ended",
@@ -275,7 +268,7 @@ describe("DaemonClient assistants", () => {
         hasMore: true,
       },
     });
-    await expect(second).resolves.toEqual([assistant]);
-    await expect(first).resolves.toMatchObject({ assistant, history: [{ seq: 7 }], hasMore: true });
+    await expect(second).resolves.toEqual([thread]);
+    await expect(first).resolves.toMatchObject({ thread, history: [{ seq: 7 }], hasMore: true });
   });
 });

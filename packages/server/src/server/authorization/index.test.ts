@@ -113,30 +113,29 @@ describe("SessionAuthorization", () => {
     expect(authorization.allowsOutbound(outboundMessage("agent_update"))).toBe(false);
   });
 
-  test("assistant reads need workspace.read and assistant mutations need workspace.write", () => {
+  test("voice profile reads need workspace.read and mutations need workspace.write", () => {
     const viewer = new SessionAuthorization(["workspace.read"]);
     const writer = new SessionAuthorization(["workspace.write"]);
 
     for (const type of [
-      "assistant.list.request",
-      "assistant.get.request",
-      "assistant.template.list.request",
+      "voice.profile.list.request",
+      "voice.thread.list.request",
+      "voice.thread.get.request",
     ] as const) {
       expect(viewer.allowsInbound(inboundMessage(type))).toBe(true);
     }
     for (const type of [
-      "assistant.create.request",
-      "assistant.update.request",
-      "assistant.delete.request",
-      "assistant.compact.request",
-      "assistant.template.save.request",
-      "assistant.template.delete.request",
+      "voice.profile.save.request",
+      "voice.profile.delete.request",
+      "voice.thread.update.request",
+      "voice.thread.compact.request",
+      "voice.thread.delete.request",
     ] as const) {
       expect(viewer.allowsInbound(inboundMessage(type))).toBe(false);
       expect(writer.allowsInbound(inboundMessage(type))).toBe(true);
     }
-    expect(viewer.allowsOutbound(outboundMessage("assistant.list.response"))).toBe(true);
-    expect(viewer.allowsOutbound(outboundMessage("assistant.create.response"))).toBe(false);
+    expect(viewer.allowsOutbound(outboundMessage("voice.profile.list.response"))).toBe(true);
+    expect(viewer.allowsOutbound(outboundMessage("voice.profile.save.response"))).toBe(false);
   });
 
   test("correlated authorization errors can always be emitted", () => {

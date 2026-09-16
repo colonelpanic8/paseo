@@ -62,12 +62,13 @@ import {
 import { respondToAgentPermission } from "./agent/permission-response.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import type { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
-import type { AssistantStore } from "./assistants/assistant-store.js";
-import type { AssistantRequest } from "@getpaseo/protocol/assistants";
+import type { VoiceProfileStore } from "./voice-profiles/voice-profile-store.js";
+import type { VoiceThreadStore } from "./voice-profiles/voice-thread-store.js";
+import type { VoiceProfileRequest } from "@getpaseo/protocol/voice-profiles";
 import {
-  AssistantRequestError,
-  handleAssistantRequest,
-} from "./assistants/assistant-session-rpc.js";
+  VoiceProfileRequestError,
+  handleVoiceProfileRequest,
+} from "./voice-profiles/voice-profile-rpc.js";
 import type { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
 import type {
   LiveVoiceToolExecutionContext,
@@ -458,6 +459,19 @@ function optionalService<T>(value: T | undefined): T | null {
 // Stub types for features under development (modules not yet available)
 type AgentMcpTransportFactory = () => Promise<unknown>;
 
+/** Which profile and thread a start request names, with absent ones dropped. */
+function resolveLiveVoiceMemoryFields(msg: {
+  profileId?: string | undefined;
+  threadId?: string | undefined;
+  newThread?: boolean | undefined;
+}): { profileId?: string; threadId?: string; newThread?: true } {
+  return {
+    ...(msg.profileId ? { profileId: msg.profileId } : {}),
+    ...(msg.threadId ? { threadId: msg.threadId } : {}),
+    ...(msg.newThread ? { newThread: true } : {}),
+  };
+}
+
 export interface SessionOptions {
   browserToolsBroker?: BrowserToolsBroker | null;
   clientId: string;
@@ -560,7 +574,8 @@ export interface SessionOptions {
   /** Daemon-global; shared by every session so call ownership is socket-exact. */
   liveVoiceCoordinator?: LiveVoiceCoordinator;
   /** Daemon-global, principal-scoped; every call goes through the trusted principal above. */
-  assistantStore?: AssistantStore;
+  voiceProfileStore?: VoiceProfileStore;
+  voiceThreadStore?: VoiceThreadStore;
   liveVoiceRouteBroker?: LiveVoiceRouteBroker;
   liveVoiceToolExecutor?: LiveVoiceToolExecutor;
   liveVoiceAgentNotifier?: LiveVoiceAgentNotifier;
@@ -808,7 +823,8 @@ export class Session {
   private readonly voiceSessions: VoiceSessions;
   private readonly liveVoice: LiveVoiceCoordinator | undefined;
   private readonly principalId: string | null;
-  private readonly assistantStore: AssistantStore | null;
+  private readonly voiceProfileStore: VoiceProfileStore | null;
+  private readonly voiceThreadStore: VoiceThreadStore | null;
   private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker | null;
   private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor | null;
   private readonly liveVoiceAgentNotifier: LiveVoiceAgentNotifier | null;
@@ -880,7 +896,8 @@ export class Session {
       liveVoiceRouteBroker,
       liveVoiceToolExecutor,
       liveVoiceAgentNotifier,
-      assistantStore,
+      voiceProfileStore,
+      voiceThreadStore,
       principalId,
       dictation,
       serverId,
@@ -1235,7 +1252,8 @@ export class Session {
     );
     this.liveVoice = liveVoiceCoordinator;
     this.principalId = optionalService(principalId);
-    this.assistantStore = optionalService(assistantStore);
+    this.voiceProfileStore = optionalService(voiceProfileStore);
+    this.voiceThreadStore = optionalService(voiceThreadStore);
     this.liveVoiceRouteBroker = optionalService(liveVoiceRouteBroker);
     this.liveVoiceToolExecutor = optionalService(liveVoiceToolExecutor);
     this.liveVoiceAgentNotifier = optionalService(liveVoiceAgentNotifier);
@@ -2651,33 +2669,37 @@ export class Session {
     source?: object,
   ): Promise<void> | undefined {
     switch (msg.type) {
-      case "assistant.list.request":
-      case "assistant.get.request":
-      case "assistant.create.request":
-      case "assistant.update.request":
-      case "assistant.delete.request":
-      case "assistant.compact.request":
-      case "assistant.template.list.request":
-      case "assistant.template.save.request":
-      case "assistant.template.delete.request":
-        return this.handleAssistantRpc(msg, source);
+      case "voice.profile.list.request":
+      case "voice.profile.save.request":
+      case "voice.profile.delete.request":
+      case "voice.thread.list.request":
+      case "voice.thread.get.request":
+      case "voice.thread.update.request":
+      case "voice.thread.compact.request":
+      case "voice.thread.delete.request":
+        return this.handleVoiceProfileRpc(msg, source);
       default:
         return undefined;
     }
   }
 
-  private async handleAssistantRpc(msg: AssistantRequest, source?: object): Promise<void> {
+  private async handleVoiceProfileRpc(msg: VoiceProfileRequest, source?: object): Promise<void> {
     try {
-      const response = await handleAssistantRequest(
-        { store: this.assistantStore, principalId: this.principalId },
+      const response = await handleVoiceProfileRequest(
+        {
+          profiles: this.voiceProfileStore,
+          threads: this.voiceThreadStore,
+          principalId: this.principalId,
+        },
         msg,
       );
       this.emitForSource(response, source);
     } catch (error) {
-      const code = error instanceof AssistantRequestError ? error.code : "assistant_request_failed";
-      const message = error instanceof Error ? error.message : "Assistant request failed";
-      if (!(error instanceof AssistantRequestError)) {
-        this.sessionLogger.error({ err: error, requestType: msg.type }, "assistant.rpc.failed");
+      const code =
+        error instanceof VoiceProfileRequestError ? error.code : "voice_profile_request_failed";
+      const message = error instanceof Error ? error.message : "Voice profile request failed";
+      if (!(error instanceof VoiceProfileRequestError)) {
+        this.sessionLogger.error({ err: error, requestType: msg.type }, "voice_profile.rpc.failed");
       }
       this.emitForSource(
         {
@@ -2777,9 +2799,9 @@ export class Session {
       offerSdp: msg.negotiation.offerSdp,
       ...(voice ? { voice } : {}),
       owner: { sessionKey: this, ...(this.principalId ? { principalId: this.principalId } : {}) },
-      // The coordinator resolves the instance's configuration server-side and
-      // ignores the per-call overrides below when an assistant is named.
-      ...(msg.assistantId ? { assistantId: msg.assistantId } : {}),
+      // The coordinator resolves the profile's configuration server-side and
+      // ignores the per-call overrides below when one applies.
+      ...resolveLiveVoiceMemoryFields(msg),
       emit: (update) => {
         this.emit({ type: "voice.live.update", payload: update });
       },
@@ -2813,6 +2835,7 @@ export class Session {
         requestId: msg.requestId,
         accepted: true,
         liveSessionId: result.liveSessionId,
+        ...(result.threadId ? { threadId: result.threadId } : {}),
         negotiation: { kind: "webrtc_sdp", answerSdp: result.answerSdp },
       });
       return;

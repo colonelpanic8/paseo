@@ -6,7 +6,7 @@ import {
   DEFAULT_CLIENT_CAPABILITIES,
   type TimelineSubscription,
 } from "./connection/index.js";
-import type { AssistantRequest } from "@getpaseo/protocol/assistants";
+import type { VoiceProfileRequest } from "@getpaseo/protocol/voice-profiles";
 import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@getpaseo/protocol/messages";
 import type { z } from "zod";
@@ -331,8 +331,8 @@ export type DaemonEvent =
 export type DaemonEventHandler = (event: DaemonEvent) => void;
 export type BrowserAutomationExecuteRequestMessage = BrowserAutomationExecuteRequest;
 export type BrowserAutomationExecuteResponseMessage = BrowserAutomationExecuteResponse;
-type AssistantRequestInput<T extends AssistantRequest["type"]> = Omit<
-  Extract<AssistantRequest, { type: T }>,
+type VoiceProfileRequestInput<T extends VoiceProfileRequest["type"]> = Omit<
+  Extract<VoiceProfileRequest, { type: T }>,
   "type" | "requestId"
 > & { requestId?: string };
 
@@ -551,6 +551,8 @@ type SetVoiceModePayload = Extract<
 export interface AcceptedLiveVoiceStart {
   liveSessionId: string;
   negotiation: { kind: "webrtc_sdp"; answerSdp: string };
+  /** Present when the call writes to a thread. */
+  threadId?: string;
 }
 type DictationFinishAcceptedPayload = Extract<
   SessionOutboundMessage,
@@ -3754,88 +3756,79 @@ export class DaemonClient {
     return response;
   }
 
-  async listAssistants(input: AssistantRequestInput<"assistant.list.request"> = {}) {
+  async listVoiceProfiles(input: VoiceProfileRequestInput<"voice.profile.list.request"> = {}) {
     const { requestId, ...fields } = input;
-    const payload = await this.sendNamespacedCorrelatedSessionRequest<"assistant.list.response">({
-      ...(requestId ? { requestId } : {}),
-      message: { type: "assistant.list.request", ...fields },
-    });
-    return payload.assistants;
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"voice.profile.list.response">({
+        ...(requestId ? { requestId } : {}),
+        message: { type: "voice.profile.list.request", ...fields },
+      });
+    return { profiles: payload.profiles, defaultProfileId: payload.defaultProfileId };
   }
 
-  async getAssistant(input: AssistantRequestInput<"assistant.get.request">) {
+  async saveVoiceProfile(input: VoiceProfileRequestInput<"voice.profile.save.request">) {
     const { requestId, ...fields } = input;
-    const payload = await this.sendNamespacedCorrelatedSessionRequest<"assistant.get.response">({
-      ...(requestId ? { requestId } : {}),
-      message: { type: "assistant.get.request", ...fields },
-    });
-    return payload;
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"voice.profile.save.response">({
+        ...(requestId ? { requestId } : {}),
+        message: { type: "voice.profile.save.request", ...fields },
+      });
+    return payload.profile;
   }
 
-  async createAssistant(input: AssistantRequestInput<"assistant.create.request">) {
+  async deleteVoiceProfile(input: VoiceProfileRequestInput<"voice.profile.delete.request">) {
     const { requestId, ...fields } = input;
-    const payload = await this.sendNamespacedCorrelatedSessionRequest<"assistant.create.response">({
+    await this.sendNamespacedCorrelatedSessionRequest<"voice.profile.delete.response">({
       ...(requestId ? { requestId } : {}),
-      message: { type: "assistant.create.request", ...fields },
-    });
-    return payload.assistant;
-  }
-
-  async updateAssistant(input: AssistantRequestInput<"assistant.update.request">) {
-    const { requestId, ...fields } = input;
-    const payload = await this.sendNamespacedCorrelatedSessionRequest<"assistant.update.response">({
-      ...(requestId ? { requestId } : {}),
-      message: { type: "assistant.update.request", ...fields },
-    });
-    return payload.assistant;
-  }
-
-  async deleteAssistant(input: AssistantRequestInput<"assistant.delete.request">) {
-    const { requestId, ...fields } = input;
-    await this.sendNamespacedCorrelatedSessionRequest<"assistant.delete.response">({
-      ...(requestId ? { requestId } : {}),
-      message: { type: "assistant.delete.request", ...fields },
+      message: { type: "voice.profile.delete.request", ...fields },
     });
   }
 
-  async compactAssistant(input: AssistantRequestInput<"assistant.compact.request">) {
+  async listVoiceThreads(input: VoiceProfileRequestInput<"voice.thread.list.request"> = {}) {
     const { requestId, ...fields } = input;
-    const payload = await this.sendNamespacedCorrelatedSessionRequest<"assistant.compact.response">(
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"voice.thread.list.response">(
       {
         ...(requestId ? { requestId } : {}),
-        message: { type: "assistant.compact.request", ...fields },
+        message: { type: "voice.thread.list.request", ...fields },
       },
     );
-    return payload.assistant;
+    return payload.threads;
   }
 
-  async listAssistantTemplates(
-    input: AssistantRequestInput<"assistant.template.list.request"> = {},
-  ) {
+  async getVoiceThread(input: VoiceProfileRequestInput<"voice.thread.get.request">) {
     const { requestId, ...fields } = input;
-    const payload =
-      await this.sendNamespacedCorrelatedSessionRequest<"assistant.template.list.response">({
-        ...(requestId ? { requestId } : {}),
-        message: { type: "assistant.template.list.request", ...fields },
-      });
-    return payload.templates;
-  }
-
-  async saveAssistantTemplate(input: AssistantRequestInput<"assistant.template.save.request">) {
-    const { requestId, ...fields } = input;
-    const payload =
-      await this.sendNamespacedCorrelatedSessionRequest<"assistant.template.save.response">({
-        ...(requestId ? { requestId } : {}),
-        message: { type: "assistant.template.save.request", ...fields },
-      });
-    return payload.template;
-  }
-
-  async deleteAssistantTemplate(input: AssistantRequestInput<"assistant.template.delete.request">) {
-    const { requestId, ...fields } = input;
-    await this.sendNamespacedCorrelatedSessionRequest<"assistant.template.delete.response">({
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"voice.thread.get.response">({
       ...(requestId ? { requestId } : {}),
-      message: { type: "assistant.template.delete.request", ...fields },
+      message: { type: "voice.thread.get.request", ...fields },
+    });
+    return { thread: payload.thread, history: payload.history, hasMore: payload.hasMore };
+  }
+
+  async updateVoiceThread(input: VoiceProfileRequestInput<"voice.thread.update.request">) {
+    const { requestId, ...fields } = input;
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"voice.thread.update.response">({
+        ...(requestId ? { requestId } : {}),
+        message: { type: "voice.thread.update.request", ...fields },
+      });
+    return payload.thread;
+  }
+
+  async compactVoiceThread(input: VoiceProfileRequestInput<"voice.thread.compact.request">) {
+    const { requestId, ...fields } = input;
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"voice.thread.compact.response">({
+        ...(requestId ? { requestId } : {}),
+        message: { type: "voice.thread.compact.request", ...fields },
+      });
+    return payload.thread;
+  }
+
+  async deleteVoiceThread(input: VoiceProfileRequestInput<"voice.thread.delete.request">) {
+    const { requestId, ...fields } = input;
+    await this.sendNamespacedCorrelatedSessionRequest<"voice.thread.delete.response">({
+      ...(requestId ? { requestId } : {}),
+      message: { type: "voice.thread.delete.request", ...fields },
     });
   }
 
@@ -3854,7 +3847,12 @@ export class DaemonClient {
    */
   async startLiveVoice(input: {
     negotiation: { kind: "webrtc_sdp"; offerSdp: string };
-    assistantId?: string;
+    /** The profile that configures the call; the daemon ignores per-call overrides when set. */
+    profileId?: string;
+    /** Continue this thread's memory. */
+    threadId?: string;
+    /** Open a new thread under the profile so the call is remembered. */
+    newThread?: boolean;
     voice?: string;
     requestId?: string;
     /** This client will report agents the call did not start. */
@@ -3876,7 +3874,9 @@ export class DaemonClient {
       message: {
         type: "voice.live.start.request",
         negotiation: input.negotiation,
-        ...(input.assistantId ? { assistantId: input.assistantId } : {}),
+        ...(input.profileId ? { profileId: input.profileId } : {}),
+        ...(input.threadId ? { threadId: input.threadId } : {}),
+        ...(input.newThread ? { newThread: true } : {}),
         ...(input.voice ? { voice: input.voice } : {}),
         ...(input.ambientAgentReports ? { ambientAgentReports: true } : {}),
         ...(input.ambientAgentGuidance ? { ambientAgentGuidance: input.ambientAgentGuidance } : {}),
@@ -3906,6 +3906,7 @@ export class DaemonClient {
     return {
       liveSessionId: payload.liveSessionId,
       negotiation: payload.negotiation,
+      ...(payload.threadId ? { threadId: payload.threadId } : {}),
     };
   }
 
