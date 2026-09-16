@@ -22,12 +22,14 @@ import {
   type LiveVoiceRouteRegistration,
 } from "./live-voice-route-broker.js";
 import { LIVE_VOICE_ROUTING_TOOLS } from "./live-voice-routing-tools.js";
+import type { VoiceProfile } from "@getpaseo/protocol/voice-profiles";
+import type { VoiceProfileStore } from "../voice-profiles/voice-profile-store.js";
 import {
-  AssistantStoreError,
-  type AssistantStore,
-  type AssistantCallHandle,
-} from "../assistants/assistant-store.js";
-import { buildAssistantContext } from "../assistants/assistant-context.js";
+  VoiceThreadStoreError,
+  type VoiceThreadStore,
+  type VoiceThreadCallHandle,
+} from "../voice-profiles/voice-thread-store.js";
+import { buildVoiceThreadContext } from "../voice-profiles/voice-thread-context.js";
 
 /** How long to wait for the provider's async answer-SDP notification before giving up. */
 const START_SDP_TIMEOUT_MS = 30_000;
@@ -52,14 +54,15 @@ const BACKEND_EXECUTOR_INSTRUCTIONS = [
 
 export type LiveVoiceStartErrorCode =
   | "busy"
-  | "assistant_busy"
+  | "thread_busy"
   | "not_found"
+  | "profile_not_found"
   | "unsupported"
   | "paseo_tools_disabled"
   | "start_failed";
 
 export type LiveVoiceCloseCause =
-  | "assistant_deleted"
+  | "thread_deleted"
   | "requested"
   | "owner_disconnected"
   | "error"
@@ -79,7 +82,7 @@ export type LiveVoiceCloseCause =
  * `realtimeStop()` there would respawn the provider process.
  */
 const CAUSES_REQUIRING_PROVIDER_STOP: ReadonlySet<LiveVoiceCloseCause> = new Set([
-  "assistant_deleted",
+  "thread_deleted",
   "requested",
   "owner_disconnected",
   "error",
@@ -111,7 +114,16 @@ export interface LiveVoiceOwner {
 }
 
 export interface LiveVoiceStartRequest {
-  assistantId?: string;
+  /**
+   * Which profile configures the call. Absent falls back to the daemon's
+   * default profile. A named profile replaces the per-call voice, instructions,
+   * and backend settings below.
+   */
+  profileId?: string | undefined;
+  /** Continue this thread's memory; wins over `newThread`. */
+  threadId?: string | undefined;
+  /** Open a thread under the profile so the call is remembered. */
+  newThread?: boolean | undefined;
   offerSdp: string;
   voice?: string;
   owner: LiveVoiceOwner;
@@ -142,6 +154,8 @@ export interface LiveVoiceContextBuildOptions {
   disabledPromptComponents?: readonly string[] | undefined;
   customVoiceInstructions?: string | undefined;
   defaultWorkspaceDirectory?: string | undefined;
+  /** Files the selected profile asks the daemon to read into the call's context. */
+  contextFiles?: readonly string[] | undefined;
 }
 
 /** Only the fields the context builder reads, with absent ones dropped. */
@@ -167,7 +181,7 @@ function toContextBuildOptions(
 }
 
 export type LiveVoiceStartResult =
-  | { accepted: true; liveSessionId: string; answerSdp: string }
+  | { accepted: true; liveSessionId: string; answerSdp: string; threadId?: string }
   | { accepted: false; errorCode: LiveVoiceStartErrorCode; errorMessage: string };
 
 /** The agent-manager surface used to spawn and dispose host sessions. */
@@ -213,7 +227,8 @@ export interface LiveVoiceAgentSource {
 }
 
 interface LiveVoiceCall {
-  assistant: AssistantCallHandle | null;
+  thread: VoiceThreadCallHandle | null;
+  profile: VoiceProfile | null;
   readonly liveSessionId: string;
   readonly owner: LiveVoiceOwner;
   readonly emit: (update: LiveVoiceUpdate) => void;
@@ -256,7 +271,8 @@ export interface LiveVoiceContextProvider {
 }
 
 export interface LiveVoiceCoordinatorOptions {
-  assistantStore?: AssistantStore;
+  profileStore?: VoiceProfileStore;
+  threadStore?: VoiceThreadStore;
   agents: LiveVoiceAgentSource;
   logger: Logger;
   /** The provider adapter that hosts calls on this daemon. */
@@ -279,12 +295,21 @@ class LiveVoicePaseoToolsDisabledError extends Error {
   readonly name = "LiveVoicePaseoToolsDisabledError";
 }
 
+/** The request named a profile this principal cannot see. */
+class LiveVoiceProfileNotFoundError extends Error {
+  readonly name = "LiveVoiceProfileNotFoundError";
+  constructor(readonly profileId: string) {
+    super(`Unknown Live Voice profile '${profileId}'.`);
+  }
+}
+
 function resolveStartErrorCode(error: unknown): LiveVoiceStartErrorCode {
   if (
-    error instanceof AssistantStoreError &&
-    (error.code === "assistant_busy" || error.code === "not_found")
+    error instanceof VoiceThreadStoreError &&
+    (error.code === "thread_busy" || error.code === "not_found")
   )
     return error.code;
+  if (error instanceof LiveVoiceProfileNotFoundError) return "profile_not_found";
   if (error instanceof LiveVoiceUnsupportedError) return "unsupported";
   if (error instanceof LiveVoicePaseoToolsDisabledError) return "paseo_tools_disabled";
   return "start_failed";
@@ -298,7 +323,8 @@ function resolveStartErrorCode(error: unknown): LiveVoiceStartErrorCode {
  * `realtimeStart` lands on the same thread). One call per client session.
  */
 export class LiveVoiceCoordinator {
-  private readonly assistantStore: AssistantStore | undefined;
+  private readonly profileStore: VoiceProfileStore | undefined;
+  private readonly threadStore: VoiceThreadStore | undefined;
   private readonly calls = new Map<string, LiveVoiceCall>();
   private readonly agents: LiveVoiceAgentSource;
   private readonly logger: Logger;
@@ -311,7 +337,8 @@ export class LiveVoiceCoordinator {
   private readonly unsubscribeAgentClosing: () => void;
 
   constructor(options: LiveVoiceCoordinatorOptions) {
-    this.assistantStore = options.assistantStore;
+    this.profileStore = options.profileStore;
+    this.threadStore = options.threadStore;
     this.agents = options.agents;
     this.logger = options.logger.child({ module: "live-voice" });
     this.hostProfile = options.hostProfile;
@@ -338,7 +365,8 @@ export class LiveVoiceCoordinator {
     // from the same client session can interleave before the map entry exists, and a
     // close arriving while the host spawns finds a call to close.
     const call: LiveVoiceCall = {
-      assistant: null,
+      thread: null,
+      profile: null,
       liveSessionId: randomUUID(),
       owner: request.owner,
       emit: request.emit,
@@ -360,20 +388,9 @@ export class LiveVoiceCoordinator {
     this.calls.set(call.liveSessionId, call);
 
     try {
-      if (request.assistantId) {
-        if (!this.assistantStore || !request.owner.principalId)
-          throw new AssistantStoreError("not_found", "Assistant ownership is unavailable");
-        call.assistant = await this.assistantStore.openCall(
-          request.owner.principalId,
-          request.assistantId,
-          call.liveSessionId,
-          () => this.close(call, "assistant_deleted"),
-        );
-        if (call.state !== "starting") {
-          await call.assistant.close("start_failed");
-          throw new Error("Live voice call closed while loading assistant");
-        }
-        const configuration = call.assistant.assistant.configuration;
+      await this.attachMemory(call, request);
+      if (call.profile) {
+        const configuration = call.profile.configuration;
         const {
           voice: _voice,
           backendModel: _model,
@@ -419,7 +436,12 @@ export class LiveVoiceCoordinator {
         { liveSessionId: call.liveSessionId, hostAgentId: call.hostAgentId },
         "live_voice.call.started",
       );
-      return { accepted: true, liveSessionId: call.liveSessionId, answerSdp };
+      return {
+        accepted: true,
+        liveSessionId: call.liveSessionId,
+        answerSdp,
+        ...(call.thread ? { threadId: call.thread.thread.id } : {}),
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.close(call, "start_failed", errorMessage);
@@ -531,20 +553,102 @@ export class LiveVoiceCoordinator {
     return null;
   }
 
+  /** Resolves what the call remembers and how it is configured. */
+  private async attachMemory(call: LiveVoiceCall, request: LiveVoiceStartRequest): Promise<void> {
+    const principalId = this.requireMemoryPrincipal(request);
+    if (request.threadId && principalId) {
+      call.thread = await this.openThread(call, principalId, request.threadId);
+    }
+    call.profile = await this.resolveCallProfile(principalId, request, call.thread);
+    if (!call.thread && request.newThread && principalId) {
+      call.thread = await this.openNewThread(call, principalId, call.profile?.id ?? null);
+    }
+    if (call.thread && call.state !== "starting") {
+      await call.thread.close("start_failed");
+      throw new Error("Live voice call closed while loading the thread");
+    }
+  }
+
+  /** Memory needs a trusted principal and a store; a call without either just forgets. */
+  private requireMemoryPrincipal(request: LiveVoiceStartRequest): string | undefined {
+    const wantsMemory = request.threadId !== undefined || request.newThread === true;
+    if (wantsMemory && (!this.threadStore || !request.owner.principalId))
+      throw new VoiceThreadStoreError("not_found", "Thread ownership is unavailable");
+    return request.owner.principalId;
+  }
+
+  /**
+   * A thread's profile wins over a requested one because the thread already
+   * belongs to it; a missing profile on an old thread degrades to an
+   * unconfigured call rather than refusing to continue its memory.
+   */
+  private async resolveCallProfile(
+    principalId: string | undefined,
+    request: LiveVoiceStartRequest,
+    thread: VoiceThreadCallHandle | null,
+  ): Promise<VoiceProfile | null> {
+    const requestedProfileId = request.profileId ?? this.profileStore?.defaultProfileId ?? null;
+    const profile = await this.findProfile(
+      principalId,
+      thread ? thread.thread.profileId : requestedProfileId,
+    );
+    if (request.profileId !== undefined && !thread && !profile) {
+      throw new LiveVoiceProfileNotFoundError(request.profileId);
+    }
+    return profile;
+  }
+
+  private async openNewThread(
+    call: LiveVoiceCall,
+    principalId: string,
+    profileId: string | null,
+  ): Promise<VoiceThreadCallHandle> {
+    if (!this.threadStore) throw new VoiceThreadStoreError("not_found", "Threads are unavailable");
+    const thread = await this.threadStore.create(principalId, { profileId });
+    return await this.openThread(call, principalId, thread.id);
+  }
+
+  private async findProfile(
+    principalId: string | undefined,
+    profileId: string | null,
+  ): Promise<VoiceProfile | null> {
+    if (!profileId || !this.profileStore || !principalId) return null;
+    return await this.profileStore.find(principalId, profileId);
+  }
+
+  private openThread(
+    call: LiveVoiceCall,
+    principalId: string,
+    threadId: string,
+  ): Promise<VoiceThreadCallHandle> {
+    if (!this.threadStore) throw new VoiceThreadStoreError("not_found", "Threads are unavailable");
+    return this.threadStore.openCall(principalId, threadId, call.liveSessionId, () =>
+      this.close(call, "thread_deleted"),
+    );
+  }
+
   private async buildCallContext(
     call: LiveVoiceCall,
     request: LiveVoiceStartRequest,
   ): Promise<LiveVoiceStartContext | null> {
+    const files = call.profile?.configuration.files ?? [];
     const context = this.context
-      ? await this.buildContext(toContextBuildOptions(request, this.hostProfile.contextLimits))
+      ? await this.buildContext({
+          ...toContextBuildOptions(request, this.hostProfile.contextLimits),
+          ...(files.length ? { contextFiles: files } : {}),
+        })
       : null;
-    if (call.assistant) {
+    if (call.thread) {
       if (!context)
-        throw new Error("Could not prepare assistant context. Try starting the call again.");
+        throw new Error("Could not prepare thread context. Try starting the call again.");
       return {
         ...context,
         initialItems: [
-          ...buildAssistantContext(call.assistant, this.hostProfile.contextLimits),
+          ...buildVoiceThreadContext(
+            call.thread,
+            call.profile?.configuration.context ?? "",
+            this.hostProfile.contextLimits,
+          ),
           ...context.initialItems,
         ],
       };
@@ -943,19 +1047,19 @@ export class LiveVoiceCoordinator {
 
   private appendHistory(
     call: LiveVoiceCall,
-    entry: Parameters<AssistantCallHandle["append"]>[0],
+    entry: Parameters<VoiceThreadCallHandle["append"]>[0],
   ): void {
-    if (!call.assistant) return;
-    void call.assistant.append(entry).catch((error) => {
+    if (!call.thread) return;
+    void call.thread.append(entry).catch((error) => {
       this.logger.error(
         { err: error, liveSessionId: call.liveSessionId },
-        "assistant.history.write_failed",
+        "voice_thread.history.write_failed",
       );
       if (call.state === "closed" || call.state === "stopping") return;
       this.publish(call, {
         kind: "error",
         code: "history_write_failed",
-        message: "Could not save assistant history. The call has ended.",
+        message: "Could not save the thread's history. The call has ended.",
         fatal: true,
       });
       this.close(call, "error");
@@ -1023,10 +1127,10 @@ export class LiveVoiceCoordinator {
     }
 
     call.state = "closed";
-    void call.assistant?.close(cause).catch((error) => {
+    void call.thread?.close(cause).catch((error) => {
       this.logger.error(
         { err: error, liveSessionId: call.liveSessionId },
-        "assistant.history.close_failed",
+        "voice_thread.history.close_failed",
       );
     });
 
