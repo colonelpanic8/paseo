@@ -8,22 +8,26 @@ import { Field, FormTextInput } from "@/components/ui/form-field";
 import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
-  ASSISTANT_CONTEXT_MAX_LENGTH,
-  ASSISTANT_INSTRUCTIONS_MAX_LENGTH,
-  type AssistantFormError,
-  type AssistantFormModel,
-} from "./assistant-form-model";
+  VOICE_PROFILE_CONTEXT_MAX_LENGTH,
+  VOICE_PROFILE_FILES_MAX,
+  VOICE_PROFILE_INSTRUCTIONS_MAX_LENGTH,
+  parseProfileFiles,
+  type VoiceProfileFormError,
+  type VoiceProfileFormModel,
+} from "./voice-profile-form-model";
 
 const NONE_OPTION_ID = "__none__";
 
-function resolveFormErrorMessage(t: TFunction, error: AssistantFormError | null): string | null {
+function resolveFormErrorMessage(t: TFunction, error: VoiceProfileFormError | null): string | null {
   switch (error) {
     case "name_required":
-      return t("assistants.form.errors.nameRequired");
+      return t("voiceProfiles.form.errors.nameRequired");
     case "name_too_long":
-      return t("assistants.form.errors.nameTooLong");
+      return t("voiceProfiles.form.errors.nameTooLong");
     case "too_long":
-      return t("assistants.form.errors.tooLong");
+      return t("voiceProfiles.form.errors.tooLong");
+    case "files_invalid":
+      return t("voiceProfiles.form.errors.filesInvalid");
     case null:
       return null;
   }
@@ -32,47 +36,28 @@ function resolveFormErrorMessage(t: TFunction, error: AssistantFormError | null)
 /** A blank name is only an error once the user has been in the field. */
 function resolveVisibleNameError(
   t: TFunction,
-  error: AssistantFormError | null,
+  error: VoiceProfileFormError | null,
   nameTouched: boolean,
 ): string | null {
+  if (error !== "name_required" && error !== "name_too_long") return null;
   if (error === "name_required" && !nameTouched) return null;
   return resolveFormErrorMessage(t, error);
 }
 
 /**
- * The fields of an assistant or template. The model owns every value; this
- * renders state and dispatches intent, and the sheet around it owns submit.
+ * The fields of a profile. The model owns every value; this renders state and
+ * dispatches intent, and the sheet around it owns submit.
  */
-export function AssistantFormView({
+export function VoiceProfileFormView({
   model,
   disabled,
 }: {
-  model: AssistantFormModel;
+  model: VoiceProfileFormModel;
   disabled: boolean;
 }): ReactElement {
   const { t } = useTranslation();
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
   const size: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
-  const showTemplatePicker = state.kind === "assistant" && state.mode === "create";
-
-  const templateOptions = useMemo<SelectFieldOption<string>[]>(
-    () => [
-      {
-        id: NONE_OPTION_ID,
-        value: NONE_OPTION_ID,
-        label: t("assistants.form.startFrom.none"),
-        testID: "assistant-form-template-none",
-      },
-      ...state.templates.map((template) => ({
-        id: template.id,
-        value: template.id,
-        label: template.name,
-        testID: `assistant-form-template-${template.id}`,
-      })),
-    ],
-    [state.templates, t],
-  );
-  const selectedTemplate = state.templates.find((template) => template.id === state.templateId);
 
   const voiceOptions = useMemo<SelectFieldOption<string>[]>(() => {
     const voices = [...state.voiceOptions];
@@ -86,7 +71,7 @@ export function AssistantFormView({
       {
         id: NONE_OPTION_ID,
         value: NONE_OPTION_ID,
-        label: t("assistants.form.voice.default"),
+        label: t("voiceProfiles.form.voice.default"),
       },
       ...voices.map((voice) => ({ id: voice, value: voice, label: voice })),
     ];
@@ -106,7 +91,7 @@ export function AssistantFormView({
       {
         id: NONE_OPTION_ID,
         value: NONE_OPTION_ID,
-        label: t("assistants.form.backendModel.default"),
+        label: t("voiceProfiles.form.backendModel.default"),
       },
       ...known,
     ];
@@ -114,41 +99,32 @@ export function AssistantFormView({
   const backendModelLabel = state.configuration.backendModel
     ? (state.backendModelOptions.find((option) => option.id === state.configuration.backendModel)
         ?.label ?? state.configuration.backendModel)
-    : t("assistants.form.backendModel.default");
+    : t("voiceProfiles.form.backendModel.default");
 
   const thinkingOptions = useMemo<SelectFieldOption<string>[]>(
     () => [
       {
         id: NONE_OPTION_ID,
         value: NONE_OPTION_ID,
-        label: t("assistants.form.backendThinking.default"),
+        label: t("voiceProfiles.form.backendThinking.default"),
       },
       ...state.availableThinkingOptionIds.map((id) => ({ id, value: id, label: id })),
     ],
     [state.availableThinkingOptionIds, t],
   );
 
-  const templateDisplay = useMemo(
-    () => ({ label: selectedTemplate?.name ?? t("assistants.form.startFrom.none") }),
-    [selectedTemplate?.name, t],
-  );
   const voiceDisplay = useMemo(
-    () => ({ label: state.configuration.voice ?? t("assistants.form.voice.default") }),
+    () => ({ label: state.configuration.voice ?? t("voiceProfiles.form.voice.default") }),
     [state.configuration.voice, t],
   );
   const modelDisplay = useMemo(() => ({ label: backendModelLabel }), [backendModelLabel]);
   const thinkingDisplay = useMemo(
     () => ({
       label:
-        state.configuration.backendThinkingOptionId ?? t("assistants.form.backendThinking.default"),
+        state.configuration.backendThinkingOptionId ??
+        t("voiceProfiles.form.backendThinking.default"),
     }),
     [state.configuration.backendThinkingOptionId, t],
-  );
-  const handleSelectTemplate = useCallback(
-    (value: string) => {
-      model.setTemplate(value === NONE_OPTION_ID ? null : value);
-    },
-    [model],
   );
   const handleSelectVoice = useCallback(
     (value: string) => {
@@ -180,145 +156,154 @@ export function AssistantFormView({
     [model],
   );
   const nameError = resolveVisibleNameError(t, state.nameError, nameTouched);
-  const contextResetKey = `${state.templateId ?? ""}`;
+  const fileCount = parseProfileFiles(state.filesText).length;
 
   return (
     <View style={styles.fields}>
       <Field
-        label={t("assistants.form.name.label")}
-        error={state.nameError === "too_long" ? null : nameError}
-        testID="assistant-form-name-field"
+        label={t("voiceProfiles.form.name.label")}
+        error={nameError}
+        testID="voice-profile-form-name-field"
       >
         <FormTextInput
           size={size}
           initialValue={state.name}
           onChangeText={handleNameChange}
           editable={!disabled}
-          placeholder={t("assistants.form.name.placeholder")}
+          placeholder={t("voiceProfiles.form.name.placeholder")}
           autoCorrect={false}
-          accessibilityLabel={t("assistants.form.name.label")}
-          testID="assistant-form-name"
+          accessibilityLabel={t("voiceProfiles.form.name.label")}
+          testID="voice-profile-form-name"
         />
       </Field>
 
-      {showTemplatePicker ? (
-        <SelectField
-          label={t("assistants.form.startFrom.label")}
-          hint={t("assistants.form.startFrom.hint")}
-          value={state.templateId ?? NONE_OPTION_ID}
-          selectedDisplay={templateDisplay}
-          options={templateOptions}
-          onChange={handleSelectTemplate}
-          placeholder={t("assistants.form.startFrom.none")}
-          emptyText={t("assistants.form.startFrom.empty")}
-          disabled={disabled}
-          size={size}
-          testID="assistant-form-template"
-        />
-      ) : null}
-
       <Field
-        label={t("assistants.form.instructions.label")}
-        hint={t("assistants.form.instructions.hint", {
+        label={t("voiceProfiles.form.instructions.label")}
+        hint={t("voiceProfiles.form.instructions.hint", {
           length: state.configuration.instructions.length,
-          max: ASSISTANT_INSTRUCTIONS_MAX_LENGTH,
+          max: VOICE_PROFILE_INSTRUCTIONS_MAX_LENGTH,
         })}
         error={
-          state.configuration.instructions.length > ASSISTANT_INSTRUCTIONS_MAX_LENGTH
-            ? t("assistants.form.errors.tooLong")
+          state.configuration.instructions.length > VOICE_PROFILE_INSTRUCTIONS_MAX_LENGTH
+            ? t("voiceProfiles.form.errors.tooLong")
             : null
         }
       >
         <FormTextInput
           size={size}
           initialValue={state.configuration.instructions}
-          resetKey={contextResetKey}
           onChangeText={model.setInstructions}
           editable={!disabled}
-          placeholder={t("assistants.form.instructions.placeholder")}
+          placeholder={t("voiceProfiles.form.instructions.placeholder")}
           style={styles.multilineInput}
           multiline
           numberOfLines={4}
           textAlignVertical="top"
-          accessibilityLabel={t("assistants.form.instructions.label")}
-          testID="assistant-form-instructions"
+          accessibilityLabel={t("voiceProfiles.form.instructions.label")}
+          testID="voice-profile-form-instructions"
         />
       </Field>
 
       <Field
-        label={t("assistants.form.context.label")}
-        hint={t("assistants.form.context.hint", {
+        label={t("voiceProfiles.form.context.label")}
+        hint={t("voiceProfiles.form.context.hint", {
           length: state.configuration.context.length,
-          max: ASSISTANT_CONTEXT_MAX_LENGTH,
+          max: VOICE_PROFILE_CONTEXT_MAX_LENGTH,
         })}
         error={
-          state.configuration.context.length > ASSISTANT_CONTEXT_MAX_LENGTH
-            ? t("assistants.form.errors.tooLong")
+          state.configuration.context.length > VOICE_PROFILE_CONTEXT_MAX_LENGTH
+            ? t("voiceProfiles.form.errors.tooLong")
             : null
         }
       >
         <FormTextInput
           size={size}
           initialValue={state.configuration.context}
-          resetKey={contextResetKey}
           onChangeText={model.setContext}
           editable={!disabled}
-          placeholder={t("assistants.form.context.placeholder")}
+          placeholder={t("voiceProfiles.form.context.placeholder")}
           style={styles.multilineInputTall}
           multiline
           numberOfLines={6}
           textAlignVertical="top"
-          accessibilityLabel={t("assistants.form.context.label")}
-          testID="assistant-form-context"
+          accessibilityLabel={t("voiceProfiles.form.context.label")}
+          testID="voice-profile-form-context"
+        />
+      </Field>
+
+      <Field
+        label={t("voiceProfiles.form.files.label")}
+        hint={t("voiceProfiles.form.files.hint", {
+          count: fileCount,
+          max: VOICE_PROFILE_FILES_MAX,
+        })}
+        error={
+          state.nameError === "files_invalid" ? t("voiceProfiles.form.errors.filesInvalid") : null
+        }
+      >
+        <FormTextInput
+          size={size}
+          initialValue={state.filesText}
+          onChangeText={model.setFilesText}
+          editable={!disabled}
+          placeholder={t("voiceProfiles.form.files.placeholder")}
+          style={styles.multilineInput}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+          autoCorrect={false}
+          autoCapitalize="none"
+          accessibilityLabel={t("voiceProfiles.form.files.label")}
+          testID="voice-profile-form-files"
         />
       </Field>
 
       <SelectField
-        label={t("assistants.form.voice.label")}
-        hint={t("assistants.form.voice.hint")}
+        label={t("voiceProfiles.form.voice.label")}
+        hint={t("voiceProfiles.form.voice.hint")}
         value={state.configuration.voice ?? NONE_OPTION_ID}
         selectedDisplay={voiceDisplay}
         options={voiceOptions}
         onChange={handleSelectVoice}
-        placeholder={t("assistants.form.voice.default")}
-        emptyText={t("assistants.form.voice.default")}
+        placeholder={t("voiceProfiles.form.voice.default")}
+        emptyText={t("voiceProfiles.form.voice.default")}
         disabled={disabled}
         size={size}
-        testID="assistant-form-voice"
+        testID="voice-profile-form-voice"
       />
 
       <SelectField
-        label={t("assistants.form.backendModel.label")}
-        hint={t("assistants.form.backendModel.hint")}
+        label={t("voiceProfiles.form.backendModel.label")}
+        hint={t("voiceProfiles.form.backendModel.hint")}
         value={state.configuration.backendModel ?? NONE_OPTION_ID}
         selectedDisplay={modelDisplay}
         options={backendModelOptions}
         onChange={handleSelectBackendModel}
-        placeholder={t("assistants.form.backendModel.default")}
-        emptyText={t("assistants.form.backendModel.default")}
+        placeholder={t("voiceProfiles.form.backendModel.default")}
+        emptyText={t("voiceProfiles.form.backendModel.default")}
         disabled={disabled}
         size={size}
-        testID="assistant-form-backend-model"
+        testID="voice-profile-form-backend-model"
       />
 
       {state.configuration.backendModel ? (
         <SelectField
-          label={t("assistants.form.backendThinking.label")}
-          hint={t("assistants.form.backendThinking.hint")}
+          label={t("voiceProfiles.form.backendThinking.label")}
+          hint={t("voiceProfiles.form.backendThinking.hint")}
           value={state.configuration.backendThinkingOptionId ?? NONE_OPTION_ID}
           selectedDisplay={thinkingDisplay}
           options={thinkingOptions}
           onChange={handleSelectThinking}
-          placeholder={t("assistants.form.backendThinking.default")}
-          emptyText={t("assistants.form.backendThinking.default")}
+          placeholder={t("voiceProfiles.form.backendThinking.default")}
+          emptyText={t("voiceProfiles.form.backendThinking.default")}
           disabled={disabled || state.availableThinkingOptionIds.length === 0}
           size={size}
-          testID="assistant-form-backend-thinking"
+          testID="voice-profile-form-backend-thinking"
         />
       ) : null}
 
       {state.submitError ? (
-        <Text style={styles.submitError} testID="assistant-form-error">
+        <Text style={styles.submitError} testID="voice-profile-form-error">
           {state.submitError}
         </Text>
       ) : null}

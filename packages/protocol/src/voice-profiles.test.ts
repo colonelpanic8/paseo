@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ASSISTANT_CONFIGURATION, AssistantRequestSchema } from "./assistants.js";
+import {
+  DEFAULT_VOICE_PROFILE_CONFIGURATION,
+  VoiceProfileIdSchema,
+  VoiceProfileRequestSchema,
+} from "./voice-profiles.js";
 import {
   SessionInboundMessageSchema,
   ServerInfoStatusPayloadSchema,
@@ -7,34 +11,42 @@ import {
 } from "./messages.js";
 import { validateWSOutboundMessage } from "./validation/ws-outbound.js";
 
-describe("assistant protocol", () => {
+describe("voice profile protocol", () => {
   it("keeps legacy voice start and server capabilities optional", () => {
-    expect(
-      VoiceLiveStartRequestSchema.parse({
-        type: "voice.live.start.request",
-        requestId: "old",
-        negotiation: { kind: "webrtc_sdp", offerSdp: "offer" },
-      }).assistantId,
-    ).toBeUndefined();
+    const start = VoiceLiveStartRequestSchema.parse({
+      type: "voice.live.start.request",
+      requestId: "old",
+      negotiation: { kind: "webrtc_sdp", offerSdp: "offer" },
+    });
+    expect(start.profileId).toBeUndefined();
+    expect(start.threadId).toBeUndefined();
     expect(
       ServerInfoStatusPayloadSchema.parse({ status: "server_info", serverId: "old", features: {} })
-        .features?.assistants,
+        .features?.voiceProfiles,
     ).toBeUndefined();
+  });
+
+  it("accepts config-declared and stored profile ids and nothing path-like", () => {
+    expect(VoiceProfileIdSchema.safeParse(`prf_${"a".repeat(32)}`).success).toBe(true);
+    expect(VoiceProfileIdSchema.safeParse("cfg_work").success).toBe(true);
+    expect(VoiceProfileIdSchema.safeParse("cfg_life.v2-x").success).toBe(true);
+    expect(VoiceProfileIdSchema.safeParse("../../secrets").success).toBe(false);
+    expect(VoiceProfileIdSchema.safeParse("cfg_").success).toBe(false);
   });
 
   it("rejects unsafe record ids and invalid revision/checkpoint values", () => {
     expect(
-      AssistantRequestSchema.safeParse({
-        type: "assistant.get.request",
+      VoiceProfileRequestSchema.safeParse({
+        type: "voice.thread.get.request",
         requestId: "get",
-        assistantId: "../../secrets",
+        threadId: "../../secrets",
       }).success,
     ).toBe(false);
     expect(
-      AssistantRequestSchema.safeParse({
-        type: "assistant.compact.request",
+      VoiceProfileRequestSchema.safeParse({
+        type: "voice.thread.compact.request",
         requestId: "edit",
-        assistantId: `ast_${"a".repeat(32)}`,
+        threadId: `thr_${"a".repeat(32)}`,
         expectedRevision: 0,
         throughSeq: -1,
         summary: "",
@@ -42,10 +54,10 @@ describe("assistant protocol", () => {
     ).toBe(false);
     expect(
       SessionInboundMessageSchema.safeParse({
-        type: "assistant.template.save.request",
-        requestId: "template",
+        type: "voice.profile.save.request",
+        requestId: "profile",
         name: "Work",
-        configuration: DEFAULT_ASSISTANT_CONFIGURATION,
+        configuration: DEFAULT_VOICE_PROFILE_CONFIGURATION,
       }).success,
     ).toBe(true);
   });
@@ -54,14 +66,13 @@ describe("assistant protocol", () => {
     const message = {
       type: "session",
       message: {
-        type: "assistant.get.response",
+        type: "voice.thread.get.response",
         payload: {
           requestId: "get",
-          assistant: {
-            id: `ast_${"a".repeat(32)}`,
-            name: "Work",
-            templateId: null,
-            configuration: DEFAULT_ASSISTANT_CONFIGURATION,
+          thread: {
+            id: `thr_${"a".repeat(32)}`,
+            profileId: "cfg_work",
+            title: "Ship the voice project",
             revision: 1,
             createdAt: "now",
             updatedAt: "now",

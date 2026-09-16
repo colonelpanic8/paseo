@@ -13,7 +13,6 @@ import { useSessionStore } from "@/stores/session-store";
 import {
   createDefaultLiveVoiceRuntimeDeps,
   createLiveVoiceRuntime,
-  LiveVoiceStartError,
   type LiveVoiceDaemonClient,
   type LiveVoiceRuntime,
   type LiveVoiceSnapshot,
@@ -32,8 +31,8 @@ import {
   getLiveVoiceVoice,
 } from "@/stores/live-voice-settings-store";
 import { handleClientObservedLiveVoiceAgentStopped } from "@/live-voice/live-voice-cross-host-router";
-import { getSelectedAssistantId } from "@/assistants/assistant-selection-store";
-import { hostSupportsAssistants } from "@/assistants/assistant-queries";
+import { getVoiceSelection, useVoiceSelectionStore } from "@/voice-profiles/voice-selection-store";
+import { hostSupportsVoiceProfiles } from "@/voice-profiles/voice-profile-queries";
 
 /**
  * Every host the app holds a connection to, read on demand. A call can outlive
@@ -60,7 +59,8 @@ interface LiveVoiceContextValue extends LiveVoiceSnapshot {
 const EMPTY_SNAPSHOT: LiveVoiceSnapshot = {
   phase: "idle",
   serverId: null,
-  assistantId: null,
+  profileId: null,
+  threadId: null,
   liveSessionId: null,
   isMuted: false,
   isAudioBlocked: false,
@@ -170,12 +170,20 @@ export function LiveVoiceProvider({ children }: LiveVoiceProviderProps) {
         { read: getLiveVoiceVoice },
         { read: getLiveVoiceCallSettings },
         {
+          // Every call on a capable host is remembered: continue the picked
+          // thread, else open a new one under the picked (or default) profile.
           read: (serverId) => {
-            const assistantId = getSelectedAssistantId(serverId) ?? undefined;
-            if (assistantId && !hostSupportsAssistants(serverId)) {
-              throw new LiveVoiceStartError({ code: "unsupported", message: null });
+            if (!hostSupportsVoiceProfiles(serverId)) {
+              return undefined;
             }
-            return assistantId;
+            const selection = getVoiceSelection(serverId);
+            return {
+              ...(selection.profileId ? { profileId: selection.profileId } : {}),
+              ...(selection.threadId ? { threadId: selection.threadId } : { newThread: true }),
+            };
+          },
+          remembered: (serverId, threadId) => {
+            useVoiceSelectionStore.getState().selectThread(serverId, threadId);
           },
         },
       ),

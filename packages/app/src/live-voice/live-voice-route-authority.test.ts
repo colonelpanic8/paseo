@@ -8,7 +8,8 @@ import {
 const ACTIVE_SNAPSHOT: LiveVoiceSnapshot = {
   phase: "active",
   serverId: "source-host",
-  assistantId: null,
+  profileId: null,
+  threadId: null,
   liveSessionId: "live-call",
   isMuted: false,
   isAudioBlocked: false,

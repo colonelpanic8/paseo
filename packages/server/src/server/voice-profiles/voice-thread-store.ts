@@ -1,36 +1,34 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
-  AssistantSchema,
-  AssistantTemplateSchema,
-  AssistantHistoryEntrySchema,
-  AssistantIdSchema,
-  AssistantTemplateIdSchema,
-  DEFAULT_ASSISTANT_CONFIGURATION,
-  type Assistant,
-  type AssistantTemplate,
-  type AssistantHistoryEntry,
-  type AssistantRequest,
-} from "@getpaseo/protocol/assistants";
+  VOICE_THREAD_TITLE_MAX_LENGTH,
+  VoiceThreadHistoryEntrySchema,
+  VoiceThreadIdSchema,
+  VoiceThreadSchema,
+  type VoiceThread,
+  type VoiceThreadHistoryEntry,
+  type VoiceProfileRequest,
+} from "@getpaseo/protocol/voice-profiles";
 import { writeJsonFileAtomic } from "../atomic-file.js";
+import { principalDirectoryName } from "./voice-profile-store.js";
 
-type Input<T extends AssistantRequest["type"]> = Omit<
-  Extract<AssistantRequest, { type: T }>,
+type Input<T extends VoiceProfileRequest["type"]> = Omit<
+  Extract<VoiceProfileRequest, { type: T }>,
   "type" | "requestId"
 >;
-type EntryInput<T = AssistantHistoryEntry> = T extends AssistantHistoryEntry
+type EntryInput<T = VoiceThreadHistoryEntry> = T extends VoiceThreadHistoryEntry
   ? Omit<T, "seq" | "callId" | "createdAt">
   : never;
 const RecordSchema = z.object({
-  assistant: AssistantSchema,
-  history: z.array(AssistantHistoryEntrySchema),
+  thread: VoiceThreadSchema,
+  history: z.array(VoiceThreadHistoryEntrySchema),
   archives: z.array(z.string().regex(/^\d+-\d+\.json$/)).optional(),
 });
-type AssistantRecord = z.infer<typeof RecordSchema>;
+type ThreadRecord = z.infer<typeof RecordSchema>;
 
-export class AssistantStoreError extends Error {
+export class VoiceThreadStoreError extends Error {
   constructor(
     public readonly code: string,
     message: string,
@@ -39,9 +37,9 @@ export class AssistantStoreError extends Error {
   }
 }
 
-export interface AssistantCallHandle {
-  readonly assistant: Assistant;
-  readonly history: AssistantHistoryEntry[];
+export interface VoiceThreadCallHandle {
+  readonly thread: VoiceThread;
+  readonly history: VoiceThreadHistoryEntry[];
   append(entry: EntryInput): Promise<void>;
   close(cause: string): Promise<void>;
 }
@@ -50,11 +48,25 @@ function missing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
-export class AssistantStore {
+/** The first thing the user says names the thread until they rename it. */
+function deriveTitle(text: string): string {
+  const line = text.trim().split(/\s+/).join(" ");
+  return line.length > VOICE_THREAD_TITLE_MAX_LENGTH
+    ? `${line.slice(0, VOICE_THREAD_TITLE_MAX_LENGTH - 1)}…`
+    : line;
+}
+
+/**
+ * Threads are per-principal journals under `directory/{hash}/threads`. A
+ * thread holds its history and a user-written summary checkpoint; the profile
+ * that configures its calls is referenced by id and resolved at call start, so
+ * editing a profile applies to every thread's next call.
+ */
+export class VoiceThreadStore {
   private readonly mutations = new Map<string, Promise<unknown>>();
   private readonly calls = new Map<
     string,
-    { handle: AssistantCallHandle; onDeleted: () => void | Promise<void> }
+    { handle: VoiceThreadCallHandle; onDeleted: () => void | Promise<void> }
   >();
   private readonly deleting = new Map<string, Promise<void>>();
 
@@ -62,17 +74,13 @@ export class AssistantStore {
 
   private principalDirectory(principal: string): string {
     if (!principal)
-      throw new AssistantStoreError("unauthorized", "Assistant ownership is unavailable");
-    return join(this.directory, createHash("sha256").update(principal).digest("hex"));
+      throw new VoiceThreadStoreError("unauthorized", "Thread ownership is unavailable");
+    return join(this.directory, principalDirectoryName(principal), "threads");
   }
 
-  private path(principal: string, id: string, template = false): string {
-    (template ? AssistantTemplateIdSchema : AssistantIdSchema).parse(id);
-    return join(
-      this.principalDirectory(principal),
-      ...(template ? ["templates"] : []),
-      `${id}.json`,
-    );
+  private path(principal: string, id: string): string {
+    VoiceThreadIdSchema.parse(id);
+    return join(this.principalDirectory(principal), `${id}.json`);
   }
 
   private serial<T>(key: string, task: () => Promise<T>): Promise<T> {
@@ -94,19 +102,16 @@ export class AssistantStore {
     try {
       return schema.parse(JSON.parse(await readFile(path, "utf8")));
     } catch (error) {
-      if (missing(error))
-        throw new AssistantStoreError("not_found", "Assistant or template not found");
+      if (missing(error)) throw new VoiceThreadStoreError("not_found", "Thread not found");
       throw error;
     }
   }
 
-  private async ids(principal: string, template = false): Promise<string[]> {
-    const directory = join(this.principalDirectory(principal), ...(template ? ["templates"] : []));
+  private async paths(principal: string): Promise<string[]> {
+    const directory = this.principalDirectory(principal);
     try {
       return (await readdir(directory))
-        .filter((name) =>
-          (template ? /^tpl_[a-f0-9]{32}\.json$/ : /^ast_[a-f0-9]{32}\.json$/).test(name),
-        )
+        .filter((name) => /^thr_[a-f0-9]{32}\.json$/.test(name))
         .map((name) => join(directory, name));
     } catch (error) {
       if (missing(error)) return [];
@@ -114,18 +119,18 @@ export class AssistantStore {
     }
   }
 
-  private async history(path: string, record: AssistantRecord): Promise<AssistantHistoryEntry[]> {
+  private async history(path: string, record: ThreadRecord): Promise<VoiceThreadHistoryEntry[]> {
     const archived = await Promise.all(
       (record.archives ?? []).map((file) =>
-        this.read(join(`${path}.history`, file), z.array(AssistantHistoryEntrySchema)),
+        this.read(join(`${path}.history`, file), z.array(VoiceThreadHistoryEntrySchema)),
       ),
     );
     return [...archived.flat(), ...record.history];
   }
 
-  private async writeRecord(path: string, record: AssistantRecord): Promise<void> {
+  private async writeRecord(path: string, record: ThreadRecord): Promise<void> {
     const summarized = record.history.filter(
-      (entry) => entry.seq <= record.assistant.summaryThroughSeq,
+      (entry) => entry.seq <= record.thread.summaryThroughSeq,
     ).length;
     const archiveCount = Math.max(summarized, record.history.length > 512 ? 256 : 0);
     if (archiveCount > 0) {
@@ -140,19 +145,20 @@ export class AssistantStore {
     await writeJsonFileAtomic(path, record);
   }
 
-  async list(principal: string): Promise<Assistant[]> {
+  /** Most recently active first. */
+  async list(principal: string): Promise<VoiceThread[]> {
     const entries = await Promise.all(
-      (await this.ids(principal)).map(async (path) => {
+      (await this.paths(principal)).map(async (path) => {
         try {
-          return (await this.read(path, RecordSchema)).assistant;
+          return (await this.read(path, RecordSchema)).thread;
         } catch (error) {
-          if (error instanceof AssistantStoreError && error.code === "not_found") return null;
+          if (error instanceof VoiceThreadStoreError && error.code === "not_found") return null;
           throw error;
         }
       }),
     );
     return entries
-      .filter((entry): entry is Assistant => entry !== null)
+      .filter((entry): entry is VoiceThread => entry !== null)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -165,23 +171,18 @@ export class AssistantStore {
     );
     const limit = Math.min(200, Math.max(1, page.limit ?? 50));
     return {
-      assistant: record.assistant,
+      thread: record.thread,
       history: candidates.slice(-limit),
       hasMore: candidates.length > limit,
     };
   }
 
-  async create(principal: string, input: Input<"assistant.create.request">): Promise<Assistant> {
-    const template = input.templateId
-      ? await this.read(this.path(principal, input.templateId, true), AssistantTemplateSchema)
-      : null;
+  async create(principal: string, input: { profileId: string | null }): Promise<VoiceThread> {
     const now = new Date().toISOString();
-    const assistant = AssistantSchema.parse({
-      id: `ast_${randomBytes(16).toString("hex")}`,
-      name: input.name,
-      templateId: template?.id ?? null,
-      configuration:
-        input.configuration ?? template?.configuration ?? DEFAULT_ASSISTANT_CONFIGURATION,
+    const thread = VoiceThreadSchema.parse({
+      id: `thr_${randomBytes(16).toString("hex")}`,
+      profileId: input.profileId,
+      title: "",
       revision: 1,
       createdAt: now,
       updatedAt: now,
@@ -189,59 +190,58 @@ export class AssistantStore {
       summaryThroughSeq: 0,
       lastSeq: 0,
     });
-    await writeJsonFileAtomic(this.path(principal, assistant.id), { assistant, history: [] });
-    return assistant;
+    await writeJsonFileAtomic(this.path(principal, thread.id), { thread, history: [] });
+    return thread;
   }
 
   private mutate(
     principal: string,
     id: string,
-    change: (record: AssistantRecord) => void,
-  ): Promise<Assistant> {
+    change: (record: ThreadRecord) => void,
+  ): Promise<VoiceThread> {
     const path = this.path(principal, id);
     return this.serial(path, async () => {
       if (this.deleting.has(path))
-        throw new AssistantStoreError("not_found", "Assistant is being deleted");
+        throw new VoiceThreadStoreError("not_found", "Thread is being deleted");
       const record = await this.read(path, RecordSchema);
       change(record);
       const parsed = RecordSchema.parse(record);
       await this.writeRecord(path, parsed);
-      return parsed.assistant;
+      return parsed.thread;
     });
   }
 
-  private checkRevision(assistant: { revision: number }, expected: number | undefined): void {
-    if (assistant.revision !== expected)
-      throw new AssistantStoreError("conflict", "This record changed. Reload before saving.");
+  private checkRevision(thread: { revision: number }, expected: number | undefined): void {
+    if (thread.revision !== expected)
+      throw new VoiceThreadStoreError("conflict", "This thread changed. Reload before saving.");
   }
 
-  update(principal: string, input: Input<"assistant.update.request">): Promise<Assistant> {
-    return this.mutate(principal, input.assistantId, (record) => {
-      this.checkRevision(record.assistant, input.expectedRevision);
-      Object.assign(record.assistant, {
-        name: input.name,
-        configuration: input.configuration,
-        revision: record.assistant.revision + 1,
+  update(principal: string, input: Input<"voice.thread.update.request">): Promise<VoiceThread> {
+    return this.mutate(principal, input.threadId, (record) => {
+      this.checkRevision(record.thread, input.expectedRevision);
+      Object.assign(record.thread, {
+        title: input.title.trim(),
+        revision: record.thread.revision + 1,
         updatedAt: new Date().toISOString(),
       });
     });
   }
 
-  compact(principal: string, input: Input<"assistant.compact.request">): Promise<Assistant> {
-    return this.mutate(principal, input.assistantId, (record) => {
-      this.checkRevision(record.assistant, input.expectedRevision);
+  compact(principal: string, input: Input<"voice.thread.compact.request">): Promise<VoiceThread> {
+    return this.mutate(principal, input.threadId, (record) => {
+      this.checkRevision(record.thread, input.expectedRevision);
       if (
-        input.throughSeq < record.assistant.summaryThroughSeq ||
-        input.throughSeq > record.assistant.lastSeq
+        input.throughSeq < record.thread.summaryThroughSeq ||
+        input.throughSeq > record.thread.lastSeq
       )
-        throw new AssistantStoreError(
+        throw new VoiceThreadStoreError(
           "invalid_checkpoint",
           "Choose a checkpoint within the saved history",
         );
-      Object.assign(record.assistant, {
+      Object.assign(record.thread, {
         summary: input.summary,
         summaryThroughSeq: input.throughSeq,
-        revision: record.assistant.revision + 1,
+        revision: record.thread.revision + 1,
         updatedAt: new Date().toISOString(),
       });
     });
@@ -252,17 +252,14 @@ export class AssistantStore {
     id: string,
     callId: string,
     onDeleted: () => void | Promise<void>,
-  ): Promise<AssistantCallHandle> {
+  ): Promise<VoiceThreadCallHandle> {
     const path = this.path(principal, id);
     return this.serial(path, async () => {
       if (this.deleting.has(path))
-        throw new AssistantStoreError("not_found", "Assistant is being deleted");
+        throw new VoiceThreadStoreError("not_found", "Thread is being deleted");
       const record = await this.read(path, RecordSchema);
       if (this.calls.has(path))
-        throw new AssistantStoreError(
-          "assistant_busy",
-          "This assistant already has an active call",
-        );
+        throw new VoiceThreadStoreError("thread_busy", "This thread already has an active call");
       const history = await this.history(path, record);
       const lastStart = history.findLast((entry) => entry.kind === "call_started");
       if (
@@ -280,8 +277,8 @@ export class AssistantStore {
           this.addEntry(current, callId, entry);
           await this.writeRecord(path, current);
         });
-      const handle: AssistantCallHandle = {
-        assistant: structuredClone(record.assistant),
+      const handle: VoiceThreadCallHandle = {
+        thread: structuredClone(record.thread),
         history: structuredClone(history),
         append: (entry) => (closed || this.deleting.has(path) ? Promise.resolve() : append(entry)),
         close: (cause) => {
@@ -305,17 +302,20 @@ export class AssistantStore {
     });
   }
 
-  private addEntry(record: AssistantRecord, callId: string, entry: EntryInput): void {
+  private addEntry(record: ThreadRecord, callId: string, entry: EntryInput): void {
     const createdAt = new Date().toISOString();
     record.history.push(
-      AssistantHistoryEntrySchema.parse({
+      VoiceThreadHistoryEntrySchema.parse({
         ...entry,
         callId,
-        seq: ++record.assistant.lastSeq,
+        seq: ++record.thread.lastSeq,
         createdAt,
       }),
     );
-    record.assistant.updatedAt = createdAt;
+    if (record.thread.title === "" && entry.kind === "transcript" && entry.role === "user") {
+      record.thread.title = deriveTitle(entry.text);
+    }
+    record.thread.updatedAt = createdAt;
   }
 
   async delete(principal: string, id: string): Promise<void> {
@@ -328,7 +328,7 @@ export class AssistantStore {
       const call = this.calls.get(path);
       if (call) {
         await call.onDeleted();
-        await call.handle.close("assistant_deleted");
+        await call.handle.close("thread_deleted");
       }
       await this.serial(path, async () => {
         await rm(path, { force: true });
@@ -342,49 +342,5 @@ export class AssistantStore {
     } finally {
       this.deleting.delete(path);
     }
-  }
-
-  async listTemplates(principal: string): Promise<AssistantTemplate[]> {
-    const templates = await Promise.all(
-      (await this.ids(principal, true)).map(async (path) => {
-        try {
-          return await this.read(path, AssistantTemplateSchema);
-        } catch (error) {
-          if (error instanceof AssistantStoreError && error.code === "not_found") return null;
-          throw error;
-        }
-      }),
-    );
-    return templates
-      .filter((entry): entry is AssistantTemplate => entry !== null)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  async saveTemplate(
-    principal: string,
-    input: Input<"assistant.template.save.request">,
-  ): Promise<AssistantTemplate> {
-    const id = input.templateId ?? `tpl_${randomBytes(16).toString("hex")}`;
-    const path = this.path(principal, id, true);
-    return this.serial(path, async () => {
-      const previous = input.templateId ? await this.read(path, AssistantTemplateSchema) : null;
-      if (previous) this.checkRevision(previous, input.expectedRevision);
-      const now = new Date().toISOString();
-      const template = AssistantTemplateSchema.parse({
-        id,
-        name: input.name,
-        configuration: input.configuration,
-        revision: (previous?.revision ?? 0) + 1,
-        createdAt: previous?.createdAt ?? now,
-        updatedAt: now,
-      });
-      await writeJsonFileAtomic(path, template);
-      return template;
-    });
-  }
-
-  async deleteTemplate(principal: string, id: string): Promise<void> {
-    const path = this.path(principal, id, true);
-    await this.serial(path, () => rm(path, { force: true }));
   }
 }

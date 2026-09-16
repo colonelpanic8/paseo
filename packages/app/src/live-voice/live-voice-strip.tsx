@@ -1,4 +1,4 @@
-import { useAssistantName } from "@/assistants/assistant-queries";
+import { useVoiceProfileName } from "@/voice-profiles/voice-profile-queries";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
@@ -35,9 +35,9 @@ export function LiveVoiceStrip() {
   const isDocked = useIsLiveVoiceStripDocked();
   const liveVoice = useLiveVoiceOptional();
   const hosts = useHosts();
-  const assistantName = useAssistantName(
+  const profileName = useVoiceProfileName(
     liveVoice?.serverId ?? null,
-    liveVoice?.assistantId ?? null,
+    liveVoice?.profileId ?? null,
   );
   const insets = useSafeAreaInsets();
   const { style: keyboardShiftStyle } = useKeyboardShiftStyle({ mode: "translate" });
@@ -57,7 +57,7 @@ export function LiveVoiceStrip() {
 
   const hostLabel = resolveCallLabel(
     hosts.find((host) => host.serverId === serverId)?.label ?? null,
-    assistantName,
+    profileName,
   );
   const statusLabel = resolveLiveVoiceStatusLabel({ phase, isAudioBlocked, t });
   const errorText = error ? resolveLiveVoiceErrorMessage(error, t) : null;
