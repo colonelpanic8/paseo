@@ -15,7 +15,7 @@ import {
 } from "@/live-voice/live-voice-placement";
 import { resolveLiveVoiceErrorMessage } from "@/live-voice/live-voice-error-message";
 import { resolveCallLabel } from "@/live-voice/live-voice-call-ui";
-import { useAssistantName } from "@/assistants/assistant-queries";
+import { useVoiceProfileName } from "@/voice-profiles/voice-profile-queries";
 import { useHosts } from "@/runtime/host-runtime";
 
 const TRANSCRIPT_MAX_HEIGHT = 240;
@@ -49,9 +49,9 @@ export function SidebarLiveVoiceSlot({ active }: { active: boolean }) {
 function LiveVoiceSidebarCard() {
   const liveVoice = useLiveVoiceOptional();
   const hosts = useHosts();
-  const assistantName = useAssistantName(
+  const profileName = useVoiceProfileName(
     liveVoice?.serverId ?? null,
-    liveVoice?.assistantId ?? null,
+    liveVoice?.profileId ?? null,
   );
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -70,7 +70,7 @@ function LiveVoiceSidebarCard() {
 
   const hostLabel = resolveCallLabel(
     hosts.find((host) => host.serverId === serverId)?.label ?? null,
-    assistantName,
+    profileName,
   );
   const statusLabel = resolveLiveVoiceStatusLabel({ phase, isAudioBlocked, t });
   const errorText = error ? resolveLiveVoiceErrorMessage(error, t) : null;

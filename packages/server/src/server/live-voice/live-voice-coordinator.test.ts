@@ -1,7 +1,8 @@
 import os from "node:os";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { AssistantStore } from "../assistants/assistant-store.js";
+import { VoiceProfileStore } from "../voice-profiles/voice-profile-store.js";
+import { VoiceThreadStore } from "../voice-profiles/voice-thread-store.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
@@ -160,7 +161,8 @@ interface Harness {
 }
 
 function createHarness(options?: {
-  assistantStore?: AssistantStore;
+  profileStore?: VoiceProfileStore;
+  threadStore?: VoiceThreadStore;
   makeProvider?: () => FakeProviderSession;
   capabilities?: { readonly [capability: string]: boolean | undefined };
   availability?: { available: boolean; error?: string | null };
@@ -237,7 +239,8 @@ function createHarness(options?: {
         return () => closingListeners.delete(callback);
       },
     },
-    ...(options?.assistantStore ? { assistantStore: options.assistantStore } : {}),
+    ...(options?.profileStore ? { profileStore: options.profileStore } : {}),
+    ...(options?.threadStore ? { threadStore: options.threadStore } : {}),
     logger: createTestLogger(),
     hostProfile: TEST_HOST_PROFILE,
     routeBroker,
@@ -1025,20 +1028,22 @@ describe("LiveVoiceCoordinator", () => {
   });
 });
 
-describe("durable assistant calls", () => {
-  it("restores history on a fresh host and applies instance configuration over call overrides", async () => {
-    const directory = await mkdtemp(join(os.tmpdir(), "paseo-assistant-call-"));
-    const store = new AssistantStore(directory);
+describe("profiled and remembered calls", () => {
+  it("restores thread history on a fresh host and applies the profile over call overrides", async () => {
+    const directory = await mkdtemp(join(os.tmpdir(), "paseo-voice-thread-call-"));
+    const profiles = new VoiceProfileStore(directory);
+    const threads = new VoiceThreadStore(directory);
     const context: LiveVoiceContextProvider = {
       build: async () => ({ prompt: "Paseo routing", initialItems: [] }),
     };
-    const harness = createHarness({ assistantStore: store, context });
+    const harness = createHarness({ profileStore: profiles, threadStore: threads, context });
     try {
-      const assistant = await store.create("alice", {
+      const profile = await profiles.save("alice", {
         name: "Work",
         configuration: {
           context: "Project Iris",
           instructions: "Be concise",
+          files: [],
           voice: "saved-voice",
           backendModel: "saved-model",
           backendThinkingOptionId: "high",
@@ -1047,7 +1052,8 @@ describe("durable assistant calls", () => {
       const owner = { sessionKey: {}, principalId: "alice" };
       const request = {
         owner,
-        assistantId: assistant.id,
+        profileId: profile.id,
+        newThread: true,
         offerSdp: OFFER_SDP,
         emit: (update: LiveVoiceUpdate) => harness.updates.push(update),
         voice: "ignored-voice",
@@ -1055,81 +1061,108 @@ describe("durable assistant calls", () => {
       };
       const first = await harness.coordinator.start(request);
       expect(first.accepted).toBe(true);
+      if (!first.accepted) throw new Error("start failed");
+      expect(first.threadId).toMatch(/^thr_/);
       expect(harness.createConfigs[0]?.model).toBe("saved-model");
       expect(harness.provider().startCalls[0]?.voice).toBe("saved-voice");
       expect(
         await harness.coordinator.start({
           ...request,
+          newThread: false,
+          threadId: first.threadId,
           owner: { sessionKey: {}, principalId: "alice" },
         }),
-      ).toMatchObject({ accepted: false, errorCode: "assistant_busy" });
+      ).toMatchObject({ accepted: false, errorCode: "thread_busy" });
       expect(
         await harness.coordinator.start({
           ...request,
+          newThread: false,
+          threadId: first.threadId,
           owner: { sessionKey: {}, principalId: "bob" },
         }),
       ).toMatchObject({ accepted: false, errorCode: "not_found" });
+      expect(
+        await harness.coordinator.start({
+          ...request,
+          profileId: `prf_${"b".repeat(32)}`,
+          owner: { sessionKey: {}, principalId: "alice" },
+        }),
+      ).toMatchObject({ accepted: false, errorCode: "profile_not_found" });
       harness
         .provider()
         .emit({ kind: "transcript", role: "user", text: "Remember the release is Monday" });
       harness
         .provider()
         .emit({ kind: "transcript", role: "assistant", text: "Monday, understood" });
-      if (!first.accepted) throw new Error("start failed");
       harness.coordinator.stop({
         liveSessionId: first.liveSessionId,
         sessionKey: owner.sessionKey,
       });
-      await store.flush();
-      const restoredStore = new AssistantStore(directory);
-      const restored = createHarness({ assistantStore: restoredStore, context });
+      await threads.flush();
+      const restoredThreads = new VoiceThreadStore(directory);
+      const restored = createHarness({
+        profileStore: new VoiceProfileStore(directory),
+        threadStore: restoredThreads,
+        context,
+      });
       try {
-        const second = await restored.coordinator.start(request);
-        expect(second.accepted).toBe(true);
+        const second = await restored.coordinator.start({
+          ...request,
+          newThread: false,
+          threadId: first.threadId,
+        });
+        expect(second).toMatchObject({ accepted: true, threadId: first.threadId });
         expect(restored.provider().startCalls[0]?.initialItems).toEqual(
           expect.arrayContaining([
             { role: "user", text: "Remember the release is Monday" },
             { role: "assistant", text: "Monday, understood" },
           ]),
         );
-        await restoredStore.delete("alice", assistant.id);
+        expect(
+          restored
+            .provider()
+            .startCalls[0]?.initialItems?.some((item) => item.text.includes("Project Iris")),
+        ).toBe(true);
+        expect((await restoredThreads.list("alice"))[0]?.title).toBe(
+          "Remember the release is Monday",
+        );
       } finally {
         restored.coordinator.dispose();
-        await restoredStore.flush();
+        await restoredThreads.flush();
       }
     } finally {
       harness.coordinator.dispose();
-      await store.flush();
+      await threads.flush();
       await rm(directory, { recursive: true, force: true });
     }
   });
 
-  it("deleting an active assistant closes its call before removing history", async () => {
-    const directory = await mkdtemp(join(os.tmpdir(), "paseo-assistant-delete-"));
-    const store = new AssistantStore(directory);
+  it("deleting an active thread closes its call before removing history", async () => {
+    const directory = await mkdtemp(join(os.tmpdir(), "paseo-voice-thread-delete-"));
+    const threads = new VoiceThreadStore(directory);
     const harness = createHarness({
-      assistantStore: store,
+      threadStore: threads,
       context: { build: async () => ({ prompt: "Paseo", initialItems: [] }) },
     });
     try {
-      const assistant = await store.create("owner", { name: "Work" });
+      const thread = await threads.create("owner", { profileId: null });
       const result = await harness.coordinator.start({
         owner: { sessionKey: {}, principalId: "owner" },
-        assistantId: assistant.id,
+        threadId: thread.id,
         offerSdp: OFFER_SDP,
         emit: (update) => harness.updates.push(update),
       });
       expect(result.accepted).toBe(true);
-      await store.delete("owner", assistant.id);
+      await threads.delete("owner", thread.id);
       expect(harness.updates.at(-1)?.event).toMatchObject({
         kind: "closed",
-        cause: "assistant_deleted",
+        cause: "thread_deleted",
       });
       expect(harness.provider().stopCalls).toHaveLength(1);
-      expect(await store.list("owner")).toEqual([]);
+      expect(await threads.list("owner")).toEqual([]);
     } finally {
       harness.coordinator.dispose();
-      await store.flush();
+      await threads.flush();
       await rm(directory, { recursive: true, force: true });
     }
   });

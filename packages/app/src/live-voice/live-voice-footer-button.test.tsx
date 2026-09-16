@@ -27,8 +27,11 @@ const { closeMenu, liveVoice } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/assistants/assistant-queries", () => ({ useAssistants: () => ({ assistants: [] }) }));
-vi.mock("@/assistants/assistants-sheet", () => ({ AssistantsSheet: () => null }));
+vi.mock("@/voice-profiles/voice-profile-queries", () => ({
+  useVoiceProfiles: () => ({ profiles: [], defaultProfileId: null }),
+  useVoiceThreads: () => ({ threads: [] }),
+}));
+vi.mock("@/voice-profiles/voice-profiles-sheet", () => ({ VoiceProfilesSheet: () => null }));
 
 vi.mock("@/contexts/live-voice-context", () => ({
   useLiveVoiceOptional: () => liveVoice,
