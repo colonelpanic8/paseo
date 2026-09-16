@@ -154,6 +154,9 @@ export interface ProviderSnapshotManagerSpies {
     typeof vi.fn<ProviderSnapshotManager["refreshSettingsSnapshot"]>
   >;
   warmUpSnapshotForCwd: ReturnType<typeof vi.fn<ProviderSnapshotManager["warmUpSnapshotForCwd"]>>;
+  revalidateSnapshotForCwd: ReturnType<
+    typeof vi.fn<ProviderSnapshotManager["revalidateSnapshotForCwd"]>
+  >;
   listRegisteredProviderIds: ReturnType<
     typeof vi.fn<ProviderSnapshotManager["listRegisteredProviderIds"]>
   >;
@@ -191,6 +194,9 @@ export function createProviderSnapshotManagerStub(): {
     async () => {},
   );
   const warmUpSnapshotForCwd = vi.fn<ProviderSnapshotManager["warmUpSnapshotForCwd"]>(
+    async () => {},
+  );
+  const revalidateSnapshotForCwd = vi.fn<ProviderSnapshotManager["revalidateSnapshotForCwd"]>(
     async () => {},
   );
   const listRegisteredProviderIds = vi.fn<ProviderSnapshotManager["listRegisteredProviderIds"]>(
@@ -243,6 +249,7 @@ export function createProviderSnapshotManagerStub(): {
     refreshSnapshotForCwd,
     refreshSettingsSnapshot,
     warmUpSnapshotForCwd,
+    revalidateSnapshotForCwd,
     listRegisteredProviderIds,
     hasProvider,
     getProviderLabel,
@@ -269,6 +276,7 @@ export function createProviderSnapshotManagerStub(): {
     refreshSnapshotForCwd,
     refreshSettingsSnapshot,
     warmUpSnapshotForCwd,
+    revalidateSnapshotForCwd,
     listRegisteredProviderIds,
     hasProvider,
     getProviderLabel,

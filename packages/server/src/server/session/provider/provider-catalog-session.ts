@@ -424,6 +424,9 @@ export class ProviderCatalogSession {
     msg: Extract<SessionInboundMessage, { type: "get_providers_snapshot_request" }>,
   ): Promise<void> {
     const cwd = msg.cwd?.trim() ? resolveSnapshotCwd(expandTilde(msg.cwd)) : undefined;
+    // Answer from the cached snapshot; catalogues that changed underneath us
+    // arrive as a snapshot update once the revalidation settles.
+    void this.providerSnapshotManager.revalidateSnapshotForCwd({ cwd });
     const snapshot = this.visibleSnapshot(this.providerSnapshotManager.getSnapshot(cwd));
     this.host.emit({
       type: "get_providers_snapshot_response",
