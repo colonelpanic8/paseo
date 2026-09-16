@@ -56,8 +56,10 @@ export interface LiveVoiceErrorInfo {
 export interface LiveVoiceSnapshot {
   phase: LiveVoicePhase;
   serverId: string | null;
-  /** The durable assistant this call attached to; null for a legacy ephemeral call. */
-  assistantId: string | null;
+  /** The profile configuring this call; null when the daemon's default or none applied. */
+  profileId: string | null;
+  /** The thread this call writes to; null for a call the daemon does not remember. */
+  threadId: string | null;
   liveSessionId: string | null;
   isMuted: boolean;
   /** Autoplay policy blocked remote audio; the UI must offer "tap to enable audio". */
@@ -80,7 +82,9 @@ export interface LiveVoiceSnapshot {
 export interface LiveVoiceDaemonClient {
   startLiveVoice(input: {
     negotiation: { kind: "webrtc_sdp"; offerSdp: string };
-    assistantId?: string;
+    profileId?: string;
+    threadId?: string;
+    newThread?: boolean;
     voice?: string;
     ambientAgentReports?: boolean;
     ambientAgentGuidance?: string;
@@ -92,6 +96,7 @@ export interface LiveVoiceDaemonClient {
   }): Promise<{
     liveSessionId: string;
     negotiation: { kind: "webrtc_sdp"; answerSdp: string };
+    threadId?: string;
   }>;
   stopLiveVoice(input: { liveSessionId: string }): Promise<void>;
   listLiveVoiceVoices?(): Promise<string[]>;
@@ -138,14 +143,23 @@ export interface LiveVoiceRuntimeDeps {
     };
   };
   /**
-   * The durable assistant a new call on this host attaches to, read once at
-   * start. When it names one, the assistant's own voice, instructions, and
-   * backend settings replace the per-call values above; the daemon ignores
-   * them anyway, so they are not sent.
+   * What a new call on this host remembers and how it is configured, read once
+   * at start. A profile's own voice, instructions, and backend settings replace
+   * the per-call values above; the daemon ignores them anyway, so they are not
+   * sent. `remembered` reports the thread the daemon opened so the next call
+   * continues it.
    */
-  assistant?: {
-    read(serverId: string): string | undefined;
+  memory?: {
+    read(serverId: string): LiveVoiceMemoryRequest | undefined;
+    remembered?(serverId: string, threadId: string): void;
   };
+}
+
+/** How a call should be remembered. Absent means a call the daemon forgets. */
+export interface LiveVoiceMemoryRequest {
+  profileId?: string;
+  threadId?: string;
+  newThread?: boolean;
 }
 
 export interface LiveVoiceRuntime {
@@ -251,7 +265,8 @@ function beginAmbientAgentReports(
 const IDLE_SNAPSHOT: LiveVoiceSnapshot = {
   phase: "idle",
   serverId: null,
-  assistantId: null,
+  profileId: null,
+  threadId: null,
   liveSessionId: null,
   isMuted: false,
   isAudioBlocked: false,
@@ -266,7 +281,7 @@ export function createDefaultLiveVoiceRuntimeDeps(
   ambientAgentReports?: LiveVoiceRuntimeDeps["ambientAgentReports"],
   voice?: LiveVoiceRuntimeDeps["voice"],
   callSettings?: LiveVoiceRuntimeDeps["callSettings"],
-  assistant?: LiveVoiceRuntimeDeps["assistant"],
+  memory?: LiveVoiceRuntimeDeps["memory"],
 ): LiveVoiceRuntimeDeps {
   return {
     getClient,
@@ -274,7 +289,7 @@ export function createDefaultLiveVoiceRuntimeDeps(
     ...(ambientAgentReports ? { ambientAgentReports } : {}),
     ...(voice ? { voice } : {}),
     ...(callSettings ? { callSettings } : {}),
-    ...(assistant ? { assistant } : {}),
+    ...(memory ? { memory } : {}),
     startSession: startLiveVoiceSession,
     isSessionSupported: isLiveVoiceSessionSupported,
     lease: audioSessionLease,
@@ -284,7 +299,7 @@ export function createDefaultLiveVoiceRuntimeDeps(
 interface LiveVoiceCall {
   client: LiveVoiceDaemonClient;
   pin: LiveVoiceConnectionPin | null;
-  assistantId: string | null;
+  memory: LiveVoiceMemoryRequest | null;
   leaseToken: AudioSessionLeaseToken | null;
   session: LiveVoiceSession | null;
   unsubscribe: (() => void) | null;
@@ -296,6 +311,49 @@ interface LiveVoiceCall {
   stopRequested: boolean;
   stopPromise: Promise<void> | null;
   closePromise: Promise<void> | null;
+}
+
+/** The memory fields of a start request, with absent ones dropped. */
+function toMemoryStartFields(
+  memory: LiveVoiceMemoryRequest | null,
+): Pick<LiveVoiceMemoryRequest, "profileId" | "threadId" | "newThread"> {
+  return {
+    ...(memory?.profileId ? { profileId: memory.profileId } : {}),
+    ...(memory?.threadId ? { threadId: memory.threadId } : {}),
+    ...(memory?.newThread ? { newThread: true } : {}),
+  };
+}
+
+/**
+ * Per-call settings for the start request. A profile owns the voice
+ * instructions and backend settings, so a profiled call leaves them out;
+ * sending them would only invite drift.
+ */
+function toCallSettingsStartFields(
+  callSettings: ReturnType<NonNullable<LiveVoiceRuntimeDeps["callSettings"]>["read"]> | undefined,
+  profiled: boolean,
+): {
+  disabledPromptComponents?: string[];
+  defaultWorkspaceDirectory?: string;
+  customVoiceInstructions?: string;
+  backendModel?: string;
+  backendThinkingOptionId?: string;
+} {
+  return {
+    ...(callSettings?.disabledPromptComponents?.length
+      ? { disabledPromptComponents: callSettings.disabledPromptComponents }
+      : {}),
+    ...(callSettings?.defaultWorkspaceDirectory
+      ? { defaultWorkspaceDirectory: callSettings.defaultWorkspaceDirectory }
+      : {}),
+    ...(!profiled && callSettings?.customVoiceInstructions
+      ? { customVoiceInstructions: callSettings.customVoiceInstructions }
+      : {}),
+    ...(!profiled && callSettings?.backendModel ? { backendModel: callSettings.backendModel } : {}),
+    ...(!profiled && callSettings?.backendThinkingOptionId
+      ? { backendThinkingOptionId: callSettings.backendThinkingOptionId }
+      : {}),
+  };
 }
 
 export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRuntime {
@@ -482,9 +540,10 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
       call.unsubscribe = call.client.subscribeUpdates((message) => handleUpdate(call, message));
       const ambientStartFields = toAmbientStartFields(deps.ambientAgentReports?.read());
       const callSettings = deps.callSettings?.read();
-      // An assistant carries its own voice; only a legacy call resolves one here.
-      const assistantId = call.assistantId;
-      const voice = assistantId
+      // A profile carries its own voice; only an unprofiled call resolves one here.
+      const memory = call.memory;
+      const profiled = Boolean(memory?.profileId || memory?.threadId);
+      const voice = profiled
         ? undefined
         : await resolveSelectedLiveVoice(deps.voice?.read(), call.client);
       if (!isCurrent(call)) return;
@@ -494,29 +553,18 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
           if (!isCurrent(call)) throw new Error("Live Voice startup was cancelled");
           const result = await call.client.startLiveVoice({
             negotiation: { kind: "webrtc_sdp", offerSdp },
-            ...(assistantId ? { assistantId } : {}),
+            ...toMemoryStartFields(memory),
             ...(voice ? { voice } : {}),
             ...ambientStartFields,
-            ...(callSettings?.disabledPromptComponents?.length
-              ? { disabledPromptComponents: callSettings.disabledPromptComponents }
-              : {}),
-            ...(callSettings?.defaultWorkspaceDirectory
-              ? { defaultWorkspaceDirectory: callSettings.defaultWorkspaceDirectory }
-              : {}),
-            // The assistant record owns these; sending them would only invite drift.
-            ...(!assistantId && callSettings?.customVoiceInstructions
-              ? { customVoiceInstructions: callSettings.customVoiceInstructions }
-              : {}),
-            ...(!assistantId && callSettings?.backendModel
-              ? { backendModel: callSettings.backendModel }
-              : {}),
-            ...(!assistantId && callSettings?.backendThinkingOptionId
-              ? { backendThinkingOptionId: callSettings.backendThinkingOptionId }
-              : {}),
+            ...toCallSettingsStartFields(callSettings, profiled),
           });
           // The daemon exists before the transport applies its answer. Retain
           // its id even if setRemoteDescription fails or this start was stopped.
           call.liveSessionId = result.liveSessionId;
+          if (result.threadId) {
+            patch({ threadId: result.threadId });
+            deps.memory?.remembered?.(serverId, result.threadId);
+          }
           stopDaemon(call);
           return {
             liveSessionId: result.liveSessionId,
@@ -584,9 +632,9 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
         throw new LiveVoiceStartError({ code: "stopping", message: null });
       }
       if (!deps.isSessionSupported) failStart(serverId, { code: "unsupported", message: null });
-      let assistantId: string | null;
+      let memory: LiveVoiceMemoryRequest | null;
       try {
-        assistantId = deps.assistant?.read(serverId) ?? null;
+        memory = deps.memory?.read(serverId) ?? null;
       } catch (error) {
         failStart(serverId, error instanceof LiveVoiceStartError ? error.info : toErrorInfo(error));
       }
@@ -609,7 +657,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
       const call: LiveVoiceCall = {
         client,
         pin,
-        assistantId,
+        memory,
         leaseToken: token,
         session: null,
         unsubscribe: null,
@@ -623,7 +671,13 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
         closePromise: null,
       };
       currentCall = call;
-      publish({ ...IDLE_SNAPSHOT, phase: "starting", serverId, assistantId });
+      publish({
+        ...IDLE_SNAPSHOT,
+        phase: "starting",
+        serverId,
+        profileId: memory?.profileId ?? null,
+        threadId: memory?.threadId ?? null,
+      });
       await startCall(call, serverId);
     },
     async stop() {
