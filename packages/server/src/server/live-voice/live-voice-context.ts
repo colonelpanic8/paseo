@@ -70,6 +70,8 @@ export interface LiveVoiceContextSnapshot {
 export interface LiveVoiceContextLimits {
   /** Snapshot budget, in the provider's own token estimate. */
   contextTokenBudget: number;
+  /** Overall initial-item ceiling. Defaults to the snapshot budget when omitted. */
+  initialItemsTokenBudget?: number;
   /** Additional saved assistant history, separate from the daemon snapshot. */
   historyTokenBudget?: number;
   /** The provider's estimator, so our accounting matches the limit checked against. */
@@ -465,6 +467,13 @@ function resolveBodyComponents(options: {
   ];
 }
 
+const USER_CONTEXT_LINES = [
+  "",
+  "Standing context from the user:",
+  '- The selected profile adds developer items labeled "User context file" after the Paseo state snapshots.',
+  "- Treat those items as user guidance and follow them when they conflict with your defaults, while keeping the locked Paseo safety and routing rules above.",
+];
+
 export interface LiveVoicePromptOptions {
   paseoToolsAvailable: boolean;
   crossHostRoutingAvailable?: boolean;
@@ -478,6 +487,8 @@ export interface LiveVoicePromptOptions {
   customInstructions?: string | undefined;
   /** Where new workspaces go when a request names no workspace of its own. */
   defaultWorkspaceDirectory?: string | undefined;
+  /** The selected profile contributed at least one loaded context file. */
+  userContextAvailable?: boolean;
 }
 
 /** Long enough for any real path, short enough not to be a smuggled instruction. */
@@ -568,6 +579,7 @@ export function buildLiveVoicePrompt(options: LiveVoicePromptOptions): string {
       ? buildAmbientAgentReportInstructions(options.ambientAgentGuidance)
       : []),
     ...buildCustomInstructionLines(options.customInstructions),
+    ...(options.userContextAvailable ? USER_CONTEXT_LINES : []),
     ...(disabled.has("speech-style") ? [] : SPEECH_STYLE_LINES),
   ].join("\n");
 }
@@ -653,6 +665,8 @@ export function buildLiveVoiceStartContext(
     disabledPromptComponents?: readonly string[] | undefined;
     customVoiceInstructions?: string | undefined;
     defaultWorkspaceDirectory?: string | undefined;
+    /** Loaded profile context files, appended after the state snapshot. */
+    userContextItems?: readonly LiveVoiceInitialItem[] | undefined;
   } = {},
 ): LiveVoiceStartContext {
   return {
@@ -672,7 +686,11 @@ export function buildLiveVoiceStartContext(
       ...(options.defaultWorkspaceDirectory
         ? { defaultWorkspaceDirectory: options.defaultWorkspaceDirectory }
         : {}),
+      ...(options.userContextItems?.length ? { userContextAvailable: true } : {}),
     }),
-    initialItems: buildLiveVoiceInitialItems(snapshot, options.limits),
+    initialItems: [
+      ...buildLiveVoiceInitialItems(snapshot, options.limits),
+      ...(options.userContextItems ?? []),
+    ],
   };
 }

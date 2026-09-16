@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AudioLines } from "lucide-react-native";
+import type { VoiceProfile, VoiceThread } from "@getpaseo/protocol/voice-profiles";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,10 +24,8 @@ import {
   type MenuPageDefinition,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAssistants } from "@/assistants/assistant-queries";
-import { useAssistantSelectionStore } from "@/assistants/assistant-selection-store";
-import { AssistantsSheet } from "@/assistants/assistants-sheet";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
+import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { useLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
 import { resolveLiveVoiceStatusLabel } from "@/live-voice/live-voice-call-ui";
@@ -38,6 +37,10 @@ import {
   type LiveVoicePhase,
 } from "@/live-voice/live-voice-runtime";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { useVoiceProfiles, useVoiceThreads } from "@/voice-profiles/voice-profile-queries";
+import { VoiceProfilesSheet } from "@/voice-profiles/voice-profiles-sheet";
+import { useVoiceSelection, useVoiceSelectionStore } from "@/voice-profiles/voice-selection-store";
+import { resolveVoiceThreadTitle } from "@/voice-profiles/voice-thread-title";
 
 const ThemedAudioLines = withUnistyles(AudioLines);
 
@@ -170,68 +173,160 @@ function LiveVoiceCallMenuItems({
   );
 }
 
-const ASSISTANT_PAGE_ID = "live-voice-assistant";
+const PROFILE_PAGE_ID = "live-voice-profile";
+const THREAD_PAGE_ID = "live-voice-thread";
+/** Enough recent threads to find the one you mean; the sheet lists them all. */
+const RECENT_THREAD_LIMIT = 8;
 
 /**
- * The submenu page that picks which assistant the call attaches to. Selecting
- * a row chooses and returns; the menu stays open so the next press is Start.
+ * Which profile a new call on the host uses once the launcher's pick and the
+ * daemon's default are both considered.
  */
-function LiveVoiceAssistantPage({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const { assistants } = useAssistants(serverId);
-  const selectedAssistantId = useAssistantSelectionStore(
-    (state) => state.selectedByServerId[serverId] ?? null,
-  );
-  const select = useAssistantSelectionStore((state) => state.select);
+function resolveEffectiveProfile(
+  profiles: readonly VoiceProfile[],
+  selectedProfileId: string | null,
+  defaultProfileId: string | null,
+): VoiceProfile | null {
+  const id = selectedProfileId ?? defaultProfileId;
+  return id ? (profiles.find((profile) => profile.id === id) ?? null) : null;
+}
 
-  const selectNone = useCallback(() => select(serverId, null), [select, serverId]);
+/** Threads a call under this profile could continue, most recent first. */
+function resolveRecentThreads(
+  threads: readonly VoiceThread[],
+  profileId: string | null,
+): VoiceThread[] {
+  return threads.filter((thread) => thread.profileId === profileId).slice(0, RECENT_THREAD_LIMIT);
+}
+
+/**
+ * The submenu page that picks which profile configures the call. Selecting a
+ * row chooses and returns; the menu stays open so the next press is Start.
+ */
+function LiveVoiceProfilePage({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const { profiles, defaultProfileId } = useVoiceProfiles(serverId);
+  const { profileId: selectedProfileId } = useVoiceSelection(serverId);
+  const selectProfile = useVoiceSelectionStore((state) => state.selectProfile);
+  const defaultName = profiles.find((profile) => profile.id === defaultProfileId)?.name;
+
+  const selectDefault = useCallback(() => selectProfile(serverId, null), [selectProfile, serverId]);
 
   return (
     <>
       <DropdownMenuItem
-        selected={selectedAssistantId === null}
+        selected={selectedProfileId === null}
         showSelectedCheck
         closeOnSelect={false}
-        onSelect={selectNone}
-        testID="live-voice-menu-assistant-none"
+        description={defaultName}
+        onSelect={selectDefault}
+        testID="live-voice-menu-profile-default"
       >
-        {t("assistants.menu.none")}
+        {t("voiceProfiles.menu.defaultProfile")}
       </DropdownMenuItem>
-      {assistants.map((assistant) => (
-        <LiveVoiceAssistantMenuItem
-          key={assistant.id}
+      {profiles.map((profile) => (
+        <LiveVoiceProfileMenuItem
+          key={profile.id}
           serverId={serverId}
-          id={assistant.id}
-          name={assistant.name}
-          selected={assistant.id === selectedAssistantId}
+          profile={profile}
+          selected={profile.id === selectedProfileId}
         />
       ))}
     </>
   );
 }
 
-function LiveVoiceAssistantMenuItem({
+function LiveVoiceProfileMenuItem({
   serverId,
-  id,
-  name,
+  profile,
   selected,
 }: {
   serverId: string;
-  id: string;
-  name: string;
+  profile: VoiceProfile;
   selected: boolean;
 }) {
-  const select = useAssistantSelectionStore((state) => state.select);
-  const handleSelect = useCallback(() => select(serverId, id), [select, serverId, id]);
+  const selectProfile = useVoiceSelectionStore((state) => state.selectProfile);
+  const handleSelect = useCallback(
+    () => selectProfile(serverId, profile.id),
+    [selectProfile, serverId, profile.id],
+  );
   return (
     <DropdownMenuItem
       selected={selected}
       showSelectedCheck
       closeOnSelect={false}
       onSelect={handleSelect}
-      testID={`live-voice-menu-assistant-${id}`}
+      testID={`live-voice-menu-profile-${profile.id}`}
     >
-      {name}
+      {profile.name}
+    </DropdownMenuItem>
+  );
+}
+
+/**
+ * The submenu page that picks what the call remembers: a fresh thread, or one
+ * of the profile's recent threads to continue.
+ */
+function LiveVoiceThreadPage({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const { profiles, defaultProfileId } = useVoiceProfiles(serverId);
+  const { threads } = useVoiceThreads(serverId);
+  const { profileId: selectedProfileId, threadId: selectedThreadId } = useVoiceSelection(serverId);
+  const selectThread = useVoiceSelectionStore((state) => state.selectThread);
+  const effectiveProfile = resolveEffectiveProfile(profiles, selectedProfileId, defaultProfileId);
+  const recent = resolveRecentThreads(threads, effectiveProfile?.id ?? null);
+
+  const selectNew = useCallback(() => selectThread(serverId, null), [selectThread, serverId]);
+
+  return (
+    <>
+      <DropdownMenuItem
+        selected={selectedThreadId === null}
+        showSelectedCheck
+        closeOnSelect={false}
+        onSelect={selectNew}
+        testID="live-voice-menu-thread-new"
+      >
+        {t("voiceProfiles.menu.newThread")}
+      </DropdownMenuItem>
+      {recent.map((thread) => (
+        <LiveVoiceThreadMenuItem
+          key={thread.id}
+          serverId={serverId}
+          thread={thread}
+          selected={thread.id === selectedThreadId}
+        />
+      ))}
+    </>
+  );
+}
+
+function LiveVoiceThreadMenuItem({
+  serverId,
+  thread,
+  selected,
+}: {
+  serverId: string;
+  thread: VoiceThread;
+  selected: boolean;
+}) {
+  const { t } = useTranslation();
+  const selectThread = useVoiceSelectionStore((state) => state.selectThread);
+  const timeAgo = useCompactTimeAgo(new Date(thread.updatedAt));
+  const handleSelect = useCallback(
+    () => selectThread(serverId, thread.id),
+    [selectThread, serverId, thread.id],
+  );
+  return (
+    <DropdownMenuItem
+      selected={selected}
+      showSelectedCheck
+      closeOnSelect={false}
+      description={timeAgo}
+      onSelect={handleSelect}
+      testID={`live-voice-menu-thread-${thread.id}`}
+    >
+      {resolveVoiceThreadTitle(thread, t)}
     </DropdownMenuItem>
   );
 }
@@ -241,27 +336,33 @@ function LiveVoiceStartMenuItems({
   hosts,
   selectedHost,
   onSelectHost,
-  onManageAssistants,
+  onManageProfiles,
 }: {
   hosts: LiveVoiceHostAvailability[];
   selectedHost: LiveVoiceHostAvailability;
   onSelectHost: (serverId: string) => void;
-  onManageAssistants: () => void;
+  onManageProfiles: () => void;
 }) {
   const liveVoice = useLiveVoiceOptional();
   const { t } = useTranslation();
   const closeMenu = useDropdownMenuClose();
   const { serverId } = selectedHost;
-  const supportsAssistants = selectedHost.supportsAssistants === true;
-  const { assistants } = useAssistants(supportsAssistants ? serverId : null);
-  const selectedAssistantId = useAssistantSelectionStore(
-    (state) => state.selectedByServerId[serverId] ?? null,
-  );
-  const selectedAssistant =
-    assistants.find((assistant) => assistant.id === selectedAssistantId) ?? null;
-  const callDescription = selectedAssistant
-    ? `${selectedAssistant.name} · ${selectedHost.label}`
-    : selectedHost.label;
+  const supportsProfiles = selectedHost.supportsVoiceProfiles === true;
+  const { profiles, defaultProfileId } = useVoiceProfiles(supportsProfiles ? serverId : null);
+  const { threads } = useVoiceThreads(supportsProfiles ? serverId : null);
+  const { profileId: selectedProfileId, threadId: selectedThreadId } = useVoiceSelection(serverId);
+  const effectiveProfile = resolveEffectiveProfile(profiles, selectedProfileId, defaultProfileId);
+  const selectedThread = threads.find((thread) => thread.id === selectedThreadId) ?? null;
+  const threadLabel = selectedThread
+    ? resolveVoiceThreadTitle(selectedThread, t)
+    : t("voiceProfiles.menu.newThread");
+  const callDescription = [
+    supportsProfiles ? (effectiveProfile?.name ?? null) : null,
+    supportsProfiles ? threadLabel : null,
+    selectedHost.label,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const handleStart = useCallback(() => {
     if (!liveVoice) {
@@ -274,20 +375,28 @@ function LiveVoiceStartMenuItems({
 
   return (
     <>
-      {supportsAssistants ? (
+      {supportsProfiles ? (
         <>
           <DropdownMenuSubTrigger
-            id={ASSISTANT_PAGE_ID}
-            value={selectedAssistant?.name ?? t("assistants.menu.none")}
-            testID="live-voice-menu-assistant"
+            id={PROFILE_PAGE_ID}
+            value={
+              selectedProfileId
+                ? (effectiveProfile?.name ?? t("voiceProfiles.menu.defaultProfile"))
+                : t("voiceProfiles.menu.defaultProfile")
+            }
+            testID="live-voice-menu-profile"
           >
-            {t("assistants.menu.label")}
+            {t("voiceProfiles.menu.profileLabel")}
           </DropdownMenuSubTrigger>
-          <DropdownMenuItem
-            onSelect={onManageAssistants}
-            testID="live-voice-menu-manage-assistants"
+          <DropdownMenuSubTrigger
+            id={THREAD_PAGE_ID}
+            value={threadLabel}
+            testID="live-voice-menu-thread"
           >
-            {t("assistants.menu.manage")}
+            {t("voiceProfiles.menu.threadLabel")}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuItem onSelect={onManageProfiles} testID="live-voice-menu-manage-profiles">
+            {t("voiceProfiles.menu.manage")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </>
@@ -309,7 +418,7 @@ function LiveVoiceStartMenuItems({
       <DropdownMenuItem
         closeOnSelect={false}
         onSelect={handleStart}
-        description={hasHostChoice ? undefined : callDescription}
+        description={callDescription}
         testID="live-voice-menu-start"
       >
         {t("liveVoice.actions.start")}
@@ -324,32 +433,37 @@ export function LiveVoiceFooterButton() {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [isManagingAssistants, setIsManagingAssistants] = useState(false);
+  const [isManagingProfiles, setIsManagingProfiles] = useState(false);
 
   const availableHosts = availability.kind === "available" ? availability.hosts : [];
   const selectedHost =
     availableHosts.find((host) => host.serverId === selectedServerId) ?? availableHosts[0] ?? null;
 
-  const handleManageAssistants = useCallback(() => {
+  const handleManageProfiles = useCallback(() => {
     setIsOpen(false);
-    setIsManagingAssistants(true);
+    setIsManagingProfiles(true);
   }, []);
-  const handleCloseAssistants = useCallback(() => {
-    setIsManagingAssistants(false);
+  const handleCloseProfiles = useCallback(() => {
+    setIsManagingProfiles(false);
   }, []);
 
-  const assistantPages = useMemo<MenuPageDefinition[]>(
+  const memoryPages = useMemo<MenuPageDefinition[]>(
     () =>
-      selectedHost?.supportsAssistants
+      selectedHost?.supportsVoiceProfiles
         ? [
             {
-              id: ASSISTANT_PAGE_ID,
-              title: t("assistants.menu.label"),
-              content: <LiveVoiceAssistantPage serverId={selectedHost.serverId} />,
+              id: PROFILE_PAGE_ID,
+              title: t("voiceProfiles.menu.profileLabel"),
+              content: <LiveVoiceProfilePage serverId={selectedHost.serverId} />,
+            },
+            {
+              id: THREAD_PAGE_ID,
+              title: t("voiceProfiles.menu.threadLabel"),
+              content: <LiveVoiceThreadPage serverId={selectedHost.serverId} />,
             },
           ]
         : [],
-    [selectedHost?.serverId, selectedHost?.supportsAssistants, t],
+    [selectedHost?.serverId, selectedHost?.supportsVoiceProfiles, t],
   );
 
   if (!liveVoice) {
@@ -362,9 +476,9 @@ export function LiveVoiceFooterButton() {
 
   return (
     <>
-      <AssistantsSheet
-        visible={isManagingAssistants}
-        onClose={handleCloseAssistants}
+      <VoiceProfilesSheet
+        visible={isManagingProfiles}
+        onClose={handleCloseProfiles}
         initialServerId={selectedHost?.serverId ?? null}
       />
       <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -395,8 +509,8 @@ export function LiveVoiceFooterButton() {
           side="top"
           align="end"
           offset={8}
-          width={260}
-          pages={assistantPages}
+          width={280}
+          pages={memoryPages}
           testID="live-voice-menu"
         >
           {hasCall ? (
@@ -412,7 +526,7 @@ export function LiveVoiceFooterButton() {
               hosts={availableHosts}
               selectedHost={selectedHost}
               onSelectHost={setSelectedServerId}
-              onManageAssistants={handleManageAssistants}
+              onManageProfiles={handleManageProfiles}
             />
           ) : null}
           {!hasCall && !selectedHost ? (

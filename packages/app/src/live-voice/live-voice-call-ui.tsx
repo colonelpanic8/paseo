@@ -281,7 +281,7 @@ const styles = StyleSheet.create((theme) => ({
 
 export function resolveCallLabel(
   hostLabel: string | null,
-  assistantName: string | null,
+  profileName: string | null,
 ): string | null {
-  return [assistantName, hostLabel].filter(Boolean).join(" · ") || null;
+  return [profileName, hostLabel].filter(Boolean).join(" · ") || null;
 }
