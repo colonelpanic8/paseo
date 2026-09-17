@@ -24,6 +24,7 @@ import {
   resolveTranscriptHomes,
   type TranscriptHome,
 } from "./provider-homes.js";
+import { mapWithConcurrency } from "./parallel.js";
 import { listTranscriptFiles, readTranscriptRecords } from "./transcript-reader.js";
 import type { UsageProvider, UsageRecord } from "./transcripts.js";
 
@@ -31,6 +32,8 @@ export const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 const MAX_WINDOW_DAYS = 90;
 const MAX_PENDING_SCANS = 8;
+/** Transcripts are large and mostly cache hits; a handful of open streams saturates the disk. */
+const READ_CONCURRENCY = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
 const RATES_REFRESH_FLOOR_MS = 60 * 1000;
@@ -340,15 +343,16 @@ export class UsageHistoryService {
         continue;
       }
 
-      const files: ScannedFile[] = [];
-      for (const file of transcriptFiles) {
-        if (seenFiles.has(file.path)) continue;
-        seenFiles.add(file.path);
-        files.push({
+      const unread = transcriptFiles.filter((file) => !seenFiles.has(file.path));
+      for (const file of unread) seenFiles.add(file.path);
+      const files = await mapWithConcurrency(
+        unread,
+        READ_CONCURRENCY,
+        async (file): Promise<ScannedFile> => ({
           path: file.path,
           records: await this.readFileRecords(file.path, file.size, file.mtimeMs, home.provider),
-        });
-      }
+        }),
+      );
       scanned.push({ home, status: "ok", files, message: null });
     }
     return scanned;
