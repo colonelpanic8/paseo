@@ -10,8 +10,10 @@ import {
   render,
   renderHook,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +35,8 @@ interface FakeHost {
   payload?: ProviderUsageHistoryPayload;
   /** How many times the page asked this host for usage. */
   reads?: number;
+  /** Overrides `payload` when a test needs to decide when the scan answers. */
+  read?: () => Promise<ProviderUsageHistoryPayload>;
 }
 
 const runtime = vi.hoisted(() => ({ hosts: [] as unknown[], isCompact: false }));
@@ -93,6 +97,7 @@ vi.mock("@/runtime/host-runtime", () => ({
   getHostRuntimeStore: () => ({
     getClient: (serverId: string) => {
       const host = fakeHosts().find((candidate) => candidate.serverId === serverId);
+      if (host?.read) return { readProviderUsageHistory: host.read } as unknown as DaemonClient;
       const hostPayload = host?.payload;
       if (!host || !hostPayload) return null;
       return {
@@ -124,6 +129,7 @@ vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+import { writeCachedUsageHistory } from "./payload-cache";
 import { ProviderUsageHistorySection } from "./section";
 import { useProviderUsageHistory } from "./use-provider-usage-history";
 import { makeWindow } from "./window";
@@ -203,10 +209,11 @@ function renderSection(hosts: FakeHost[], options: RenderSectionOptions = {}): v
 }
 
 describe("ProviderUsageHistorySection", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubGlobal("React", React);
     runtime.hosts = [];
     runtime.isCompact = false;
+    await AsyncStorage.clear();
   });
 
   afterEach(() => {
@@ -323,6 +330,31 @@ describe("ProviderUsageHistorySection", () => {
 
     expect((await screen.findByTestId("usage-history-headline")).textContent).toBe("$3.00");
     expect(screen.getByTestId("usage-history-coverage").textContent).toBe("jay-lenovo is offline");
+  });
+
+  it("draws the numbers a host last reported while its next scan runs", async () => {
+    await writeCachedUsageHistory("host-a", makeWindow(30), payload(7, "ryzen-shine"));
+    let answer: (payload: ProviderUsageHistoryPayload) => void = () => {};
+    renderSection([
+      {
+        serverId: "host-a",
+        label: "ryzen-shine",
+        connectionStatus: "online",
+        supported: true,
+        read: () =>
+          new Promise<ProviderUsageHistoryPayload>((resolve) => {
+            answer = resolve;
+          }),
+      },
+    ]);
+
+    expect((await screen.findByTestId("usage-history-headline")).textContent).toBe("$7.00");
+
+    answer(payload(3, "ryzen-shine"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("usage-history-headline").textContent).toBe("$3.00"),
+    );
   });
 
   it("renders one empty card when no selected host is reachable", async () => {
