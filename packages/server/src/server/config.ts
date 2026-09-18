@@ -28,6 +28,7 @@ import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 
 export {
   loadPersistedConfig,
+  loadConfigStack,
   readPersistedConfig,
   savePersistedConfig,
   getPersistedConfigValue,
