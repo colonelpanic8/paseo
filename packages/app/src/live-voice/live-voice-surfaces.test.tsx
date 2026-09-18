@@ -47,7 +47,7 @@ vi.mock("react-native-reanimated", async () => {
   return { default: { View } };
 });
 
-vi.mock("@/hooks/use-keyboard-shift-style", () => ({
+vi.mock("@/keyboard/shift", () => ({
   useKeyboardShiftStyle: () => ({ shift: { value: 0 }, style: {} }),
 }));
 
