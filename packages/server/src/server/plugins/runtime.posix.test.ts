@@ -1,10 +1,11 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { fork } from "node:child_process";
 import { tmpdir } from "node:os";
 import { PassThrough } from "node:stream";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pino from "pino";
-import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/provider";
+import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/server/provider";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentStreamEvent } from "../agent/agent-sdk-types.js";
 import { PluginAgentClientRegistry } from "../agent/plugin-provider.js";
@@ -123,8 +124,28 @@ function createTestRuntime(
 
 function createTrackedSessionHost() {
   const active = new Set<object>();
+  // One entry per hello handshake: an attached socket is not a redialled one.
+  const hellos: object[] = [];
+  const waiters = new Set<{ count: number; resolve: () => void }>();
+  function recordHello(socket: object): void {
+    hellos.push(socket);
+    for (const waiter of waiters) {
+      if (hellos.length < waiter.count) continue;
+      waiters.delete(waiter);
+      waiter.resolve();
+    }
+  }
   return {
     active,
+    hellos,
+    // Resolves on the handshake itself rather than after a delay, so the test
+    // waits for the event it cares about instead of a guess at how long it takes.
+    waitForHellos(count: number): Promise<void> {
+      if (hellos.length >= count) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        waiters.add({ count, resolve });
+      });
+    },
     host: {
       async attachPluginSocket(_pluginId: string, socket: PluginSessionSocket) {
         const closed = new Promise<void>((resolve) => socket.once("close", resolve));
@@ -134,6 +155,7 @@ function createTrackedSessionHost() {
           if (typeof data !== "string") return;
           const message = JSON.parse(data);
           if (message.type !== "hello") return;
+          recordHello(socket);
           socket.send(
             JSON.stringify({
               type: "session",
@@ -207,6 +229,65 @@ afterEach(async () => {
 });
 
 describe("PluginRuntime", () => {
+  it.each([
+    { specifier: "@getpaseo/plugin", moduleDirectory: "shared" },
+    { specifier: "@getpaseo/plugin", moduleDirectory: "server" },
+  ])(
+    "loads $specifier contracts without React in the subprocess module graph",
+    async ({ specifier, moduleDirectory }) => {
+      const directory = await createPlugin(
+        "react-free",
+        `import { rpc } from "./${moduleDirectory}/contract";
+export default function contribute(server) {
+  server.handle(rpc, (input) => input);
+  return () => {};
+}`,
+      );
+      await mkdir(path.join(directory, moduleDirectory));
+      await writeFile(
+        path.join(directory, moduleDirectory, "contract.ts"),
+        `import { defineRpc, defineAttachmentSource } from "${specifier}";
+import { z } from "zod";
+export const rpc = defineRpc({ name: "echo", input: z.string(), output: z.string() });
+const source = defineAttachmentSource({ id: "test", search: rpc });
+if (source.search !== rpc) throw new Error("Attachment contract was not preserved");`,
+      );
+      // Reject imports even when the workspace has React installed. This covers the host's
+      // static graph and SDK imports evaluated through the compiled plugin's runtimeRequire.
+      const guard = `export function resolve(specifier, context, nextResolve) {
+  if (/^(react|react-dom|react-native|use-sync-external-store)(\\/|$)/.test(specifier)) {
+    throw new Error("React module reached plugin subprocess: " + specifier);
+  }
+  return nextResolve(specifier, context);
+}`;
+      const guardUrl = `data:text/javascript,${encodeURIComponent(guard)}`;
+      const loaderUrl = new URL("../../terminal/terminal-ts-loader.mjs", import.meta.url).href;
+      const setup = `import { register } from "node:module";
+register(${JSON.stringify(loaderUrl)});
+register(${JSON.stringify(guardUrl)});`;
+      const runtime = createTestRuntime({
+        spawnChild: () =>
+          fork(new URL("./plugin-process.ts", import.meta.url), [], {
+            execArgv: [
+              "--experimental-strip-types",
+              "--import",
+              `data:text/javascript,${encodeURIComponent(setup)}`,
+            ],
+            serialization: "advanced",
+            stdio: ["ignore", "pipe", "pipe", "ipc"],
+          }),
+      });
+      try {
+        await runtime.startPlugin("react-free", directory);
+        await expect(runtime.invoke("react-free", "echo", "hello")).resolves.toBe("hello");
+      } catch (error) {
+        throw new Error(JSON.stringify(runtime.getLogs("react-free")), { cause: error });
+      } finally {
+        await runtime.stopAll();
+      }
+    },
+  );
+
   it("runs the direct example through the existing AgentClient path", async () => {
     const pluginId = "provider-direct-example";
     const directory = fileURLToPath(
@@ -253,8 +334,8 @@ describe("PluginRuntime", () => {
   it("runs a provider connection through the real plugin subprocess boundary", async () => {
     const directory = await createPlugin(
       "provider-round-trip",
-      `import type { PluginServerContext } from "@getpaseo/plugin";
-import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/provider";
+      `import type { PluginServerContext } from "@getpaseo/plugin/server";
+import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/server/provider";
 
 const provider: ProviderRegistration = {
   id: "direct-example",
@@ -461,8 +542,8 @@ export default function contribute(server: PluginServerContext) {
     );
     const directory = await createPlugin(
       "provider-acp-round-trip",
-      `import type { PluginServerContext } from "@getpaseo/plugin";
-import { runAcpProvider } from "@getpaseo/plugin/acp";
+      `import type { PluginServerContext } from "@getpaseo/plugin/server";
+import { runAcpProvider } from "@getpaseo/plugin/server/acp";
 import { vendorEditTransformer } from "./server/vendor-edit.js";
 
 export default function contribute(server: PluginServerContext) {
@@ -598,7 +679,7 @@ lines.on("line", (line) => {
   it("rejects a malformed provider event from a real plugin subprocess", async () => {
     const directory = await createPlugin(
       "malicious-provider",
-      `import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/provider";
+      `import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/server/provider";
 let connectionId = "";
 process.on("message", (message: unknown) => {
   const value = message as { type?: string; connectionId?: string };
@@ -665,7 +746,7 @@ export default function contribute(server: any) { server.registerProvider(provid
   it("emits runtime failure for live sessions when a real plugin process dies", async () => {
     const directory = await createPlugin(
       "dying-provider",
-      `import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/provider";
+      `import type { ProviderEvent, ProviderRegistration } from "@getpaseo/plugin/server/provider";
 const provider: ProviderRegistration = {
   id: "dying",
   label: "Dying",
@@ -966,7 +1047,7 @@ export default function contribute(plugin: unknown) {
     const directory = await createPlugin(
       "shutdown-connect",
       `import { writeFile } from "node:fs/promises";
-import type { ProviderRegistration } from "@getpaseo/plugin/provider";
+import type { ProviderRegistration } from "@getpaseo/plugin/server/provider";
 
 const provider: ProviderRegistration = {
   id: "delayed",
@@ -1341,7 +1422,7 @@ export default function contribute(server: { registerProvider(provider: Provider
     const runtime = createTestRuntime();
 
     await expect(runtime.startPlugin("legacy", directory)).rejects.toThrow(
-      "This plugin was made for an older version of Paseo and cannot run on Paseo v0.8. Ask its author to update it. Plugin authors can follow the migration guide: https://paseo.sh/docs/plugins/v0.8/migration",
+      "This plugin was made for an older version of Paseo and cannot run on Paseo v0.8. Ask its author to update it. Plugin authors can follow the migration guide: https://paseo.sh/docs/plugins/migration",
     );
   });
 
@@ -1449,34 +1530,6 @@ export default function contribute(server: any) {
     await runtime.stopAll();
   });
 
-  // COMPAT(plugin-sdk-scope): plugins scaffolded through 0.5.0-beta.1 import the unpublished
-  // @paseo/plugin name. Drop with the specifiers in plugin-sdk-specifiers.ts.
-  it("loads a plugin that imports the pre-rename @paseo/plugin specifier", async () => {
-    const directory = await createPlugin(
-      "legacy-sdk",
-      `import { z } from "zod";
-import { defineRpc } from "@paseo/plugin";
-
-const pingRpc = defineRpc({
-  name: "ping",
-  input: z.object({}),
-  output: z.object({ ok: z.boolean() }),
-});
-
-export default function contribute(plugin: any) {
-  plugin.handle(pingRpc, async () => ({ ok: true }));
-  return () => undefined;
-}`,
-    );
-    const runtime = createTestRuntime();
-
-    await runtime.startPlugin("legacy-sdk", directory);
-
-    await expect(runtime.invoke("legacy-sdk", "ping", {})).resolves.toMatchObject({ ok: true });
-
-    await runtime.stopAll();
-  });
-
   it("keeps client and server modules in their target runtime", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
     temporaryDirectories.push(directory);
@@ -1493,7 +1546,7 @@ export default function contribute(plugin: any) {
       ),
       writeFile(
         path.join(directory, "index.client.tsx"),
-        `import type { PluginClientContext } from "@getpaseo/plugin";
+        `import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { Surface } from "./client/surface";
 export default function contribute(client: PluginClientContext) {
   client.addSurface("main", Surface);
@@ -1503,7 +1556,7 @@ export default function contribute(client: PluginClientContext) {
       ),
       writeFile(
         path.join(directory, "index.server.ts"),
-        `import type { PluginServerContext } from "@getpaseo/plugin";
+        `import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { inspectRpc } from "./shared/inspect";
 import { inspectHost } from "./server/inspect";
 export default function contribute(server: PluginServerContext) {
@@ -1576,7 +1629,7 @@ export function inspectHost(_input: z.input<typeof inspectRpc.input>) {
       ),
       writeFile(
         path.join(directory, "index.client.tsx"),
-        `import type { PluginClientContext } from "@getpaseo/plugin";
+        `import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { Surface } from "./client/surface";
 
 export default function contribute(client: PluginClientContext) {
@@ -1621,7 +1674,7 @@ export function Surface() { return readSecret(); }`,
       ),
       writeFile(
         path.join(directory, "index.server.ts"),
-        `import type { PluginServerContext } from "@getpaseo/plugin";
+        `import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { inspect } from "./server/inspect";
 import { inspectRpc } from "./shared/inspect";
 
@@ -1741,5 +1794,150 @@ export default function contribute(plugin: any) {
     await expect(runtime.invoke("crashing", "anything", {})).rejects.toThrow(
       "Plugin is not available",
     );
+  });
+
+  it("re-attaches a plugin session when the daemon closes the socket under a live child", async () => {
+    const directory = await createPlugin(
+      "reattaching",
+      `export default function contribute(plugin: unknown) { void plugin; return () => undefined; }`,
+    );
+    const sessions = createTrackedSessionHost();
+    const runtime = createTestRuntime({ sessionHost: sessions.host });
+    await runtime.startPlugin("reattaching", directory);
+
+    expect(sessions.active.size).toBe(1);
+    expect(sessions.hellos).toHaveLength(1);
+    const first = [...sessions.active][0] as PluginSessionSocket;
+
+    // What an expired lease does: drop the socket, leave the process running.
+    first.close(1000, "expired application lease");
+
+    // A second handshake, not just a second attachment: the client really redialled.
+    await sessions.waitForHellos(2);
+
+    expect(sessions.active.size).toBe(1);
+    expect([...sessions.active][0]).not.toBe(first);
+    await runtime.stopAll();
+    expect(sessions.active.size).toBe(0);
+  });
+
+  it("replaces a closed plugin session only once the child sends a fresh hello", async () => {
+    const directory = await createPlugin(
+      "lazy-reattach",
+      `export default function contribute(plugin: unknown) { void plugin; return () => undefined; }`,
+    );
+    const sessions = createTrackedSessionHost();
+    const child = createReloadChild("lazy-reattach", []);
+    const runtime = createTestRuntime({ spawnChild: () => child, sessionHost: sessions.host });
+    await runtime.startPlugin("lazy-reattach", directory);
+    const first = [...sessions.active][0] as PluginSessionSocket;
+    // This child is a stub with no real client, so no handshake has happened.
+    expect(sessions.hellos).toHaveLength(0);
+
+    first.close(1000, "expired application lease");
+    expect(sessions.active.size).toBe(0);
+
+    // Frames the child had already queued belong to the session that just died.
+    // Standing a socket up for one would leave it unspoken to until the host's
+    // hello timeout closed it, and that close would stand up another.
+    child.emitMessage({
+      type: "paseo_frame",
+      data: JSON.stringify({ type: "session", message: { type: "ping" } }),
+      isBinary: false,
+    });
+    expect(sessions.active.size).toBe(0);
+
+    child.emitMessage({
+      type: "paseo_frame",
+      data: JSON.stringify({
+        type: "hello",
+        clientId: "plugin:lazy-reattach",
+        clientType: "cli",
+        protocolVersion: 1,
+      }),
+      isBinary: false,
+    });
+    await sessions.waitForHellos(1);
+
+    expect(sessions.active.size).toBe(1);
+    expect([...sessions.active][0]).not.toBe(first);
+    await runtime.stopAll();
+    expect(sessions.active.size).toBe(0);
+  });
+
+  it("attaches no replacement session when the plugin is stopped", async () => {
+    const directory = await createPlugin(
+      "stopping",
+      `export default function contribute(plugin: unknown) { void plugin; return () => undefined; }`,
+    );
+    const sessions = createTrackedSessionHost();
+    const runtime = createTestRuntime({ sessionHost: sessions.host });
+    await runtime.startPlugin("stopping", directory);
+    expect(sessions.active.size).toBe(1);
+
+    await runtime.stopPluginById("stopping");
+
+    expect(runtime.getLogs("stopping").map((entry) => entry.message)).not.toContain(
+      "[paseo] Re-attached plugin session",
+    );
+    expect(sessions.active.size).toBe(0);
+  });
+  it("closes an in-flight replacement when the plugin stops before attachment completes", async () => {
+    const directory = await createPlugin(
+      "stopping-redial",
+      `export default function contribute() { return () => undefined; }`,
+    );
+    const child = createReloadChild("stopping-redial", []);
+    const sessions = createTrackedSessionHost();
+    let finishAttachment!: () => void;
+    const attachmentHeld = new Promise<void>((resolve) => {
+      finishAttachment = resolve;
+    });
+    let replacementAttached!: (socket: PluginSessionSocket) => void;
+    const replacementStarted = new Promise<PluginSessionSocket>((resolve) => {
+      replacementAttached = resolve;
+    });
+    let attachments = 0;
+    const runtime = createTestRuntime({
+      spawnChild: () => child,
+      sessionHost: {
+        async attachPluginSocket(pluginId, socket) {
+          const attachment = await sessions.host.attachPluginSocket(pluginId, socket);
+          attachments += 1;
+          if (attachments === 2) {
+            replacementAttached(socket);
+            await attachmentHeld;
+          }
+          return attachment;
+        },
+      },
+    });
+    try {
+      await runtime.startPlugin("stopping-redial", directory);
+      const first = [...sessions.active][0] as PluginSessionSocket;
+      first.close();
+      child.emitMessage({
+        type: "paseo_frame",
+        data: JSON.stringify({ type: "hello" }),
+        isBinary: false,
+      });
+      const replacement = await replacementStarted;
+      const replacementClosed = new Promise<void>((resolve) => replacement.once("close", resolve));
+      await runtime.stopPluginById("stopping-redial");
+      finishAttachment();
+      await replacementClosed;
+      expect(sessions.active.size).toBe(0);
+      expect(sessions.hellos).toEqual([]);
+      expect(runtime.catalog()).toEqual([]);
+      child.emitMessage({
+        type: "paseo_frame",
+        data: JSON.stringify({ type: "hello" }),
+        isBinary: false,
+      });
+      expect(attachments).toBe(2);
+    } finally {
+      finishAttachment();
+      await runtime.stopAll();
+    }
   });
 });
