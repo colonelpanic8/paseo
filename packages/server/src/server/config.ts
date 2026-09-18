@@ -31,6 +31,15 @@ import {
 } from "./agent-environment.js";
 import { DEFAULT_AGENT_ENVIRONMENT_ENTRIES } from "@getpaseo/protocol/agent-environment";
 
+export {
+  loadPersistedConfig,
+  readPersistedConfig,
+  savePersistedConfig,
+  getPersistedConfigValue,
+  editPersistedConfig,
+  type PersistedConfig,
+} from "./persisted-config.js";
+
 const DEFAULT_PORT = 6767;
 const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
 const DEFAULT_APP_BASE_URL = "https://app.paseo.sh";
