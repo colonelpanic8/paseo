@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import type { ComposerTextSource } from "@/composer/text-source";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -36,7 +37,8 @@ interface ComposerStashProps {
   provider: string | null;
   /** Anchor for the picker popover (the message input container). */
   anchorRef: RefObject<View | null>;
-  userInput: string;
+  /** Live composer text; read on demand so keystrokes do not re-render the stash. */
+  textSource: ComposerTextSource;
   setUserInput: (text: string) => void;
   attachments: UserComposerAttachment[];
   setAttachments: (updater: AttachmentListUpdater) => void;
@@ -161,7 +163,7 @@ function StashUndoToast({
 export function ComposerStash({
   provider,
   anchorRef,
-  userInput,
+  textSource,
   setUserInput,
   attachments,
   setAttachments,
@@ -183,8 +185,6 @@ export function ComposerStash({
 
   // Refs so the keyboard handler and toast Undo see the live composer state
   // without re-registering on every keystroke.
-  const userInputRef = useRef(userInput);
-  userInputRef.current = userInput;
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
   const disabledRef = useRef(disabled);
@@ -205,11 +205,11 @@ export function ComposerStash({
         return;
       }
       setMenuOpen(false);
-      setUserInput(mergeStashRestoreText(userInputRef.current, entry.text));
+      setUserInput(mergeStashRestoreText(textSource.getSnapshot(), entry.text));
       setAttachments((prev) => mergeStashRestoreAttachments(prev, entry.attachments));
       focusInput();
     },
-    [focusInput, scopeKey, setAttachments, setUserInput],
+    [focusInput, scopeKey, setAttachments, setUserInput, textSource],
   );
 
   const deleteEntry = useCallback(
@@ -248,7 +248,7 @@ export function ComposerStash({
     if (disabledRef.current) {
       return false;
     }
-    const text = userInputRef.current.trim();
+    const text = textSource.getSnapshot().trim();
     const currentAttachments = attachmentsRef.current;
     if (text.length === 0 && currentAttachments.length === 0) {
       setMenuOpen((open) => !open);
@@ -269,7 +269,7 @@ export function ComposerStash({
     setAttachments([]);
     showStashedToast(entry.id, evicted);
     return true;
-  }, [provider, setAttachments, setUserInput, showStashedToast]);
+  }, [provider, setAttachments, setUserInput, showStashedToast, textSource]);
 
   const handlerIdRef = useRef(`composer-stash:${Math.random().toString(36).slice(2)}`);
   const handleKeyboardAction = useCallback(
@@ -290,13 +290,17 @@ export function ComposerStash({
   });
 
   // The picker is a transient popover, not a panel: resuming typing closes it.
-  const previousInputRef = useRef(userInput);
   useEffect(() => {
-    if (previousInputRef.current !== userInput) {
-      previousInputRef.current = userInput;
+    let previous = textSource.getSnapshot();
+    return textSource.subscribe(() => {
+      const next = textSource.getSnapshot();
+      if (next === previous) {
+        return;
+      }
+      previous = next;
       setMenuOpen(false);
-    }
-  }, [userInput]);
+    });
+  }, [textSource]);
 
   useEffect(() => {
     if (disabled) {
