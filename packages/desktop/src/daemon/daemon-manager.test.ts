@@ -54,7 +54,7 @@ vi.mock("electron-log/main", () => ({
   },
 }));
 
-vi.mock("@getpaseo/server", async () => {
+vi.mock("@getpaseo/server/daemon-control", async () => {
   const { DEFAULT_DAEMON_LOG_FILENAME, resolveDaemonLogPath } =
     await import("@server/server/daemon-log-path.js");
   return {
