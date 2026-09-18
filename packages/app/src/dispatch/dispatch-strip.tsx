@@ -13,7 +13,7 @@ import {
   type DispatchSilenceTracker,
 } from "@/dispatch/dispatch-silence";
 import { useDictation } from "@/hooks/use-dictation";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
+import { useKeyboardShiftStyle } from "@/keyboard/shift";
 import {
   createLiveVoiceCuePlayer,
   type LiveVoiceCuePlayer,
