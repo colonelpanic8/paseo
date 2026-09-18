@@ -65,6 +65,7 @@ export default defineConfig({
           "@tanstack/react-query",
           "react-native-web",
           "react-native-gesture-handler",
+          "react-native-keyboard-controller",
         ],
       },
     },
@@ -80,7 +81,11 @@ export default defineConfig({
       "react-native-gesture-handler > hoist-non-react-statics",
       "react-native-gesture-handler > invariant",
     ],
-    exclude: ["react-native-reanimated", "react-native-gesture-handler"],
+    exclude: [
+      "react-native-reanimated",
+      "react-native-gesture-handler",
+      "react-native-keyboard-controller",
+    ],
   },
   // The globals a React Native bundler defines, which esbuild is no longer there to supply for
   // the package excluded above.
@@ -115,6 +120,14 @@ export default defineConfig({
         replacement: path.resolve(__dirname, "../relay/src/index.ts"),
       },
       { find: "@", replacement: path.resolve(__dirname, "src") },
+      // Keep keyboard-controller's imports in Vite so native aliases and platform extensions apply.
+      {
+        find: /^react-native-keyboard-controller$/,
+        replacement: path.resolve(
+          resolvePackageEntry("react-native-keyboard-controller"),
+          "lib/module/index.js",
+        ),
+      },
       // The CJS entry bypasses Vite's React Native alias and web-extension resolution.
       {
         find: /^react-native-gesture-handler$/,
