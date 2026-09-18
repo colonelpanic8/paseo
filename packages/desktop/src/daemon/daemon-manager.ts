@@ -11,7 +11,7 @@ import {
   isSameDaemonInstance,
   type DaemonInstance,
   type PaseoPaths,
-} from "@getpaseo/server";
+} from "@getpaseo/server/daemon-control";
 import {
   copyAttachmentFileToManagedStorage,
   deleteManagedAttachmentFile,

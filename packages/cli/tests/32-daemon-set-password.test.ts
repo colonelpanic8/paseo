@@ -5,7 +5,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Command } from "commander";
-import { isBearerTokenValid, resolvePaseoPaths } from "@getpaseo/server";
+import { isBearerTokenValid } from "@getpaseo/server/auth";
+import { resolvePaseoPaths } from "@getpaseo/server/daemon-control";
 import {
   runSetPasswordCommand,
   setDaemonPasswordInConfig,

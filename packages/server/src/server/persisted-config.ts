@@ -12,13 +12,9 @@ import {
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
 import { persistPaseoLayoutSelection, resolvePaseoPaths, type PaseoPaths } from "./paseo-paths.js";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
-import {
-  AgentProfileSchema,
-  AgentSkillSelectionSchema,
-  PluginIdSchema,
-  PluginSourceSchema,
-  TerminalProfileSchema,
-} from "@getpaseo/protocol/messages";
+import { AgentProfileSchema, AgentSkillSelectionSchema } from "@getpaseo/protocol/agent-profile";
+import { PluginIdSchema, PluginSourceSchema } from "@getpaseo/protocol/plugin-config";
+import { TerminalProfileSchema } from "@getpaseo/protocol/terminal-profile";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);

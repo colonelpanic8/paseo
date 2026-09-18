@@ -5,11 +5,13 @@ import path from "node:path";
 import {
   loadPersistedConfig,
   savePersistedConfig,
+  type PersistedConfig,
+} from "@getpaseo/server/configuration";
+import {
   readDaemonInstance,
   waitForDaemonReady,
   type PaseoPaths,
-  type PersistedConfig,
-} from "@getpaseo/server";
+} from "@getpaseo/server/daemon-control";
 import { withGlobalOptions } from "../utils/command-options.js";
 import type { CommandOptions } from "../output/index.js";
 import { launchLocalDaemon, parseTimeoutMs } from "./daemon/local-daemon.js";

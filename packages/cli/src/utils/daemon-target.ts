@@ -1,4 +1,4 @@
-import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server";
+import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server/daemon-control";
 
 export type DaemonTarget =
   | { kind: "instance"; home: string; paths?: PaseoPaths }

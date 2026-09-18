@@ -52,7 +52,7 @@ vi.mock("electron-log/main", () => ({
   },
 }));
 
-vi.mock("@getpaseo/server", () => ({
+vi.mock("@getpaseo/server/daemon-control", () => ({
   resolvePaseoHome: vi.fn(() => mocks.paseoHome),
   resolvePaseoPaths: vi.fn(() => mocks.paseoPaths),
   spawnProcess: mocks.spawnProcess,
