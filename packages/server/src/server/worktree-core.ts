@@ -3,12 +3,10 @@ import { createNameId } from "mnemonic-id";
 import type { ForgeService } from "../services/forge-service.js";
 import {
   createWorktree,
-  resolveExistingWorktreeForSlug,
   slugify,
   validateBranchSlug,
-  type WorktreeConfig,
+  type CreatedWorktree,
 } from "../utils/worktree.js";
-import type { WorktreeIncludeSummary } from "../utils/worktree-include.js";
 import {
   resolveWorktreeCreationIntent,
   type ResolveWorktreeCreationIntentInput,
@@ -17,6 +15,7 @@ import {
 } from "./resolve-worktree-creation-intent.js";
 import type { ChangeRequestCheckoutSource, FirstAgentContext } from "@getpaseo/protocol/messages";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
+import { runWithGitCommandPriority } from "../utils/run-git-command.js";
 
 export interface CreateWorktreeCoreInput {
   cwd: string;
@@ -42,8 +41,7 @@ export interface CreateWorktreeCoreDeps {
 }
 
 export interface CreateWorktreeCoreResult {
-  worktree: WorktreeConfig;
-  worktreeIncludeSummary?: WorktreeIncludeSummary;
+  worktree: CreatedWorktree;
   intent: WorktreeCreationIntent;
   repoRoot: string;
   created: boolean;
@@ -53,13 +51,18 @@ export async function createWorktreeCore(
   input: CreateWorktreeCoreInput,
   deps: CreateWorktreeCoreDeps,
 ): Promise<CreateWorktreeCoreResult> {
+  return runWithGitCommandPriority("high", () => createWorktreeCoreWithPriority(input, deps));
+}
+
+async function createWorktreeCoreWithPriority(
+  input: CreateWorktreeCoreInput,
+  deps: CreateWorktreeCoreDeps,
+): Promise<CreateWorktreeCoreResult> {
   const repoRoot = await resolveWorktreeRepoRoot(input, deps.workspaceGitService);
   const requestedWorktreeSlug = input.worktreeSlug
     ? normalizeWorktreeSlug(input.worktreeSlug)
     : undefined;
-  const requestedBranchName = input.branchName
-    ? validateWorktreeSlug(input.branchName.trim())
-    : undefined;
+  const requestedBranchName = input.branchName?.trim();
 
   let intentInput: ResolveWorktreeCreationIntentInput;
   if (input.action === "checkout") {
@@ -112,27 +115,15 @@ export async function createWorktreeCore(
     }
   }
 
-  const existingWorktree = await resolveExistingWorktreeForSlug({
-    slug: normalizedSlug,
-    repoRoot,
-    paseoHome: input.paseoHome,
-    worktreesRoot: input.worktreesRoot,
-  });
-  if (existingWorktree) {
-    return { worktree: existingWorktree, intent, repoRoot, created: false };
-  }
-
-  const { worktreeIncludeSummary, ...worktree } = await createWorktree({
-    cwd: repoRoot,
-    worktreeSlug: normalizedSlug,
-    source: intent,
-    runSetup: input.runSetup ?? true,
-    paseoHome: input.paseoHome,
-    worktreesRoot: input.worktreesRoot,
-  });
   return {
-    worktree,
-    worktreeIncludeSummary,
+    worktree: await createWorktree({
+      cwd: repoRoot,
+      worktreeSlug: normalizedSlug,
+      source: intent,
+      runSetup: input.runSetup ?? true,
+      paseoHome: input.paseoHome,
+      worktreesRoot: input.worktreesRoot,
+    }),
     intent,
     repoRoot,
     created: true,

@@ -1,4 +1,6 @@
+import type { SelectedFile } from "@/attachments/selected-file";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -34,6 +36,11 @@ export interface AttachmentPersister {
     mimeType: string;
     fileName: string | null;
   }) => Promise<AttachmentMetadata>;
+  persistFromDataUrl: (input: {
+    dataUrl: string;
+    mimeType: string;
+    fileName: string | null;
+  }) => Promise<AttachmentMetadata>;
   deleteAttachments: (metadata: AttachmentMetadata[]) => Promise<void> | void;
 }
 
@@ -43,10 +50,11 @@ export interface ComposerSendClient {
     text: string,
     options: {
       messageId: string;
+      activeTurnBehavior?: ActiveTurnBehavior;
       images: Array<{ data: string; mimeType: string }>;
       attachments: ReturnType<typeof splitComposerAttachmentsForSubmit>["attachments"];
     },
-  ) => Promise<void | { outOfBand?: boolean }>;
+  ) => Promise<void>;
   uploadFile: (input: { fileName: string; mimeType: string; bytes: Uint8Array }) => Promise<{
     requestId: string;
     file: {
@@ -67,7 +75,7 @@ export interface ComposerCancelClient {
 
 export interface MessageSubmissionWriter {
   begin: (agentId: string, message: UserMessageItem) => void;
-  accept: (agentId: string, clientMessageId: string, outOfBand: boolean | undefined) => void;
+  accept: (agentId: string, clientMessageId: string) => void;
   reject: (agentId: string, clientMessageId: string) => MessageSubmissionRejectionOutcome;
 }
 
@@ -80,7 +88,10 @@ export interface QueueWriter {
 
 export async function pickAndPersistImages(input: {
   pickImages: () => Promise<PickedImageAttachmentInput[] | null>;
-  persister: Pick<AttachmentPersister, "persistFromBlob" | "persistFromFileUri">;
+  persister: Pick<
+    AttachmentPersister,
+    "persistFromBlob" | "persistFromFileUri" | "persistFromDataUrl"
+  >;
 }): Promise<AttachmentMetadata[]> {
   const result = await input.pickImages();
   if (!result?.length) return [];
@@ -91,6 +102,13 @@ export async function pickAndPersistImages(input: {
       if (picked.source.kind === "blob") {
         return await input.persister.persistFromBlob({
           blob: picked.source.blob,
+          mimeType,
+          fileName,
+        });
+      }
+      if (picked.source.kind === "data_url") {
+        return await input.persister.persistFromDataUrl({
+          dataUrl: picked.source.dataUrl,
           mimeType,
           fileName,
         });
@@ -106,11 +124,26 @@ export async function pickAndPersistImages(input: {
 
 export async function uploadFileAttachments(input: {
   client: ComposerSendClient;
-  files: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }>;
+  files: SelectedFile[];
 }): Promise<Extract<ComposerAttachment, { kind: "file" }>[]> {
   const result: Extract<ComposerAttachment, { kind: "file" }>[] = [];
+  const prepared: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }> = [];
 
   for (const file of input.files) {
+    const bytes = await file.readBytes();
+    if (bytes.byteLength > 50 * 1024 * 1024) {
+      throw new Error(
+        i18n.t("composer.errors.fileTooLarge", { size: "50MB", fileName: file.fileName }),
+      );
+    }
+    prepared.push({
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      bytes,
+    });
+  }
+
+  for (const file of prepared) {
     const response = await input.client.uploadFile(file);
     if (response.error || !response.file) {
       throw new Error(response.error ?? "Upload failed.");
@@ -139,19 +172,16 @@ export interface CancelComposerAgentInput {
   isAgentRunning: boolean;
   isCancellingAgent: boolean;
   isConnected: boolean;
-  onCancelFailed: (error: unknown) => void;
 }
 
-export function cancelComposerAgent(input: CancelComposerAgentInput): boolean {
-  if (!input.isAgentRunning || input.isCancellingAgent) return false;
-  if (!input.isConnected || !input.client) return false;
+export function cancelComposerAgent(input: CancelComposerAgentInput): Promise<void> | null {
+  if (!input.isAgentRunning || input.isCancellingAgent) return null;
+  if (!input.isConnected || !input.client) return null;
   try {
-    void Promise.resolve(input.client.cancelAgent(input.agentId)).catch(input.onCancelFailed);
+    return Promise.resolve(input.client.cancelAgent(input.agentId));
   } catch (error) {
-    input.onCancelFailed(error);
-    return false;
+    return Promise.reject(error);
   }
-  return true;
 }
 
 export interface DispatchComposerAgentMessageInput {
@@ -164,6 +194,8 @@ export interface DispatchComposerAgentMessageInput {
     images: AttachmentMetadata[],
   ) => Promise<Array<{ data: string; mimeType: string }> | undefined>;
   submission: MessageSubmissionWriter;
+  activeTurnBehavior?: ActiveTurnBehavior;
+  activeTurnId?: string;
 }
 
 export async function dispatchComposerAgentMessage(
@@ -179,19 +211,22 @@ export async function dispatchComposerAgentMessage(
     timestamp: new Date(),
     images: wirePayload.images,
     attachments: wirePayload.attachments,
+    ...(input.activeTurnBehavior === "steer" && input.activeTurnId
+      ? { turnId: input.activeTurnId }
+      : {}),
   });
   input.submission.begin(input.agentId, userMessage);
   try {
     const imagesData = await input.encodeImages(wirePayload.images);
-    const result = await input.client.sendAgentMessage(input.agentId, input.text, {
+    await input.client.sendAgentMessage(input.agentId, input.text, {
       messageId: clientMessageId,
+      ...(input.activeTurnBehavior ? { activeTurnBehavior: input.activeTurnBehavior } : {}),
       images: imagesData ?? [],
       attachments: wirePayload.attachments,
     });
-    input.submission.accept(input.agentId, clientMessageId, result?.outOfBand);
+    input.submission.accept(input.agentId, clientMessageId);
   } catch (error) {
-    const outcome = input.submission.reject(input.agentId, clientMessageId);
-    if (outcome === "accepted") return;
+    input.submission.reject(input.agentId, clientMessageId);
     throw error;
   }
 }
@@ -337,7 +372,9 @@ function isForgeAttachment(
   return (
     attachment.kind === "forge_issue" ||
     attachment.kind === "forge_change_request" ||
-    // COMPAT(githubAttachmentKinds): added in v0.1.106, remove after 2026-12-28 once daemon floor >= v0.1.106
+    // COMPAT(githubAttachmentKinds): accept legacy persisted attachment kinds
+    // until 2027-01-17, when supported floors are >= v0.2.0 and old drafts no
+    // longer require them.
     attachment.kind === "github_issue" ||
     attachment.kind === "github_pr"
   );
@@ -357,17 +394,17 @@ export function toggleForgeAttachment(
   return [...current, buildForgeAttachment(item)];
 }
 
-interface ToggleGithubAttachmentFromPickerInput {
+interface ToggleForgeAttachmentFromPickerInput {
   current: UserComposerAttachment[];
   item: ForgeSearchItem;
-  markGithubAttachmentRemoved: (attachment: UserComposerAttachment) => void;
+  markForgeAttachmentRemoved: (attachment: UserComposerAttachment) => void;
 }
 
-export function toggleGithubAttachmentFromPicker({
+export function toggleForgeAttachmentFromPicker({
   current,
   item,
-  markGithubAttachmentRemoved,
-}: ToggleGithubAttachmentFromPickerInput): UserComposerAttachment[] {
+  markForgeAttachmentRemoved,
+}: ToggleForgeAttachmentFromPickerInput): UserComposerAttachment[] {
   const existingAttachment = current.find(
     (attachment) =>
       isForgeAttachment(attachment) &&
@@ -375,19 +412,19 @@ export function toggleGithubAttachmentFromPicker({
       attachment.item.number === item.number,
   );
   if (existingAttachment) {
-    markGithubAttachmentRemoved(existingAttachment);
+    markForgeAttachmentRemoved(existingAttachment);
   }
   return toggleForgeAttachment(current, item);
 }
 
-export function findGithubItemByOption(
+export function findForgeItemByOption(
   items: readonly ForgeSearchItem[],
   optionId: string,
 ): ForgeSearchItem | undefined {
   return items.find((candidate) => `${candidate.kind}:${candidate.number}` === optionId);
 }
 
-export function isAttachmentSelectedForGithubItem(
+export function isAttachmentSelectedForForgeItem(
   current: readonly ComposerAttachment[],
   item: ForgeSearchItem,
 ): boolean {
@@ -398,5 +435,3 @@ export function isAttachmentSelectedForGithubItem(
       attachment.item.number === item.number,
   );
 }
-
-export const toggleGithubAttachment = toggleForgeAttachment;

@@ -33,6 +33,13 @@ describe("CursorACPAgentClient model discovery", () => {
         child: { kill: vi.fn(), exitCode: 0, signalCode: null, once: vi.fn() },
         connection: {
           newSession: vi.fn().mockResolvedValue(this.response),
+          extMethod: async () => ({
+            models: (this.response.models?.availableModels ?? []).map((model) => ({
+              value: model.modelId,
+              name: model.name,
+              configOptions: [],
+            })),
+          }),
         },
         initialize: { agentCapabilities: {} },
       } as SpawnedACPProcess;
@@ -137,6 +144,15 @@ describe("CursorACPAgentClient model discovery", () => {
         cwd: "/tmp/cursor",
       }),
     ).resolves.toEqual([
+      {
+        type: "toggle",
+        id: "auto_accept",
+        label: "Auto Accept",
+        description: "Automatically approves ACP permission prompts.",
+        tooltip: "Auto accept permission prompts",
+        icon: "shield-check",
+        value: false,
+      },
       {
         type: "select",
         id: CURSOR_FAST_FEATURE_OPTION.id,

@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
@@ -205,8 +205,8 @@ test("archiving a workspace removes it from every subscribed client", async () =
   const removals = collectWorkspaceRemovals(observer);
 
   try {
-    await ctx.client.fetchWorkspaces({ subscribe: { subscriptionId: "workspace-initiator" } });
-    await observer.fetchWorkspaces({ subscribe: { subscriptionId: "workspace-observer" } });
+    await ctx.client.fetchWorkspaces({ subscribe: {} });
+    await observer.fetchWorkspaces({ subscribe: {} });
 
     const archive = await ctx.client.archiveWorkspace(workspaceId);
     await observer.ping({ requestId: "archive-observer-barrier" });
@@ -233,7 +233,7 @@ test("renaming a workspace updates every subscribed client", async () => {
   const titles = collectWorkspaceTitles(observer);
 
   try {
-    await observer.fetchWorkspaces({ subscribe: { subscriptionId: "workspace-observer" } });
+    await observer.fetchWorkspaces({ subscribe: {} });
 
     const renamed = await ctx.client.setWorkspaceTitle(workspaceId, "Renamed workspace");
     await observer.ping({ requestId: "rename-observer-barrier" });
@@ -299,6 +299,118 @@ test("archiving the last reference to a worktree removes it from disk regardless
     .toBe(false);
   await expect.poll(() => existsSync(deleteDir), { timeout: 10000, interval: 100 }).toBe(false);
 }, 60000);
+
+test.skipIf(process.platform === "win32")(
+  "archiving a worktree is repeatable while background setup is still writing into it",
+  async () => {
+    const repoDir = createGitRepo();
+    const setupStartedPath = path.join(repoDir, "setup-started");
+    const stopSetupPath = path.join(repoDir, "stop-setup");
+    writeFileSync(
+      path.join(repoDir, "paseo.json"),
+      JSON.stringify({
+        worktree: {
+          setup: [
+            `node -e "const fs=require('fs'),path=require('path');const source=process.env.PASEO_SOURCE_CHECKOUT_PATH;const worktree=process.env.PASEO_WORKTREE_PATH;const target=path.join(worktree,'node_modules/react-native-svg/lib/typescript');fs.writeFileSync(path.join(source,'setup-started'),'started');while(!fs.existsSync(path.join(source,'stop-setup'))){try{fs.mkdirSync(target,{recursive:true});fs.writeFileSync(path.join(target,'active'),String(Date.now()))}catch{}}"`,
+          ],
+        },
+      }),
+    );
+    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync(
+      "git",
+      ["-c", "commit.gpgsign=false", "commit", "-m", "add active worktree setup"],
+      { cwd: repoDir, stdio: "pipe" },
+    );
+
+    const result = await ctx.client.createWorkspace({
+      source: {
+        kind: "worktree",
+        cwd: repoDir,
+        worktreeSlug: "archive-during-setup",
+        baseBranch: "main",
+      },
+    });
+    const workspace = result.workspace;
+    if (!workspace?.workspaceDirectory) {
+      throw new Error(result.error ?? "Failed to create worktree workspace");
+    }
+
+    try {
+      await expect.poll(() => existsSync(setupStartedPath), { timeout: 10000 }).toBe(true);
+
+      const archive = await ctx.client.archiveWorkspace(workspace.id);
+      const retry = await ctx.client.archiveWorkspace(workspace.id);
+
+      expect({ archiveError: archive.error, retryError: retry.error }).toEqual({
+        archiveError: null,
+        retryError: null,
+      });
+      expect((await activeWorkspaceIds()).has(workspace.id)).toBe(false);
+      expect(existsSync(workspace.workspaceDirectory)).toBe(false);
+    } finally {
+      writeFileSync(stopSetupPath, "stop\n");
+    }
+  },
+  60000,
+);
+
+test.skipIf(process.platform === "win32")(
+  "repeating archive removes a residual worktree for an already-archived workspace",
+  async () => {
+    const repoDir = createGitRepo();
+    const result = await ctx.client.createWorkspace({
+      source: {
+        kind: "worktree",
+        cwd: repoDir,
+        worktreeSlug: "self-heal-archive",
+        baseBranch: "main",
+      },
+    });
+    const workspace = result.workspace;
+    if (!workspace?.workspaceDirectory) {
+      throw new Error(result.error ?? "Failed to create worktree workspace");
+    }
+
+    const writerStartedPath = path.join(repoDir, "writer-started");
+    const stopWriterPath = path.join(repoDir, "stop-writer");
+    const target = path.join(
+      workspace.workspaceDirectory,
+      "node_modules/react-native-svg/lib/typescript",
+    );
+    const writer = spawn(
+      process.execPath,
+      [
+        "-e",
+        `const fs=require('fs'),path=require('path');const target=${JSON.stringify(target)};const started=${JSON.stringify(writerStartedPath)};const stop=${JSON.stringify(stopWriterPath)};fs.writeFileSync(started,'started');while(!fs.existsSync(stop)){try{fs.mkdirSync(target,{recursive:true});fs.writeFileSync(path.join(target,'active'),String(Date.now()))}catch{}}`,
+      ],
+      { stdio: "ignore" },
+    );
+    const writerExit = new Promise<void>((resolve) => writer.once("exit", () => resolve()));
+
+    try {
+      await expect.poll(() => existsSync(writerStartedPath), { timeout: 10000 }).toBe(true);
+
+      const firstArchive = await ctx.client.archiveWorkspace(workspace.id);
+
+      expect(firstArchive.error).toBeNull();
+      expect((await activeWorkspaceIds()).has(workspace.id)).toBe(false);
+      expect(existsSync(workspace.workspaceDirectory)).toBe(true);
+
+      writeFileSync(stopWriterPath, "stop\n");
+      await writerExit;
+
+      const retry = await ctx.client.archiveWorkspace(workspace.id);
+
+      expect(retry.error).toBeNull();
+      expect(existsSync(workspace.workspaceDirectory)).toBe(false);
+    } finally {
+      writeFileSync(stopWriterPath, "stop\n");
+      await writerExit;
+    }
+  },
+  60000,
+);
 
 test("worktree archive targets the explicit workspaceId when a directory backs multiple workspaces", async () => {
   const repoDir = createGitRepo();

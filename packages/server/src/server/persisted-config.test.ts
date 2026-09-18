@@ -8,7 +8,7 @@ import {
   PersistedConfigSchema,
   savePersistedConfig,
 } from "./persisted-config.js";
-import { PRIVATE_FILE_MODE } from "./private-files.js";
+import { PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE } from "./private-files.js";
 
 const MODE_MASK = 0o777;
 const PERMISSIVE_FILE_MODE = 0o644;
@@ -250,6 +250,20 @@ describe("PersistedConfigSchema agent provider runtime settings", () => {
         { provider: "codex", model: "gpt-5.4-mini", thinkingOptionId: "low" },
       ],
     });
+  });
+
+  test("accepts a custom provider catalog refresh timeout", () => {
+    const parsed = PersistedConfigSchema.parse({
+      agents: { catalogRefreshTimeoutMs: 180_000 },
+    });
+
+    expect(parsed.agents?.catalogRefreshTimeoutMs).toBe(180_000);
+  });
+
+  test("rejects provider catalog refresh timeouts that overflow Node timers", () => {
+    expect(() =>
+      PersistedConfigSchema.parse({ agents: { catalogRefreshTimeoutMs: 2_147_483_648 } }),
+    ).toThrow();
   });
 });
 
@@ -648,6 +662,16 @@ describe("PersistedConfigSchema voice mode config", () => {
 });
 
 describe("loadPersistedConfig", () => {
+  test("materializes relay disabled for a new Paseo home", () => {
+    const home = createTempHome();
+    try {
+      const config = loadPersistedConfig(home);
+      expect(config.daemon?.relay?.enabled).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("accepts the documented config schema marker", () => {
     const home = createTempHome();
     const configPath = path.join(home, "config.json");
@@ -740,7 +764,8 @@ describe.skipIf(process.platform === "win32")("persisted config file permissions
   });
 
   test("saves config.json with private permissions", () => {
-    const home = createTempHome();
+    const parent = createTempHome();
+    const home = path.join(parent, "home");
     try {
       savePersistedConfig(home, {
         providers: {
@@ -750,9 +775,10 @@ describe.skipIf(process.platform === "win32")("persisted config file permissions
         },
       });
 
+      expect(modeOf(home)).toBe(PRIVATE_DIRECTORY_MODE);
       expect(modeOf(path.join(home, "config.json"))).toBe(PRIVATE_FILE_MODE);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      rmSync(parent, { recursive: true, force: true });
     }
   });
 });

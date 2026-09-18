@@ -52,8 +52,10 @@ paseo workspace create \
   --mode branch-off \
   --new-branch feature/auth \
   --worktree-slug feature-auth \
-  --base main
+  --base origin/main
 ```
+
+Use `origin/main` rather than `main`. Paseo fetches remote refs in the background, so the remote-tracking branch is current, while your local `main` is whatever you last pulled. An unqualified `main` resolves to that local branch first, and the worktree starts from stale history. Prefixing the remote names the fetched ref explicitly.
 
 Check out an existing branch:
 
@@ -109,46 +111,6 @@ Drop a `paseo.json` in your repo root. Paseo reads it from the committed version
 Both fields accept a multiline shell script or an array of commands; commands run sequentially either way.
 
 Commands run with the worktree as `cwd`. Use `$PASEO_SOURCE_CHECKOUT_PATH` to reach files in the original checkout (untracked config, local caches, etc).
-
-## .worktreeinclude
-
-Use a root-level .worktreeinclude to materialize local source-checkout files before
-worktree.setup runs. Each path is relative to the source checkout.
-
-    # Copy is the default.
-    .env.local
-    .cache/**
-
-    # Modes can also be explicit.
-    symlink node_modules
-    copy .tool-state/**
-
-Each line is `[copy|symlink] <path>`; the mode is optional and defaults to `copy`. Blank lines
-and whole-line comments are ignored. A single star matches within a path segment and a double
-star matches recursively; a directory ending in /\*\* materializes that directory as one
-recursive entry. Absolute paths, parent-directory paths, and .git paths are rejected.
-
-Copy entries are independent snapshots: a copied file or directory replaces an existing path on
-a later materialization. Symlink entries point directly at
-the live source file or directory, so changes through either path affect the same data. Paseo
-does not replace an existing file, directory, or different link with a symlink.
-
-Entries must resolve to regular files or directories. A top-level source symbolic link is
-dereferenced only when its canonical target remains inside the source checkout: `copy` snapshots
-that target and `symlink` links directly to it. Directory snapshots reject nested symbolic links
-so Paseo never writes through an unexpected path. A symlinked directory intentionally exposes its
-live source contents.
-
-Prefer paths ignored by the target branch. For a symlinked directory, use an ignore rule without
-a trailing slash (for example, node_modules, not node_modules/), because Git treats the link
-itself as a file. Unignored materialized paths appear in git status.
-
-On Windows, Paseo uses junctions for local directories. File links and network-directory links
-require Windows symbolic-link support. It never silently copies an explicit `symlink <path>`
-entry; enable Developer Mode or switch that entry to `copy <path>` if link creation fails.
-
-Archiving removes only the worktree's links, not their source targets. If the source path is
-later moved or deleted, a symlink becomes broken; Paseo does not repair it automatically.
 
 ## Scripts and services
 
@@ -295,7 +257,8 @@ Services additionally get:
 ```bash
 paseo workspace ls
 paseo run --workspace <workspace-id> "implement auth"
+paseo workspace rename <workspace-id> "Auth rework"
 paseo workspace archive <workspace-id>
 ```
 
-For the common case, `paseo run --new-workspace worktree --worktree-mode branch-off --new-branch feature/auth --base main "implement auth"` creates both the workspace and its first agent.
+For the common case, `paseo run --new-workspace worktree --worktree-mode branch-off --new-branch feature/auth --base origin/main "implement auth"` creates both the workspace and its first agent.

@@ -6,7 +6,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { LigaturesAddon } from "@xterm/addon-ligatures/lib/addon-ligatures.mjs";
-import { Terminal, type ITheme } from "@xterm/xterm";
+import { Terminal, type ITheme, type IMarker } from "@xterm/xterm";
 import type { TerminalState } from "@getpaseo/protocol/messages";
 import {
   type TerminalInputModeState,
@@ -28,8 +28,25 @@ import {
   type TerminalLocalFileLinkSource,
   type TerminalLocalFileLinkTarget,
 } from "../local-links/terminal-local-link-provider";
+import { isMac, isFindShortcut } from "./terminal-find-shortcut";
+import { resolveTerminalFontFamily, resolveTerminalFontSize } from "./terminal-font";
 
 export type TerminalOutputData = Uint8Array;
+
+export interface TerminalFindHandle {
+  setWidgetSize(size: { width: number; height: number }): void;
+  search(query: string, direction?: "next" | "previous"): void;
+  clear(): void;
+}
+
+export interface TerminalFindResult {
+  resultIndex: number;
+  resultCount: number;
+  limited: boolean;
+  placement: "top" | "bottom";
+}
+
+const FIND_HIGHLIGHT_LIMIT = 20_000;
 
 export interface TerminalEmulatorRuntimeMountInput {
   root: HTMLDivElement;
@@ -42,8 +59,10 @@ export interface TerminalEmulatorRuntimeMountInput {
 }
 
 export interface TerminalEmulatorRuntimeCallbacks {
+  onFindRequest?: () => void;
+  onFindResult?: (result: TerminalFindResult) => void;
   onInput?: (data: string) => Promise<void> | void;
-  onResize?: (input: { rows: number; cols: number; shouldClaim: boolean }) => Promise<void> | void;
+  onResize?: (input: TerminalResizeEvent) => Promise<void> | void;
   onTerminalKey?: (input: {
     key: string;
     ctrl: boolean;
@@ -61,6 +80,33 @@ export interface TerminalEmulatorRuntimeCallbacks {
     disposition: "main" | "side",
   ) => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
+}
+
+export interface TerminalResizeEvent {
+  rows: number;
+  cols: number;
+  shouldClaim: boolean;
+  forceClaim?: boolean;
+}
+
+export interface TerminalResizeRequest {
+  forceRefresh?: boolean;
+  shouldClaim?: boolean;
+  forceClaim?: boolean;
+}
+
+export function createTerminalResizeEvent(input: {
+  rows: number;
+  cols: number;
+  shouldClaim: boolean;
+  forceClaim: boolean;
+}): TerminalResizeEvent {
+  return {
+    rows: input.rows,
+    cols: input.cols,
+    shouldClaim: input.shouldClaim,
+    forceClaim: input.shouldClaim && input.forceClaim,
+  };
 }
 
 interface TerminalEmulatorRuntimeDisposables {
@@ -95,11 +141,6 @@ declare global {
   }
 }
 
-const isMac =
-  typeof navigator !== "undefined" &&
-  (/Macintosh|Mac OS/i.test(navigator.userAgent ?? "") ||
-    /Mac/i.test((navigator as Navigator & { platform?: string }).platform ?? ""));
-
 const isAppleHandheld =
   typeof navigator !== "undefined" &&
   isAppleHandheldPlatform({
@@ -109,7 +150,6 @@ const isAppleHandheld =
   });
 
 const DEFAULT_TOUCH_SCROLL_LINE_HEIGHT_PX = 18;
-const DEFAULT_TERMINAL_FONT_SIZE = 13;
 const FIT_TIMEOUT_DELAYS_MS = [0, 16, 48, 120, 250, 500, 1_000, 2_000];
 const OUTPUT_OPERATION_TIMEOUT_MS = 5_000;
 const EMPTY_TERMINAL_OUTPUT = new Uint8Array(0);
@@ -130,37 +170,6 @@ function prependTerminalOutput(
   return output;
 }
 
-const DEFAULT_TERMINAL_FONT_FAMILY = [
-  // Prefer common developer fonts, with Nerd Font variants for prompt/TUI glyphs.
-  "JetBrains Mono",
-  "JetBrainsMono Nerd Font",
-  "JetBrainsMono NF",
-  "MesloLGM Nerd Font",
-  "MesloLGM NF",
-  "Hack Nerd Font",
-  "FiraCode Nerd Font",
-  // PUA-only fallback (many Nerd glyphs live here on some systems).
-  "Symbols Nerd Font",
-  // System fallbacks.
-  "SF Mono",
-  "Menlo",
-  "Monaco",
-  "Consolas",
-  "'Liberation Mono'",
-  "monospace",
-].join(", ");
-
-function resolveTerminalFontFamily(fontFamily: string | undefined): string {
-  const trimmed = fontFamily?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_TERMINAL_FONT_FAMILY;
-}
-
-function resolveTerminalFontSize(fontSize: number | undefined): number {
-  return typeof fontSize === "number" && Number.isFinite(fontSize) && fontSize > 0
-    ? fontSize
-    : DEFAULT_TERMINAL_FONT_SIZE;
-}
-
 function withOverviewRulerBorderHidden(theme: ITheme): ITheme {
   return {
     ...theme,
@@ -169,6 +178,8 @@ function withOverviewRulerBorderHidden(theme: ITheme): ITheme {
 }
 
 export class TerminalEmulatorRuntime {
+  constructor(private readonly options: { isMac: boolean } = { isMac }) {}
+
   private callbacks: TerminalEmulatorRuntimeCallbacks = {};
   private pendingModifiers: PendingTerminalModifiers = {
     ctrl: false,
@@ -177,8 +188,49 @@ export class TerminalEmulatorRuntime {
   };
   private terminal: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
-  private fitAndEmitResize: ((input?: { force?: boolean; shouldClaim?: boolean }) => void) | null =
-    null;
+  private searchAddon: SearchAddon | null = null;
+  private findResult = { resultIndex: -1, resultCount: 0 };
+  private findQuery = "";
+  private findOutputAnchor: IMarker | undefined;
+  private findWidgetSize = { width: 0, height: 0 };
+
+  readonly find: TerminalFindHandle = {
+    setWidgetSize: (size) => {
+      this.findWidgetSize = size;
+      this.emitFindResult();
+    },
+    search: (query, direction) => {
+      this.releaseFindOutputAnchor();
+      this.findQuery = query;
+      if (this.terminal && !this.searchAddon) this.loadSearchAddon(this.terminal);
+      const theme = this.terminal?.options.theme;
+      const options = {
+        regex: false,
+        caseSensitive: false,
+        incremental: direction === undefined,
+        decorations: {
+          matchBorder: theme?.yellow ?? "#b58900",
+          matchOverviewRuler: theme?.yellow ?? "#b58900",
+          activeMatchBorder: theme?.blue ?? "#268bd2",
+          activeMatchColorOverviewRuler: theme?.blue ?? "#268bd2",
+        },
+      };
+      if (direction === "next") this.searchAddon?.findNext(query, options);
+      else this.searchAddon?.findPrevious(query, options);
+    },
+    clear: () => {
+      this.releaseFindOutputAnchor();
+      this.findQuery = "";
+      // clearDecorations leaves the addon's pending refresh alive. Disposal
+      // cancels its timers and listeners without touching terminal selection.
+      this.searchAddon?.dispose();
+      this.searchAddon = null;
+      this.findResult = { resultIndex: -1, resultCount: 0 };
+      this.emitFindResult();
+    },
+  };
+
+  private fitAndEmitResize: ((input?: TerminalResizeRequest) => void) | null = null;
   private lastSize: { rows: number; cols: number } | null = null;
   private cleanup: (() => void) | null = null;
   private outputOperations: TerminalOutputOperation[] = [];
@@ -204,10 +256,10 @@ export class TerminalEmulatorRuntime {
       return;
     }
 
-    this.fitAndEmitResize?.({ force: true, shouldClaim: false });
+    this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
     if (typeof window.requestAnimationFrame === "function") {
       window.requestAnimationFrame(() => {
-        this.fitAndEmitResize?.({ force: true, shouldClaim: false });
+        this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
       });
     }
   };
@@ -220,196 +272,49 @@ export class TerminalEmulatorRuntime {
     this.pendingModifiers = input.pendingModifiers;
   }
 
-  mount(input: TerminalEmulatorRuntimeMountInput): void {
-    this.unmount();
-
-    input.host.innerHTML = "";
-    this.lastSize = null;
-    this.inputModeTracker.reset();
-    this.emitInputModeChange();
-
-    const terminal = new Terminal({
-      allowProposedApi: true,
-      convertEol: false,
-      cursorBlink: true,
-      cursorStyle: "bar",
-      fontFamily: resolveTerminalFontFamily(input.fontFamily),
-      fontSize: resolveTerminalFontSize(input.fontSize),
-      lineHeight: 1.0,
-      macOptionIsMeta: true,
-      minimumContrastRatio: 1,
-      rescaleOverlappingGlyphs: true,
-      scrollbar: {
-        width: 8,
-      },
-      scrollback: input.scrollback,
-      theme: withOverviewRulerBorderHidden(input.theme),
+  private loadSearchAddon(terminal: Terminal): void {
+    const searchAddon = new SearchAddon({ highlightLimit: FIND_HIGHLIGHT_LIMIT });
+    terminal.loadAddon(searchAddon);
+    this.searchAddon = searchAddon;
+    searchAddon.onDidChangeResults((result) => {
+      this.findResult = result;
+      this.emitFindResult();
     });
-    const fitAddon = new FitAddon();
-    const unicode11Addon = new Unicode11Addon();
-    let webglAddon: WebglAddon | null = null;
-    let imageAddon: ImageAddon | null = null;
-    terminal.loadAddon(fitAddon);
-    terminal.loadAddon(unicode11Addon);
-    terminal.loadAddon(
-      new WebLinksAddon((event, uri) => {
-        event.preventDefault();
-        void this.callbacks.onOpenExternalUrl?.(uri);
-      }),
+  }
+
+  private releaseFindOutputAnchor(): void {
+    this.findOutputAnchor?.dispose();
+    this.findOutputAnchor = undefined;
+  }
+
+  private preserveFindViewport(terminal: Terminal): void {
+    if (!this.findQuery || this.findResult.resultCount === 0 || this.findOutputAnchor) return;
+    const buffer = terminal.buffer.active;
+    this.findOutputAnchor = terminal.registerMarker(
+      buffer.viewportY - buffer.baseY - buffer.cursorY,
     );
-    const localFileLinkProvider = terminal.registerLinkProvider(
-      createTerminalLocalFileLinkProvider(terminal, {
-        resolveLink: async (source) => {
-          const target = await this.callbacks.onResolveLocalFileLink?.(source);
-          return target ?? null;
-        },
-        openLink: (target, disposition) => {
-          void this.callbacks.onOpenLocalFileLink?.(target, disposition);
-        },
-      }),
-    );
-    terminal.loadAddon(new SearchAddon({ highlightLimit: 20_000 }));
-    terminal.loadAddon(new ClipboardAddon());
-    try {
-      terminal.loadAddon(new LigaturesAddon());
-    } catch {
-      // Ligatures require Font Access API or compatible environment
-    }
-    terminal.open(input.host);
-    this.themeBackgroundElements = this.collectThemeBackgroundElements(input);
-    this.applyThemeBackground(input.theme);
-    try {
-      terminal.unicode.activeVersion = "11";
-    } catch {
-      // Ignore if unicode API isn't available in this build/runtime.
-    }
+  }
 
-    const disposeImageAddon = (): void => {
-      try {
-        imageAddon?.dispose();
-      } catch {
-        // ignore
-      }
-      imageAddon = null;
-    };
-    const disposeWebglRenderer = (): void => {
-      if (!webglAddon) {
-        return;
-      }
-      try {
-        webglAddon.dispose();
-      } catch {
-        // ignore
-      }
-      webglAddon = null;
-      disposeImageAddon();
-      // WebGL and DOM renderers can have different cell dimensions.
-      this.fitAndEmitResize?.({ force: true, shouldClaim: false });
-    };
-
-    // Browser xterm is a renderer only; it never replies to terminal protocol queries.
-    // Replies live on the daemon (one process boundary from the PTY) so they arrive
-    // before the foreground app exits, instead of racing back over the websocket.
-    // Re-registered after the image addon loads so our handlers stay last in the
-    // LIFO dispatch (the image addon registers its own {final:"c"} for sixel DA1).
-    const registerProtocolQuerySuppression = (): void => {
-      terminal.parser.registerCsiHandler({ final: "c" }, () => true);
-      terminal.parser.registerCsiHandler({ prefix: ">", final: "c" }, () => true);
-      terminal.parser.registerCsiHandler({ prefix: "=", final: "c" }, () => true);
-      terminal.parser.registerCsiHandler({ final: "n" }, () => true);
-      terminal.parser.registerCsiHandler({ prefix: "?", final: "n" }, () => true);
-      terminal.parser.registerCsiHandler({ final: "R" }, () => true);
-      terminal.parser.registerCsiHandler({ intermediates: "$", final: "p" }, () => true);
-      terminal.parser.registerCsiHandler(
-        { prefix: "?", intermediates: "$", final: "p" },
-        () => true,
-      );
-      for (const code of [10, 11, 12]) {
-        terminal.parser.registerOscHandler(code, (data) => data.trim() === "?");
-      }
-    };
-    registerProtocolQuerySuppression();
-
-    let webglAddonRaf: number | null = requestAnimationFrame(() => {
-      webglAddonRaf = null;
-      try {
-        disposeWebglRenderer();
-        webglAddon = new WebglAddon();
-        webglAddon.onContextLoss(() => {
-          disposeWebglRenderer();
-        });
-        terminal.loadAddon(webglAddon);
-        imageAddon = new ImageAddon();
-        terminal.loadAddon(imageAddon);
-        registerProtocolQuerySuppression();
-        this.fitAndEmitResize?.({ force: true, shouldClaim: false });
-      } catch {
-        disposeWebglRenderer();
-      }
-    });
-
-    const restoreDocumentStyles = this.applyDocumentBoundsStyles({
-      root: input.root,
-    });
-    const restoreViewportStyles = this.applyViewportTouchStyles({
-      host: input.host,
-    });
-
-    this.terminal = terminal;
-    this.fitAddon = fitAddon;
-    window.__paseoTerminal = terminal;
-
-    const fitAndEmitResize = (resizeInput?: { force?: boolean; shouldClaim?: boolean }): void => {
-      const force = resizeInput?.force ?? false;
-      const shouldClaim = resizeInput?.shouldClaim ?? true;
-      const currentTerminal = this.terminal;
-      const currentFitAddon = this.fitAddon;
-      if (!currentTerminal || !currentFitAddon) {
-        return;
-      }
-
-      if (input.root.offsetWidth === 0 || input.root.offsetHeight === 0) {
-        return;
-      }
-
-      try {
-        currentFitAddon.fit();
-      } catch {
-        return;
-      }
-
-      const nextRows = currentTerminal.rows;
-      const nextCols = currentTerminal.cols;
-      const previous = this.lastSize;
-      if (!force && previous && previous.rows === nextRows && previous.cols === nextCols) {
-        return;
-      }
-
-      this.lastSize = { rows: nextRows, cols: nextCols };
-      this.refreshVisibleRows();
-      this.callbacks.onResize?.({
-        rows: nextRows,
-        cols: nextCols,
-        shouldClaim,
-      });
-    };
-    this.fitAndEmitResize = fitAndEmitResize;
-
-    fitAndEmitResize({ force: true, shouldClaim: false });
-
-    const inputDisposable = terminal.onData((data) => {
-      if (this.suppressInput) {
-        return;
-      }
-      this.callbacks.onInput?.(data);
-    });
-
+  attachKeyEventHandler(
+    terminal: Pick<
+      Terminal,
+      "attachCustomKeyEventHandler" | "hasSelection" | "getSelection" | "paste"
+    >,
+  ): void {
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown" || event.isComposing) {
         return true;
       }
 
-      if (!isMac && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+      if (this.handleFindShortcut(event)) return false;
+
+      if (
+        !this.options.isMac &&
+        event.ctrlKey &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.metaKey
+      ) {
         const key = event.key.toLowerCase();
 
         // Ctrl+C: copy selection to clipboard if text is selected, otherwise let xterm send SIGINT
@@ -473,6 +378,260 @@ export class TerminalEmulatorRuntime {
       event.stopPropagation();
       return false;
     });
+  }
+
+  private handleFindShortcut(event: KeyboardEvent): boolean {
+    if (!isFindShortcut(event, this.options) || !this.callbacks.onFindRequest) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    this.callbacks.onFindRequest();
+    return true;
+  }
+
+  private findWidgetCoversSelection(): boolean {
+    if (!this.findQuery) return false;
+    const terminal = this.terminal;
+    const element = terminal?.element;
+    const screen = element?.querySelector(".xterm-screen");
+    const selection = terminal?.getSelectionPosition();
+    if (!terminal || !element || !screen || !selection) return false;
+    const root = element.getBoundingClientRect();
+    const grid = screen.getBoundingClientRect();
+    const cellWidth = grid.width / terminal.cols;
+    const cellHeight = grid.height / terminal.rows;
+    const firstRow = terminal.buffer.active.viewportY;
+    const top = grid.top + (selection.start.y - firstRow) * cellHeight;
+    const bottom = grid.top + (selection.end.y - firstRow + 1) * cellHeight;
+    // A wrapped selection can occupy the right edge on its intermediate rows.
+    const rightCol = selection.start.y === selection.end.y ? selection.end.x : terminal.cols;
+    const right = grid.left + rightCol * cellWidth;
+    return (
+      top < root.top + this.findWidgetSize.height &&
+      bottom > root.top &&
+      right > root.right - this.findWidgetSize.width
+    );
+  }
+
+  private emitFindResult(): void {
+    const placement = this.findWidgetCoversSelection() ? "bottom" : "top";
+    this.callbacks.onFindResult?.({
+      ...this.findResult,
+      limited: this.findResult.resultCount >= FIND_HIGHLIGHT_LIMIT,
+      placement,
+    });
+  }
+
+  getInputModeState(): TerminalInputModeState {
+    return this.inputModeTracker.getState();
+  }
+
+  mount(input: TerminalEmulatorRuntimeMountInput): void {
+    this.unmount();
+
+    input.host.innerHTML = "";
+    this.lastSize = null;
+    this.inputModeTracker.reset();
+    this.emitInputModeChange();
+
+    const terminal = new Terminal({
+      allowProposedApi: true,
+      convertEol: false,
+      cursorBlink: true,
+      cursorStyle: "bar",
+      fontFamily: resolveTerminalFontFamily(input.fontFamily),
+      fontSize: resolveTerminalFontSize(input.fontSize),
+      lineHeight: 1.0,
+      macOptionIsMeta: true,
+      minimumContrastRatio: 1,
+      rescaleOverlappingGlyphs: true,
+      scrollbar: {
+        width: 8,
+      },
+      scrollback: input.scrollback,
+      theme: withOverviewRulerBorderHidden(input.theme),
+    });
+    const fitAddon = new FitAddon();
+    const unicode11Addon = new Unicode11Addon();
+    let webglAddon: WebglAddon | null = null;
+    let imageAddon: ImageAddon | null = null;
+    terminal.loadAddon(fitAddon);
+    terminal.loadAddon(unicode11Addon);
+    terminal.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        event.preventDefault();
+        void this.callbacks.onOpenExternalUrl?.(uri);
+      }),
+    );
+    const localFileLinkProvider = terminal.registerLinkProvider(
+      createTerminalLocalFileLinkProvider(terminal, {
+        resolveLink: async (source) => {
+          const target = await this.callbacks.onResolveLocalFileLink?.(source);
+          return target ?? null;
+        },
+        openLink: (target, disposition) => {
+          void this.callbacks.onOpenLocalFileLink?.(target, disposition);
+        },
+      }),
+    );
+    this.loadSearchAddon(terminal);
+    terminal.onWriteParsed(() => {
+      // Even a bottom viewport is an inspected location while searching. A
+      // marker follows buffer trimming; output writes remain batched normally.
+      const anchor = this.findOutputAnchor;
+      if (anchor && !anchor.isDisposed) terminal.scrollToLine(anchor.line);
+      // A parser turn may yield with submitted writes still queued. Commit
+      // callbacks identify completion; plain writes still submit back-to-back.
+      if (this.pendingWriteCommits.size === 0) this.releaseFindOutputAnchor();
+    });
+    terminal.onScroll(() => {
+      if (this.findQuery) this.emitFindResult();
+    });
+    terminal.loadAddon(new ClipboardAddon());
+    try {
+      terminal.loadAddon(new LigaturesAddon());
+    } catch {
+      // Ligatures require Font Access API or compatible environment
+    }
+    terminal.open(input.host);
+    this.themeBackgroundElements = this.collectThemeBackgroundElements(input);
+    this.applyThemeBackground(input.theme);
+    try {
+      terminal.unicode.activeVersion = "11";
+    } catch {
+      // Ignore if unicode API isn't available in this build/runtime.
+    }
+
+    const disposeImageAddon = (): void => {
+      try {
+        imageAddon?.dispose();
+      } catch {
+        // ignore
+      }
+      imageAddon = null;
+    };
+    const disposeWebglRenderer = (): void => {
+      if (!webglAddon) {
+        return;
+      }
+      try {
+        webglAddon.dispose();
+      } catch {
+        // ignore
+      }
+      webglAddon = null;
+      disposeImageAddon();
+      // WebGL and DOM renderers can have different cell dimensions.
+      this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
+    };
+
+    // Browser xterm is a renderer only; it never replies to terminal protocol queries.
+    // Replies live on the daemon (one process boundary from the PTY) so they arrive
+    // before the foreground app exits, instead of racing back over the websocket.
+    // Re-registered after the image addon loads so our handlers stay last in the
+    // LIFO dispatch (the image addon registers its own {final:"c"} for sixel DA1).
+    const registerProtocolQuerySuppression = (): void => {
+      terminal.parser.registerCsiHandler({ final: "c" }, () => true);
+      terminal.parser.registerCsiHandler({ prefix: ">", final: "c" }, () => true);
+      terminal.parser.registerCsiHandler({ prefix: "=", final: "c" }, () => true);
+      terminal.parser.registerCsiHandler({ final: "n" }, () => true);
+      terminal.parser.registerCsiHandler({ prefix: "?", final: "n" }, () => true);
+      terminal.parser.registerCsiHandler({ final: "R" }, () => true);
+      terminal.parser.registerCsiHandler({ intermediates: "$", final: "p" }, () => true);
+      terminal.parser.registerCsiHandler(
+        { prefix: "?", intermediates: "$", final: "p" },
+        () => true,
+      );
+      for (const code of [10, 11, 12]) {
+        terminal.parser.registerOscHandler(code, (data) => data.trim() === "?");
+      }
+    };
+    registerProtocolQuerySuppression();
+
+    let webglAddonRaf: number | null = requestAnimationFrame(() => {
+      webglAddonRaf = null;
+      try {
+        disposeWebglRenderer();
+        webglAddon = new WebglAddon();
+        webglAddon.onContextLoss(() => {
+          disposeWebglRenderer();
+        });
+        terminal.loadAddon(webglAddon);
+        imageAddon = new ImageAddon();
+        terminal.loadAddon(imageAddon);
+        registerProtocolQuerySuppression();
+        this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
+      } catch {
+        disposeWebglRenderer();
+      }
+    });
+
+    const restoreDocumentStyles = this.applyDocumentBoundsStyles({
+      root: input.root,
+    });
+    const restoreViewportStyles = this.applyViewportTouchStyles({
+      host: input.host,
+    });
+
+    this.terminal = terminal;
+    this.fitAddon = fitAddon;
+    window.__paseoTerminal = terminal;
+
+    const fitAndEmitResize = (resizeInput?: TerminalResizeRequest): void => {
+      const forceRefresh = resizeInput?.forceRefresh ?? false;
+      const shouldClaim = resizeInput?.shouldClaim ?? true;
+      const forceClaim = resizeInput?.forceClaim ?? false;
+      const currentTerminal = this.terminal;
+      const currentFitAddon = this.fitAddon;
+      if (!currentTerminal || !currentFitAddon) {
+        return;
+      }
+
+      if (input.root.offsetWidth === 0 || input.root.offsetHeight === 0) {
+        return;
+      }
+
+      try {
+        currentFitAddon.fit();
+      } catch {
+        return;
+      }
+
+      const nextRows = currentTerminal.rows;
+      const nextCols = currentTerminal.cols;
+      const previous = this.lastSize;
+      if (
+        !forceRefresh &&
+        !forceClaim &&
+        previous &&
+        previous.rows === nextRows &&
+        previous.cols === nextCols
+      ) {
+        return;
+      }
+
+      this.lastSize = { rows: nextRows, cols: nextCols };
+      this.refreshVisibleRows();
+      this.callbacks.onResize?.(
+        createTerminalResizeEvent({
+          rows: nextRows,
+          cols: nextCols,
+          shouldClaim,
+          forceClaim,
+        }),
+      );
+    };
+    this.fitAndEmitResize = fitAndEmitResize;
+
+    fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
+
+    const inputDisposable = terminal.onData((data) => {
+      if (this.suppressInput) {
+        return;
+      }
+      this.callbacks.onInput?.(data);
+    });
+
+    this.attachKeyEventHandler(terminal);
 
     const removeTouchListeners = this.setupTouchScrollHandlers({
       root: input.root,
@@ -480,12 +639,14 @@ export class TerminalEmulatorRuntime {
       terminal,
     });
     const resizeObserver = new ResizeObserver(() => {
-      fitAndEmitResize({ shouldClaim: true });
+      fitAndEmitResize({ shouldClaim: false });
     });
     resizeObserver.observe(input.root);
     resizeObserver.observe(input.host);
 
-    const windowResizeHandler = () => fitAndEmitResize({ shouldClaim: true });
+    const windowResizeHandler = () => {
+      fitAndEmitResize({ shouldClaim: false });
+    };
     window.addEventListener("resize", windowResizeHandler);
     const windowFocusHandler = () => {
       this.handleVisibilityRestore();
@@ -498,23 +659,25 @@ export class TerminalEmulatorRuntime {
     document.addEventListener("visibilitychange", documentVisibilityChangeHandler);
 
     const visualViewport = window.visualViewport;
-    const visualViewportResizeHandler = () => fitAndEmitResize({ shouldClaim: true });
+    const visualViewportResizeHandler = () => {
+      fitAndEmitResize({ shouldClaim: false });
+    };
     visualViewport?.addEventListener("resize", visualViewportResizeHandler);
 
     const fitTimeouts = FIT_TIMEOUT_DELAYS_MS.map((delayMs) =>
       window.setTimeout(() => {
-        fitAndEmitResize({ force: true, shouldClaim: false });
+        fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
       }, delayMs),
     );
 
     const fontSet = document.fonts;
     const fontReadyHandler = () => {
-      fitAndEmitResize({ force: true, shouldClaim: false });
+      fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
     };
     fontSet?.addEventListener?.("loadingdone", fontReadyHandler);
     void fontSet?.ready
       .then(() => {
-        fitAndEmitResize({ force: true, shouldClaim: false });
+        fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
         return;
       })
       .catch(() => {
@@ -522,7 +685,7 @@ export class TerminalEmulatorRuntime {
       });
 
     window.setTimeout(() => {
-      fitAndEmitResize({ force: true, shouldClaim: false });
+      fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
     }, 0);
 
     if (input.initialSnapshot) {
@@ -624,6 +787,10 @@ export class TerminalEmulatorRuntime {
     this.processOutputQueue();
   }
 
+  paste(text: string): void {
+    this.terminal?.paste(text);
+  }
+
   renderSnapshot(input: { state: TerminalState | null; onCommitted?: () => void }): void {
     if (!input.state) {
       this.clear(input);
@@ -654,7 +821,7 @@ export class TerminalEmulatorRuntime {
     this.processOutputQueue();
   }
 
-  resize(input?: { force?: boolean; shouldClaim?: boolean }): void {
+  resize(input?: TerminalResizeRequest): void {
     this.fitAndEmitResize?.(input);
   }
 
@@ -705,7 +872,7 @@ export class TerminalEmulatorRuntime {
       return;
     }
 
-    this.fitAndEmitResize?.({ force: true });
+    this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
     this.refreshVisibleRows();
   }
 
@@ -758,6 +925,7 @@ export class TerminalEmulatorRuntime {
   }
 
   unmount(): void {
+    this.releaseFindOutputAnchor();
     this.clearInFlightOutputTimeout();
     const inFlightOperation = this.inFlightOutputOperation;
     this.inFlightOutputOperation = null;
@@ -779,6 +947,9 @@ export class TerminalEmulatorRuntime {
       window.__paseoTerminal = undefined;
     }
     this.terminal = null;
+    this.searchAddon = null;
+    this.findQuery = "";
+    this.findResult = { resultIndex: -1, resultCount: 0 };
     this.fitAddon = null;
     this.fitAndEmitResize = null;
     this.lastSize = null;
@@ -853,6 +1024,7 @@ export class TerminalEmulatorRuntime {
   }
 
   private submitWrite(terminal: Terminal, operation: TerminalOutputOperation): void {
+    this.preserveFindViewport(terminal);
     // Synchronous per-write tracking must run in frame order; doing it here in the drain
     // loop preserves that ordering even though the writes are submitted without waiting.
     const text = this.inputModeDecoder.decode(operation.data, { stream: true });
@@ -862,19 +1034,11 @@ export class TerminalEmulatorRuntime {
     }
     this.hasUngatedWrites = true;
     const onCommitted = operation.onCommitted;
-    if (!onCommitted) {
-      try {
-        terminal.write(operation.data);
-      } catch {
-        // Match existing behavior: a failed write still proceeds with no commit callback.
-      }
-      return;
-    }
     const commit = () => {
       if (!this.pendingWriteCommits.delete(commit)) {
         return;
       }
-      onCommitted();
+      onCommitted?.();
     };
     this.pendingWriteCommits.add(commit);
     try {

@@ -1,5 +1,10 @@
 "use dom";
 
+import type {
+  TerminalFindHandle,
+  TerminalFindResult,
+} from "../terminal/runtime/terminal-emulator-runtime";
+
 import {
   useCallback,
   useEffect,
@@ -23,10 +28,12 @@ import {
   TerminalEmulatorRuntime,
   type TerminalOutputData,
 } from "../terminal/runtime/terminal-emulator-runtime";
+import { encodeTerminalPaste } from "../terminal/runtime/terminal-paste";
 import type {
   TerminalLocalFileLinkSource,
   TerminalLocalFileLinkTarget,
 } from "../terminal/local-links/terminal-local-link-provider";
+import type { TerminalClipboardWriter } from "../terminal/native-renderer/terminal-selection";
 import type { TerminalRendererReadyChange } from "../utils/terminal-renderer-readiness";
 import { openExternalUrl } from "../utils/open-external-url";
 import { focusWithRetries } from "../utils/web-focus";
@@ -39,10 +46,15 @@ import {
 import { getDesktopHost } from "@/desktop/host";
 
 export interface TerminalEmulatorHandle {
+  find?: TerminalFindHandle;
   writeOutput: (data: TerminalOutputData) => void;
   restoreOutput: (data: TerminalOutputData) => void;
   renderSnapshot: (state: TerminalState | null) => void;
+  paste: (text: string) => void;
+  copySelection: (clipboard: TerminalClipboardWriter) => Promise<string>;
   clear: () => void;
+  claimSize: () => void;
+  showKeyboard: () => void;
   blur: () => void;
 }
 
@@ -93,18 +105,28 @@ interface TerminalEmulatorProps {
   dom?: DOMProps;
   ref: Ref<TerminalEmulatorHandle>;
   streamKey: string;
+  supportsTerminalInputModeReplay: boolean;
   testId?: string;
   xtermTheme?: ITheme;
   scrollbackLines: number;
   fontFamily?: string;
   fontSize?: number;
+  keyboardInset?: number;
+  isKeyboardVisible?: boolean;
   swipeGesturesEnabled?: boolean;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   initialSnapshot?: TerminalState | null;
+  onFindRequest?: () => void;
+  onFindResult?: (result: TerminalFindResult) => void;
   onInput?: (data: string) => Promise<void> | void;
   onFocus?: () => Promise<void> | void;
-  onResize?: (input: { rows: number; cols: number; shouldClaim: boolean }) => Promise<void> | void;
+  onResize?: (input: {
+    rows: number;
+    cols: number;
+    shouldClaim: boolean;
+    forceClaim?: boolean;
+  }) => Promise<void> | void;
   onTerminalKey?: (input: {
     key: string;
     ctrl: boolean;
@@ -114,6 +136,7 @@ interface TerminalEmulatorProps {
   }) => Promise<void> | void;
   onPendingModifiersConsumed?: () => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
+  onSelectionChange?: (hasSelection: boolean) => void;
   onResolveLocalFileLink?: (
     source: TerminalLocalFileLinkSource,
   ) => Promise<TerminalLocalFileLinkTarget | null> | TerminalLocalFileLinkTarget | null;
@@ -157,6 +180,8 @@ export default function TerminalEmulator({
   onSwipeLeft,
   onSwipeRight,
   initialSnapshot = null,
+  onFindRequest,
+  onFindResult,
   onInput,
   onFocus,
   onResize,
@@ -186,6 +211,8 @@ export default function TerminalEmulator({
   const onRendererReadyChangeRef = useRef(onRendererReadyChange);
   onRendererReadyChangeRef.current = onRendererReadyChange;
   const mountCallbacksRef = useRef({
+    onFindRequest,
+    onFindResult,
     onInput,
     onResize,
     onTerminalKey,
@@ -195,6 +222,8 @@ export default function TerminalEmulator({
     onOpenLocalFileLink,
   });
   mountCallbacksRef.current = {
+    onFindRequest,
+    onFindResult,
     onInput,
     onResize,
     onTerminalKey,
@@ -211,6 +240,18 @@ export default function TerminalEmulator({
   const dropActiveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const domBridgeRef = useRef<DOMImperativeFactory | null>(null);
+  const pasteText = useCallback((text: string) => {
+    if (text.length === 0) {
+      return;
+    }
+    mountCallbacksRef.current.onInput?.(
+      encodeTerminalPaste({
+        text,
+        bracketedPaste: runtimeRef.current?.getInputModeState().bracketedPaste ?? false,
+      }),
+    );
+  }, []);
+
   useDOMImperativeHandle(
     domBridgeRef,
     (): DOMImperativeFactory => ({
@@ -230,18 +271,37 @@ export default function TerminalEmulator({
           runtimeRef.current?.renderSnapshot({ state });
         }
       },
+      paste: (...args) => {
+        const text = args[0];
+        if (typeof text === "string" && text.length > 0) {
+          pasteText(text);
+        }
+      },
+      copySelection: async () => "",
       clear: () => {
         runtimeRef.current?.clear();
+      },
+      claimSize: () => {
+        runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
+      },
+      showKeyboard: () => {
+        runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
+        runtimeRef.current?.focus();
       },
       blur: () => {
         runtimeRef.current?.blur();
       },
     }),
-    [],
+    [pasteText],
   );
   useImperativeHandle(
     ref,
     (): TerminalEmulatorHandle => ({
+      find: {
+        setWidgetSize: (size) => runtimeRef.current?.find.setWidgetSize(size),
+        search: (query, direction) => runtimeRef.current?.find.search(query, direction),
+        clear: () => runtimeRef.current?.find.clear(),
+      },
       writeOutput: (data: TerminalOutputData) => {
         runtimeRef.current?.write({ data });
       },
@@ -251,14 +311,25 @@ export default function TerminalEmulator({
       renderSnapshot: (state: TerminalState | null) => {
         runtimeRef.current?.renderSnapshot({ state });
       },
+      paste: (text: string) => {
+        pasteText(text);
+      },
+      copySelection: async () => "",
       clear: () => {
         runtimeRef.current?.clear();
+      },
+      claimSize: () => {
+        runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
+      },
+      showKeyboard: () => {
+        runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
+        runtimeRef.current?.focus();
       },
       blur: () => {
         runtimeRef.current?.blur();
       },
     }),
-    [],
+    [pasteText],
   );
 
   useEffect(() => {
@@ -426,6 +497,8 @@ export default function TerminalEmulator({
   useEffect(() => {
     runtimeRef.current?.setCallbacks({
       callbacks: {
+        onFindRequest,
+        onFindResult,
         onInput,
         onResize,
         onTerminalKey,
@@ -437,6 +510,8 @@ export default function TerminalEmulator({
       },
     });
   }, [
+    onFindRequest,
+    onFindResult,
     onInput,
     onInputModeChange,
     onOpenLocalFileLink,
@@ -458,7 +533,7 @@ export default function TerminalEmulator({
     if (focusRequestToken <= 0) {
       return () => {};
     }
-    runtimeRef.current?.resize({ force: true, shouldClaim: true });
+    runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
     return focusWithRetries({
       focus: () => {
         runtimeRef.current?.focus();
@@ -478,7 +553,7 @@ export default function TerminalEmulator({
     if (resizeRequestToken <= 0) {
       return;
     }
-    runtimeRef.current?.resize({ force: true, shouldClaim: true });
+    runtimeRef.current?.resize({ forceClaim: false, shouldClaim: false });
   }, [resizeRequestToken]);
 
   const showTerminalContextMenu = useCallback(() => {
