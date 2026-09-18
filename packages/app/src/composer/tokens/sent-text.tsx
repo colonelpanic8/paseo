@@ -12,12 +12,14 @@ interface SentComposerTokenTextProps {
   text: string;
   sigils: ComposerSigils;
   style: StyleProp<TextStyle>;
+  dataSet?: Record<string, string>;
 }
 
 export const SentComposerTokenText = memo(function SentComposerTokenText({
   text,
   sigils,
   style,
+  dataSet,
 }: SentComposerTokenTextProps) {
   const segments = useMemo(
     () => segmentComposerText(text, collectSubmittedComposerTokens(text)),
@@ -25,7 +27,7 @@ export const SentComposerTokenText = memo(function SentComposerTokenText({
   );
 
   return (
-    <Text selectable style={style}>
+    <Text selectable style={style} dataSet={dataSet}>
       {segments.map((segment) =>
         segment.kind === "text" ? (
           segment.text

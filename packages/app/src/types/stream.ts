@@ -8,7 +8,6 @@ import { timelineItemIdentity } from "@getpaseo/protocol/timeline-identity";
 import type { AgentAttachment, AgentStreamEventPayload } from "@getpaseo/protocol/messages";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
-import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
 
 /**
  * Simple hash function for deterministic ID generation
@@ -84,7 +83,7 @@ export type StreamItem =
   | ThoughtItem
   | ToolCallItem
   | TodoListItem
-  | ActivityLogItem
+  | NotificationItem
   | CompactionItem
   | PluginTimelineStreamItem;
 
@@ -449,7 +448,11 @@ function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): S
     return null;
   }
   if (isAgentToolCallItem(retained)) {
-    const tailIndex = findExistingTimelineIdentityIndex(tail, retained.payload.data.callId);
+    const identity = agentToolCallIdentity({
+      callId: retained.payload.data.callId,
+      turnId: retained.turnId,
+    });
+    const tailIndex = findExistingTimelineIdentityIndex(tail, identity);
     const existing = tail[tailIndex];
     if (tailIndex < 0 || !existing || !isAgentToolCallItem(existing)) {
       return null;
@@ -707,6 +710,7 @@ export interface AssistantMessageItem {
   timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
+  /** Display-only fields, assigned after source-item plugin transforms. */
   blockGroupId?: string;
   blockIndex?: number;
 }
@@ -771,17 +775,17 @@ export function isAgentToolCallItem(item: StreamItem): item is AgentToolCallItem
   return item.kind === "tool_call" && item.payload.source === "agent";
 }
 
-type ActivityLogType = "system" | "info" | "success" | "error";
+type NotificationLevel = "info" | "warning" | "error";
 
-export interface ActivityLogItem {
-  kind: "activity_log";
+export interface NotificationItem {
+  kind: "notification";
+  sourceType: "error" | "notification";
   id: string;
   timelineCursor?: TimelinePosition;
   turnId?: string;
   timestamp: Date;
-  activityType: ActivityLogType;
+  level: NotificationLevel;
   message: string;
-  metadata?: Record<string, unknown>;
 }
 
 export interface CompactionItem {
@@ -1022,9 +1026,24 @@ function finalizeActiveThoughts(state: StreamItem[]): StreamItem[] {
 }
 
 export function streamTimelineItemIdentity(item: StreamItem): string | null {
-  if (isAgentToolCallItem(item)) return item.payload.data.callId;
+  if (isAgentToolCallItem(item)) {
+    return agentToolCallIdentity({
+      callId: item.payload.data.callId,
+      turnId: item.turnId,
+    });
+  }
   if (item.kind === "plugin") return `${item.pluginId}/${item.pluginItemId}`;
   return null;
+}
+
+interface AgentToolCallIdentityInput {
+  callId: string;
+  turnId?: string;
+}
+
+function agentToolCallIdentity(input: AgentToolCallIdentityInput): string {
+  if (!input.turnId) return input.callId;
+  return `turn:${encodeURIComponent(input.turnId)}/${encodeURIComponent(input.callId)}`;
 }
 
 function findExistingTimelineIdentityIndex(state: StreamItem[], identity: string): number {
@@ -1165,13 +1184,18 @@ export function mergeAgentToolCallItem(
   };
 }
 
-function appendAgentToolCall(
-  state: StreamItem[],
-  data: AgentToolCallData,
-  timestamp: Date,
-  timelineCursor?: TimelinePosition,
-): StreamItem[] {
-  const existingIndex = findExistingTimelineIdentityIndex(state, data.callId);
+interface AppendAgentToolCallInput {
+  state: StreamItem[];
+  data: AgentToolCallData;
+  timestamp: Date;
+  turnId?: string;
+  timelineCursor?: TimelinePosition;
+}
+
+function appendAgentToolCall(input: AppendAgentToolCallInput): StreamItem[] {
+  const { state, data, timestamp, turnId, timelineCursor } = input;
+  const identity = agentToolCallIdentity({ callId: data.callId, turnId });
+  const existingIndex = findExistingTimelineIdentityIndex(state, identity);
 
   if (existingIndex >= 0) {
     const existing = state[existingIndex];
@@ -1200,8 +1224,9 @@ function appendAgentToolCall(
 
   const item: ToolCallItem = {
     kind: "tool_call",
-    id: `agent_tool_${data.callId}`,
+    id: `agent_tool_${identity}`,
     ...(timelineCursor ? { timelineCursor } : {}),
+    ...(turnId ? { turnId } : {}),
     timestamp,
     payload: {
       source: "agent",
@@ -1213,6 +1238,16 @@ function appendAgentToolCall(
   };
 
   return [...state, item];
+}
+
+function appendNotification(state: StreamItem[], entry: NotificationItem): StreamItem[] {
+  const index = state.findIndex((existing) => existing.id === entry.id);
+  if (index >= 0) {
+    const next = [...state];
+    next[index] = entry;
+    return next;
+  }
+  return [...state, entry];
 }
 
 function appendPluginTimelineItem(
@@ -1241,16 +1276,6 @@ function appendPluginTimelineItem(
   const next = [...state];
   next[existingIndex] = { ...nextItem, id: existing.id };
   return next;
-}
-
-function appendActivityLog(state: StreamItem[], entry: ActivityLogItem): StreamItem[] {
-  const index = state.findIndex((existing) => existing.id === entry.id);
-  if (index >= 0) {
-    const next = [...state];
-    next[index] = entry;
-    return next;
-  }
-  return [...state, entry];
 }
 
 function appendTodoList(
@@ -1374,10 +1399,6 @@ function reduceTimelineToolCall(
     .trim()
     .replace(/[.\s-]+/g, "_")
     .toLowerCase();
-  if (event.provider === "claude" && normalizedToolName === "exitplanmode") {
-    return state;
-  }
-
   if (
     event.provider === "claude" &&
     (normalizedToolName === "todowrite" || normalizedToolName === "todo_write")
@@ -1415,9 +1436,9 @@ function reduceTimelineToolCall(
     );
   }
 
-  return appendAgentToolCall(
+  return appendAgentToolCall({
     state,
-    {
+    data: {
       provider: event.provider,
       callId: item.callId,
       name: item.name,
@@ -1428,7 +1449,8 @@ function reduceTimelineToolCall(
     },
     timestamp,
     timelineCursor,
-  );
+    turnId: event.turnId,
+  });
 }
 
 function reduceTimelineCompaction(
@@ -1459,7 +1481,7 @@ function reduceTimelineCompaction(
   }
   const compaction: CompactionItem = {
     kind: "compaction",
-    id: createTimelineId("compaction", item.status, timestamp),
+    id: createUniqueTimelineId(state, "compaction", item.status, timestamp),
     ...(timelineCursor ? { timelineCursor } : {}),
     timestamp,
     status: item.status,
@@ -1523,15 +1545,28 @@ function reduceTimelineEvent(
       );
     }
     case "error": {
-      const activity: ActivityLogItem = {
-        kind: "activity_log",
-        id: createTimelineId("error", item.message ?? "", timestamp),
+      const notification: NotificationItem = {
+        kind: "notification",
+        sourceType: "error",
+        id: createUniqueTimelineId(state, "error", item.message ?? "", timestamp),
         ...(timelineCursor ? { timelineCursor } : {}),
         timestamp,
-        activityType: "error",
+        level: "error",
         message: item.message ?? "Unknown error",
       };
-      return finalizeActiveThoughts(appendActivityLog(state, activity));
+      return finalizeActiveThoughts(appendNotification(state, notification));
+    }
+    case "notification": {
+      const notification: NotificationItem = {
+        kind: "notification",
+        sourceType: "notification",
+        id: createUniqueTimelineId(state, "notification", item.message, timestamp),
+        ...(timelineCursor ? { timelineCursor } : {}),
+        timestamp,
+        level: item.level,
+        message: item.message,
+      };
+      return finalizeActiveThoughts(appendNotification(state, notification));
     }
     case "compaction":
       return finalizeActiveThoughts(
@@ -1693,7 +1728,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
     case "todo":
       return "todo_list";
     case "error":
-      return "activity_log";
+    case "notification":
+      return "notification";
     case "plugin":
       return "plugin";
     default:
@@ -1719,14 +1755,6 @@ function finalizeHeadItems(head: StreamItem[]): StreamItem[] {
     }
     return item;
   });
-}
-
-function createAssistantBlockId(params: { groupId: string; blockIndex: number }): string {
-  return `${params.groupId}:block:${params.blockIndex}`;
-}
-
-function getTrailingNewlineSuffix(text: string): string {
-  return /\n+$/.exec(text)?.[0] ?? "";
 }
 
 function getActiveAssistantHeadIndex(head: StreamItem[]): number {
@@ -1755,73 +1783,6 @@ function getTailAssistantToResume(params: {
     return null;
   }
   return params.tailAssistant;
-}
-
-function promoteCompletedAssistantBlocks(params: { tail: StreamItem[]; head: StreamItem[] }): {
-  tail: StreamItem[];
-  head: StreamItem[];
-  changedTail: boolean;
-  changedHead: boolean;
-} {
-  const assistantIndex = getActiveAssistantHeadIndex(params.head);
-  const activeItem = params.head[assistantIndex];
-  if (assistantIndex < 0 || !activeItem || activeItem.kind !== "assistant_message") {
-    return {
-      tail: params.tail,
-      head: params.head,
-      changedTail: false,
-      changedHead: false,
-    };
-  }
-
-  const blocks = splitMarkdownBlocks(activeItem.text);
-  if (blocks.length < 2) {
-    return {
-      tail: params.tail,
-      head: params.head,
-      changedTail: false,
-      changedHead: false,
-    };
-  }
-
-  const blockGroupId = activeItem.blockGroupId ?? activeItem.id;
-  const firstBlockIndex = activeItem.blockIndex ?? 0;
-  const completedBlocks = blocks.slice(0, -1);
-  const liveBlock = `${blocks[blocks.length - 1] ?? ""}${getTrailingNewlineSuffix(activeItem.text)}`;
-  const promotedItems = completedBlocks.map<AssistantMessageItem>((block, offset) => ({
-    ...activeItem,
-    id: createAssistantBlockId({
-      groupId: blockGroupId,
-      blockIndex: firstBlockIndex + offset,
-    }),
-    blockGroupId,
-    blockIndex: firstBlockIndex + offset,
-    text: block,
-  }));
-
-  const nextTail = flushHeadToTail(params.tail, promotedItems);
-  const liveItem: AssistantMessageItem = {
-    ...activeItem,
-    id: createAssistantBlockId({
-      groupId: blockGroupId,
-      blockIndex: firstBlockIndex + completedBlocks.length,
-    }),
-    blockGroupId,
-    blockIndex: firstBlockIndex + completedBlocks.length,
-    text: liveBlock,
-  };
-  const nextHead = [
-    ...params.head.slice(0, assistantIndex),
-    liveItem,
-    ...params.head.slice(assistantIndex + 1),
-  ];
-
-  return {
-    tail: nextTail,
-    head: nextHead,
-    changedTail: nextTail !== params.tail,
-    changedHead: true,
-  };
 }
 
 /**
@@ -2067,13 +2028,7 @@ export function applyStreamEvent(params: {
   if (incomingKind !== null && isStreamableKind(incomingKind)) {
     const reservedItemIds =
       incomingKind === "assistant_message" && getActiveAssistantHeadIndex(nextHead) < 0
-        ? new Set(
-            nextTail.flatMap((item) =>
-              item.kind === "assistant_message" && item.blockGroupId
-                ? [item.id, item.blockGroupId]
-                : [item.id],
-            ),
-          )
+        ? new Set(nextTail.map((item) => item.id))
         : undefined;
     const reduced = reduceStreamUpdate(nextHead, event, timestamp, {
       source,
@@ -2083,16 +2038,6 @@ export function applyStreamEvent(params: {
     if (reduced !== nextHead) {
       nextHead = reduced;
       changedHead = true;
-    }
-    if (incomingKind === "assistant_message") {
-      const promoted = promoteCompletedAssistantBlocks({
-        tail: nextTail,
-        head: nextHead,
-      });
-      nextTail = promoted.tail;
-      nextHead = promoted.head;
-      changedTail = changedTail || promoted.changedTail;
-      changedHead = changedHead || promoted.changedHead;
     }
     return { tail: nextTail, head: nextHead, changedTail, changedHead };
   }
