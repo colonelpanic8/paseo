@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import type { ComposerHeightResult } from "./height.types";
 
 interface ComposerHeightArgs {
-  value: string;
+  getText: () => string;
   textareaRef: RefObject<HTMLElement | null>;
   minHeight: number;
   maxHeight: number;
@@ -32,15 +32,15 @@ const COPIED_STYLES = [
 ] as const;
 
 export function useComposerHeight({
-  value,
+  getText,
   textareaRef,
   minHeight,
   maxHeight,
 }: ComposerHeightArgs): ComposerHeightResult {
   const [height, setHeight] = useState(minHeight);
   const heightRef = useRef(minHeight);
-  const paramsRef = useRef({ value, minHeight, maxHeight });
-  paramsRef.current = { value, minHeight, maxHeight };
+  const paramsRef = useRef({ getText, minHeight, maxHeight });
+  paramsRef.current = { getText, minHeight, maxHeight };
   const mirrorRef = useRef<HTMLTextAreaElement | null>(null);
   const mirrorStyledRef = useRef(false);
 
@@ -105,7 +105,7 @@ export function useComposerHeight({
     document.body.appendChild(mirror);
     mirrorRef.current = mirror;
     mirrorStyledRef.current = false;
-    measure(paramsRef.current.value);
+    measure(paramsRef.current.getText());
     return () => {
       mirror.remove();
       mirrorRef.current = null;
@@ -114,8 +114,8 @@ export function useComposerHeight({
   }, [measure]);
 
   useLayoutEffect(() => {
-    measure(value);
-  }, [maxHeight, minHeight, value, measure]);
+    measure(getText());
+  }, [maxHeight, minHeight, getText, measure]);
 
   useEffect(() => {
     const source = textareaRef.current;
@@ -126,7 +126,7 @@ export function useComposerHeight({
       if (Math.abs(nextWidth - previousWidth) < 1) return;
       previousWidth = nextWidth;
       if (!syncMirrorStyles()) return;
-      measure(paramsRef.current.value);
+      measure(paramsRef.current.getText());
     });
     observer.observe(source);
     return () => observer.disconnect();
