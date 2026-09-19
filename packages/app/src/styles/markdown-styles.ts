@@ -20,8 +20,9 @@ function contentHeadingLineHeight(contentSize: number, tier: keyof typeof FONT_S
 // sits on grow unevenly. Web keeps the padded chip because there it really is
 // an inline run.
 const inlineCodeSurfaceStyle = isWeb ? { paddingVertical: 2 } : { paddingVertical: 0 };
-const inlineCodeLineHeight = (theme: Theme) =>
-  isWeb ? Math.round(theme.fontSize.code * 1.45) : Math.round(theme.fontSize.base * 1.4);
+// Web inherits the paragraph's line box: setting one here is what makes wrapped rows uneven.
+const inlineCodeLineHeightStyle = (theme: Theme) =>
+  isWeb ? {} : { lineHeight: Math.round(theme.fontSize.base * 1.4) };
 
 /**
  * Creates comprehensive markdown styles for react-native-markdown-display.
@@ -191,7 +192,7 @@ export function createMarkdownStyles(theme: Theme) {
       borderWidth: 0,
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
-      lineHeight: inlineCodeLineHeight(theme),
+      ...inlineCodeLineHeightStyle(theme),
     },
 
     code_block: {
@@ -414,7 +415,7 @@ export function createCompactMarkdownStyles(theme: Theme) {
     code_inline: {
       ...baseStyles.code_inline,
       fontSize: theme.fontSize.code,
-      lineHeight: isWeb ? baseStyles.code_inline.lineHeight : 20,
+      ...(isWeb ? {} : { lineHeight: 20 }),
     },
 
     code_block: {
