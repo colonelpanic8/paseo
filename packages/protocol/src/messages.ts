@@ -174,6 +174,28 @@ const MutableMetadataGenerationConfigSchema = z
   })
   .passthrough();
 
+/**
+ * The ten identity colors clients draw hosts, projects, and profiles in. Order is load-bearing:
+ * clients derive a default color by indexing into this array, so reordering silently recolors
+ * every host and project that never chose one.
+ */
+export const IDENTITY_COLOR_NAMES = [
+  "violet",
+  "sky",
+  "emerald",
+  "orange",
+  "pink",
+  "indigo",
+  "teal",
+  "red",
+  "amber",
+  "blue",
+] as const;
+
+export const IdentityColorNameSchema = z.enum(IDENTITY_COLOR_NAMES);
+
+export type IdentityColorName = z.infer<typeof IdentityColorNameSchema>;
+
 const MutableBrowserToolsConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -225,6 +247,8 @@ export const MutableDaemonConfigSchema = z
     // COMPAT(agentEnvironment): added in v0.3.1, optional so an older daemon's
     // config still parses. Remove the optional when the floor is >= v0.3.1.
     agentEnvironment: MutableAgentEnvironmentConfigSchema.optional(),
+    /** How the host presents itself. `color` is an identity color name; unknown values are ignored. */
+    appearance: z.object({ color: z.string().optional() }).passthrough().optional(),
   })
   .passthrough();
 
@@ -254,6 +278,11 @@ export const MutableDaemonConfigPatchSchema = z
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
     agentEnvironment: MutableAgentEnvironmentConfigPatchSchema.optional(),
+    /** `null` clears the host color so clients fall back to their derived default. */
+    appearance: z
+      .object({ color: IdentityColorNameSchema.nullable().optional() })
+      .passthrough()
+      .optional(),
   })
   .partial()
   .passthrough();
@@ -3885,6 +3914,9 @@ export const ServerInfoStatusPayloadSchema = z
     // fallback in packages/app/src/utils/paseo-worktree-path.ts after 2027-08-04.
     worktreesRoot: z.string().optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
+    // COMPAT(hostAppearance): added in v0.7.3, remove optional parsing after 2027-09-06.
+    // `color` stays a string on the wire so a color added later does not break older clients.
+    appearance: z.object({ color: z.string().optional() }).passthrough().optional(),
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
       .object({
@@ -3896,6 +3928,8 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(hubAgentRpc): added in v0.8.0; remove gate after 2027-03-05.
         hubAgentRpc: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
+        // COMPAT(hostAppearance): added in v0.7.3, remove gate after 2027-09-06.
+        hostAppearance: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
         providersSnapshotCwd: z.boolean().optional(),
         // COMPAT(directorySync): added in v0.3.x, remove gate after 2027-02-12.
