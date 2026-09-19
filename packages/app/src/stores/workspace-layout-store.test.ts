@@ -79,7 +79,7 @@ const workspaceLayoutIds = createDeterministicWorkspaceLayoutIds();
 const workspaceLayoutStore = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
 
 it("observes open chats across unmounted workspaces until their tabs close", () => {
-  const store = createWorkspaceLayoutStore(workspaceLayoutIds);
+  const store = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
   store.setState({ layoutByWorkspace: {} });
   const received: string[][] = [];
   const stop = observeOpenWorkspaceAgentIds("server-1", (ids) => received.push(ids), store);
@@ -112,7 +112,7 @@ it("observes open chats across unmounted workspaces until their tabs close", () 
 });
 
 it("feeds restored layout to timeline sync as a release signal, not a subscription source", async () => {
-  const store = createWorkspaceLayoutStore(workspaceLayoutIds);
+  const store = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
   store.setState({ layoutByWorkspace: {} });
   // Launch: layout rehydrates tabs the user opened in earlier sessions.
   const restored = store.getState().openTab({
@@ -1272,7 +1272,7 @@ describe("workspace-layout-store actions", () => {
           },
         }),
       );
-      const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+      const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
       await restored.persist.rehydrate();
       const state = restored.getState();
       const layout = state.layoutByWorkspace[workspaceKey];
@@ -1319,7 +1319,7 @@ describe("workspace-layout-store actions", () => {
         },
       }),
     );
-    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
     await restored.persist.rehydrate();
     const layout = restored.getState().layoutByWorkspace[workspaceKey];
     expect(collectAllPanes(layout.root).map((pane) => pane.id)).toEqual(["pane_saved_ordinary"]);
@@ -4525,13 +4525,14 @@ describe("workspace-layout-store actions", () => {
 
 it("persists the once-only PR add after closing, and clears it when purging the workspace", async () => {
   await AsyncStorage.removeItem("workspace-layout-state");
-  const source = createWorkspaceLayoutStore(workspaceLayoutIds);
+  const source = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
   await source.persist.rehydrate();
   const workspaceKey = "server-1:pr-once";
   const placement = () => ({ placement: { mode: "prefer" as const, paneId: "explorer" } });
   source.getState().autoOpenPullRequestTab(workspaceKey, placement);
   source.getState().closeTab(workspaceKey, "pull_request");
-  const restored = createWorkspaceLayoutStore(workspaceLayoutIds);
+  await source.flushPersistence();
+  const restored = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
   await restored.persist.rehydrate();
   expect(restored.getState().pullRequestTabAutoOpenedByWorkspace[workspaceKey]).toBe(true);
   expect(restored.getState().autoOpenPullRequestTab(workspaceKey, placement)).toBeNull();
