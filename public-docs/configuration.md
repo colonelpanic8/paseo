@@ -289,6 +289,40 @@ Set the persisted value in `config.json`:
 
 `PASEO_RELAY_ENABLED=true|false` overrides the file for a foreground deployment. Managed `start` uses the file. End and relaunch a deployment to remove its override before changing relay from the app or `paseo daemon pair --relay`.
 
+## Push notifications
+
+Store builds receive push through Expo automatically once the app has connected to the daemon. Source builds without Google services, such as the F-Droid build, cannot obtain an Expo token; give the daemon an [ntfy](https://ntfy.sh) server and topic instead and subscribe to that topic in the ntfy app on your phone:
+
+```json
+{
+  "daemon": {
+    "push": {
+      "ntfy": {
+        "serverUrl": "https://ntfy.example.net",
+        "topic": "paseo-8f3c1a"
+      }
+    }
+  }
+}
+```
+
+Both channels deliver in parallel. The notification body includes the agent's last message, so prefer a self-hosted server or one on a private network. Tapping the notification opens the agent in Paseo. These settings apply on reload without a restart.
+
+By default the daemon pushes only when no Paseo client has been active for three minutes. On desktop that means input anywhere on the machine, not just in Paseo. Two settings change it:
+
+```json
+{
+  "daemon": {
+    "push": {
+      "presenceThresholdMs": 30000,
+      "ignorePresence": false
+    }
+  }
+}
+```
+
+`presenceThresholdMs` is how long after your last activity you still count as present. `ignorePresence: true` pushes every eligible notification even while you are at the machine, and still delivers the in-app notification. Use it rather than a zero threshold, which would suppress the in-app notification instead of adding a push alongside it.
+
 ## Common env vars
 
 - `PASEO_HOME`, set Paseo home directory
