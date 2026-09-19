@@ -252,6 +252,23 @@ Services additionally get:
 - `$PASEO_SERVICE_<NAME>_PORT` / `_URL`, peer service ports and URLs
 - `$HOST`, `127.0.0.1` for local-only daemons, `0.0.0.0` when the daemon binds all interfaces
 
+## Agent environment (agentEnv)
+
+Projects that manage per-directory environment with [direnv](https://direnv.net), [mise](https://mise.jdx.dev), or a similar tool can commit a top-level `agentEnv` wrapper command:
+
+```json
+{ "agentEnv": "direnv exec ." }
+```
+
+Before launching an agent, Paseo runs the wrapper once in the agent's working directory, captures the environment it produces, and injects the added or changed variables into the agent process — so the agent's shell commands _and_ the MCP servers it spawns see the project environment (API keys, `PATH` additions, tool shims).
+
+Details:
+
+- The value is a wrapper: Paseo executes `<agentEnv> env -0` through `bash -c` in the agent cwd. Anything that can run a command under the project environment works (`direnv exec .`, `mise exec --`, a custom script).
+- The environment is captured once per agent launch. Editing `.envrc` mid-session doesn't affect a running agent — restart the agent to pick up changes.
+- If the wrapper fails, the agent launch fails with the wrapper's error. With direnv this means an unapproved `.envrc` blocks the launch until you run `direnv allow` — note that direnv approvals are per-path, so a fresh worktree needs its own `direnv allow` (a `worktree.setup` command is a good place for it).
+- POSIX only for now; on Windows the field is ignored with a daemon-log warning.
+
 ## Manage the workspace
 
 ```bash
