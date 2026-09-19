@@ -37,7 +37,9 @@ async function hydratePreference() {
     useShortcutModStore.setState({ preference: value });
   }
 }
-void hydratePreference();
+// A device that cannot read the preference keeps the platform default; an unhandled
+// rejection here would surface as a module-load failure instead.
+void hydratePreference().catch(() => undefined);
 
 export function getShortcutModPreference(): ShortcutModPreference {
   return useShortcutModStore.getState().preference;
