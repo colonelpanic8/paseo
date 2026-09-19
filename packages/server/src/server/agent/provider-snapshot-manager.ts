@@ -54,6 +54,13 @@ import { PluginAgentClientRegistry } from "./plugin-provider.js";
 import { ProviderIntrospectionQueue } from "./provider-introspection-queue.js";
 
 const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
+/**
+ * Age at which a read revalidates a catalogue outright. Providers that publish
+ * a catalogue cache key (OpenCode) only rewrite their source when the provider
+ * runs, so a daemon that never launches one would otherwise serve the
+ * catalogue it started with forever.
+ */
+const DEFAULT_CATALOG_REVALIDATE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const MAX_REFRESH_TIMEOUT_MS = 2_147_483_647;
 const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
 const PROVIDER_REFRESH_DEADLINE_ENV = "PASEO_PROVIDER_REFRESH_TIMEOUT_MS";
@@ -123,6 +130,7 @@ export interface ProviderSnapshotManagerOptions {
   extraClients?: Partial<Record<AgentProvider, AgentClient>>;
   refreshTimeoutMs?: number;
   diagnosticTimeoutMs?: number;
+  catalogRevalidateMaxAgeMs?: number;
   openCodeBridge?: OpenCodeBridge;
 }
 
@@ -244,6 +252,8 @@ interface ProviderSnapshotTarget {
 export class ProviderSnapshotManager {
   private readonly catalogs = new Map<string, Map<AgentProvider, ProviderCatalog>>();
   private readonly targets = new Map<string, Target>();
+  private readonly revalidations = new Map<string, Promise<void>>();
+  private readonly catalogRevalidateMaxAgeMs: number;
   private readonly events = new EventEmitter();
   private destroyed = false;
   private refreshTimeoutMs: number;
@@ -279,6 +289,8 @@ export class ProviderSnapshotManager {
     this.providerOverrides = options.providerOverrides;
     this.baseProviderOverrides = options.providerOverrides;
     this.refreshTimeoutMs = providerRefreshDeadline(options.refreshTimeoutMs);
+    this.catalogRevalidateMaxAgeMs =
+      options.catalogRevalidateMaxAgeMs ?? DEFAULT_CATALOG_REVALIDATE_MAX_AGE_MS;
     this.diagnosticTimeoutMs = resolveDiagnosticTimeoutMs(
       options.diagnosticTimeoutMs,
       this.refreshTimeoutMs,
@@ -330,6 +342,54 @@ export class ProviderSnapshotManager {
         .filter((cwd) => cwd !== homeCwd)
         .map((cwd) => this.warmUp(createWorkspaceSnapshotTarget(cwd), providersToRefresh)),
     );
+  }
+
+  /**
+   * Re-checks catalogues that can tell us they changed. Providers publishing a
+   * catalogue cache key own the decision: an unchanged key costs a key lookup,
+   * a changed one re-fetches. Providers without a key keep their catalogue
+   * until someone asks for a refresh.
+   */
+  revalidateSnapshotForCwd(options: ProviderSnapshotWarmUpOptions = {}): Promise<void> {
+    const target = resolveProviderSnapshotTarget(options.cwd);
+    const { snapshotCwd } = target;
+    const inFlight = this.revalidations.get(snapshotCwd);
+    if (inFlight) return inFlight;
+    const current = this.targets.get(snapshotCwd);
+    if (this.destroyed || !current) return Promise.resolve();
+
+    const requested = this.resolveRefreshProviders(options.providers) ?? this.getProviderIds();
+    const providers = requested.filter(
+      (provider) => this.providerClients[provider]?.getCatalogCacheKey !== undefined,
+    );
+    if (providers.length === 0) return Promise.resolve();
+
+    const now = Date.now();
+    const aged = providers.filter((provider) =>
+      this.catalogIsAged(current.snapshot, provider, now),
+    );
+    const checked = providers.filter((provider) => !aged.includes(provider));
+    const revalidation = Promise.all([
+      checked.length > 0 ? this.warmUp(target, checked) : Promise.resolve(),
+      aged.length > 0 ? this.refreshProviders(target, aged) : Promise.resolve(),
+    ])
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        this.logger.debug({ err: error, snapshotCwd }, "Provider catalogue revalidation failed");
+      })
+      .finally(() => {
+        this.revalidations.delete(snapshotCwd);
+      });
+    this.revalidations.set(snapshotCwd, revalidation);
+    return revalidation;
+  }
+
+  private catalogIsAged(snapshot: ProviderSnapshot, provider: AgentProvider, now: number): boolean {
+    const fetchedAt = snapshot.records.find(({ entry }) => entry.provider === provider)?.entry
+      .fetchedAt;
+    if (!fetchedAt) return false;
+    const fetchedMs = Date.parse(fetchedAt);
+    return Number.isFinite(fetchedMs) && now - fetchedMs >= this.catalogRevalidateMaxAgeMs;
   }
 
   async warmUpSnapshotForCwd(options: ProviderSnapshotWarmUpOptions): Promise<void> {
