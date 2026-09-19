@@ -36,8 +36,12 @@ describe("normalizeStoredHostAppearance", () => {
   });
 
   it("normalizes custom hex colors and rejects invalid colors", () => {
-    expect(normalizeStoredHostAppearance({ color: "#A1b2C3" }).color).toBe("#a1b2c3");
-    expect(normalizeStoredHostAppearance({ color: "bad color" }).color).toBe("none");
+    expect(normalizeStoredHostAppearance({ color: "#A1b2C3", badgeDisplay: null }).color).toBe(
+      "#a1b2c3",
+    );
+    expect(normalizeStoredHostAppearance({ color: "bad color", badgeDisplay: null }).color).toBe(
+      "none",
+    );
   });
 });
 
