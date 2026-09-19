@@ -20,7 +20,9 @@ const percentageDisplayOptions = [
 export function ProviderUsageSettingsSection({
   view,
   onRefresh,
+  serverId,
 }: {
+  serverId: string;
   view: ProviderUsageView;
   onRefresh: () => void;
 }) {
@@ -64,7 +66,12 @@ export function ProviderUsageSettingsSection({
           />
         </View>
       </View>
-      <ProviderUsageBody view={view} onRefresh={onRefresh} percentageDisplay={percentageDisplay} />
+      <ProviderUsageBody
+        view={view}
+        onRefresh={onRefresh}
+        percentageDisplay={percentageDisplay}
+        serverId={serverId}
+      />
     </SettingsSection>
   );
 }
@@ -73,7 +80,9 @@ function ProviderUsageBody({
   view,
   onRefresh,
   percentageDisplay,
+  serverId,
 }: {
+  serverId: string;
   view: ProviderUsageView;
   onRefresh: () => void;
   percentageDisplay: ProviderUsagePercentageDisplay;
@@ -105,7 +114,11 @@ function ProviderUsageBody({
   }
 
   return (
-    <ProviderUsageList providers={view.payload.providers} percentageDisplay={percentageDisplay} />
+    <ProviderUsageList
+      providers={view.payload.providers}
+      percentageDisplay={percentageDisplay}
+      serverId={serverId}
+    />
   );
 }
 
