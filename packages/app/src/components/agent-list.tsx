@@ -24,6 +24,7 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { HighlightedText } from "@/components/ui/highlighted-text";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { findHighlightRanges } from "@/components/ui/highlighted-text-segments";
+import { useMinuteNow } from "@/hooks/use-minute-tick";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -181,7 +182,9 @@ function SessionRow({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const timeAgo = formatTimeAgo(agent.lastActivityAt);
+  // Idle agents get no prop churn, so tick to keep "Xm ago" from freezing.
+  const now = useMinuteNow();
+  const timeAgo = formatTimeAgo(agent.lastActivityAt, now);
   const agentKey = `${agent.serverId}:${agent.id}`;
   const isSelected = selectedAgentId === agentKey;
   const projectName = agent.projectPlacement?.projectName ?? "";

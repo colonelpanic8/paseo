@@ -28,7 +28,7 @@ function workspaceDescriptor(input: {
   projectId?: string;
   projectDisplayName?: string;
   status?: WorkspaceDescriptor["status"];
-  statusEnteredAt?: Date | null;
+  activityAt?: Date | null;
 }): WorkspaceDescriptor {
   return {
     id: input.id,
@@ -41,7 +41,8 @@ function workspaceDescriptor(input: {
     name: input.name ?? input.id,
     status: input.status ?? "done",
     archivingAt: null,
-    statusEnteredAt: input.statusEnteredAt ?? null,
+    statusEnteredAt: null,
+    activityAt: input.activityAt ?? null,
     diffStat: null,
     scripts: [],
   };
@@ -154,7 +155,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
               projectId: "project-1",
               projectDisplayName: "Project 1",
               status: "done",
-              statusEnteredAt: new Date("2026-01-01T00:00:00.000Z"),
+              activityAt: new Date("2026-01-01T00:00:00.000Z"),
             }),
           ],
           [
@@ -165,7 +166,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
               projectId: "project-2",
               projectDisplayName: "Project 2",
               status: "running",
-              statusEnteredAt: new Date("2026-02-01T00:00:00.000Z"),
+              activityAt: new Date("2026-02-01T00:00:00.000Z"),
             }),
           ],
           [
@@ -176,7 +177,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
               projectId: "project-1",
               projectDisplayName: "Project 1",
               status: "needs_input",
-              statusEnteredAt: new Date("2026-01-15T00:00:00.000Z"),
+              activityAt: new Date("2026-01-15T00:00:00.000Z"),
             }),
           ],
           [
@@ -187,7 +188,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
               projectId: "project-2",
               projectDisplayName: "Project 2",
               status: "running",
-              statusEnteredAt: new Date("2026-03-01T00:00:00.000Z"),
+              activityAt: new Date("2026-03-01T00:00:00.000Z"),
             }),
           ],
         ]),

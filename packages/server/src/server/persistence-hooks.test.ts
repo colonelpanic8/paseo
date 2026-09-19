@@ -3,6 +3,7 @@ import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import {
   buildConfigOverrides,
   buildSessionConfig,
+  extractTimestamps,
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
 
@@ -27,6 +28,30 @@ function createRecord(overrides?: Partial<StoredAgentRecord>): StoredAgentRecord
 }
 
 describe("persistence hooks", () => {
+  test("extractTimestamps keeps lifecycle and conversation activity separate", () => {
+    const record = createRecord({
+      updatedAt: "2026-08-01T10:05:00.000Z",
+      lastActivityAt: "2026-08-01T10:05:00.000Z",
+      lastMessageAt: "2026-08-01T09:30:00.000Z",
+    });
+
+    const timestamps = extractTimestamps(record);
+
+    expect(timestamps.updatedAt.toISOString()).toBe("2026-08-01T10:05:00.000Z");
+    expect(timestamps.lastMessageAt?.toISOString()).toBe("2026-08-01T09:30:00.000Z");
+  });
+
+  test("extractTimestamps migrates legacy records from the last user message", () => {
+    const timestamps = extractTimestamps(
+      createRecord({
+        lastMessageAt: undefined,
+        lastUserMessageAt: "2026-08-01T09:25:00.000Z",
+      }),
+    );
+
+    expect(timestamps.lastMessageAt?.toISOString()).toBe("2026-08-01T09:25:00.000Z");
+  });
+
   test("buildConfigOverrides preserves the complete private launch config", () => {
     const record = createRecord({
       title: "Voice agent (current)",
