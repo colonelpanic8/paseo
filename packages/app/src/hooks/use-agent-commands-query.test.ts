@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
 import {
   type AgentCommandsClient,
   type DraftCommandConfig,
@@ -63,5 +64,65 @@ describe("fetchAgentCommands", () => {
     await fetchAgentCommands({ client, agentId: "agent-1" });
 
     expect(client.calls).toEqual([{ agentId: "agent-1", draftConfig: undefined }]);
+  });
+
+  it("reports a failed draft listing instead of reading it as an empty catalog", async () => {
+    const client = createClient({
+      requestId: "req_commands",
+      agentId: "new-workspace",
+      error: "Codex app-server exited with code 1",
+      commands: [],
+    });
+
+    await expect(
+      fetchAgentCommands({
+        client,
+        agentId: "new-workspace",
+        draftConfig: { provider: "codex", cwd: "/repo" },
+      }),
+    ).rejects.toThrow("Codex app-server exited with code 1");
+  });
+
+  it("reports a failed session listing so it can be retried", async () => {
+    const client = createClient({
+      requestId: "req_commands",
+      agentId: "agent-1",
+      error: "Codex app-server exited with code 1",
+      commands: [],
+    });
+
+    await expect(fetchAgentCommands({ client, agentId: "agent-1" })).rejects.toThrow(
+      "Codex app-server exited with code 1",
+    );
+  });
+
+  it("recovers skills after a transient session failure instead of caching an empty list", async () => {
+    const queryClient = new QueryClient();
+    let attempts = 0;
+    const skills: ListCommandsResult["commands"] = [
+      { name: "release", description: "Release", argumentHint: "", kind: "skill" },
+    ];
+    const client: AgentCommandsClient = {
+      async listCommands() {
+        attempts += 1;
+        if (attempts === 1) {
+          return { ...commandsPayload([]), error: "Codex app-server unavailable" };
+        }
+        return commandsPayload(skills);
+      },
+    };
+
+    try {
+      const commands = await queryClient.fetchQuery({
+        queryKey: ["agentCommands", "server-1", "session", "agent-1"],
+        queryFn: () => fetchAgentCommands({ client, agentId: "agent-1" }),
+        retry: 1,
+        retryDelay: 0,
+      });
+      expect(commands).toEqual(skills);
+      expect(attempts).toBe(2);
+    } finally {
+      queryClient.clear();
+    }
   });
 });
