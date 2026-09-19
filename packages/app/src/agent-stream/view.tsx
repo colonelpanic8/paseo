@@ -163,6 +163,7 @@ function renderStreamItemWithTurnFooter(input: {
   layoutItem: StreamLayoutItem;
   strategy: TurnContentStrategy;
   supportsTimelineCursor: boolean;
+  canForkNatively: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
   formatTurnMeta?: (attribution: TurnAttribution) => string | null;
 }): ReactNode {
@@ -178,6 +179,7 @@ function renderStreamItemWithTurnFooter(input: {
       timing={footerHost.timing}
       startIndex={footerHost.startIndex}
       supportsTimelineCursor={input.supportsTimelineCursor}
+      canForkNatively={input.canForkNatively}
       onForkAssistantTurn={input.onForkAssistantTurn}
       formatTurnMeta={input.formatTurnMeta}
     />
@@ -314,6 +316,7 @@ const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
   "supportsRewindConversation",
   "supportsRewindFiles",
   "supportsRewindBoth",
+  "supportsNativeFork",
 ];
 
 const EMPTY_STREAM_HEAD: StreamItem[] = [];
@@ -342,6 +345,10 @@ function useRunningTurnModelDisplay(serverId: string, context: AgentScreenAgent)
     thinkingOptionId: context.thinkingOptionId,
     effectiveThinkingOptionId: context.effectiveThinkingOptionId,
   });
+}
+
+function supportsNativeFork(context: AgentScreenAgent, readOnly: boolean): boolean {
+  return Boolean(context.capabilities?.supportsNativeFork) && !readOnly;
 }
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
@@ -523,6 +530,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       handleInlinePathPress({ raw: filePath, path: filePath }, "preferred");
     });
 
+    // Provider-session forking is only meaningful for a live agent that
+    // reports the capability; the summary path covers everything else.
+    const canForkNatively = supportsNativeFork(context, readOnly);
+
     const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(
       async ({ target, boundary }) => {
         await forkAgent({
@@ -531,6 +542,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           workspaceId: context.workspaceId,
           target,
           boundary,
+          canForkNatively,
         });
       },
     );
@@ -967,12 +979,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           layoutItem,
           strategy: streamRenderStrategy,
           supportsTimelineCursor: supportsAgentForkContextCursor,
+          canForkNatively,
           onForkAssistantTurn: readOnly ? undefined : handleForkAssistantTurn,
           formatTurnMeta,
         });
       },
       [
         formatTurnMeta,
+        canForkNatively,
         handleForkAssistantTurn,
         readOnly,
         renderStreamItemContent,
@@ -1006,12 +1020,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             host={bottomTurnFooterHost}
             strategy={streamRenderStrategy}
             supportsTimelineCursor={supportsAgentForkContextCursor}
+            canForkNatively={canForkNatively}
             onForkAssistantTurn={readOnly ? undefined : handleForkAssistantTurn}
             onForkInFlightTurn={readOnly ? undefined : handleForkInFlightTurn}
           />
         ) : null,
       [
         formatTurnMeta,
+        canForkNatively,
         handleForkAssistantTurn,
         handleForkInFlightTurn,
         readOnly,
