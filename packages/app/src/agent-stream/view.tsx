@@ -772,6 +772,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
       const session = useSessionStore.getState().sessions[resolvedServerId];
+      const activeTurn = session?.agents.get(agentId)?.turn;
       await dispatchComposerAgentMessage({
         client,
         agentId,
@@ -780,7 +781,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         encodeImages,
         submission: createMessageSubmissionWriter(resolvedServerId),
         activeTurnBehavior: "steer",
-        activeTurnId: session?.agents.get(agentId)?.activeTurn?.turnId ?? undefined,
+        activeTurnId: activeTurn?.phase === "open" ? (activeTurn.turnId ?? undefined) : undefined,
       });
     });
 

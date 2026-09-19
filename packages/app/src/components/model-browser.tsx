@@ -79,7 +79,7 @@ import {
   groupProfilesByProviderModel,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
-  resolveModelBrowserScrolling,
+  clampModelBrowserScrolling,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
 import {
@@ -1987,7 +1987,7 @@ export function ModelBrowser({
       onShowAllModels={state.showAllModels}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
-      scrolling={resolveModelBrowserScrolling(scrolling, insideBottomSheet)}
+      scrolling={clampModelBrowserScrolling(scrolling, insideBottomSheet)}
       searchAllOnFocus={searchAllOnFocus}
       rootBrowseContent={rootBrowseContent}
       showProfilesSection={showProfilesSection}
