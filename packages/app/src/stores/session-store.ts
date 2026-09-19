@@ -237,15 +237,30 @@ function preserveWorkspaceMapIdentity(
   return changed ? next : existing;
 }
 
-function projectMapsEqual(
-  left: ReadonlyMap<string, ProjectDescriptor>,
-  right: ReadonlyMap<string, ProjectDescriptor>,
-): boolean {
-  if (left.size !== right.size) return false;
-  for (const [projectId, project] of right) {
-    if (!equal(left.get(projectId), project)) return false;
+// A snapshot that re-sends an unchanged project must not hand out a new object: every
+// consumer keyed on identity would re-render for nothing.
+function preserveProjectMapIdentity(
+  existing: Map<string, ProjectDescriptor>,
+  incoming: Map<string, ProjectDescriptor>,
+): Map<string, ProjectDescriptor> {
+  if (existing === incoming) return existing;
+
+  const next = new Map<string, ProjectDescriptor>();
+  let changed = existing.size !== incoming.size;
+  const existingEntries = existing.entries();
+
+  for (const [key, project] of incoming) {
+    const existingProject = existing.get(key);
+    const nextProject =
+      existingProject && equal(existingProject, project) ? existingProject : project;
+    next.set(key, nextProject);
+    const existingEntry = existingEntries.next().value;
+    if (!existingEntry || existingEntry[0] !== key || existingEntry[1] !== nextProject) {
+      changed = true;
+    }
   }
-  return true;
+
+  return changed ? next : existing;
 }
 
 export type ExplorerEntryKind = "file" | "directory";
@@ -1629,10 +1644,15 @@ export const useSessionStore = create<SessionStore>()(
         for (const project of projects) next.set(project.projectId, project);
         set((prev) => {
           const session = prev.sessions[serverId];
-          if (!session || projectMapsEqual(session.projects, next)) return prev;
+          if (!session) return prev;
+          const preservedProjects = preserveProjectMapIdentity(session.projects, next);
+          if (session.projects === preservedProjects) return prev;
           return {
             ...prev,
-            sessions: { ...prev.sessions, [serverId]: { ...session, projects: next } },
+            sessions: {
+              ...prev.sessions,
+              [serverId]: { ...session, projects: preservedProjects },
+            },
           };
         });
       },
