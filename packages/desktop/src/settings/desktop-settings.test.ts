@@ -6,8 +6,24 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_DESKTOP_SETTINGS,
   type DesktopSettings,
-  createDesktopSettingsStore,
+  createDesktopSettingsStore as createDesktopSettingsStoreForPlatform,
 } from "./desktop-settings";
+import { loadSettingsSeed } from "./settings-seed";
+
+function createDesktopSettingsStore(
+  options: Parameters<typeof createDesktopSettingsStoreForPlatform>[0],
+) {
+  return createDesktopSettingsStoreForPlatform({
+    ...options,
+    loadSeed:
+      options.loadSeed ??
+      (() =>
+        loadSettingsSeed({
+          userDataPath: options.userDataPath,
+          platform: "darwin",
+        })),
+  });
+}
 
 async function createTempUserDataDir(): Promise<string> {
   return await mkdtemp(path.join(os.tmpdir(), "paseo-desktop-settings-"));
