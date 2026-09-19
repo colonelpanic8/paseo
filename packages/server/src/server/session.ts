@@ -7902,6 +7902,43 @@ export class Session {
     }
   }
 
+  /**
+   * Clear one agent's attention on behalf of its workspace, dismissing a failed state too.
+   * Returns whether anything changed.
+   */
+  private async clearAgentAttentionForWorkspace(
+    agentId: string,
+    workspace: PersistedWorkspaceRecord,
+  ): Promise<boolean> {
+    const dismissedError = await this.agentManager.dismissAgentError(agentId);
+    if (this.agentManager.getAgent(agentId)) {
+      await this.agentManager.clearAgentAttention(agentId);
+      return true;
+    }
+
+    const record = await this.agentStorage.get(agentId);
+    if (!record || record.internal || record.archivedAt || record.requiresAttention !== true) {
+      return dismissedError;
+    }
+    const nextRecord: StoredAgentRecord = {
+      ...record,
+      updatedAt: new Date().toISOString(),
+      requiresAttention: false,
+      attentionReason: null,
+      attentionTimestamp: null,
+    };
+    await this.agentStorage.upsert(nextRecord);
+    this.emit({
+      type: "agent_update",
+      payload: {
+        kind: "upsert",
+        agent: this.buildStoredAgentPayload(nextRecord),
+        project: await this.buildProjectPlacementForWorkspace(workspace),
+      },
+    });
+    return true;
+  }
+
   private async handleWorkspaceClearAttentionRequest(
     request: Extract<SessionInboundMessage, { type: "workspace.clear_attention.request" }>,
   ): Promise<void> {
@@ -7949,50 +7986,21 @@ export class Session {
         // Clearing attention is scoped to the workspace that OWNS the agent, by
         // workspaceId — never by comparing cwd strings. A sibling workspace
         // sharing the same directory keeps its own agents' attention.
+        // A failed agent is included even once its attention flag is gone: the error
+        // lifecycle alone keeps the workspace rendering as failed, so clearing is the
+        // only way to dismiss it short of prompting the agent again.
         const clearableAgentIds = agents
           .filter((agent) => !agent.archivedAt)
           .filter((agent) => agent.workspaceId === workspace.workspaceId)
-          .filter((agent) => agent.requiresAttention === true)
+          .filter((agent) => agent.requiresAttention === true || agent.status === "error")
           .filter((agent) => (agent.pendingPermissions?.length ?? 0) === 0)
           .filter((agent) => agent.attentionReason !== "permission")
           .map((agent) => agent.id);
 
         for (const agentId of clearableAgentIds) {
-          const liveAgent = this.agentManager.getAgent(agentId);
-          if (liveAgent) {
-            await this.agentManager.clearAgentAttention(agentId);
+          if (await this.clearAgentAttentionForWorkspace(agentId, workspace)) {
             clearedAgentIds.push(agentId);
-            continue;
           }
-
-          const record = await this.agentStorage.get(agentId);
-          if (
-            !record ||
-            record.internal ||
-            record.archivedAt ||
-            record.requiresAttention !== true
-          ) {
-            continue;
-          }
-          const nextRecord: StoredAgentRecord = {
-            ...record,
-            updatedAt: new Date().toISOString(),
-            requiresAttention: false,
-            attentionReason: null,
-            attentionTimestamp: null,
-          };
-          await this.agentStorage.upsert(nextRecord);
-          const agent = this.buildStoredAgentPayload(nextRecord);
-          const project = await this.buildProjectPlacementForWorkspace(workspace);
-          this.emit({
-            type: "agent_update",
-            payload: {
-              kind: "upsert",
-              agent,
-              project,
-            },
-          });
-          clearedAgentIds.push(agentId);
         }
 
         await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
