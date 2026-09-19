@@ -12,6 +12,7 @@ interface Mounted {
   container: HTMLDivElement;
   textarea: HTMLTextAreaElement;
   latest: () => ComposerHeightResult;
+  textRef: { current: string };
   setValue: (value: string) => void;
 }
 
@@ -45,16 +46,19 @@ const TEXTAREA_STYLE: React.CSSProperties = {
 };
 
 function Probe({
-  value,
+  textRef,
   sink,
   textareaRef,
 }: {
-  value: string;
+  textRef: { current: string };
   sink: ResultSink;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
+  // The composer holds live text in a ref and reports every edit through onTextChange, so the
+  // hook reads the text through a stable getter rather than a prop.
+  const getText = React.useCallback(() => textRef.current, [textRef]);
   const result = useComposerHeight({
-    value,
+    getText,
     textareaRef,
     minHeight: MIN_HEIGHT,
     maxHeight: MAX_HEIGHT,
@@ -64,16 +68,16 @@ function Probe({
     () => ({ ...TEXTAREA_STYLE, height: measuredHeight(result) }),
     [result],
   );
-  return <textarea ref={textareaRef} value={value} readOnly style={style} />;
+  return <textarea ref={textareaRef} value={textRef.current} readOnly style={style} />;
 }
 
 function renderProbe(
   root: Root,
-  value: string,
+  textRef: { current: string },
   sink: ResultSink,
   textareaRef: React.RefObject<HTMLTextAreaElement | null>,
 ): void {
-  root.render(<Probe value={value} sink={sink} textareaRef={textareaRef} />);
+  root.render(<Probe textRef={textRef} sink={sink} textareaRef={textareaRef} />);
 }
 
 function mountProbe(): Mounted {
@@ -82,7 +86,8 @@ function mountProbe(): Mounted {
   const root = createRoot(container);
   const textareaRef = React.createRef<HTMLTextAreaElement | null>();
   const sink = createResultSink();
-  act(() => renderProbe(root, "", sink, textareaRef));
+  const textRef = { current: "" };
+  act(() => renderProbe(root, textRef, sink, textareaRef));
   const textarea = container.querySelector("textarea");
   if (!textarea) throw new Error("Probe did not render a textarea");
   const entry: Mounted = {
@@ -90,7 +95,14 @@ function mountProbe(): Mounted {
     container,
     textarea,
     latest: sink.latest,
-    setValue: (value) => act(() => renderProbe(root, value, sink, textareaRef)),
+    textRef,
+    setValue: (value) =>
+      act(() => {
+        const result = sink.latest();
+        if (result.mode === "measured") result.onTextChange(textRef.current, value);
+        textRef.current = value;
+        renderProbe(root, textRef, sink, textareaRef);
+      }),
   };
   mounted.push(entry);
   return entry;
@@ -109,7 +121,10 @@ function typeIntoComposer(probe: Mounted, text: string): void {
   let previous = "";
   for (let length = 1; length <= text.length; length += 1) {
     const next = text.slice(0, length);
-    act(() => result.onTextChange(previous, next));
+    act(() => {
+      result.onTextChange(previous, next);
+      probe.textRef.current = next;
+    });
     previous = next;
   }
 }
