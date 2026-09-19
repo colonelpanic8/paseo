@@ -24,13 +24,13 @@ describe("startLiveVoiceCall", () => {
     expect(launcherRequests).toBe(1);
   });
 
-  it("starts the requested assistant without opening the launcher after success", async () => {
+  it("starts the requested profile without opening the launcher after success", async () => {
     const calls: Call[] = [];
     let launcherRequests = 0;
 
     await startLiveVoiceCall({
       serverId: "host-a",
-      options: { assistantId: "assistant-a" },
+      options: { profileId: "cfg_a" },
       start: async (serverId, options) => {
         calls.push({ serverId, options });
       },
@@ -39,7 +39,7 @@ describe("startLiveVoiceCall", () => {
       },
     });
 
-    expect(calls).toEqual([{ serverId: "host-a", options: { assistantId: "assistant-a" } }]);
+    expect(calls).toEqual([{ serverId: "host-a", options: { profileId: "cfg_a" } }]);
     expect(launcherRequests).toBe(0);
   });
 });

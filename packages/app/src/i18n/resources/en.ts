@@ -1841,6 +1841,22 @@ export const en = {
       unknown: "The microphone is in use. Stop the other audio feature first.",
     },
   },
+  dispatch: {
+    label: "Dispatch",
+    listening: "Listening…",
+    sending: "Sending…",
+    sent: "Sent to {{target}}",
+    send: "Send",
+    cancel: "Cancel",
+    dismiss: "Dismiss",
+    defaultTarget: "your dispatch agent",
+    errors: {
+      noTarget: "Set a dispatch agent in Settings first.",
+      hostOffline: "The dispatch agent's host is offline.",
+      nothingHeard: "Didn't hear anything.",
+      sendFailed: "Couldn't reach your dispatch agent.",
+    },
+  },
   liveVoice: {
     label: "Live voice",
     menu: {
@@ -1872,13 +1888,24 @@ export const en = {
         description: "Used for new calls. An active call keeps its current voice.",
         default: "Default",
       },
+      quickLaunch: {
+        hostLabel: "Shortcut host",
+        description:
+          "The host a paseo://live-voice shortcut calls. Automatic uses the only eligible host.",
+        auto: "Automatic",
+        profileLabel: "Shortcut profile",
+        profileHint:
+          "Which profile answers a shortcut call on that host. Same selection as the Live voice menu.",
+        hostDefault: "Host default",
+      },
       dispatch: {
         hostLabel: "Dispatch host",
-        description: "Choose the host for one-shot prompts from your watch.",
+        description:
+          "Choose the host for one-shot prompts from your watch or a paseo://dispatch shortcut.",
         chooseHost: "Choose host",
         noHosts: "No hosts available",
         agentLabel: "Dispatch agent",
-        agentHint: "Spoken watch prompts are sent to this agent.",
+        agentHint: "Spoken prompts from your watch or a shortcut are sent to this agent.",
         notSet: "Not set",
         clear: "Not set",
         noAgents: "No agents on this host",

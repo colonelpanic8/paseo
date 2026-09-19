@@ -13,7 +13,8 @@ const NOW = 1_750_000_000_000;
 
 const IDLE: LiveVoiceSnapshot = {
   phase: "idle",
-  assistantId: null,
+  profileId: null,
+  threadId: null,
   serverId: null,
   liveSessionId: null,
   isMuted: false,

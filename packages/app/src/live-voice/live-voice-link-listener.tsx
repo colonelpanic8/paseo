@@ -1,5 +1,6 @@
 import * as Linking from "expo-linking";
 import { useEffect, useState } from "react";
+import { useAppVisible } from "@/hooks/use-app-visible";
 import { isNative } from "@/constants/platform";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
 import {
@@ -17,12 +18,48 @@ import {
   resolveLiveVoiceLinkHost,
   type LiveVoiceLink,
 } from "@/live-voice/live-voice-link";
+import { matchLinkProfile } from "@/live-voice/live-voice-link-profile";
+import type { LiveVoiceStartOptions } from "@/live-voice/live-voice-runtime";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { useLiveVoiceSettingsStore } from "@/stores/live-voice-settings-store";
+import { useSessionStore } from "@/stores/session-store";
+
+/**
+ * A link that names a profile starts with exactly that one, or with the host
+ * default if the name matches nothing: a shortcut wired to "Reviewer" must not
+ * silently call whatever the launcher last selected. A link without one
+ * defers to the launcher's selection.
+ */
+async function resolveLinkStartOptions(
+  serverId: string,
+  link: LiveVoiceLink,
+): Promise<LiveVoiceStartOptions> {
+  if (!link.profile) {
+    return {};
+  }
+  const client = useSessionStore.getState().sessions[serverId]?.client ?? null;
+  if (!client) {
+    return { profileId: null };
+  }
+  try {
+    const { profiles } = await client.listVoiceProfiles();
+    const profileId = matchLinkProfile(profiles, link.profile);
+    if (!profileId) {
+      console.warn("[Linking] Live Voice link named an unknown profile", link.profile);
+    }
+    return { profileId };
+  } catch (error) {
+    console.warn("[Linking] Could not resolve the Live Voice link profile", error);
+    return { profileId: null };
+  }
+}
 
 export function LiveVoiceLinkListener() {
   const liveVoice = useLiveVoiceOptional();
+  const isAppVisible = useAppVisible();
   const availability = useLiveVoiceAvailability();
   const hosts = useLiveVoiceHostAvailability();
+  const defaultHost = useLiveVoiceSettingsStore((state) => state.quickLaunchServerId);
   const [pendingLink, setPendingLink] = useState<LiveVoiceLink | null>(null);
   const [isHostBootstrapReady, setIsHostBootstrapReady] = useState(false);
 
@@ -96,7 +133,9 @@ export function LiveVoiceLinkListener() {
 
     const decision = resolveLiveVoiceLinkHost({
       link: pendingLink,
+      defaultHost,
       isHostBootstrapReady,
+      isAppVisible,
       availability,
       hosts,
     });
@@ -109,8 +148,26 @@ export function LiveVoiceLinkListener() {
       requestLiveVoiceLauncher();
       return;
     }
-    startLiveVoiceCall(liveVoice.start, decision.serverId);
-  }, [availability, hosts, isHostBootstrapReady, liveVoice, pendingLink]);
+    const link = pendingLink;
+    const startWithLinkOptions = async () => {
+      const options = await resolveLinkStartOptions(decision.serverId, link);
+      await startLiveVoiceCall({
+        start: liveVoice.start,
+        serverId: decision.serverId,
+        options,
+        showLauncher: requestLiveVoiceLauncher,
+      });
+    };
+    void startWithLinkOptions();
+  }, [
+    availability,
+    defaultHost,
+    hosts,
+    isAppVisible,
+    isHostBootstrapReady,
+    liveVoice,
+    pendingLink,
+  ]);
 
   return null;
 }

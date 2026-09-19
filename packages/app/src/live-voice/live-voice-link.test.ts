@@ -25,13 +25,17 @@ function host(overrides: Partial<LiveVoiceHostAvailability> = {}): LiveVoiceHost
 
 function decide(input: {
   link?: LiveVoiceLink;
+  defaultHost?: string | null;
   isHostBootstrapReady?: boolean;
+  isAppVisible?: boolean;
   availability: LiveVoiceAvailability;
   hosts?: LiveVoiceHostAvailability[];
 }) {
   return resolveLiveVoiceLinkHost({
-    link: input.link ?? { host: null },
+    link: input.link ?? { host: null, profile: null },
+    defaultHost: input.defaultHost ?? null,
     isHostBootstrapReady: input.isHostBootstrapReady ?? true,
+    isAppVisible: input.isAppVisible ?? true,
     availability: input.availability,
     hosts: input.hosts ?? input.availability.hosts,
   });
@@ -39,12 +43,20 @@ function decide(input: {
 
 describe("parseLiveVoiceLink", () => {
   it("parses the Live Voice link without a host", () => {
-    expect(parseLiveVoiceLink("paseo://live-voice")).toEqual({ host: null });
+    expect(parseLiveVoiceLink("paseo://live-voice")).toEqual({ host: null, profile: null });
   });
 
   it("parses and decodes an explicit host", () => {
     expect(parseLiveVoiceLink("paseo://live-voice?host=host%2Fremote")).toEqual({
       host: "host/remote",
+      profile: null,
+    });
+  });
+
+  it("parses a profile reference", () => {
+    expect(parseLiveVoiceLink("paseo://live-voice?profile=Chief%20of%20staff")).toEqual({
+      host: null,
+      profile: "Chief of staff",
     });
   });
 
@@ -59,6 +71,17 @@ describe("parseLiveVoiceLink", () => {
 });
 
 describe("resolveLiveVoiceLinkHost", () => {
+  it("holds a shortcut until Paseo is visible, then starts the eligible host", () => {
+    const available = host();
+    const availability: LiveVoiceAvailability = { kind: "available", hosts: [available] };
+
+    expect(decide({ availability, isAppVisible: false })).toEqual({ kind: "wait" });
+    expect(decide({ availability, isAppVisible: true })).toEqual({
+      kind: "start",
+      serverId: available.serverId,
+    });
+  });
+
   it("waits for host bootstrap before deciding", () => {
     expect(
       decide({
@@ -85,7 +108,7 @@ describe("resolveLiveVoiceLinkHost", () => {
 
     expect(
       decide({
-        link: { host: "host-b" },
+        link: { host: "host-b", profile: null },
         availability: { kind: "available", hosts: [hostA, hostB] },
       }),
     ).toEqual({ kind: "start", serverId: "host-b" });
@@ -102,7 +125,7 @@ describe("resolveLiveVoiceLinkHost", () => {
 
     expect(
       decide({
-        link: { host: "host-b" },
+        link: { host: "host-b", profile: null },
         availability: { kind: "available", hosts: [readyHost] },
         hosts: [readyHost, connectingHost],
       }),
@@ -114,7 +137,7 @@ describe("resolveLiveVoiceLinkHost", () => {
 
     expect(
       decide({
-        link: { host: "host-b" },
+        link: { host: "host-b", profile: null },
         isHostBootstrapReady: false,
         availability: { kind: "available", hosts: [available] },
       }),
@@ -131,7 +154,7 @@ describe("resolveLiveVoiceLinkHost", () => {
 
     expect(
       decide({
-        link: { host: "host-b" },
+        link: { host: "host-b", profile: null },
         availability: { kind: "available", hosts: [available] },
         hosts: [available, offline],
       }),
@@ -145,6 +168,31 @@ describe("resolveLiveVoiceLinkHost", () => {
       kind: "start",
       serverId: "host-a",
     });
+  });
+
+  it("uses the quick-launch host from settings when the link names none", () => {
+    const hostA = host();
+    const hostB = host({ serverId: "host-b", label: "Host B" });
+
+    expect(
+      decide({
+        defaultHost: "host-b",
+        availability: { kind: "available", hosts: [hostA, hostB] },
+      }),
+    ).toEqual({ kind: "start", serverId: "host-b" });
+  });
+
+  it("lets the link's host override the quick-launch host", () => {
+    const hostA = host();
+    const hostB = host({ serverId: "host-b", label: "Host B" });
+
+    expect(
+      decide({
+        link: { host: "host-a", profile: null },
+        defaultHost: "host-b",
+        availability: { kind: "available", hosts: [hostA, hostB] },
+      }),
+    ).toEqual({ kind: "start", serverId: "host-a" });
   });
 
   it("shows the launcher instead of guessing between eligible hosts", () => {
@@ -199,7 +247,7 @@ describe("Live Voice native routing", () => {
     (initial) => {
       const path = "paseo://live-voice/?host=host%2Fremote";
       expect(redirectSystemPath({ path, initial })).toBe(initial ? "/" : "");
-      expect(parseLiveVoiceLink(path)).toEqual({ host: "host/remote" });
+      expect(parseLiveVoiceLink(path)).toEqual({ host: "host/remote", profile: null });
     },
   );
 
