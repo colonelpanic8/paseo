@@ -63,6 +63,21 @@ import {
 } from "./agent/create-agent-title.js";
 import { respondToAgentPermission } from "./agent/permission-response.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
+import type { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
+import type { VoiceProfileStore } from "./voice-profiles/voice-profile-store.js";
+import type { VoiceThreadStore } from "./voice-profiles/voice-thread-store.js";
+import type { VoiceProfileRequest } from "@getpaseo/protocol/voice-profiles";
+import {
+  VoiceProfileRequestError,
+  handleVoiceProfileRequest,
+} from "./voice-profiles/voice-profile-rpc.js";
+import type { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import type {
+  LiveVoiceToolExecutionContext,
+  LiveVoiceToolExecutor,
+} from "./live-voice/live-voice-tool-executor.js";
+import type { LiveVoiceAgentNotifier } from "./live-voice/live-voice-agent-notifier.js";
+import { formatLiveVoiceAgentNotification } from "./live-voice/live-voice-agent-message.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
@@ -423,6 +438,11 @@ export interface SessionFileSystem {
   isDirectory(path: string): Promise<boolean>;
 }
 
+type VoiceLiveStartResponsePayload = Extract<
+  SessionOutboundMessage,
+  { type: "voice.live.start.response" }
+>["payload"];
+
 const nodeSessionFileSystem: SessionFileSystem = {
   async isDirectory(path) {
     const stats = await stat(path).catch(() => null);
@@ -430,12 +450,35 @@ const nodeSessionFileSystem: SessionFileSystem = {
   },
 };
 
+function optionalService<T>(value: T | undefined): T | null {
+  return value ?? null;
+}
+
 // Stub types for features under development (modules not yet available)
 type AgentMcpTransportFactory = () => Promise<unknown>;
+
+/** Which profile and thread a start request names, with absent ones dropped. */
+function resolveLiveVoiceMemoryFields(msg: {
+  profileId?: string | undefined;
+  threadId?: string | undefined;
+  newThread?: boolean | undefined;
+}): { profileId?: string; threadId?: string; newThread?: true } {
+  return {
+    ...(msg.profileId ? { profileId: msg.profileId } : {}),
+    ...(msg.threadId ? { threadId: msg.threadId } : {}),
+    ...(msg.newThread ? { newThread: true } : {}),
+  };
+}
 
 export interface SessionOptions {
   browserToolsBroker?: BrowserToolsBroker | null;
   clientId: string;
+  /**
+   * The admitted principal this session acts for. Set by the socket layer from
+   * admission, never from anything the client sends. Absent means no principal
+   * is known and principal-scoped features fail closed.
+   */
+  principalId?: string;
   permissions: readonly DaemonPermission[];
   appVersion?: string | null;
   clientCapabilities?: Record<string, unknown> | null;
@@ -533,6 +576,14 @@ export interface SessionOptions {
   voice?: {
     turnDetection?: Resolvable<TurnDetectionProvider | null>;
   };
+  /** Daemon-global; shared by every session so call ownership is socket-exact. */
+  liveVoiceCoordinator?: LiveVoiceCoordinator;
+  /** Daemon-global, principal-scoped; every call goes through the trusted principal above. */
+  voiceProfileStore?: VoiceProfileStore;
+  voiceThreadStore?: VoiceThreadStore;
+  liveVoiceRouteBroker?: LiveVoiceRouteBroker;
+  liveVoiceToolExecutor?: LiveVoiceToolExecutor;
+  liveVoiceAgentNotifier?: LiveVoiceAgentNotifier;
   voiceBridge?: {
     registerVoiceSpeakHandler?: (agentId: string, handler: VoiceSpeakHandler) => void;
     unregisterVoiceSpeakHandler?: (agentId: string) => void;
@@ -775,6 +826,13 @@ export class Session {
   private readonly workspaceGitObserver: WorkspaceGitObserverService;
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly voiceSessions: VoiceSessions;
+  private readonly liveVoice: LiveVoiceCoordinator | undefined;
+  private readonly principalId: string | null;
+  private readonly voiceProfileStore: VoiceProfileStore | null;
+  private readonly voiceThreadStore: VoiceThreadStore | null;
+  private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker | null;
+  private readonly liveVoiceToolExecutor: LiveVoiceToolExecutor | null;
+  private readonly liveVoiceAgentNotifier: LiveVoiceAgentNotifier | null;
   private readonly checkoutSession: CheckoutSession;
   private readonly scheduleSession: ScheduleSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
@@ -839,6 +897,13 @@ export class Session {
       resolveScriptHealth,
       voice,
       voiceBridge,
+      liveVoiceCoordinator,
+      liveVoiceRouteBroker,
+      liveVoiceToolExecutor,
+      liveVoiceAgentNotifier,
+      voiceProfileStore,
+      voiceThreadStore,
+      principalId,
       dictation,
       serverId,
       daemonVersion,
@@ -1190,6 +1255,13 @@ export class Session {
       this.delivery,
       () => this.refreshObservationProducers(),
     );
+    this.liveVoice = liveVoiceCoordinator;
+    this.principalId = optionalService(principalId);
+    this.voiceProfileStore = optionalService(voiceProfileStore);
+    this.voiceThreadStore = optionalService(voiceThreadStore);
+    this.liveVoiceRouteBroker = optionalService(liveVoiceRouteBroker);
+    this.liveVoiceToolExecutor = optionalService(liveVoiceToolExecutor);
+    this.liveVoiceAgentNotifier = optionalService(liveVoiceAgentNotifier);
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -2218,6 +2290,17 @@ export class Session {
     this.emit(message);
   }
 
+  private dispatchVoiceMessage(
+    msg: SessionInboundMessage,
+    source?: object,
+  ): Promise<void> | undefined {
+    return (
+      this.dispatchVoiceAndControlMessage(msg) ??
+      this.dispatchLiveVoiceMessage(msg, source) ??
+      this.dispatchAssistantMessage(msg, source)
+    );
+  }
+
   private async registerBrowserHost(
     request: Extract<SessionInboundMessage, { type: "browser.host.register.request" }>,
     respond = true,
@@ -2271,7 +2354,7 @@ export class Session {
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
       this.dispatchSubscriptionMessage(msg, source) ??
-      this.dispatchVoiceAndControlMessage(msg) ??
+      this.dispatchVoiceMessage(msg, source) ??
       this.dispatchAgentRewindMessage(msg, source) ??
       this.dispatchAgentRelationshipMessage(msg) ??
       this.dispatchAgentTimelineMessage(msg, source) ??
@@ -2581,6 +2664,314 @@ export class Session {
       default:
         return undefined;
     }
+  }
+
+  private dispatchLiveVoiceMessage(
+    msg: SessionInboundMessage,
+    source?: object,
+  ): Promise<void> | undefined {
+    switch (msg.type) {
+      case "voice.live.start.request":
+        return this.handleLiveVoiceStartRequest(msg, source);
+      case "voice.live.stop.request":
+        this.handleLiveVoiceStopRequest(msg, source);
+        return undefined;
+      case "voice.live.voices.request":
+        return this.handleLiveVoiceVoicesRequest(msg, source);
+      case "voice.live.route.response":
+        this.liveVoiceRouteBroker?.receiveResponse(msg, this);
+        return undefined;
+      case "voice.live.tool.execute.request":
+        return this.handleLiveVoiceToolExecuteRequest(msg, source);
+      case "voice.live.agent.notify.request":
+        return this.handleLiveVoiceAgentNotifyRequest(msg, source);
+      case "voice.live.agent.watch.request":
+        this.handleLiveVoiceAgentWatchRequest(msg, source);
+        return undefined;
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchAssistantMessage(
+    msg: SessionInboundMessage,
+    source?: object,
+  ): Promise<void> | undefined {
+    switch (msg.type) {
+      case "voice.profile.list.request":
+      case "voice.profile.save.request":
+      case "voice.profile.delete.request":
+      case "voice.thread.list.request":
+      case "voice.thread.get.request":
+      case "voice.thread.update.request":
+      case "voice.thread.compact.request":
+      case "voice.thread.delete.request":
+        return this.handleVoiceProfileRpc(msg, source);
+      default:
+        return undefined;
+    }
+  }
+
+  private async handleVoiceProfileRpc(msg: VoiceProfileRequest, source?: object): Promise<void> {
+    try {
+      const response = await handleVoiceProfileRequest(
+        {
+          profiles: this.voiceProfileStore,
+          threads: this.voiceThreadStore,
+          principalId: this.principalId,
+        },
+        msg,
+      );
+      this.emitForSource(response, source);
+    } catch (error) {
+      const code =
+        error instanceof VoiceProfileRequestError ? error.code : "voice_profile_request_failed";
+      const message = error instanceof Error ? error.message : "Voice profile request failed";
+      if (!(error instanceof VoiceProfileRequestError)) {
+        this.sessionLogger.error({ err: error, requestType: msg.type }, "voice_profile.rpc.failed");
+      }
+      this.emitForSource(
+        {
+          type: "rpc_error",
+          payload: { requestId: msg.requestId, requestType: msg.type, error: message, code },
+        },
+        source,
+      );
+    }
+  }
+
+  private async handleLiveVoiceVoicesRequest(
+    msg: Extract<SessionInboundMessage, { type: "voice.live.voices.request" }>,
+    source?: object,
+  ): Promise<void> {
+    const catalog = await this.agentManager.listLiveVoiceVoices();
+    this.emitForSource(
+      {
+        type: "voice.live.voices.response",
+        payload: { requestId: msg.requestId, voices: catalog.voices },
+      },
+      source,
+    );
+  }
+
+  /**
+   * Turns the ambient watch over every agent on this daemon on or off for one
+   * socket. Scoped to the socket rather than the session so it dies with the
+   * connection, exactly like the per-work watches beside it.
+   */
+  private handleLiveVoiceAgentWatchRequest(
+    msg: Extract<SessionInboundMessage, { type: "voice.live.agent.watch.request" }>,
+    source?: object,
+  ): void {
+    const notifier = this.liveVoiceAgentNotifier;
+    const sourceKey = source ?? this;
+    if (!notifier) {
+      this.emitForSource(
+        {
+          type: "voice.live.agent.watch.response",
+          payload: {
+            requestId: msg.requestId,
+            enabled: false,
+            error: {
+              code: "unsupported",
+              message: "This daemon does not report agent activity to Live Voice.",
+            },
+          },
+        },
+        source,
+      );
+      return;
+    }
+    if (msg.enabled) {
+      notifier.watchAll({ sourceKey, emit: (update) => this.emitForSource(update, source) });
+    } else {
+      notifier.stopWatchingAll(sourceKey);
+    }
+    this.emitForSource(
+      {
+        type: "voice.live.agent.watch.response",
+        payload: { requestId: msg.requestId, enabled: notifier.isWatchingAll(sourceKey) },
+      },
+      source,
+    );
+  }
+
+  private async handleLiveVoiceStartRequest(
+    msg: Extract<SessionInboundMessage, { type: "voice.live.start.request" }>,
+    source?: object,
+  ): Promise<void> {
+    const respond = (payload: VoiceLiveStartResponsePayload): void => {
+      this.emitForSource({ type: "voice.live.start.response", payload }, source);
+    };
+    const coordinator = this.liveVoice;
+    if (!coordinator) {
+      respond({
+        requestId: msg.requestId,
+        accepted: false,
+        errorCode: "unsupported",
+        errorMessage: "This daemon does not support live voice.",
+      });
+      return;
+    }
+    const capabilitySourceKey = source ?? this;
+    const crossHostRoutingAvailable = this.supportsForSource(
+      CLIENT_CAPS.liveVoiceCrossHostRouter,
+      capabilitySourceKey,
+    );
+    const voiceCatalog = msg.voice ? await this.agentManager.listLiveVoiceVoices() : null;
+    const voice = voiceCatalog?.voices.includes(msg.voice ?? "") ? msg.voice : undefined;
+    // The reconnectable client session owns the call. Android may suspend the
+    // control socket while its native WebRTC media path and foreground service
+    // remain healthy, so updates and routed requests follow the session across
+    // socket replacement.
+    const result = await coordinator.start({
+      offerSdp: msg.negotiation.offerSdp,
+      ...(voice ? { voice } : {}),
+      owner: { sessionKey: this, ...(this.principalId ? { principalId: this.principalId } : {}) },
+      // The coordinator resolves the profile's configuration server-side and
+      // ignores the per-call overrides below when one applies.
+      ...resolveLiveVoiceMemoryFields(msg),
+      emit: (update) => {
+        this.emit({ type: "voice.live.update", payload: update });
+      },
+      ...(crossHostRoutingAvailable
+        ? {
+            sendRouteRequest: (request) => {
+              this.emit(request);
+            },
+          }
+        : {}),
+      // The client, not this daemon, decides whether ambient reports happen —
+      // it is the party that watches every host and holds the user's setting.
+      ...(msg.ambientAgentReports ? { ambientAgentReports: true } : {}),
+      ...(msg.ambientAgentGuidance ? { ambientAgentGuidance: msg.ambientAgentGuidance } : {}),
+      ...(msg.disabledPromptComponents?.length
+        ? { disabledPromptComponents: msg.disabledPromptComponents }
+        : {}),
+      ...(msg.customVoiceInstructions
+        ? { customVoiceInstructions: msg.customVoiceInstructions }
+        : {}),
+      ...(msg.defaultWorkspaceDirectory
+        ? { defaultWorkspaceDirectory: msg.defaultWorkspaceDirectory }
+        : {}),
+      ...(msg.backendModel ? { backendModel: msg.backendModel } : {}),
+      ...(msg.backendThinkingOptionId
+        ? { backendThinkingOptionId: msg.backendThinkingOptionId }
+        : {}),
+    });
+    if (result.accepted) {
+      respond({
+        requestId: msg.requestId,
+        accepted: true,
+        liveSessionId: result.liveSessionId,
+        ...(result.threadId ? { threadId: result.threadId } : {}),
+        negotiation: { kind: "webrtc_sdp", answerSdp: result.answerSdp },
+      });
+      return;
+    }
+    respond({
+      requestId: msg.requestId,
+      accepted: false,
+      errorCode: result.errorCode,
+      errorMessage: result.errorMessage,
+    });
+  }
+
+  private handleLiveVoiceStopRequest(
+    msg: Extract<SessionInboundMessage, { type: "voice.live.stop.request" }>,
+    source?: object,
+  ): void {
+    // Stop is idempotent: a stale or unknown liveSessionId is a no-op that still
+    // gets a response.
+    this.liveVoice?.stop({ liveSessionId: msg.liveSessionId, sessionKey: this });
+    this.emitForSource(
+      { type: "voice.live.stop.response", payload: { requestId: msg.requestId } },
+      source,
+    );
+  }
+
+  private async handleLiveVoiceToolExecuteRequest(
+    msg: Extract<SessionInboundMessage, { type: "voice.live.tool.execute.request" }>,
+    source?: object,
+  ): Promise<void> {
+    const sourceKey = source ?? this;
+    const notifier = this.liveVoiceAgentNotifier;
+    // The report goes to the exact socket that asked for the work and carries no
+    // call identity: this daemon is not told which call the work belongs to, and
+    // must not learn it.
+    const executionContext: LiveVoiceToolExecutionContext = notifier
+      ? {
+          onBackgroundAgentStarted: ({ agentId }) => {
+            notifier.watch({
+              agentId,
+              requestId: msg.requestId,
+              sourceKey,
+              emit: (update) => this.emitForSource(update, source),
+            });
+          },
+        }
+      : {};
+    const response = this.liveVoiceToolExecutor
+      ? await this.liveVoiceToolExecutor.execute(msg, executionContext)
+      : {
+          type: "voice.live.tool.execute.response" as const,
+          payload: {
+            requestId: msg.requestId,
+            ok: false as const,
+            error: {
+              code: "unsupported",
+              message: "This daemon does not support routed Live Voice tool execution.",
+              retryable: false,
+            },
+          },
+        };
+    this.emitForSource(response, source);
+  }
+
+  /**
+   * Speaks a work notification into a call this daemon hosts. The client is the
+   * only party that knows the routed work belongs to this call, so it is the
+   * client that asks — and the coordinator still checks that the asking client
+   * session owns the call it names.
+   */
+  private async handleLiveVoiceAgentNotifyRequest(
+    msg: Extract<SessionInboundMessage, { type: "voice.live.agent.notify.request" }>,
+    source?: object,
+  ): Promise<void> {
+    const coordinator = this.liveVoice;
+    const result = coordinator
+      ? await coordinator.say({
+          liveSessionId: msg.liveSessionId,
+          sessionKey: this,
+          text: formatLiveVoiceAgentNotification(msg.notification),
+        })
+      : ({
+          delivered: false,
+          errorCode: "unsupported",
+          errorMessage: "This daemon does not support live voice.",
+        } as const);
+    this.emitForSource(
+      {
+        type: "voice.live.agent.notify.response",
+        payload: {
+          requestId: msg.requestId,
+          delivered: result.delivered,
+          ...(result.delivered
+            ? {}
+            : { error: { code: result.errorCode, message: result.errorMessage } }),
+        },
+      },
+      source,
+    );
+  }
+
+  /** Release work that really is scoped to one physical socket. */
+  public releaseLiveVoiceSocketResources(source: object): void {
+    this.liveVoiceAgentNotifier?.releaseForSource(source);
+  }
+
+  public hasActiveLiveVoiceCall(): boolean {
+    return this.liveVoice?.hasActiveCallForSession(this) ?? false;
   }
 
   private dispatchAgentRewindMessage(
@@ -8407,6 +8798,8 @@ export class Session {
   public async cleanup(): Promise<void> {
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
     this.isCleanedUp = true;
+    this.liveVoice?.closeForSession(this);
+    this.liveVoiceAgentNotifier?.releaseForSource(this);
     await this.delivery.close();
 
     if (this.unsubscribeAgentEvents) {

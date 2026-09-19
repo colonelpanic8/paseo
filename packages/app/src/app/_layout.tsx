@@ -62,6 +62,9 @@ import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
 import { VoiceProvider } from "@/contexts/voice-context";
+import { LiveVoiceProvider } from "@/contexts/live-voice-context";
+import { LiveVoiceStrip } from "@/live-voice/live-voice-strip";
+import { LiveVoiceMuteShortcut } from "@/live-voice/live-voice-mute-shortcut";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -569,6 +572,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
           <View style={flexStyle}>{children}</View>
         </WindowChromeRegion>
       )}
+      {/* Both compact panels overlay the content row, not the whole surface, so
+          anything docked below the row — the Live Voice strip — stays on screen
+          and reachable while a panel is open. */}
+      {isCompactLayout ? themedSidebarChrome : null}
     </View>
   );
 
@@ -577,6 +584,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const surface = (
     <View style={layoutStyles.surfaceFill}>
       {workspaceChrome}
+      {/* In normal flow below the content row: a live call belongs to no screen,
+          so its surface docks at the app's edge instead of floating over one. */}
+      <LiveVoiceStrip />
+      <LiveVoiceMuteShortcut />
       <AppearanceStyleBoundary>
         {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
           <WindowChromeRegion corners="top-left">
@@ -593,7 +604,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <DesktopWindowControls />
         <FloatingPanelPortalHost />
       </AppearanceStyleBoundary>
-      {isCompactLayout ? themedSidebarChrome : null}
       <AppearanceStyleBoundary>
         <DownloadToast />
         <RosettaCalloutSource />
@@ -672,11 +682,13 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   return (
     <AppearanceProvider>
       <VoiceProvider>
-        <DesktopWindowControlsSync />
-        <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
-        <HostSessionManager />
-        <FaviconStatusSync />
-        {children}
+        <LiveVoiceProvider>
+          <DesktopWindowControlsSync />
+          <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
+          <HostSessionManager />
+          <FaviconStatusSync />
+          {children}
+        </LiveVoiceProvider>
       </VoiceProvider>
     </AppearanceProvider>
   );
