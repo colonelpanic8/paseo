@@ -112,6 +112,16 @@ describe("useDraftAgentCreateFlow", () => {
       text: "build this",
       timestamp: new Date("2026-05-25T00:00:00.000Z"),
     };
+    // The store entry is what keeps a restored attempt alive; an attempt nothing
+    // tracks is abandoned on mount.
+    useCreateFlowStore.getState().setPending({
+      draftId: "draft-handoff",
+      serverId: "server-1",
+      agentId: null,
+      clientMessageId: attempt.clientMessageId,
+      text: attempt.text,
+      timestamp: attempt.timestamp.getTime(),
+    });
     const { result, rerender } = renderHook(
       ({ provider }: { provider: string | null }) =>
         useDraftAgentCreateFlow({
