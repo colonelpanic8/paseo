@@ -170,6 +170,36 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 
 ---
 
+## Voice profile and thread records
+
+User profiles and threads belong to the admitted principal. Their files live
+under `$PASEO_HOME/voice/{principal-hash}/profiles/` and `.../threads/`; the
+principal comes from connection admission, never a request field. They have no
+workspace ownership or agent parentage. Config-declared profiles never touch the
+filesystem: they are resolved from `config.json` at daemon start and merged into
+every principal's list with `cfg_` ids.
+
+A profile is a single revisioned record. A thread stores a profile id, a title,
+a revision, a monotonically sequenced journal, and a user-written summary
+checkpoint. The title is empty until the first user utterance names it or the
+user renames it. Revisions protect title and summary edits from stale saves;
+transcript arrival does not change them.
+
+The thread file is an atomic manifest with recent entries and references to
+immutable history segments. Compaction and the active-history bound move older
+entries into segments before replacing the manifest. Original speech remains
+readable through paginated history; compaction changes only what a future call
+receives. Deletion removes the manifest and segments after draining its active
+call's writes. A call left open by a daemon restart is marked interrupted when
+the thread is next called.
+
+Startup context has a separate bounded history budget beside the daemon snapshot
+budget. The summary, the profile's context, and its context files are labelled
+developer material; recorded speech stays in user or assistant roles and is never
+resubmitted as a new command. Missing or unreadable history fails the start
+rather than silently starting a thread with no memory; an unreadable context
+file is logged and skipped.
+
 ## Runtime-only Terminal Sessions
 
 Terminals are live daemon state, not persisted JSON records. A terminal carries a `workspaceId` while it is running; workspace-scoped terminal lists include only terminals with the matching `workspaceId`. Legacy live terminals without an owner remain visible to unscoped terminal reads but contribute to no workspace status.

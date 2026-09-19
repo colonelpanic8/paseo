@@ -323,13 +323,6 @@ function renderContextWindowMeter(
   );
 }
 
-function resolveContextWindowPlacement(
-  meter: ReactElement | null,
-  reserveSlot: boolean,
-): ReactNode {
-  return reserveSlot ? <View style={styles.contextWindowMeterSlot}>{meter}</View> : null;
-}
-
 interface RenderLeftContentArgs {
   agentControls: DraftAgentControlsProps | undefined;
   agentId: string;
@@ -2135,7 +2128,8 @@ function ComposerContentImpl({
     ],
   );
   const beforeVoiceContent = useMemo(
-    () => resolveContextWindowPlacement(contextWindowMeter, hasAgent),
+    () =>
+      hasAgent ? <View style={styles.contextWindowMeterSlot}>{contextWindowMeter}</View> : null,
     [contextWindowMeter, hasAgent],
   );
 
