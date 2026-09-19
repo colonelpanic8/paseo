@@ -212,7 +212,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
 
   it("publishes only waiting and ready targets in status order", async () => {
     act(() => {
-      useSessionStore.getState().setWorkspaces(
+      seedRuntimeWorkspaces(
         "srv",
         new Map([
           [
