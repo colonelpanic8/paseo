@@ -3,6 +3,7 @@ import type { StyleProp, ViewStyle } from "react-native";
 import type { StreamItem } from "@/types/stream";
 import { continuesResponse } from "./turn-membership";
 import type { StreamHistoryBoundary, StreamRenderSegments } from "./model";
+import { resolveTurnAttribution, type TurnAttribution } from "./turn-attribution";
 import type {
   BottomAnchorLocalRequest,
   BottomAnchorRouteRequest,
@@ -103,6 +104,7 @@ export interface StreamStrategy {
     relation: NeighborRelation,
   ) => StreamItem | undefined;
   collectAssistantResponseContent: (items: StreamItem[], startIndex: number) => string;
+  resolveTurnAttribution: (items: StreamItem[], startIndex: number) => TurnAttribution | null;
   isNearBottom: (input: StreamNearBottomInput) => boolean;
   getBottomOffset: (metrics: StreamViewportMetrics) => number;
   getEdgeSlotProps: (
@@ -186,6 +188,8 @@ export function createStreamStrategy(config: StreamStrategyConfig): StreamStrate
       }
       return messages.toReversed().join("\n\n");
     },
+    resolveTurnAttribution: (items, startIndex) =>
+      resolveTurnAttribution(items, startIndex, config.assistantTurnTraversalStep),
     isNearBottom: (input) => config.isNearBottom(input),
     getBottomOffset: (metrics) => config.getBottomOffset(metrics),
     getEdgeSlotProps: (component, gapSize) => {
@@ -285,6 +289,14 @@ export function collectAssistantResponseContentForStreamRenderStrategy(params: {
   startIndex: number;
 }): string {
   return params.strategy.collectAssistantResponseContent(params.items, params.startIndex);
+}
+
+export function resolveTurnAttributionForStreamRenderStrategy(params: {
+  strategy: StreamStrategy;
+  items: StreamItem[];
+  startIndex: number;
+}): TurnAttribution | null {
+  return params.strategy.resolveTurnAttribution(params.items, params.startIndex);
 }
 
 export function isNearBottomForStreamRenderStrategy(

@@ -1850,6 +1850,11 @@ export const ar: TranslationResources = {
     archiveTooltip: "أرشفة الوكيل الفرعي",
     archiveFinishedAction: "أرشفة الوكلاء الفرعيين المكتملين",
     archiveFinishedRetry: "إعادة المحاولة ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "أصلي",
+    },
+    rowAccessibilityLabel: "{{label}}، وكيل فرعي {{ownership}}",
   },
   panels: {
     draft: {
@@ -1957,6 +1962,8 @@ export const ar: TranslationResources = {
     used: "تم استخدام{{percentage}}%",
     tokens: "رموز{{used}}/{{max}}",
     sessionCost: "تكلفة الجلسة{{cost}}",
+    model: "النموذج {{model}}",
+    thinking: "التفكير {{thinking}}",
     accessibility: "تم استخدام نافذة السياق{{percentage}}%",
   },
   review: {
