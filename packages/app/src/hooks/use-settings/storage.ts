@@ -100,6 +100,8 @@ export interface AppSettings {
   commandTriggerSigil: ComposerSigil;
   /** Character that opens the skills-only menu anywhere in a message. */
   skillTriggerSigil: ComposerSigil;
+  /** Whether paseo:// links with send=true may deliver a prompt without confirmation. */
+  linkPromptSend: boolean;
   /** Desktop-only preferences for implicit opens into the ordinary side pane. */
   openInSidePane: OpenInSidePanePreferences;
   pullRequestOpenLocation: PullRequestOpenLocation;
@@ -157,6 +159,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   vimKeybindings: false,
   commandTriggerSigil: DEFAULT_COMMAND_SIGIL,
   skillTriggerSigil: DEFAULT_SKILL_SIGIL,
+  linkPromptSend: false,
   openInSidePane: DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES,
   pullRequestOpenLocation: "explorer",
 };
@@ -256,6 +259,7 @@ const StoredAppSettingsSchema = z
     vimKeybindings: z.boolean().catch(false),
     commandTriggerSigil: z.string().optional(),
     skillTriggerSigil: z.string().optional(),
+    linkPromptSend: z.boolean().catch(false),
     openInSidePane: z
       .object({
         explorerFiles: z.boolean().catch(false),

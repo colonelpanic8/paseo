@@ -139,6 +139,9 @@ import {
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { PluginCatalogSync } from "@/plugins";
+import { AndroidIntentListener } from "@/intents/android-intent-listener";
+import { AndroidResumeShortcutSync } from "@/intents/android-resume-shortcut-sync";
+import { AndroidAssistantCatalogSync } from "@/intents/android-assistant-catalog-sync";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -700,6 +703,9 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
         <LiveVoiceProvider>
           <DesktopWindowControlsSync />
           <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
+          {isNative ? <AndroidIntentListener /> : null}
+          {isNative ? <AndroidResumeShortcutSync /> : null}
+          {isNative ? <AndroidAssistantCatalogSync /> : null}
           <LiveVoiceLinkListener />
           <DispatchLinkListener />
           <HostSessionManager />
@@ -937,6 +943,8 @@ function RootStack() {
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />
+      <Stack.Screen name="agent" />
+      <Stack.Screen name="workspace" />
       <Stack.Screen name="settings/hosts/[serverId]/index" />
       <Stack.Screen name="settings/hosts/[serverId]/[hostSection]" />
       <Stack.Screen name="settings/hosts/[serverId]/plugins/[pluginId]/[screenId]" />
