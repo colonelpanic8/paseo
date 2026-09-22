@@ -420,7 +420,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       const client = new ClaudeAgentClient({
         logger,
         resolveBinary: async () => "/test/claude/bin",
-        resolveVersion: async () => "2.1.219",
+        resolveVersion: async () => "2.1.257",
         configDir: emptyConfigDir,
       });
       const { models } = await client.fetchCatalog({
@@ -489,7 +489,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       const client = new ClaudeAgentClient({
         logger,
         resolveBinary: async () => "/test/claude/bin",
-        resolveVersion: async () => "2.1.219",
+        resolveVersion: async () => "2.1.257",
         configDir: emptyConfigDir,
       });
       const { models } = await client.fetchCatalog({
