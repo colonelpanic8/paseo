@@ -32,8 +32,9 @@ object AssistantJobs {
       journal ?: AssistantJournal(File(context.applicationContext.filesDir, JOURNAL_DIR)).also { journal = it }
     }
 
+  // On unless the user turned it off: only the verified EVA caller reaches it.
   fun isUnattendedAllowed(context: Context): Boolean =
-    context.applicationContext.getSharedPreferences(GRANT_PREFS, Context.MODE_PRIVATE).getBoolean(GRANT_KEY, false)
+    context.applicationContext.getSharedPreferences(GRANT_PREFS, Context.MODE_PRIVATE).getBoolean(GRANT_KEY, true)
 
   fun setUnattendedAllowed(context: Context, allowed: Boolean) {
     context.applicationContext.getSharedPreferences(GRANT_PREFS, Context.MODE_PRIVATE)
