@@ -17,6 +17,7 @@ in `packages/app/app.config.js`.
 | Static launcher shortcuts                  | long-press the app icon                               | New workspace, Open project, History. Declared by the config plugin.                      |
 | Dynamic launcher shortcut                  | long-press the app icon                               | "Resume <workspace>" for the last workspace the user opened. Set from the app at runtime. |
 | Assistant catalog provider                 | query `content://sh.paseo.assistant/…`                | Read-only workspace, agent, and message listing for on-device assistants. See below.      |
+| EVA extension service                      | bind `com.colonelpanic.eva.action.EXTENSION`          | Starts agents and sends prompts for EVA, with durable receipts. See below.                |
 | Pairing offer                              | any URL with `#offer=`                                | Adds the host. See `OfferLinkListener` in `packages/app/src/app/_layout.tsx`.             |
 
 Shares and selections always go to the New workspace composer. It is the one
@@ -110,10 +111,10 @@ host that owns it. Omitting it preserves cross-host lookup for older callers.
 
 On every table a SQL selection or sort order is refused rather than ignored.
 The provider serves the exact `com.colonelpanic.eva` package only when Android
-verifies its released signing certificate. A `com.colonelpanic.eva.debug`
-caller is allowed only when signed by the same key as the Paseo build. Other
+verifies its released signing certificate. `com.colonelpanic.eva.debug` is
+accepted only by test builds (see [Authorization](#authorization)). Other
 callers cannot read the catalog or transcripts. The pinned certificate in
-`AssistantContentProvider` comes from EVA's signed release APK and must be
+`AssistantCallerPolicy` comes from EVA's signed release APK and must be
 updated if its signing identity rotates.
 
 ### Messages
@@ -125,26 +126,182 @@ error — and `limit` 1 to 50 (default 10). Rows are newest first, `kind` is
 1000 characters. A `workspaceId` fans out over that workspace's non-archived
 top-level agents on every host that owns it and merges them by time.
 
-This table needs the app process alive. The provider's binder thread posts an
-`onAssistantQuery` event through `AssistantQueryBridge` and parks for about
-seven seconds; `AndroidAssistantQueryListener` fetches the timelines from the
-daemon and answers with `resolveAssistantQuery`. Reasoning, todos, and tool
-internals are dropped on the way, because an assistant reads these out loud.
+The provider's binder thread parks for up to 17 seconds while
+`AssistantQueryBridge` runs the `PaseoAssistantTask` Headless JS task (see
+[Headless runtime](#headless-runtime)). The task connects the hosts it needs,
+loads their directories, fetches the timelines, and answers with
+`resolveAssistantQuery`. This works with no screen open and from a cold
+process. Callers should allow 20 seconds. Reasoning, todos, and tool internals
+are dropped on the way, because an assistant reads these out loud.
 
-Anything that keeps the app from answering — Paseo not running, a host offline,
-an unknown id, a timeout, a failed fetch — comes back as a `kind=notice` row
-whose `text` is a sentence the assistant can read, not an exception. A partial
-workspace fetch includes a notice before the available messages so the
-assistant does not present an incomplete transcript as complete. Only a
-request the provider cannot parse throws. A workspace whose agents have said
-nothing yet returns no rows.
+Anything that keeps the app from answering — a host offline, an unknown id, a
+timeout, a failed fetch — comes back as a `kind=notice` row whose `text` is a
+sentence the assistant can read, not an exception. A partial workspace fetch
+includes a notice before the available messages so the assistant does not
+present an incomplete transcript as complete. Only a request the provider
+cannot parse throws. A workspace whose agents have said nothing yet returns no
+rows.
 
 The authority is `sh.paseo.assistant` for release builds and
 `<package>.assistant` for the debug variant, declared by
 `packages/app/plugins/with-assistant-provider.js`, because Android refuses to
-install two apps that claim one authority. Picking a target is the
-assistant's job: it queries, chooses, then opens a `paseo://agent` or
-`paseo://workspace` link with the id.
+install two apps that claim one authority.
+
+## Assistant actions (EVA extension)
+
+The provider only reads. To act, EVA binds `EvaExtensionService`, an
+implementation of EVA's installed-app extension protocol v1 (EVA's
+`docs/extension-protocol.md`). The same config plugin declares it with action
+`com.colonelpanic.eva.action.EXTENSION` and metadata
+`com.colonelpanic.eva.extension.version=1`. The two AIDL files under
+`modules/paseo-android-intents/android/src/main/aidl/` are EVA's ABI: copy them
+verbatim, never edit them here.
+
+| Capability       | Effects | Wait | Arguments                                                                                                                                                                                                                                   |
+| ---------------- | ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_agent`   | write   | 25 s | `serverId`, `projectId`, `prompt`, `isolation` (`local`/`worktree`) required. Worktree only: `worktreeMode`, `baseRef`, `branch`, `prNumber`, `forge`, `worktreeSlug`. Optional `provider`, `model`, `modeId`, `thinkingOptionId`, `title`. |
+| `send_prompt`    | write   | 25 s | `serverId`, `agentId`, `prompt` required; `activeTurnBehavior` `steer` (default) or `interrupt`.                                                                                                                                            |
+| `request_status` | read    | 10 s | `invocationId` of an earlier call.                                                                                                                                                                                                          |
+
+Schemas are flat and use only `type`, `description`, `enum`, `minLength` and
+`maxLength`; EVA rejects the whole descriptor on any other keyword. Ranges,
+the slug format and field combinations are enforced in
+`assistant/AssistantCapabilities.kt`. The descriptor revision is a hash of the
+descriptor, so any schema or wording change produces a new one. After changing
+it, regenerate EVA's fixture (`app/src/test/resources/extensions/paseo-describe.json`
+in EVA) and tell the EVA owner.
+
+### Authorization
+
+Every binder call checks the caller with `AssistantCallerPolicy`, the same
+rule the provider uses (`assistant/CallerRules.kt`). The calling UID must own
+exactly one package: `com.colonelpanic.eva` with the pinned release
+certificate, or, in a test build only, `com.colonelpanic.eva.debug` signed
+with this build's key. A test build is a debuggable build, or a release build
+prebuilt with `PASEO_ASSISTANT_DEBUG_CALLERS=1`. That variable makes the config
+plugin add the `sh.paseo.assistant.allowDebugCallers` metadata. Production
+builds never set it, so they refuse debug EVA even when it shares their
+signer. Mutations also need
+**Settings → General → Let EVA run agents**. It is off by default and stored in
+native `SharedPreferences`, so it is checked before any JavaScript starts. It
+is rechecked whenever a saved request resumes. EVA's own per-action grants
+still apply on EVA's side.
+
+Unattended runs never borrow interactive state. `serverId` and `projectId` must
+name a project in the host's live registry (`project.list`); there is no
+remembered-host or remembered-project fallback. `provider` and `model` default
+to the New workspace form's saved choice, and a saved model the host no longer
+offers falls back to the provider default. `modeId` comes only from the request.
+A saved permission mode is never applied, so an unattended agent cannot inherit
+full access. No provider anywhere is `needs_configuration`.
+
+### Receipts
+
+Each call is journaled in `filesDir/assistant-requests/` (credential-encrypted
+storage), keyed by caller UID and invocation ID. The record is written before
+any network work and stores a fingerprint of the arguments. Reusing an ID with
+different arguments is a conflict. An identical replay returns the recorded
+receipt and never re-runs a settled request.
+
+Before the first send, the executor resolves the exact daemon request and
+commits it together with `dispatchStarted`. Every later run replays that stored
+request under the same idempotency key (`assistant:<journal key>`) and message
+ID. The daemon's durable `CreationService` and `MessageReceipts` turn a replay
+into a status read, so a replay cannot create a second workspace or send a
+second prompt. The daemon reports `outcomeUnknown` if it restarted mid-dispatch;
+that becomes `uncertain` and is never retried.
+
+| State                                                                             | Meaning                                                                                | EVA envelope                       |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------- |
+| `accepted`                                                                        | Journaled. The daemon has not acknowledged it yet                                      | `handed_off`, pollable             |
+| `waiting_for_host`                                                                | Host unreachable. Resumes on the next status call                                      | `handed_off`, pollable             |
+| `submitted`                                                                       | Daemon admitted it. Workspace or agent may exist; prompt not confirmed                 | `handed_off`, pollable             |
+| `completed`                                                                       | Creation reached `prompt_started`, or `send_agent_message` was accepted. Not task done | `completed`                        |
+| `uncertain`                                                                       | May have run. Do not retry; check in Paseo                                             | `unknown`                          |
+| `failed`                                                                          | Definite failure after admission. Partial effects possible                             | `failed`                           |
+| `rejected`, `request_id_conflict`, `unknown_request`                              | Nothing sent: bad arguments, unknown host/project/agent/provider/model/mode, reused ID | `not_executed`/`invalid_arguments` |
+| `expired`                                                                         | Pending 10 minutes and never sent                                                      | `not_executed`/`deadline_exceeded` |
+| `not_started`                                                                     | No React host to run on                                                                | `not_executed`                     |
+| `needs_authorization`, `needs_configuration`, `needs_host_update`, `needs_unlock` | Nothing sent. The user has to act                                                      | `not_executed`/`not_configured`    |
+
+`ReceiptRules` in `assistant/AssistantReceipts.kt` is the only code that changes
+a state. Terminal states are final, `submitted` never regresses, and once
+`dispatchStarted` is set, a "nothing was sent" state becomes `uncertain`.
+A request sent without an acknowledgement for 10 minutes becomes `uncertain`
+rather than `expired`. `request_status` replies `completed`; the stored state
+is in the receipt. It is also the only retry path. Paseo never retries in the
+background, so a pending request advances only while EVA asks about it.
+
+Execute replies arrive by the deadline minus 1.5 seconds with whatever state is
+current. The daemon owns creation once it admits the request, so that work
+finishes even if EVA unbinds. Work before admission continues only while the
+process is alive and bound.
+
+### Headless runtime
+
+The daemon transport (pairing, relay encryption, request correlation) exists
+only in the JavaScript client, so execution and transcript reads run in
+JavaScript. `AssistantRuntime` starts the app's `ReactHost` without an Activity
+when no React context exists, then runs `PaseoAssistantTask`. The task is
+registered at bundle load in `src/intents/register-assistant-task.android.ts`,
+because no component mounts in a headless start. It boots the host runtime from
+storage and waits for the host connection
+(`src/intents/assistant-task.ts`). A warm app runs the same task on its live
+host runtime. Describe, caller checks, argument validation, the journal, and
+status reads of settled requests stay native and never start JavaScript. This
+deliberately departs from the protocol's advice to avoid starting JavaScript.
+A native daemon transport would remove the dependency, but it would duplicate
+the relay protocol.
+
+A headless start mounts no React tree, so state that a provider or hook fills
+in stays empty. The session's `serverInfo` is written by `session-context.tsx`,
+so `refreshWorkspaceDirectory` waits on it forever headless, and route
+preparation only reads the local cache. Headless code talks to the client
+directly, or uses directory calls that do not wait on React-owned state, such
+as `refreshAgentDirectory`.
+
+### Lifecycle
+
+| Phone state                         | What happens                                                                                                                                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App open, or warm in the background | The task runs on the live runtime and reuses its host connections.                                                                                                                                 |
+| Process evicted or never started    | Binding cold-starts the process; the task starts React Native headless. Budget a few seconds of the 25-second wait for that.                                                                       |
+| Locked after the first unlock       | Same as above. Credential-encrypted storage stays readable, and no activity launch or keyguard dismissal is involved.                                                                              |
+| Before the first unlock             | Neither the service nor the provider is Direct Boot aware, so Android does not resolve them. EVA reports `needs_unlock`. Do not move hosts, prompts, or the journal into device-protected storage. |
+| Force-stopped                       | An explicit bind from EVA still starts the service and the headless runtime.                                                                                                                       |
+| Host offline                        | `waiting_for_host`. Each status call reconnects and resumes; after 10 minutes it is `expired`.                                                                                                     |
+
+While EVA is bound, Android treats Paseo as serving a foreground client, so the
+process is not frozen. Android's [background activity launch](https://developer.android.com/guide/components/activities/background-starts)
+and [foreground-service start](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)
+restrictions do not apply, because nothing launches an activity or a
+foreground service. See [Direct Boot](https://developer.android.com/privacy-and-security/direct-boot)
+for what is readable before the first unlock.
+
+To test on a device, use EVA's `InstalledExtensionDeviceTest` (EVA
+`docs/operations.md`). You need a disposable emulator or device, a Paseo test
+build that shares a signer with EVA debug, and a disposable paired host. Treat
+transcripts and logs as private. EVA has no device test for content queries.
+Run a `/messages` query as EVA with a small instrumentation APK that targets
+`com.colonelpanic.eva.debug` and is signed with EVA debug's key. Its code runs
+in EVA's process, so the provider sees EVA's UID and package.
+
+Verified on 2026-09-23 on an API 36 `google_apis` emulator with a PIN set and
+the keyguard showing. The setup was a production-variant APK signed with the
+RN template debug key (the same signer as EVA debug), a throwaway daemon, and
+the `mock` provider. With the process killed or force-stopped, `create_agent`
+(local and worktree) and `send_prompt` returned `completed` in 0.9–2.0
+seconds. That time includes the cold React Native start. The daemon showed one
+agent per call, with the prompt as its first user message. Settled
+`request_status` reads took under 5 ms and started no JavaScript. With the host
+down, `create_agent` returned `waiting_for_host` at 23.5 seconds. After the
+host came back, one `request_status` resumed and completed it without a
+duplicate. With the toggle off, the call returned `needs_authorization`.
+With the app force-stopped, `/messages` from EVA's process returned the agent's
+latest rows in 1.5 seconds, and a workspace fan-out in 1.4 seconds. A
+production-configured build refused the same caller: the provider threw
+`SecurityException`, and the service replied `unauthorized_caller`.
+Before-first-unlock after a reboot, and a physical phone, are not yet verified.
 
 ## Invoking from adb
 
@@ -164,9 +321,9 @@ An automation tool that can only launch a fixed action, a fixed URI base, and
 scalar query values (a voice assistant's declarative intent binding, a Tasker
 task, a widget) has everything it needs in the links table: action `VIEW`,
 base `paseo://agent` or `paseo://new`, query slots for the parameters.
-Launching a link proves the handoff, not that the prompt was sent; a client
-that needs the outcome has to observe the agent through the daemon. Ids come
-from the catalog provider above or from the user.
+Launching a link proves the handoff, not that the prompt was sent. EVA uses
+[Assistant actions](#assistant-actions-eva-extension) instead, which report
+the outcome. Ids come from the catalog provider above or from the user.
 
 ## Adding an entry point
 

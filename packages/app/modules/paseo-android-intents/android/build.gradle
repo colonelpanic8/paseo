@@ -12,4 +12,13 @@ useDefaultAndroidSdkVersions()
 
 android {
   namespace "sh.paseo.androidintents"
+  buildFeatures {
+    aidl true
+  }
+}
+
+dependencies {
+  // ReactHost and HeadlessJsTaskContext for AssistantRuntime.
+  implementation 'com.facebook.react:react-android'
+  testImplementation 'junit:junit:4.13.2'
 }
