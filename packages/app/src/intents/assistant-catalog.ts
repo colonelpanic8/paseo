@@ -1,7 +1,8 @@
-import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
+import type { Agent, ProjectDescriptor, WorkspaceDescriptor } from "@/stores/session-store";
 import { parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
 
 export const ASSISTANT_CATALOG_VERSION = 1;
+const MAX_PROJECTS = 100;
 const MAX_WORKSPACES = 100;
 const MAX_AGENTS = 200;
 const MAX_LABEL_LENGTH = 120;
@@ -10,6 +11,13 @@ export interface AssistantCatalogHost {
   serverId: string;
   label: string;
   status: string;
+}
+
+export interface AssistantCatalogProject {
+  id: string;
+  serverId: string;
+  name: string;
+  kind: ProjectDescriptor["projectKind"];
 }
 
 export interface AssistantCatalogWorkspace {
@@ -38,14 +46,21 @@ export interface AssistantCatalog {
   version: typeof ASSISTANT_CATALOG_VERSION;
   capturedAt: string;
   hosts: AssistantCatalogHost[];
+  projects: AssistantCatalogProject[];
   workspaces: AssistantCatalogWorkspace[];
   agents: AssistantCatalogAgent[];
   truncated: boolean;
 }
 
+export interface AssistantCatalogProjectInput {
+  serverId: string;
+  project: ProjectDescriptor;
+}
+
 export interface AssistantCatalogInput {
   now: Date;
   hosts: readonly AssistantCatalogHost[];
+  projects: readonly AssistantCatalogProjectInput[];
   workspaces: readonly WorkspaceDescriptor[] | ReadonlyMap<string, WorkspaceDescriptor>;
   agents: readonly Agent[] | ReadonlyMap<string, Agent>;
   serverIdOfWorkspace: (workspace: WorkspaceDescriptor) => string;
@@ -110,7 +125,24 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
     })
     .sort((a, b) => (b.lastActivityAt ?? "").localeCompare(a.lastActivityAt ?? ""));
 
-  const truncated = workspaces.length > MAX_WORKSPACES || agents.length > MAX_AGENTS;
+  const projects = input.projects
+    .map(({ serverId, project }) => ({
+      id: project.projectId,
+      serverId,
+      name:
+        clip(project.projectCustomName) || clip(project.projectDisplayName) || project.projectId,
+      kind: project.projectKind,
+    }))
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name) ||
+        a.serverId.localeCompare(b.serverId) ||
+        a.id.localeCompare(b.id),
+    );
+  const truncated =
+    projects.length > MAX_PROJECTS ||
+    workspaces.length > MAX_WORKSPACES ||
+    agents.length > MAX_AGENTS;
   return {
     version: ASSISTANT_CATALOG_VERSION,
     capturedAt: input.now.toISOString(),
@@ -119,6 +151,7 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
       label: clip(host.label) || host.serverId,
       status: host.status,
     })),
+    projects: projects.slice(0, MAX_PROJECTS),
     workspaces: workspaces.slice(0, MAX_WORKSPACES),
     agents: agents.slice(0, MAX_AGENTS).map((agent) => ({
       id: agent.id,

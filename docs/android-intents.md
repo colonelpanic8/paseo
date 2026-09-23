@@ -45,10 +45,15 @@ Every query parameter is optional unless marked.
 fill query parameters, never path segments. They resolve the host and replace
 themselves with the canonical route.
 
-**Host resolution** when `serverId` is omitted: the host of the last opened
+**Agent/workspace link host resolution** when `serverId` is omitted: the host of the last opened
 workspace, else the only configured host. With several hosts and no history
 the link fails with a toast asking for `serverId`. An unknown `serverId` fails
-the same way; a link never adds or picks a host on its own.
+the same way; a link never adds a host on its own. `/new` uses the interactive
+form's host defaults instead. Automation callers must supply `serverId` and
+`projectId` together; do not rely on the form's remembered/online-host fallback.
+The project ID resolves its root from that host's project registry, so `dir`
+is not needed. An unresolved ID without `dir` retains its selection with no
+usable directory until hydration or an explicit project choice.
 
 **Prompts** are capped at 16,000 characters and merged into the target draft,
 which survives until that composer mounts. Sending without a tap is off by
@@ -79,18 +84,22 @@ form.
 ## Assistant catalog provider
 
 Links let another app act, but not look. The app exports a read-only content
-provider (`AssistantContentProvider` in the native module) with three tables:
+provider (`AssistantContentProvider` in the native module) with four tables:
 
 | URI                                                                            | Columns                                                                                               |
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `content://sh.paseo.assistant/projects?serverId=&q=&limit=`                    | `id`, `serverId`, `name`, `kind`                                                                      |
 | `content://sh.paseo.assistant/workspaces?q=&limit=`                            | `id`, `serverId`, `name`, `project`, `repository`, `branch`, `status`, `agentCount`, `lastActivityAt` |
 | `content://sh.paseo.assistant/agents?workspaceId=&serverId=&q=&limit=`         | `id`, `serverId`, `workspaceId`, `name`, `provider`, `status`, `lastActivityAt`                       |
 | `content://sh.paseo.assistant/messages?agentId=&workspaceId=&serverId=&limit=` | `id`, `serverId`, `workspaceId`, `agentId`, `agentName`, `kind`, `createdAt`, `text`                  |
 
-`workspaces` and `agents` come from a catalog the app publishes whenever hosts,
+`projects`, `workspaces`, and `agents` come from a catalog the app publishes whenever hosts,
 workspaces, or agents change: ids, names, status, and activity, most recent
-first, capped at 100 workspaces and 200 agents. Paths, prompts, and transcripts
-are never in it. Those two tables read a file, so they work without starting
+first, capped at 100 workspaces and 200 agents. Projects come from the host
+registry, including projects without workspaces, sorted by name and capped at 100. Use `(serverId, id)` as the project identity, never the name or a repository
+grouping key. The catalog publisher retains directory demand for configured
+hosts while mounted, so discovery does not require first visiting a project. Paths, prompts, and transcripts
+are never in it. Those three tables read a file, so they work without starting
 React Native and answer as of the last time the app was open. `q` is a
 case-insensitive substring match over the row's columns and `limit` is 1 to 100
 (default 25).
