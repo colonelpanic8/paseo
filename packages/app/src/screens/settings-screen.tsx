@@ -80,6 +80,7 @@ import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-
 import { EditorSection } from "@/screens/settings/editor-section";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { androidIntents } from "@/native/android-intents";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -325,6 +326,33 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
   );
 }
 
+function AssistantAutomationRow() {
+  const { t } = useTranslation();
+  const [allowed, setAllowed] = useState(() => androidIntents.isAssistantAutomationAllowed());
+  const handleChange = useCallback((next: boolean) => {
+    androidIntents.setAssistantAutomationAllowed(next);
+    setAllowed(next);
+  }, []);
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]} testID="assistant-automation-row">
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {t("settings.general.assistantAutomation.label")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.general.assistantAutomation.description")}
+        </Text>
+      </View>
+      <Switch
+        value={allowed}
+        onValueChange={handleChange}
+        accessibilityLabel={t("settings.general.assistantAutomation.label")}
+        testID="assistant-automation-switch"
+      />
+    </View>
+  );
+}
+
 function GeneralSection({
   settings,
   handleLanguageChange,
@@ -383,6 +411,7 @@ function GeneralSection({
             testID="link-prompt-send-switch"
           />
         </View>
+        {androidIntents.isAvailable ? <AssistantAutomationRow /> : null}
       </View>
     </SettingsSection>
   );
