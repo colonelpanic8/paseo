@@ -8,6 +8,7 @@ import {
   hostProjectFromRoute,
   hostProjectFromWorkspace,
   resolveEquivalentHostProjectCandidate,
+  resolveExactHostProjectCandidate,
 } from "./host-project-model";
 import { normalizeWorkspaceDescriptor } from "@/stores/session-store";
 
@@ -94,6 +95,40 @@ describe("host project lookups", () => {
     expect(getWorktreeSupportForHostProject({ project: groupedProject, serverId: "missing" })).toBe(
       "unknown",
     );
+  });
+
+  test("resolves a project-id-only link by exact host placement", () => {
+    const requested = hostProjectFromRoute({ serverId: "host-b", projectId: "prj_b" });
+    expect(requested).not.toBeNull();
+    expect(getHostProjectSourceDirectory(requested!, "host-b")).toBeNull();
+    const resolved = resolveExactHostProjectCandidate({
+      candidate: requested!,
+      projects: [project()],
+      serverId: "host-b",
+    });
+    expect(resolved).toEqual(project());
+    expect(getHostProjectSourceDirectory(resolved!, "host-b")).toBe("/repo/b");
+    expect(
+      resolveExactHostProjectCandidate({
+        candidate: requested!,
+        projects: [project()],
+        serverId: "host-a",
+      }),
+    ).toBeNull();
+  });
+
+  test("keeps a stale project-id-only link unresolved instead of adopting another root", () => {
+    const requested = hostProjectFromRoute({ serverId: "host-a", projectId: "stale" });
+    expect(requested).not.toBeNull();
+    expect(
+      resolveExactHostProjectCandidate({
+        candidate: requested!,
+        projects: [project()],
+        serverId: "host-a",
+      }),
+    ).toBeNull();
+    expect(getHostProjectId(requested!, "host-a")).toBe("stale");
+    expect(getHostProjectSourceDirectory(requested!, "host-a")).toBeNull();
   });
 
   test("marks route placeholder worktree support as unknown", () => {
