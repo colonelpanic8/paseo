@@ -972,6 +972,12 @@ export const WorkspaceTitleSetRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspaceTitleRegenerateRequestSchema = z.object({
+  type: z.literal("workspace.title.regenerate.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+
 export const WorkspacePinSetRequestSchema = z.object({
   type: z.literal("workspace.pin.set.request"),
   workspaceId: z.string(),
@@ -2080,6 +2086,11 @@ export const WorkspaceTitleSetResponsePayloadSchema = z.object({
 
 export const WorkspaceTitleSetResponseSchema = z.object({
   type: z.literal("workspace.title.set.response"),
+  payload: WorkspaceTitleSetResponsePayloadSchema,
+});
+
+export const WorkspaceTitleRegenerateResponseSchema = z.object({
+  type: z.literal("workspace.title.regenerate.response"),
   payload: WorkspaceTitleSetResponsePayloadSchema,
 });
 
@@ -3228,6 +3239,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProjectIconSetRequestSchema,
   ProjectRemoveRequestSchema,
   WorkspaceTitleSetRequestSchema,
+  WorkspaceTitleRegenerateRequestSchema,
   WorkspacePinSetRequestSchema,
   WorkspaceSnoozeSetRequestSchema,
   WorkspaceLabelListRequestSchema,
@@ -3601,6 +3613,7 @@ export const ServerInfoStatusPayloadSchema = z
         archivedWorkspacesList: z.boolean().optional(),
         // COMPAT(workspaceSnooze): added in v0.2.4, drop the gate when floor >= v0.2.4.
         workspaceSnooze: z.boolean().optional(),
+        workspaceTitleRegenerate: z.boolean().optional(),
         // COMPAT(workspaceSetupRun): added in v0.8.0, remove gate after 2027-09-02.
         workspaceSetupRun: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.8.0, remove gate after 2027-09-05.
@@ -6957,6 +6970,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectIconSetResponseSchema,
   ProjectRemoveResponseSchema,
   WorkspaceTitleSetResponseSchema,
+  WorkspaceTitleRegenerateResponseSchema,
   WorkspacePinSetResponseSchema,
   WorkspaceSnoozeSetResponseSchema,
   WorkspaceRecoveryInspectResponseSchema,
