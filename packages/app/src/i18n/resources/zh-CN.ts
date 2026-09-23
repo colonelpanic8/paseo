@@ -2060,6 +2060,10 @@ export const zhCN: TranslationResources = {
         label: "通过链接发送提示",
         description: "允许 paseo:// 链接和其他应用无需确认即可向智能体发送提示",
       },
+      assistantAutomation: {
+        label: "允许 EVA 运行智能体",
+        description: "允许 EVA 助手无需确认即可启动智能体并向其发送提示，即使手机已锁定",
+      },
       language: {
         label: "语言",
         description: "应用语言",

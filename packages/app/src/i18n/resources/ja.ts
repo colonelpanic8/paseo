@@ -2107,6 +2107,11 @@ export const ja: TranslationResources = {
         description:
           "paseo:// リンクや他のアプリが確認なしでエージェントにプロンプトを送信できるようにします",
       },
+      assistantAutomation: {
+        label: "EVA によるエージェント実行を許可",
+        description:
+          "EVA アシスタントが確認なしでエージェントを起動し、プロンプトを送信できるようにします（端末のロック中も含む）",
+      },
       language: {
         label: "言語",
         description: "アプリの言語",

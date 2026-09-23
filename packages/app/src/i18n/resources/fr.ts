@@ -2143,6 +2143,11 @@ export const fr: TranslationResources = {
         description:
           "Autoriser les liens paseo:// et d’autres apps à envoyer un prompt à un agent sans confirmation",
       },
+      assistantAutomation: {
+        label: "Autoriser EVA à lancer des agents",
+        description:
+          "Autoriser l’assistant EVA à démarrer des agents et à leur envoyer des prompts sans confirmation, même téléphone verrouillé",
+      },
       language: {
         label: "Langue",
         description: "Langue de l'application",

@@ -2085,6 +2085,11 @@ export const ar: TranslationResources = {
         label: "إرسال المطالبات من الروابط",
         description: "السماح لروابط paseo:// والتطبيقات الأخرى بإرسال مطالبة إلى وكيل دون تأكيد",
       },
+      assistantAutomation: {
+        label: "السماح لـ EVA بتشغيل الوكلاء",
+        description:
+          "السماح لمساعد EVA ببدء الوكلاء وإرسال المطالبات إليهم دون تأكيد، حتى أثناء قفل الهاتف",
+      },
       language: {
         label: "لغة",
         description: "لغة التطبيق",

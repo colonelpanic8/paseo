@@ -6,10 +6,11 @@ interface PaseoAndroidIntentsModule {
   clearDynamicShortcuts(): void;
   publishAssistantCatalog(json: string): void;
   resolveAssistantQuery(requestId: string, json: string): void;
-  addListener(
-    eventName: "onIntent" | "onAssistantQuery",
-    listener: (payload: unknown) => void,
-  ): EventSubscription;
+  reportAssistantRequest(key: string, json: string): Promise<string | null>;
+  finishAssistantRequest(key: string): void;
+  isAssistantAutomationAllowed(): boolean;
+  setAssistantAutomationAllowed(allowed: boolean): void;
+  addListener(eventName: "onIntent", listener: (payload: unknown) => void): EventSubscription;
 }
 
 const nativeModule = requireOptionalNativeModule<PaseoAndroidIntentsModule>("PaseoAndroidIntents");
@@ -36,10 +37,22 @@ export const androidIntents = {
   publishAssistantCatalog(json: string): void {
     nativeModule?.publishAssistantCatalog(json);
   },
-  addAssistantQueryListener(listener: (payload: unknown) => void): EventSubscription | null {
-    return nativeModule?.addListener("onAssistantQuery", listener) ?? null;
-  },
   resolveAssistantQuery(requestId: string, json: string): void {
     nativeModule?.resolveAssistantQuery(requestId, json);
+  },
+  /** Resolves with the request as the journal now stores it. */
+  async reportAssistantRequest(key: string, json: string): Promise<unknown> {
+    if (!nativeModule) throw new Error("Assistant requests need the Android app");
+    const stored = await nativeModule.reportAssistantRequest(key, json);
+    return stored ? (JSON.parse(stored) as unknown) : null;
+  },
+  finishAssistantRequest(key: string): void {
+    nativeModule?.finishAssistantRequest(key);
+  },
+  isAssistantAutomationAllowed(): boolean {
+    return nativeModule?.isAssistantAutomationAllowed() ?? false;
+  },
+  setAssistantAutomationAllowed(allowed: boolean): void {
+    nativeModule?.setAssistantAutomationAllowed(allowed);
   },
 };

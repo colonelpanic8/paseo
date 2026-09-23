@@ -3,7 +3,6 @@ package sh.paseo.androidintents
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Context
-import android.content.pm.PackageManager
 import android.content.pm.ProviderInfo
 import android.database.Cursor
 import android.database.MatrixCursor
@@ -18,13 +17,10 @@ private const val DEFAULT_LIMIT = 25
 private const val MAX_LIMIT = 100
 private const val MESSAGE_DEFAULT_LIMIT = 10
 private const val MESSAGE_MAX_LIMIT = 50
-private const val MESSAGE_TIMEOUT_MS = 7_000L
-private const val EVA_PACKAGE = "com.colonelpanic.eva"
-private const val EVA_DEBUG_PACKAGE = "com.colonelpanic.eva.debug"
-// Public signing certificate of the released EVA app, not a secret.
-private const val EVA_CERT_SHA256 = "688df17827dd9a002705baf0400c80f8f4650c6e87c3fc91d41f32be287f8b68"
+// Leaves room for a cold React Native start and a host round trip.
+private const val MESSAGE_TIMEOUT_MS = 17_000L
 private const val UNAVAILABLE_NOTICE =
-  "Paseo could not read the conversation; open Paseo, leave it running, and ask again."
+  "Paseo could not read the conversation in time; ask again in a moment."
 
 private val PROJECT_COLUMNS = listOf("id", "serverId", "name", "kind")
 private val WORKSPACE_COLUMNS =
@@ -41,7 +37,8 @@ private val INT_COLUMNS = setOf("agentCount")
  * `content://<authority>/workspaces?q=&limit=` and `/agents?workspaceId=&q=&limit=`
  * are served from the file [AssistantCatalogStore] holds, so they answer
  * without starting React Native. `/messages?agentId=&workspaceId=&limit=` needs
- * live transcripts and goes through [AssistantQueryBridge] instead. The
+ * live transcripts and goes through [AssistantQueryBridge], which starts the
+ * JavaScript runtime headless when the app is not running. The
  * authority is declared by the app's config plugin so a debug build can install
  * beside a release build. Only query parameters filter: a SQL selection is
  * refused rather than ignored.
@@ -101,14 +98,7 @@ class AssistantContentProvider : ContentProvider() {
   private fun isAuthorizedCaller(): Boolean {
     val appContext = context ?: return false
     val caller = callingPackage ?: return false
-    if (caller != EVA_PACKAGE && caller != EVA_DEBUG_PACKAGE) return false
-    val manager = appContext.packageManager
-    val callerUid = Binder.getCallingUid()
-    if (caller == EVA_DEBUG_PACKAGE) {
-      return manager.checkSignatures(appContext.applicationInfo.uid, callerUid) == PackageManager.SIGNATURE_MATCH
-    }
-    val certificate = EVA_CERT_SHA256.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-    return manager.hasSigningCertificate(callerUid, certificate, PackageManager.CERT_INPUT_SHA256)
+    return AssistantCallerPolicy.isAuthorized(appContext, Binder.getCallingUid(), caller)
   }
 
   private fun queryCatalog(
@@ -160,8 +150,10 @@ class AssistantContentProvider : ContentProvider() {
     val limit = parseLimit(uri.getQueryParameter("limit"), MESSAGE_DEFAULT_LIMIT, MESSAGE_MAX_LIMIT)
     val scopedWorkspaceId = if (agentId == null) workspaceId else null
 
+    val appContext = context ?: return noticeCursor(requested, agentId, scopedWorkspaceId, serverId, UNAVAILABLE_NOTICE)
     val answer =
       AssistantQueryBridge.request(
+        appContext,
         mapOf("agentId" to agentId, "workspaceId" to scopedWorkspaceId, "serverId" to serverId, "limit" to limit),
         MESSAGE_TIMEOUT_MS,
       )

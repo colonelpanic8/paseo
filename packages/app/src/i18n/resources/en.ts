@@ -2206,6 +2206,11 @@ export const en = {
         description:
           "Let paseo:// links and other apps send a prompt to an agent without confirmation",
       },
+      assistantAutomation: {
+        label: "Let EVA run agents",
+        description:
+          "Let the EVA assistant start agents and send them prompts without confirmation, even while the phone is locked",
+      },
       language: {
         label: "Language",
         description: "App language",

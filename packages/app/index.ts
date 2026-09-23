@@ -14,5 +14,7 @@ import "@expo/metro-runtime";
 import "expo-router/build/fast-refresh";
 import { renderRootComponent } from "expo-router/build/renderRootComponent";
 import { RootApp } from "./src/root-app";
+import { registerAssistantTask } from "./src/intents/register-assistant-task";
 
+registerAssistantTask();
 renderRootComponent(RootApp);
