@@ -267,20 +267,32 @@ async function readProviderEntry(client: AssistantHostClient, provider: string, 
   }
 }
 
-/** Provider and model from the request, else from the New workspace form; mode only from the request. */
+/** The host's first ready provider, in the order the host lists them. */
+async function firstReadyProvider(client: AssistantHostClient, cwd: string) {
+  for (let attempt = 1; ; attempt += 1) {
+    const snapshot = await client.getProvidersSnapshot({ cwd });
+    const ready = snapshot.entries.find(
+      (entry) => entry.enabled !== false && entry.status === "ready",
+    );
+    const loading = snapshot.entries.some((entry) => entry.status === "loading");
+    if (ready || !loading || attempt >= PROVIDER_LOADING_ATTEMPTS) return ready?.provider;
+    await new Promise((resolve) => setTimeout(resolve, PROVIDER_LOADING_DELAY_MS));
+  }
+}
+
+/**
+ * Provider and model from the request, else the New workspace form's saved
+ * choice, else the host's first ready provider; mode only from the request.
+ */
 async function resolveLaunch(
   args: CreateAgentArguments,
   client: AssistantHostClient,
   preferences: FormPreferences,
   cwd: string,
 ) {
-  const provider = args.provider ?? preferences.provider;
+  const provider = args.provider ?? preferences.provider ?? (await firstReadyProvider(client, cwd));
   if (!provider) {
-    throw stop(
-      "needs_configuration",
-      "provider_required",
-      "Choose a provider once in Paseo's New workspace form, or name one in the request.",
-    );
+    throw stop("needs_configuration", "provider_required", "No provider is ready on this host.");
   }
   const entry = await readProviderEntry(client, provider, cwd);
   if (!entry || entry.enabled === false) {

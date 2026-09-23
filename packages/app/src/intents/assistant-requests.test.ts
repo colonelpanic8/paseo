@@ -303,7 +303,6 @@ describe("runAssistantRequest create_agent", () => {
       "rejected",
       "worktree_unsupported",
     ],
-    ["no provider anywhere", {}, null, "needs_configuration", "provider_required"],
     ["a provider the host lacks", { provider: "codex" }, {}, "rejected", "unknown_provider"],
     ["a mode the provider lacks", { modeId: "yolo" }, {}, "rejected", "unknown_mode"],
   ])("rejects %s without dispatching", async (_label, args, preferences, state, code) => {
@@ -331,6 +330,36 @@ describe("runAssistantRequest create_agent", () => {
     expect(host.calls).toContain("createWorkspace");
     expect(journal.last()?.state).toBe("completed");
   });
+
+  it("falls back to the host's first ready provider when none is named or saved", async () => {
+    const host = fakeHost({});
+    const journal = fakeJournal();
+
+    await runAssistantRequest(
+      createJob({ isolation: "local", provider: undefined }),
+      deps({ kind: "connected", client: host.client }, journal),
+    );
+
+    const config = (host.createInputs[0].agent as { config: Record<string, unknown> }).config;
+    expect(config).toEqual({ provider: "claude", cwd: "/repo" });
+    expect(journal.last()?.state).toBe("completed");
+  });
+
+  it("asks for configuration when no provider is ready and none is named", async () => {
+    const host = fakeHost({ loadingSnapshots: 99 });
+    const journal = fakeJournal();
+
+    await runAssistantRequest(
+      createJob({ provider: undefined }),
+      deps({ kind: "connected", client: host.client }, journal),
+    );
+
+    expect(host.calls).not.toContain("createWorkspace");
+    expect(journal.last()).toMatchObject({
+      state: "needs_configuration",
+      error: { code: "provider_required" },
+    });
+  }, 10_000);
 
   it("asks for a host update instead of degrading on an old daemon", async () => {
     const host = fakeHost({ features: { creationLifecycle: true } });
