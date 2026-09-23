@@ -137,7 +137,10 @@ object AssistantCapabilities {
             max = 63,
             pattern = SLUG,
           ),
-          Field.Text("provider", "Agent provider ID. Defaults to the provider last chosen in Paseo's New workspace form."),
+          Field.Text(
+            "provider",
+            "Agent provider ID. Defaults to the provider last chosen in Paseo's New workspace form, else the host's first ready provider.",
+          ),
           Field.Text("model", "Model ID. Defaults to the provider's saved model, else the provider default."),
           Field.Text("modeId", "Permission mode ID. Defaults to the provider's default mode; saved modes are never applied unattended."),
           Field.Text("thinkingOptionId", "Thinking option ID for the model."),
