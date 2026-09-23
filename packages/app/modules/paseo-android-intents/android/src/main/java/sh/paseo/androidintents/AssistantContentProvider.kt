@@ -26,6 +26,7 @@ private const val EVA_CERT_SHA256 = "688df17827dd9a002705baf0400c80f8f4650c6e87c
 private const val UNAVAILABLE_NOTICE =
   "Paseo could not read the conversation; open Paseo, leave it running, and ask again."
 
+private val PROJECT_COLUMNS = listOf("id", "serverId", "name", "kind")
 private val WORKSPACE_COLUMNS =
   listOf("id", "serverId", "name", "project", "repository", "branch", "status", "agentCount", "lastActivityAt")
 private val AGENT_COLUMNS =
@@ -57,6 +58,7 @@ class AssistantContentProvider : ContentProvider() {
 
   override fun getType(uri: Uri): String? =
     when (uri.pathSegments.singleOrNull()) {
+      "projects" -> "vnd.android.cursor.dir/vnd.$authority.project"
       "workspaces" -> "vnd.android.cursor.dir/vnd.$authority.workspace"
       "agents" -> "vnd.android.cursor.dir/vnd.$authority.agent"
       "messages" -> "vnd.android.cursor.dir/vnd.$authority.message"
@@ -88,6 +90,7 @@ class AssistantContentProvider : ContentProvider() {
     }
     require(sortOrder.isNullOrEmpty()) { "Sorting is fixed to most recent activity" }
     return when (uri.pathSegments.singleOrNull()) {
+      "projects" -> queryCatalog("projects", PROJECT_COLUMNS, uri, projection)
       "workspaces" -> queryCatalog("workspaces", WORKSPACE_COLUMNS, uri, projection)
       "agents" -> queryCatalog("agents", AGENT_COLUMNS, uri, projection)
       "messages" -> queryMessages(uri, projection)
