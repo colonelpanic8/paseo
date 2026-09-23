@@ -181,19 +181,22 @@ with this build's key. A test build is a debuggable build, or a release build
 prebuilt with `PASEO_ASSISTANT_DEBUG_CALLERS=1`. That variable makes the config
 plugin add the `sh.paseo.assistant.allowDebugCallers` metadata. Production
 builds never set it, so they refuse debug EVA even when it shares their
-signer. Mutations also need
-**Settings → General → Let EVA run agents**. It is off by default and stored in
-native `SharedPreferences`, so it is checked before any JavaScript starts. It
-is rechecked whenever a saved request resumes. EVA's own per-action grants
+signer. Mutations are also gated by
+**Settings → General → Let EVA run agents**. It is on by default, so a
+verified EVA works on a new install with no setup. Turning it off is stored in
+native `SharedPreferences`, so it is checked before any JavaScript starts, and
+it is rechecked whenever a saved request resumes. EVA's own per-action grants
 still apply on EVA's side.
 
 Unattended runs never borrow interactive state. `serverId` and `projectId` must
 name a project in the host's live registry (`project.list`); there is no
-remembered-host or remembered-project fallback. `provider` and `model` default
-to the New workspace form's saved choice, and a saved model the host no longer
-offers falls back to the provider default. `modeId` comes only from the request.
-A saved permission mode is never applied, so an unattended agent cannot inherit
-full access. No provider anywhere is `needs_configuration`.
+remembered-host or remembered-project fallback. `provider` defaults to the New
+workspace form's saved choice, else the host's first ready provider in the
+host's order. `model` defaults to the saved model for that provider, and a
+saved model the host no longer offers falls back to the provider default.
+`modeId` comes only from the request. A saved permission mode is never applied,
+so an unattended agent cannot inherit full access. With no provider ready on
+the host, the answer is `needs_configuration`.
 
 ### Receipts
 
@@ -296,7 +299,7 @@ agent per call, with the prompt as its first user message. Settled
 `request_status` reads took under 5 ms and started no JavaScript. With the host
 down, `create_agent` returned `waiting_for_host` at 23.5 seconds. After the
 host came back, one `request_status` resumed and completed it without a
-duplicate. With the toggle off, the call returned `needs_authorization`.
+duplicate. With the toggle turned off, the call returned `needs_authorization`.
 With the app force-stopped, `/messages` from EVA's process returned the agent's
 latest rows in 1.5 seconds, and a workspace fan-out in 1.4 seconds. A
 production-configured build refused the same caller: the provider threw
