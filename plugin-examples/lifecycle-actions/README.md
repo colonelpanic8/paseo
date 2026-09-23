@@ -17,6 +17,10 @@ paseo plugin install /absolute/path/to/plugin-examples/lifecycle-logger
 paseo plugin logs lifecycle-logger
 ```
 
+Outside the Paseo repository, `server/inspect.ts` needs `@getpaseo/protocol` installed for its
+type imports. Add it to your plugin development dependencies at the same version as
+`@getpaseo/plugin` before installing this example.
+
 Copy the callbacks you need into your own plugin. The follow-up example sends a new message; it does
 not replay attachments or undo previous tool effects. If the provider keeps returning the matching
 phrase, it keeps sending follow-ups. Add limits or delay in your plugin when your workflow needs them.
@@ -29,4 +33,4 @@ Claude agent.
 See [agent configuration](../agent-configuration) for a focused example that injects MCP servers and
 changes Codex sandbox and approval options while preserving other settings.
 
-See the [lifecycle reference](../../public-docs/plugins/v0.8/reference.md#lifecycle-hooks) for the API.
+See the [lifecycle reference](../../public-docs/plugins/reference.md#lifecycle-hooks) for the API.
