@@ -1141,6 +1141,8 @@ function StatusWorkspaceQuickActions({
         open={open}
         onOpenChange={onOpenChange}
         workspaceKey={workspace.workspaceKey}
+        serverId={workspace.serverId}
+        workspaceId={workspace.workspaceId}
         onCopyPath={onCopyPath}
         onCopyBranchName={onCopyBranchName}
         onRename={onRename}
