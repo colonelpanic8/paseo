@@ -2979,6 +2979,26 @@ export class DaemonClient {
     return { title: payload.title };
   }
 
+  async regenerateWorkspaceTitle(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<{ title: string | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.title.regenerate.request",
+        workspaceId,
+      },
+      responseType: "workspace.title.regenerate.response",
+      // Structured generation retries and falls back across providers.
+      timeout: 180_000,
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "regenerateWorkspaceTitle rejected");
+    }
+    return { title: payload.title };
+  }
+
   async setWorkspacePinned(
     workspaceId: string,
     pinned: boolean,

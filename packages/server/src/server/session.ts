@@ -58,6 +58,7 @@ import {
   sendPromptToAgent,
   waitForAgentRunStartWithTimeout,
   unarchiveAgentState,
+  isSystemInjectedEnvelope,
 } from "./agent/agent-prompt.js";
 import {
   resolveCreateAgentTitles,
@@ -243,6 +244,10 @@ import {
   type CreatePaseoWorktreeResult,
 } from "./paseo-worktree-service.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
+import {
+  buildWorkspaceConversationSeed,
+  type WorkspaceConversationSource,
+} from "./workspace-title-regenerator.js";
 import {
   buildAgentSessionConfig as buildWorktreeAgentSessionConfig,
   createPaseoWorktreeWorkflow as createWorktreeWorkflow,
@@ -2905,6 +2910,8 @@ export class Session {
     switch (msg.type) {
       case "workspace.title.set.request":
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
+      case "workspace.title.regenerate.request":
+        return this.handleWorkspaceTitleRegenerateRequest(msg.workspaceId, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
       case "workspace.snooze.set.request":
@@ -3745,6 +3752,101 @@ export class Session {
         },
       });
     }
+  }
+
+  private async handleWorkspaceTitleRegenerateRequest(
+    workspaceId: string,
+    requestId: string,
+  ): Promise<void> {
+    this.sessionLogger.info(
+      { workspaceId, requestId },
+      "session: workspace.title.regenerate.request",
+    );
+    const emitResponse = (title: string | null, error: string | null) => {
+      this.emit({
+        type: "workspace.title.regenerate.response",
+        payload: { requestId, workspaceId, accepted: error === null, title, error },
+      });
+    };
+
+    try {
+      const workspace = await this.workspaceRegistry.get(workspaceId);
+      if (!workspace) {
+        emitResponse(null, "Workspace not found");
+        return;
+      }
+      const seed = buildWorkspaceConversationSeed(
+        await this.collectWorkspaceConversationSources(workspaceId),
+      );
+      if (!seed) {
+        emitResponse(null, "Workspace has no agent conversation to title from");
+        return;
+      }
+      const title = await this.workspaceAutoName.generateTitleFromConversation({
+        cwd: workspace.cwd,
+        seed,
+        currentSelection: this.getFocusedAgentSelectionForCwd(workspace.cwd) ?? null,
+      });
+      if (!title) {
+        emitResponse(null, "Title generation failed");
+        return;
+      }
+      const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
+        ...existing,
+        title,
+        updatedAt: new Date().toISOString(),
+      }));
+      if (!updated) {
+        emitResponse(null, "Workspace not found");
+        return;
+      }
+      emitResponse(title, null);
+      await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, workspaceId, requestId },
+        "session: workspace.title.regenerate.request error",
+      );
+      emitResponse(null, getErrorMessageOr(error, "Failed to regenerate workspace title"));
+    }
+  }
+
+  // Live agents contribute their conversation; unloaded ones only their stored title, since
+  // loading them would resume provider sessions just to read history.
+  private async collectWorkspaceConversationSources(
+    workspaceId: string,
+  ): Promise<WorkspaceConversationSource[]> {
+    const liveAgents = this.agentManager
+      .listAgents()
+      .filter((agent) => agent.workspaceId === workspaceId && !agent.internal)
+      .toSorted(
+        (left, right) =>
+          (right.lastMessageAt?.getTime() ?? 0) - (left.lastMessageAt?.getTime() ?? 0),
+      );
+    const liveIds = new Set(liveAgents.map((agent) => agent.id));
+    const storedRecords = await this.agentStorage.listByWorkspace(workspaceId);
+    const storedTitles = new Map(storedRecords.map((record) => [record.id, record.title]));
+    const sources: WorkspaceConversationSource[] = [];
+    for (const agent of liveAgents) {
+      const rows = await this.agentManager.getTimelineRows(agent.id);
+      const userMessages = rows.flatMap((row) =>
+        row.item.type === "user_message" && !isSystemInjectedEnvelope(row.item.text)
+          ? [row.item.text]
+          : [],
+      );
+      sources.push({
+        title: storedTitles.get(agent.id) ?? agent.config.title ?? null,
+        userMessages,
+        lastAssistantMessage: await this.agentManager.getLastAssistantMessage(agent.id),
+      });
+    }
+    for (const record of storedRecords) {
+      if (liveIds.has(record.id) || record.internal || record.archivedAt || !record.title) {
+        continue;
+      }
+      sources.push({ title: record.title, userMessages: [], lastAssistantMessage: null });
+    }
+    return sources;
   }
 
   private async handleWorkspacePinSetRequest(

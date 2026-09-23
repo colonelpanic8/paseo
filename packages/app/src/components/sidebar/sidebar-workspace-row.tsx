@@ -488,6 +488,8 @@ function WorkspaceRowTrailingActions({
               <SidebarWorkspaceMenu
                 {...kebab.menuProps}
                 workspaceKey={workspace.workspaceKey}
+                serverId={workspace.serverId}
+                workspaceId={workspace.workspaceId}
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}

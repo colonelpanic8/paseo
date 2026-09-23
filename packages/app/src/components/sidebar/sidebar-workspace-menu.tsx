@@ -19,6 +19,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Sparkles,
   Tag,
   Sun,
 } from "lucide-react-native";
@@ -26,6 +27,9 @@ import { isWeb } from "@/constants/platform";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useToast } from "@/contexts/toast-context";
+import { useHostFeature } from "@/runtime/host-features";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -67,6 +71,7 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedCircle = withUnistyles(Circle);
 const ThemedPencil = withUnistyles(Pencil);
+const ThemedSparkles = withUnistyles(Sparkles);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
@@ -77,6 +82,7 @@ const ThemedListTree = withUnistyles(ListTree);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
+const retitleLeadingIcon = <ThemedSparkles size={14} uniProps={foregroundMutedColorMapping} />;
 const markAsReadLeadingIcon = (
   <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
 );
@@ -217,6 +223,14 @@ function SidebarWorkspaceMenuItems({
           {t("sidebar.workspace.actions.rename")}
         </WorkspaceMenuItem>
       ) : null}
+      {serverId && workspaceId ? (
+        <WorkspaceRetitleMenuItem
+          surface={surface}
+          workspaceKey={workspaceKey}
+          serverId={serverId}
+          workspaceId={workspaceId}
+        />
+      ) : null}
       {onMarkAsRead ? (
         <WorkspaceMenuItem
           surface={surface}
@@ -247,7 +261,7 @@ function SidebarWorkspaceMenuItems({
           {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
         </WorkspaceMenuItem>
       ) : null}
-      {serverId && workspaceId ? (
+      {surface === "dropdown" && serverId && workspaceId ? (
         <DropdownMenuSubTrigger
           id={WORKSPACE_LABEL_PAGE_ID}
           leading={labelLeading}
@@ -367,6 +381,53 @@ export function SidebarWorkspaceMenu({
         />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function WorkspaceRetitleMenuItem({
+  surface,
+  workspaceKey,
+  serverId,
+  workspaceId,
+}: {
+  surface: MenuSurface;
+  workspaceKey: string;
+  serverId: string;
+  workspaceId: string;
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const supported = useHostFeature(serverId, "workspaceTitleRegenerate");
+  const handleSelect = useCallback(async () => {
+    const client = getHostRuntimeStore().getClient(serverId);
+    if (!client) {
+      toast.error(t("sidebar.workspace.toasts.hostDisconnected"));
+      return;
+    }
+    toast.show(t("sidebar.workspace.toasts.retitlingWorkspace"), { durationMs: null });
+    try {
+      await client.regenerateWorkspaceTitle(workspaceId);
+      toast.show(t("sidebar.workspace.toasts.retitledWorkspace"), { variant: "success" });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("sidebar.workspace.toasts.failedToRetitleWorkspace"),
+      );
+    }
+  }, [serverId, t, toast, workspaceId]);
+  if (!supported) {
+    return null;
+  }
+  return (
+    <WorkspaceMenuItem
+      surface={surface}
+      testID={`sidebar-workspace-menu-retitle-${workspaceKey}`}
+      leading={retitleLeadingIcon}
+      onSelect={handleSelect}
+    >
+      {t("sidebar.workspace.actions.retitle")}
+    </WorkspaceMenuItem>
   );
 }
 
@@ -530,6 +591,8 @@ export function SidebarWorkspaceContextMenu({
         <SidebarWorkspaceMenuItems
           surface="context"
           workspaceKey={workspaceKey}
+          serverId={workspace.serverId}
+          workspaceId={workspace.workspaceId}
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}

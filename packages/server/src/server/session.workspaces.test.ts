@@ -572,6 +572,7 @@ function createSessionForWorkspaceTests(
       newName: string,
     ) => Promise<{ previousBranch: string | null; currentBranch: string | null }>;
     generateWorkspaceName?: () => Promise<GeneratedWorkspaceName | null>;
+    generateWorkspaceTitle?: (options: { seed: string }) => Promise<string | null>;
   } = {},
 ): TestSession {
   const logger = {
@@ -736,6 +737,7 @@ function createSessionForWorkspaceTests(
         emitWorkspaceUpdateForWorkspaceId: async () => {},
         logger: asSessionLogger(logger),
         generateWorkspaceName: options.generateWorkspaceName,
+        generateWorkspaceTitle: options.generateWorkspaceTitle,
       }),
       renameCurrentBranch: options.renameCurrentBranch,
       daemonConfigStore: asDaemonConfigStore({
@@ -8425,6 +8427,78 @@ test("workspace.snooze.set.request rejects past wake times and unknown workspace
     snoozeStatus: null,
     error: "Workspace not found",
   });
+});
+
+test("workspace.title.regenerate.request retitles from the workspace's live conversation", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const seeds: string[] = [];
+  const liveAgent = {
+    id: "agent-live",
+    workspaceId: "ws-1",
+    lastMessageAt: new Date("2026-03-01T12:05:00.000Z"),
+    config: { title: "Fix login" },
+  };
+  const row = (seq: number, item: unknown) => ({
+    seq,
+    timestamp: "2026-03-01T12:00:00.000Z",
+    item,
+  });
+  const session = asTestSession(
+    createSessionForWorkspaceTests({
+      onMessage: (message) => emitted.push(message),
+      agentManager: {
+        listAgents: () => [liveAgent],
+        getTimelineRows: async () => [
+          row(1, { type: "user_message", text: "Fix the login redirect" }),
+          row(2, { type: "user_message", text: "<paseo-system>\ninjected\n</paseo-system>" }),
+          row(3, { type: "user_message", text: "Now migrate sessions to Redis" }),
+        ],
+        getLastAssistantMessage: async () => "Sessions now live in Redis.",
+      },
+      agentStorage: { listByWorkspace: async () => [] },
+      generateWorkspaceTitle: async ({ seed }) => {
+        seeds.push(seed);
+        return "Migrate sessions to Redis";
+      },
+    }),
+  );
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: "ws-1",
+    projectId: "proj-1",
+    cwd: REPO_CWD,
+    kind: "local_checkout",
+    displayName: "main",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+  const workspaces = new Map([[workspace.workspaceId, { ...workspace, title: "Fix login" }]]);
+  session.workspaceRegistry.get = async (id: string) => workspaces.get(id) ?? null;
+  session.workspaceRegistry.update = async (id, updater) => {
+    const existing = workspaces.get(id);
+    if (!existing) return null;
+    const updated = updater(existing);
+    workspaces.set(id, updated);
+    return updated;
+  };
+
+  await session.handleMessage({
+    type: "workspace.title.regenerate.request",
+    workspaceId: workspace.workspaceId,
+    requestId: "req-retitle",
+  });
+
+  expect(findByType(emitted, "workspace.title.regenerate.response")?.payload).toEqual({
+    requestId: "req-retitle",
+    workspaceId: "ws-1",
+    accepted: true,
+    title: "Migrate sessions to Redis",
+    error: null,
+  });
+  expect(workspaces.get("ws-1")?.title).toBe("Migrate sessions to Redis");
+  expect(seeds).toHaveLength(1);
+  expect(seeds[0]).toContain("Now migrate sessions to Redis");
+  expect(seeds[0]).toContain("Sessions now live in Redis.");
+  expect(seeds[0]).not.toContain("injected");
 });
 
 test("workspace.title.set.request with whitespace-only title clears the title", async () => {
