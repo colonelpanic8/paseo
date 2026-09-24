@@ -1783,6 +1783,268 @@ export const ptBR: TranslationResources = {
       copied: "Copiado",
     },
   },
+  audioSession: {
+    busy: {
+      voiceMode: "O modo de voz está usando o microfone. Pare-o primeiro.",
+      dictation: "O ditado está usando o microfone. Pare-o primeiro.",
+      liveVoice: "A voz ao vivo está usando o microfone. Pare-a primeiro.",
+      unknown: "O microfone está em uso. Pare primeiro o outro recurso de áudio.",
+    },
+  },
+  liveVoice: {
+    label: "Voz ao vivo",
+    menu: {
+      hosts: "Host",
+    },
+    actions: {
+      start: "Iniciar voz ao vivo",
+      unavailable: "Voz ao vivo indisponível",
+      stop: "Parar voz ao vivo",
+      mute: "Silenciar microfone",
+      unmute: "Ativar microfone",
+      enableAudio: "Toque para ativar o áudio",
+      showTranscript: "Mostrar transcrição",
+      hideTranscript: "Ocultar transcrição",
+      dismiss: "Dispensar",
+    },
+    unavailable: {
+      platform: "A voz ao vivo não é compatível com este dispositivo.",
+      noHosts: "Adicione um host para usar a voz ao vivo.",
+      connecting: "Conectando aos hosts. A voz ao vivo aparecerá quando um estiver pronto.",
+      offline: "Nenhum host está online. Conecte-se a um host para usar a voz ao vivo.",
+      upgrade: "Os hosts conectados não anunciam voz ao vivo. Atualize seus daemons.",
+      toolsDisabled:
+        "Ative as ferramentas do Paseo nas configurações deste host para usar a voz ao vivo.",
+    },
+    settings: {
+      title: "Voz ao vivo",
+      voice: {
+        label: "Voz",
+        description: "Usada em novas chamadas. Uma chamada ativa mantém a voz atual.",
+        default: "Padrão",
+      },
+      backendModel: {
+        label: "Modelo de ações",
+        description:
+          "Executa as ações da chamada nos bastidores. O padrão é rápido e barato; escolha um modelo mais forte se as ações exigirem mais critério.",
+        default: "Padrão (rápido)",
+      },
+      backendThinking: {
+        label: "Raciocínio das ações",
+        description: "Profundidade de raciocínio do modelo de ações.",
+        default: "Padrão",
+      },
+      agentReports: {
+        label: "Avisar sobre atividade de agentes",
+        description:
+          "Durante uma chamada, saiba quando qualquer sessão de agente termina, falha ou precisa de permissão — inclusive as que você iniciou fora da chamada, em qualquer host conectado.",
+      },
+      agentReportGuidance: {
+        label: "Quando interromper",
+        description: "Repassado ao agente de voz como está. Deixe vazio para ele decidir.",
+        placeholder: "Só me interrompa para pedidos de permissão e falhas.",
+      },
+      promptComponents: {
+        "canonical-tools": {
+          label: "Cola de ferramentas",
+          description:
+            "Dá ao assistente os nomes exatos das ferramentas para pular turnos de descoberta.",
+        },
+        "delegation-brevity": {
+          label: "Delegações breves",
+          description:
+            "Mantém curtos os prompts às sessões de agente — sem ditar código nem listas de passos.",
+        },
+        "cross-host-reach": {
+          label: "Visão entre máquinas",
+          description:
+            "Ensina ao assistente quais leituras cobrem todas as máquinas em uma só chamada.",
+        },
+        recipes: {
+          label: "Receitas",
+          description:
+            "Os caminhos mais curtos conhecidos para pedidos comuns, como arquivar pelo nome.",
+        },
+        "speech-style": {
+          label: "Estilo de fala",
+          description: "Frases faladas, agir antes de narrar e vocabulário do Paseo.",
+        },
+      },
+      customInstructions: {
+        label: "Instruções permanentes",
+        description: "Repassadas ao agente de voz como estão, em toda chamada.",
+        placeholder: "Responda sempre em uma frase, a menos que eu peça mais.",
+      },
+      defaultWorkspaceDirectory: {
+        label: "Diretório padrão de espaço de trabalho",
+        description:
+          "Onde novos espaços de trabalho são criados quando uma solicitação não tem um óbvio. Deixe vazio e o agente de voz pergunta.",
+        placeholder: "~/Projects",
+      },
+    },
+    diagnostics: {
+      title: "Voz ao vivo",
+      statusTitle: "Status",
+      noHosts: "Nenhum host configurado.",
+      hostSummary: "{{version}} · {{support}}",
+      unknownVersion: "Versão desconhecida",
+      supported: "Voz ao vivo compatível",
+      unsupported: "Voz ao vivo incompatível",
+      supportUnknown: "Compatibilidade com voz ao vivo desconhecida",
+      connection: {
+        idle: "Ocioso",
+        connecting: "Conectando",
+        online: "Online",
+        offline: "Offline",
+        error: "Erro",
+      },
+    },
+    status: {
+      connecting: "Conectando...",
+      live: "Ao vivo",
+      audioBlocked: "Áudio bloqueado",
+      stopping: "Parando...",
+      ended: "Chamada encerrada",
+      error: "Falha",
+    },
+    transcript: {
+      empty: "Nada falado ainda.",
+      user: "Você:",
+      assistant: "Agente:",
+    },
+    errors: {
+      busy: "Já existe uma chamada de voz ao vivo ativa neste host.",
+      unsupported: "Este host não suporta voz ao vivo.",
+      startFailed: "Não foi possível iniciar a voz ao vivo.",
+      micBusy: "O microfone está sendo usado por outro recurso.",
+      notConnected: "Este host não está conectado.",
+      alreadyActive: "Já existe uma chamada de voz ao vivo em andamento.",
+      stopping: "A chamada de voz ao vivo anterior ainda está sendo encerrada.",
+      micDenied:
+        "O acesso ao microfone está bloqueado. Permita que o Paseo use o microfone e tente novamente.",
+      micUnavailable:
+        "Nenhum microfone disponível foi encontrado. Conecte ou selecione um nas configurações de áudio do dispositivo e tente novamente.",
+      backgroundUnavailable: "Não foi possível iniciar o áudio em segundo plano.",
+      iceTimeout: "Não foi possível negociar a conexão em tempo.",
+      connectionLost: "A conexão de voz ao vivo caiu.",
+    },
+  },
+  voiceProfiles: {
+    menu: {
+      profileLabel: "Perfil",
+      defaultProfile: "Padrão do host",
+      threadLabel: "Conversa",
+      newThread: "Nova conversa",
+      manage: "Gerenciar perfis…",
+    },
+    thread: {
+      untitled: "Conversa sem título",
+    },
+    settings: {
+      title: "Perfis e conversas",
+      description:
+        "Um perfil define como uma chamada se comporta: instruções, contexto, arquivos, voz e modelo de ação. Uma conversa é o que a chamada lembra. Cada chamada abre ou continua uma conversa sob o perfil escolhido.",
+      manage: "Gerenciar",
+    },
+    manage: {
+      title: "Perfis e conversas",
+      noHosts: "Nenhum host conectado suporta perfis. Atualize o daemon.",
+      profiles: "Perfis",
+      profilesEmpty: "Ainda não há perfis. As chamadas usam as configurações padrão do host.",
+      threads: "Conversas",
+      threadsEmpty: "Ainda não há conversas. Cada chamada neste host inicia uma.",
+      selectedForCalls: "Usado em novas chamadas",
+      continuing: "Continuado pela próxima chamada",
+      hostDefault: "Padrão do host",
+      fromConfig: "Do config.json do daemon",
+      noInstructions: "Sem instruções",
+      entries: "{{n}} entradas",
+    },
+    actions: {
+      newProfile: "Novo perfil",
+      menu: "Ações para {{name}}",
+      useForCalls: "Usar nas chamadas",
+      stopUsing: "Usar o padrão do host",
+      continueThread: "Continuar na próxima chamada",
+      stopContinuing: "Começar do zero na próxima chamada",
+      openHistory: "Abrir histórico",
+      edit: "Editar",
+      delete: "Excluir",
+      deleteProfileTitle: "Excluir {{name}}?",
+      deleteProfileMessage:
+        "As conversas que o usavam mantêm o histórico e continuam sem a configuração dele.",
+      deleteThreadTitle: "Excluir {{title}}?",
+      deleteThreadMessage:
+        "O histórico da conversa e o resumo são removidos. O trabalho delegado a agentes continua em execução.",
+    },
+    form: {
+      createTitle: "Novo perfil",
+      editTitle: "Editar perfil",
+      create: "Criar",
+      save: "Salvar alterações",
+      name: {
+        label: "Nome",
+        placeholder: "Chefe de gabinete",
+      },
+      instructions: {
+        label: "Instruções",
+        hint: "{{length}} / {{max}}. Passadas ao agente de voz como escritas, em toda chamada.",
+        placeholder: "Encaminhe o trabalho aos agentes; nunca escreva código você mesmo.",
+      },
+      context: {
+        label: "Contexto",
+        hint: "{{length}} / {{max}}. Contexto que a chamada conhece desde o início.",
+        placeholder: "Estamos lançando o projeto de voz. Prefira o repositório paseo.",
+      },
+      files: {
+        label: "Arquivos de contexto",
+        hint: "{{count}} / {{max}}. Um caminho absoluto ou iniciado por ~ por linha; o daemon os lê ao iniciar a chamada.",
+        placeholder: "~/org/AGENTS.md",
+      },
+      voice: {
+        label: "Voz",
+        hint: "Usada em novas chamadas.",
+        default: "Padrão",
+      },
+      backendModel: {
+        label: "Modelo de ação",
+        hint: "Executa as ações da chamada nos bastidores; não é o modelo que fala.",
+        default: "Padrão (rápido)",
+      },
+      backendThinking: {
+        label: "Raciocínio de ação",
+        hint: "Profundidade de raciocínio do modelo de ação.",
+        default: "Padrão",
+      },
+      errors: {
+        nameRequired: "O nome é obrigatório",
+        nameTooLong: "O nome é muito longo",
+        tooLong: "Muito longo",
+        filesInvalid: "Cada arquivo deve ser um caminho absoluto ou iniciado por ~, no máximo 16",
+      },
+    },
+    history: {
+      title: "Histórico",
+      empty: "Nada lembrado ainda. Inicie uma chamada para começar.",
+      loadOlder: "Carregar anteriores",
+      callStarted: "Chamada iniciada",
+      callEnded: "Chamada encerrada · {{cause}}",
+      delegationOk: "Delegado: {{description}}",
+      delegationFailed: "Delegação falhou ({{code}}): {{description}}",
+      user: "Você",
+      assistant: "Assistente",
+      limits:
+        "Novas chamadas começam do resumo mais o histórico recente que cabe no limite de contexto do provedor. A fala ao vivo não é retomada.",
+      summary: {
+        label: "Resumo",
+        hint: "Escrito por você. Novas chamadas o leem no lugar do histórico antigo.",
+        coversThrough: "Cobre o histórico até a entrada #{{seq}}.",
+        placeholder: "O que a próxima chamada deve levar adiante.",
+        willCover: "Salvar cobre o histórico até a entrada #{{seq}}.",
+        save: "Salvar resumo",
+      },
+    },
+  },
   realtimeVoice: {
     actions: {
       mute: "Silenciar voz em tempo real",
@@ -1982,6 +2244,7 @@ export const ptBR: TranslationResources = {
     groupInfo: "Sobre {{title}}",
     sections: {
       general: "Geral",
+      voice: "Voz ao vivo",
       appearance: "Aparência",
       layout: en.settings.sections.layout,
       editor: "Editor",
@@ -2294,9 +2557,13 @@ export const ptBR: TranslationResources = {
         sendMessage: "Enviar mensagem",
         queueMessage: "Enfileirar mensagem",
         muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
+        muteUnmuteLiveVoice: "Silenciar/ativar voz ao vivo",
+        holdInvertLiveVoiceMute: "Segurar para inverter o silêncio da voz ao vivo",
         switchProject: "Trocar projeto",
       },
       helpNotes: {
+        holdInvertLiveVoiceMute:
+          "Aperte para falar quando silenciado; aperte para silenciar quando ativo.",
         showKeyboardShortcuts:
           "Disponível quando o foco não está em um campo de texto ou terminal.",
       },
