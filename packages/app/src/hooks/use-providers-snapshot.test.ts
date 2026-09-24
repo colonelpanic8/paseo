@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { CancelledError, QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
@@ -9,7 +9,10 @@ import {
 } from "@getpaseo/protocol/provider-snapshot-codec";
 import type { CachedProviderSnapshot, ProviderSnapshotCache } from "@/data/provider-snapshot-cache";
 import { draftAgentCommandsQueryKey } from "@/hooks/agent-commands-query";
-import { resolveProviderIconName } from "@/components/provider-icon-name";
+import {
+  replaceProviderSnapshotIcons,
+  resolveProviderIconName,
+} from "@/components/provider-icon-name";
 import { applyProvidersSnapshotUpdate, type ProvidersSnapshotUpdate } from "@/data/push-router";
 import {
   fetchProvidersSnapshot,
@@ -465,6 +468,102 @@ describe("applyProvidersSnapshotUpdate", () => {
     });
 
     expect(queryClient.getQueryState(commandsKey)?.isInvalidated).toBe(true);
+  });
+});
+
+describe("snapshot cache commit ordering", () => {
+  const commitOrderingServerId = "cache-commit-ordering";
+  const iconProvider = "test-provider";
+
+  function iconEntry(
+    status: ProviderSnapshotEntry["status"],
+    iconSvg: string,
+  ): ProviderSnapshotEntry {
+    return { provider: iconProvider, status, enabled: true, iconSvg };
+  }
+
+  // The push lands after getProvidersSnapshot has returned but before the fetch
+  // publishes, so only the abort checkpoint that follows the cache write keeps
+  // the superseded response from overwriting the pushed snapshot.
+  it("keeps a push delivered between the fetch response and the cache commit", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    const queryKey = providersSnapshotQueryKey(commitOrderingServerId, "/repo-a");
+    const supersededEntries = [iconEntry("loading", "superseded-icon")];
+    const pushedEntries = [iconEntry("ready", "pushed-icon")];
+    let markWriting = () => {};
+    const writing = new Promise<void>((resolve) => {
+      markWriting = resolve;
+    });
+    let releaseWrite = () => {};
+    const written = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    const recordingCache = createCache();
+    const cache: ProviderSnapshotCache = {
+      ...recordingCache,
+      async write(input) {
+        markWriting();
+        await written;
+        await recordingCache.write(input);
+      },
+    };
+    const client = createClient({
+      snapshots: [
+        {
+          ...providersSnapshot(supersededEntries),
+          snapshotHash: "superseded-hash",
+          compactSnapshot: compactProviderSnapshot(supersededEntries),
+        },
+      ],
+    });
+    let supersededFetch: Promise<GetProvidersSnapshotResult> | undefined;
+    try {
+      const superseded = queryClient.fetchQuery({
+        queryKey,
+        queryFn: ({ signal }) => {
+          supersededFetch = fetchProvidersSnapshot({
+            client,
+            serverId: commitOrderingServerId,
+            cwd: "/repo-a",
+            queryClient,
+            cache,
+            signal,
+          });
+          return supersededFetch;
+        },
+      });
+      await writing;
+      await applyProvidersSnapshotUpdate({
+        client: createClient(),
+        serverId: commitOrderingServerId,
+        queryClient,
+        cache: createCache(),
+        message: {
+          type: "providers_snapshot_update",
+          payload: {
+            cwd: "/repo-a",
+            entries: pushedEntries,
+            generatedAt: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      });
+      releaseWrite();
+      await expect(supersededFetch).rejects.toBeInstanceOf(CancelledError);
+      await expect(superseded).rejects.toBeInstanceOf(CancelledError);
+      expect(queryClient.getQueryData<GetProvidersSnapshotResult>(queryKey)?.entries).toEqual(
+        pushedEntries,
+      );
+      expect(resolveProviderIconName(iconProvider, commitOrderingServerId)).toEqual({
+        kind: "svg",
+        svg: "pushed-icon",
+      });
+    } finally {
+      releaseWrite();
+      queryClient.clear();
+      replaceProviderSnapshotIcons(commitOrderingServerId, []);
+    }
   });
 });
 
