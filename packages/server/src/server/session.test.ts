@@ -24,6 +24,7 @@ import {
 } from "@getpaseo/protocol/binary-frames/index";
 import { Session } from "./session.js";
 import { OWNER_PERMISSIONS, type DaemonPermission } from "./authorization/index.js";
+import { VoiceThreadStoreError } from "./voice-profiles/voice-thread-store.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import { StructuredAgentFallbackError } from "./agent/agent-response-loop.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
@@ -33,6 +34,10 @@ import { WorkspaceLabelError, type WorkspaceLabelService } from "./workspace-lab
 import { createPersistedProjectRecord } from "./workspace-registry.js";
 import { deriveProjectKey } from "./project-key.js";
 import type { SessionOptions } from "./session.js";
+import type { LiveVoiceCoordinator } from "./live-voice/live-voice-coordinator.js";
+import type { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import type { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
+import type { LiveVoiceAgentNotifier } from "./live-voice/live-voice-agent-notifier.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "./messages.js";
 import {
   asSessionInternals as asSessionInternalsHelper,
@@ -324,6 +329,14 @@ interface SessionForTestOptions {
   serverId?: SessionOptions["serverId"];
   daemonVersion?: SessionOptions["daemonVersion"];
   daemonRuntimeConfig?: SessionOptions["daemonRuntimeConfig"];
+  clientCapabilities?: SessionOptions["clientCapabilities"];
+  liveVoiceCoordinator?: LiveVoiceCoordinator;
+  liveVoiceRouteBroker?: LiveVoiceRouteBroker;
+  liveVoiceToolExecutor?: LiveVoiceToolExecutor;
+  liveVoiceAgentNotifier?: LiveVoiceAgentNotifier;
+  principalId?: string;
+  voiceProfileStore?: SessionOptions["voiceProfileStore"];
+  voiceThreadStore?: SessionOptions["voiceThreadStore"];
   downloadTokenStore?: SessionOptions["downloadTokenStore"];
   pushNotifications?: SessionOptions["pushNotifications"];
   messages?: unknown[];
@@ -370,6 +383,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     messageReceipts: createMessageReceiptsStub(),
     creationService: createTestCreationService(),
     clientId: options.clientId ?? "test-client",
+    clientCapabilities: options.clientCapabilities,
     onMessage: (message) => messages.push(message),
     ...(options.targetedMessages
       ? {
@@ -436,6 +450,13 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     getDaemonTcpPort: options.getDaemonTcpPort,
     getDaemonTcpHost: options.getDaemonTcpHost,
     voice: options.voice,
+    liveVoiceCoordinator: options.liveVoiceCoordinator,
+    liveVoiceRouteBroker: options.liveVoiceRouteBroker,
+    liveVoiceToolExecutor: options.liveVoiceToolExecutor,
+    liveVoiceAgentNotifier: options.liveVoiceAgentNotifier,
+    principalId: options.principalId,
+    voiceProfileStore: options.voiceProfileStore,
+    voiceThreadStore: options.voiceThreadStore,
     serverId: options.serverId,
     daemonVersion: options.daemonVersion,
     daemonRuntimeConfig: options.daemonRuntimeConfig,
@@ -741,6 +762,412 @@ describe("workspace label editing", () => {
         },
       },
     ]);
+  });
+});
+
+describe("Live Voice routing session boundary", () => {
+  test("stops a call using the stable reconnectable session authority", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const stop = vi.fn();
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceCoordinator: { stop } as unknown as LiveVoiceCoordinator,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.stop.request",
+        requestId: "stop-request-1",
+        liveSessionId: "live-session-1",
+      },
+      source,
+    );
+
+    expect(stop).toHaveBeenCalledExactlyOnceWith({
+      liveSessionId: "live-session-1",
+      sessionKey: session,
+    });
+    expect(targetedMessages).toContainEqual({
+      source,
+      message: {
+        type: "voice.live.stop.response",
+        payload: { requestId: "stop-request-1" },
+      },
+    });
+  });
+
+  test("returns the host's upstream Live Voice catalog", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const session = createSessionForTest({
+      targetedMessages,
+      agentManager: {
+        listLiveVoiceVoices: vi.fn().mockResolvedValue({ voices: ["cove", "future-voice"] }),
+      },
+    });
+
+    await session.handleMessage(
+      { type: "voice.live.voices.request", requestId: "voices-request-1" },
+      source,
+    );
+
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.voices.response",
+          payload: {
+            requestId: "voices-request-1",
+            voices: ["cove", "future-voice"],
+          },
+        },
+      },
+    ]);
+  });
+
+  test("drops a selected voice that the host provider's catalog rejects", async () => {
+    const source = {};
+    const start = vi.fn().mockResolvedValue({
+      accepted: true,
+      liveSessionId: "live-session-1",
+      answerSdp: "answer-sdp",
+    });
+    const session = createSessionForTest({
+      agentManager: {
+        listLiveVoiceVoices: vi.fn().mockResolvedValue({ voices: ["cove", "juniper"] }),
+      },
+      liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.start.request",
+        requestId: "start-request-1",
+        negotiation: { kind: "webrtc_sdp", offerSdp: "offer-sdp" },
+        voice: "shimmer",
+      },
+      source,
+    );
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start.mock.calls[0]?.[0]).not.toHaveProperty("voice");
+  });
+
+  test("a legacy owner starts local-only Live Voice without receiving route messages", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const start = vi.fn().mockResolvedValue({
+      accepted: true,
+      liveSessionId: "live-session-1",
+      answerSdp: "answer-sdp",
+    });
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.start.request",
+        requestId: "start-request-1",
+        negotiation: { kind: "webrtc_sdp", offerSdp: "offer-sdp" },
+      },
+      source,
+    );
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start.mock.calls[0]?.[0]).not.toHaveProperty("sendRouteRequest");
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.start.response",
+          payload: {
+            requestId: "start-request-1",
+            accepted: true,
+            liveSessionId: "live-session-1",
+            negotiation: { kind: "webrtc_sdp", answerSdp: "answer-sdp" },
+          },
+        },
+      },
+    ]);
+  });
+
+  test("routes a capable owner's reverse requests through its reconnectable session", async () => {
+    const source = {};
+    const otherSource = {};
+    const messages: SessionOutboundMessage[] = [];
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const start = vi.fn().mockImplementation(async (request) => {
+      await request.sendRouteRequest({
+        type: "voice.live.route.request",
+        requestId: "route-request-1",
+        liveSessionId: "live-session-1",
+        operation: { kind: "list_hosts" },
+      });
+      return {
+        accepted: true,
+        liveSessionId: "live-session-1",
+        answerSdp: "answer-sdp",
+      };
+    });
+    const session = createSessionForTest({
+      messages,
+      targetedMessages,
+      liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
+    });
+    session.updateClientCapabilities({ [CLIENT_CAPS.liveVoiceCrossHostRouter]: true }, source);
+    session.updateClientCapabilities({}, otherSource);
+
+    await session.handleMessage(
+      {
+        type: "voice.live.start.request",
+        requestId: "start-request-1",
+        negotiation: { kind: "webrtc_sdp", offerSdp: "offer-sdp" },
+      },
+      source,
+    );
+
+    expect(start.mock.calls[0]?.[0].owner).toEqual({ sessionKey: session });
+    expect(messages).toContainEqual({
+      type: "voice.live.route.request",
+      requestId: "route-request-1",
+      liveSessionId: "live-session-1",
+      operation: { kind: "list_hosts" },
+    });
+    expect(targetedMessages.some((entry) => entry.source === otherSource)).toBe(false);
+  });
+
+  test("accepts reverse route responses from a replacement socket in the owning session", async () => {
+    const replacementSource = {};
+    const receiveResponse = vi.fn();
+    const session = createSessionForTest({
+      liveVoiceRouteBroker: { receiveResponse } as unknown as LiveVoiceRouteBroker,
+    });
+    const response = {
+      type: "voice.live.route.response" as const,
+      payload: {
+        requestId: "route-request-1",
+        liveSessionId: "live-session-1",
+        ok: false as const,
+        error: {
+          code: "target_offline",
+          message: "The selected host is offline.",
+          retryable: true,
+        },
+      },
+    };
+
+    await session.handleMessage(response, replacementSource);
+
+    expect(receiveResponse).toHaveBeenCalledExactlyOnceWith(response, session);
+  });
+
+  test("target tool execution responds only to the requesting source", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const execute = vi.fn().mockResolvedValue({
+      type: "voice.live.tool.execute.response",
+      payload: {
+        requestId: "execute-request-1",
+        ok: true,
+        toolResult: { content: [], structuredContent: { agents: [] } },
+      },
+    });
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceToolExecutor: { execute } as unknown as LiveVoiceToolExecutor,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.tool.execute.request",
+        requestId: "execute-request-1",
+        toolName: "list_agents",
+        arguments: {},
+      },
+      source,
+    );
+
+    expect(execute).toHaveBeenCalledWith(
+      {
+        type: "voice.live.tool.execute.request",
+        requestId: "execute-request-1",
+        toolName: "list_agents",
+        arguments: {},
+      },
+      {},
+    );
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.tool.execute.response",
+          payload: {
+            requestId: "execute-request-1",
+            ok: true,
+            toolResult: { content: [], structuredContent: { agents: [] } },
+          },
+        },
+      },
+    ]);
+  });
+
+  test("reports background work started by a routed tool to the requesting source only", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const watch = vi.fn();
+    const execute = vi.fn(
+      async (
+        request: { requestId: string },
+        context: { onBackgroundAgentStarted?: (params: { agentId: string }) => void },
+      ) => {
+        context.onBackgroundAgentStarted?.({ agentId: "agent-1" });
+        return {
+          type: "voice.live.tool.execute.response",
+          payload: { requestId: request.requestId, ok: true, toolResult: { content: [] } },
+        };
+      },
+    );
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceToolExecutor: { execute } as unknown as LiveVoiceToolExecutor,
+      liveVoiceAgentNotifier: { watch } as unknown as LiveVoiceAgentNotifier,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.tool.execute.request",
+        requestId: "execute-request-1",
+        toolName: "create_agent",
+        arguments: {},
+        notifyOnAgentFinish: true,
+      },
+      source,
+    );
+
+    expect(watch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agentId: "agent-1",
+        requestId: "execute-request-1",
+        sourceKey: source,
+      }),
+    );
+  });
+
+  test("speaks a work notification into the requesting client's session-owned call", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const say = vi.fn().mockResolvedValue({
+      delivered: false,
+      errorCode: "unknown_call",
+      errorMessage: "This client does not own a live voice call with that id.",
+    });
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceCoordinator: { say } as unknown as LiveVoiceCoordinator,
+    });
+
+    await session.handleMessage(
+      {
+        type: "voice.live.agent.notify.request",
+        requestId: "notify-1",
+        liveSessionId: "live-session-1",
+        notification: {
+          agentId: "agent-1",
+          title: "Rebase main",
+          reason: "finished",
+          summary: null,
+        },
+      },
+      source,
+    );
+
+    expect(say).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ liveSessionId: "live-session-1", sessionKey: session }),
+    );
+    expect(say.mock.calls[0]?.[0].text).toContain("Rebase main");
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.agent.notify.response",
+          payload: {
+            requestId: "notify-1",
+            delivered: false,
+            error: {
+              code: "unknown_call",
+              message: "This client does not own a live voice call with that id.",
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  test("scopes the ambient agent watch to the exact socket that asked for it", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const watching = new Set<object>();
+    const notifier = {
+      watchAll: vi.fn(({ sourceKey }: { sourceKey: object }) => {
+        watching.add(sourceKey);
+      }),
+      stopWatchingAll: vi.fn((sourceKey: object) => {
+        watching.delete(sourceKey);
+      }),
+      isWatchingAll: (sourceKey: object) => watching.has(sourceKey),
+    };
+    const session = createSessionForTest({
+      targetedMessages,
+      liveVoiceAgentNotifier: notifier as unknown as LiveVoiceAgentNotifier,
+    });
+
+    await session.handleMessage(
+      { type: "voice.live.agent.watch.request", requestId: "watch-1", enabled: true },
+      source,
+    );
+
+    expect(notifier.watchAll).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ sourceKey: source }),
+    );
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.live.agent.watch.response",
+          payload: { requestId: "watch-1", enabled: true },
+        },
+      },
+    ]);
+
+    await session.handleMessage(
+      { type: "voice.live.agent.watch.request", requestId: "watch-2", enabled: false },
+      source,
+    );
+
+    expect(notifier.stopWatchingAll).toHaveBeenCalledExactlyOnceWith(source);
+    expect(targetedMessages[1]?.message).toEqual({
+      type: "voice.live.agent.watch.response",
+      payload: { requestId: "watch-2", enabled: false },
+    });
+  });
+
+  test("tells a client asking for ambient reports when the daemon cannot give them", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const session = createSessionForTest({ targetedMessages });
+
+    await session.handleMessage(
+      { type: "voice.live.agent.watch.request", requestId: "watch-1", enabled: true },
+      source,
+    );
+
+    expect(targetedMessages[0]?.message).toMatchObject({
+      type: "voice.live.agent.watch.response",
+      payload: { requestId: "watch-1", enabled: false, error: { code: "unsupported" } },
+    });
   });
 });
 
@@ -5809,4 +6236,217 @@ test("provider snapshots preserve versionless visibility while capabilities upda
     "plugin-provider",
   ]);
   expect(references.compactSnapshot!.entries[0]!.modes![0]!.icon).toBe("ShieldCheck");
+});
+
+describe("voice profile RPCs", () => {
+  const threadId = `thr_${"a".repeat(32)}`;
+
+  function createStores() {
+    return {
+      profiles: {
+        list: vi.fn().mockResolvedValue([]),
+        defaultProfileId: null,
+        save: vi.fn(),
+        delete: vi.fn(),
+        find: vi.fn(),
+      },
+      threads: {
+        list: vi.fn().mockResolvedValue([]),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        compact: vi.fn(),
+        delete: vi.fn(),
+      },
+    };
+  }
+
+  function storeOptions(stores: ReturnType<typeof createStores>) {
+    return {
+      voiceProfileStore: stores.profiles as unknown as NonNullable<
+        SessionOptions["voiceProfileStore"]
+      >,
+      voiceThreadStore: stores.threads as unknown as NonNullable<
+        SessionOptions["voiceThreadStore"]
+      >,
+    };
+  }
+
+  test("scopes the stores to the admitted principal and replies only to the source", async () => {
+    const source = {};
+    const messages: SessionOutboundMessage[] = [];
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const stores = createStores();
+    const session = createSessionForTest({
+      principalId: "device-a",
+      ...storeOptions(stores),
+      messages,
+      targetedMessages,
+    });
+
+    // A principal named on the wire must never win over admission.
+    await session.handleMessage(
+      {
+        type: "voice.profile.list.request",
+        requestId: "list-1",
+        principalId: "owner",
+      } as unknown as SessionInboundMessage,
+      source,
+    );
+
+    expect(stores.profiles.list).toHaveBeenCalledWith("device-a");
+    expect(messages).toEqual([]);
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "voice.profile.list.response",
+          payload: { requestId: "list-1", profiles: [], defaultProfileId: null },
+        },
+      },
+    ]);
+  });
+
+  test("surfaces store errors as correlated rpc_error with the store's code", async () => {
+    const source = {};
+    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    const stores = createStores();
+    stores.threads.get.mockRejectedValue(
+      new VoiceThreadStoreError("not_found", "Thread not found"),
+    );
+    const session = createSessionForTest({
+      principalId: "device-a",
+      ...storeOptions(stores),
+      targetedMessages,
+    });
+
+    await session.handleMessage(
+      { type: "voice.thread.get.request", requestId: "get-1", threadId, limit: 20 },
+      source,
+    );
+
+    expect(stores.threads.get).toHaveBeenCalledWith("device-a", threadId, { limit: 20 });
+    expect(targetedMessages).toEqual([
+      {
+        source,
+        message: {
+          type: "rpc_error",
+          payload: {
+            requestId: "get-1",
+            requestType: "voice.thread.get.request",
+            error: "Thread not found",
+            code: "not_found",
+          },
+        },
+      },
+    ]);
+  });
+
+  test("fails closed when the session has no admitted principal", async () => {
+    const messages: SessionOutboundMessage[] = [];
+    const stores = createStores();
+    const session = createSessionForTest({ ...storeOptions(stores), messages });
+
+    await session.handleMessage({
+      type: "voice.profile.save.request",
+      requestId: "save-1",
+      name: "Work",
+      configuration: {
+        instructions: "",
+        context: "",
+        files: [],
+        voice: null,
+        backendModel: null,
+        backendThinkingOptionId: null,
+      },
+    });
+
+    expect(stores.profiles.save).not.toHaveBeenCalled();
+    expect(messages).toEqual([
+      {
+        type: "rpc_error",
+        payload: {
+          requestId: "save-1",
+          requestType: "voice.profile.save.request",
+          error: "Profile ownership is unavailable.",
+          code: "unauthorized",
+        },
+      },
+    ]);
+  });
+
+  test("lets a read-only principal list threads but not mutate them", async () => {
+    const messages: SessionOutboundMessage[] = [];
+    const stores = createStores();
+    const session = createSessionForTest({
+      principalId: "viewer",
+      permissions: ["workspace.read"],
+      ...storeOptions(stores),
+      messages,
+    });
+
+    await session.handleMessage({
+      type: "voice.thread.delete.request",
+      requestId: "delete-1",
+      threadId,
+    });
+    await session.handleMessage({ type: "voice.thread.list.request", requestId: "list-2" });
+
+    expect(stores.threads.delete).not.toHaveBeenCalled();
+    expect(stores.threads.list).toHaveBeenCalledWith("viewer");
+    expect(messages).toEqual([
+      {
+        type: "rpc_error",
+        payload: {
+          requestId: "delete-1",
+          requestType: "voice.thread.delete.request",
+          error: "Session is not authorized for voice.thread.delete.request",
+          code: "access_denied",
+        },
+      },
+      { type: "voice.thread.list.response", payload: { requestId: "list-2", threads: [] } },
+    ]);
+  });
+
+  test("hands the coordinator the memory fields, the trusted principal, and returns the thread", async () => {
+    const start = vi.fn().mockResolvedValue({
+      accepted: true,
+      liveSessionId: "live-session-1",
+      answerSdp: "answer-sdp",
+      threadId,
+    });
+    const messages: SessionOutboundMessage[] = [];
+    const session = createSessionForTest({
+      principalId: "device-a",
+      liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
+      messages,
+    });
+
+    await session.handleMessage({
+      type: "voice.live.start.request",
+      requestId: "start-1",
+      negotiation: { kind: "webrtc_sdp", offerSdp: "offer-sdp" },
+      profileId: "cfg_work",
+      newThread: true,
+    });
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start.mock.calls[0]?.[0]).toMatchObject({
+      profileId: "cfg_work",
+      newThread: true,
+      owner: { principalId: "device-a" },
+    });
+    expect(messages).toEqual([
+      {
+        type: "voice.live.start.response",
+        payload: {
+          requestId: "start-1",
+          accepted: true,
+          liveSessionId: "live-session-1",
+          threadId,
+          negotiation: { kind: "webrtc_sdp", answerSdp: "answer-sdp" },
+        },
+      },
+    ]);
+  });
 });
