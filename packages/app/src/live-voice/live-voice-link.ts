@@ -3,8 +3,18 @@ import type {
   LiveVoiceHostAvailability,
 } from "@/live-voice/live-voice-availability-policy";
 
+/**
+ * `paseo://live-voice?host=<serverId>&profile=<id or name>`
+ *
+ * Both parameters are optional. Without `host` the link uses the quick-launch
+ * host from settings, then the only eligible host; without `profile` it uses
+ * the launcher's selection on that host. An earbud or automation shortcut can
+ * therefore be one fixed URL and still follow whatever the user configured.
+ */
 export interface LiveVoiceLink {
   host: string | null;
+  /** A profile id (`prf_…`/`cfg_…`) or a display name; resolved on the chosen host. */
+  profile: string | null;
 }
 
 export type LiveVoiceLinkHostDecision =
@@ -14,7 +24,10 @@ export type LiveVoiceLinkHostDecision =
 
 export interface ResolveLiveVoiceLinkHostInput {
   link: LiveVoiceLink;
+  /** The quick-launch host from settings; stands in for a link without `host`. */
+  defaultHost?: string | null;
   isHostBootstrapReady: boolean;
+  isAppVisible: boolean;
   availability: LiveVoiceAvailability;
   hosts: LiveVoiceHostAvailability[];
 }
@@ -36,7 +49,8 @@ export function parseLiveVoiceLink(url: string): LiveVoiceLink | null {
   }
 
   const host = parsed.searchParams.get("host")?.trim() || null;
-  return { host };
+  const profile = parsed.searchParams.get("profile")?.trim() || null;
+  return { host, profile };
 }
 
 function isHostEligibilityPending(host: LiveVoiceHostAvailability): boolean {
@@ -49,22 +63,27 @@ function isHostEligibilityPending(host: LiveVoiceHostAvailability): boolean {
 export function resolveLiveVoiceLinkHost(
   input: ResolveLiveVoiceLinkHostInput,
 ): LiveVoiceLinkHostDecision {
-  const requestedHost = input.link.host
-    ? (input.hosts.find((host) => host.serverId === input.link.host) ?? null)
+  // Native call startup requires a resumed Activity, which can follow the URL event.
+  if (!input.isAppVisible) {
+    return { kind: "wait" };
+  }
+  const requestedHostId = input.link.host ?? input.defaultHost ?? null;
+  const requestedHost = requestedHostId
+    ? (input.hosts.find((host) => host.serverId === requestedHostId) ?? null)
     : null;
   if (requestedHost && isHostEligibilityPending(requestedHost)) {
     return { kind: "wait" };
   }
 
   if (input.availability.kind === "available") {
-    const requestedAvailableHost = input.link.host
-      ? (input.availability.hosts.find((host) => host.serverId === input.link.host) ?? null)
+    const requestedAvailableHost = requestedHostId
+      ? (input.availability.hosts.find((host) => host.serverId === requestedHostId) ?? null)
       : null;
     if (requestedAvailableHost) {
       return { kind: "start", serverId: requestedAvailableHost.serverId };
     }
 
-    const isRequestedHostStillUnknown = input.link.host !== null && requestedHost === null;
+    const isRequestedHostStillUnknown = requestedHostId !== null && requestedHost === null;
     if (isRequestedHostStillUnknown && !input.isHostBootstrapReady) {
       return { kind: "wait" };
     }

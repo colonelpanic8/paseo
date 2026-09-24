@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
+import { useAppVisible } from "@/hooks/use-app-visible";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
@@ -443,10 +444,11 @@ export function LiveVoiceFooterButton({ active }: { active: boolean }) {
   const [isManagingProfiles, setIsManagingProfiles] = useState(false);
   const isCompactLayout = useIsCompactFormFactor();
   const isLauncherRequested = useLiveVoiceLauncherRequested();
+  const isAppVisible = useAppVisible();
   const openAgentListForLayout = usePanelStore((state) => state.openAgentListForLayout);
 
   useEffect(() => {
-    if (!isLauncherRequested) {
+    if (!isLauncherRequested || !isAppVisible) {
       return;
     }
     openAgentListForLayout({ isCompact: isCompactLayout });
@@ -455,7 +457,7 @@ export function LiveVoiceFooterButton({ active }: { active: boolean }) {
     }
     setIsOpen(true);
     consumeLiveVoiceLauncherRequest();
-  }, [active, isCompactLayout, isLauncherRequested, openAgentListForLayout]);
+  }, [active, isAppVisible, isCompactLayout, isLauncherRequested, openAgentListForLayout]);
 
   const availableHosts = availability.kind === "available" ? availability.hosts : [];
   const selectedHost =

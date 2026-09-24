@@ -16,6 +16,7 @@ import {
   type LiveVoiceDaemonClient,
   type LiveVoiceRuntime,
   type LiveVoiceSnapshot,
+  type LiveVoiceStartOptions,
 } from "@/live-voice/live-voice-runtime";
 import { registerLiveVoiceRouteAuthority } from "@/live-voice/live-voice-route-authority";
 import { attachLiveVoiceCues } from "@/live-voice/live-voice-cues";
@@ -47,7 +48,7 @@ const ambientWatchDeps: LiveVoiceAmbientWatchDeps = {
 };
 
 interface LiveVoiceContextValue extends LiveVoiceSnapshot {
-  start: (serverId: string) => Promise<void>;
+  start: (serverId: string, options?: LiveVoiceStartOptions) => Promise<void>;
   stop: () => Promise<void>;
   setMuted: (muted: boolean) => void;
   toggleMute: () => void;
@@ -183,14 +184,18 @@ export function LiveVoiceProvider({ children }: LiveVoiceProviderProps) {
         {
           // Every call on a capable host is remembered: continue the picked
           // thread, else open a new one under the picked (or default) profile.
-          read: (serverId) => {
+          // A link's profile override replaces the launcher's pick; the picked
+          // thread only carries over when it belongs to the same profile.
+          read: (serverId, override) => {
             if (!hostSupportsVoiceProfiles(serverId)) {
               return undefined;
             }
             const selection = getVoiceSelection(serverId);
+            const profileId = override === undefined ? selection.profileId : override;
+            const threadId = profileId === selection.profileId ? selection.threadId : null;
             return {
-              ...(selection.profileId ? { profileId: selection.profileId } : {}),
-              ...(selection.threadId ? { threadId: selection.threadId } : { newThread: true }),
+              ...(profileId ? { profileId } : {}),
+              ...(threadId ? { threadId } : { newThread: true }),
             };
           },
           remembered: (serverId, threadId) => {

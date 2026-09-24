@@ -1857,6 +1857,22 @@ export const ru: TranslationResources = {
       unknown: "Микрофон занят. Сначала остановите другую аудиофункцию.",
     },
   },
+  dispatch: {
+    label: "Dispatch",
+    listening: "Слушаю…",
+    sending: "Отправка…",
+    sent: "Отправлено: {{target}}",
+    send: "Отправить",
+    cancel: "Отмена",
+    dismiss: "Закрыть",
+    defaultTarget: "вашему агенту Dispatch",
+    errors: {
+      noTarget: "Сначала выберите агента Dispatch в настройках.",
+      hostOffline: "Хост агента Dispatch не в сети.",
+      nothingHeard: "Ничего не услышано.",
+      sendFailed: "Не удалось связаться с агентом Dispatch.",
+    },
+  },
   liveVoice: {
     label: "Живой голос",
     menu: {
@@ -1889,13 +1905,23 @@ export const ru: TranslationResources = {
         description: "Используется для новых звонков. Активный звонок сохраняет текущий голос.",
         default: "По умолчанию",
       },
+      quickLaunch: {
+        hostLabel: "Хост ярлыка",
+        description:
+          "Хост, которому звонит ярлык paseo://live-voice. «Автоматически» использует единственный доступный хост.",
+        auto: "Автоматически",
+        profileLabel: "Профиль ярлыка",
+        profileHint:
+          "Какой профиль отвечает на звонок по ярлыку на этом хосте. Тот же выбор, что и в меню живого голоса.",
+        hostDefault: "По умолчанию хоста",
+      },
       dispatch: {
         hostLabel: "Хост Dispatch",
-        description: "Выберите хост для разовых запросов с часов.",
+        description: "Выберите хост для разовых запросов с часов или ярлыка paseo://dispatch.",
         chooseHost: "Выбрать хост",
         noHosts: "Нет доступных хостов",
         agentLabel: "Агент Dispatch",
-        agentHint: "Голосовые запросы с часов отправляются этому агенту.",
+        agentHint: "Голосовые запросы с часов или ярлыка отправляются этому агенту.",
         notSet: "Не задан",
         clear: "Не задан",
         noAgents: "На этом хосте нет агентов",

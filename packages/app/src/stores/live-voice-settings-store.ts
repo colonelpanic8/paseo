@@ -54,6 +54,12 @@ interface LiveVoiceSettingsState {
   /** The realtime voice to use for new calls; null leaves selection to the provider. */
   voice: string | null;
   /**
+   * The host a `paseo://live-voice` link calls when it names none. Null lets the
+   * link fall back to the only eligible host, or to the launcher when there are
+   * several. The assistant for that call is the launcher's selection on the host.
+   */
+  quickLaunchServerId: string | null;
+  /**
    * Report agent sessions the call did not start — anything finishing, failing,
    * or asking for permission on any connected host.
    */
@@ -78,6 +84,7 @@ interface LiveVoiceSettingsState {
   backendModel: string | null;
   backendThinkingOptionId: string | null;
   setVoice: (voice: string | null) => void;
+  setQuickLaunchServerId: (serverId: string | null) => void;
   setAmbientAgentReports: (enabled: boolean) => void;
   setAmbientAgentGuidance: (guidance: string) => void;
   setPromptComponentEnabled: (id: LiveVoiceOptionalPromptComponent, enabled: boolean) => void;
@@ -91,6 +98,7 @@ export const useLiveVoiceSettingsStore = create<LiveVoiceSettingsState>()(
   persist(
     (set) => ({
       voice: null,
+      quickLaunchServerId: null,
       // Off by default: it turns a call the user started for one thing into a
       // channel their whole machine can interrupt, which should be chosen.
       ambientAgentReports: false,
@@ -101,6 +109,7 @@ export const useLiveVoiceSettingsStore = create<LiveVoiceSettingsState>()(
       backendModel: null,
       backendThinkingOptionId: null,
       setVoice: (voice) => set({ voice }),
+      setQuickLaunchServerId: (serverId) => set({ quickLaunchServerId: serverId }),
       setAmbientAgentReports: (enabled) => set({ ambientAgentReports: enabled }),
       setAmbientAgentGuidance: (guidance) =>
         set({ ambientAgentGuidance: guidance.slice(0, MAX_AMBIENT_AGENT_GUIDANCE_LENGTH) }),

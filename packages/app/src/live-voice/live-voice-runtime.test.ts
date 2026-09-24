@@ -1014,6 +1014,18 @@ describe("Live Voice runtime memory", () => {
     });
   });
 
+  it("passes a link's profile override through to the resolver", async () => {
+    const read = vi.fn((_serverId: string, override?: string | null) =>
+      override === undefined ? { profileId: PROFILE_ID } : { profileId: override ?? undefined },
+    );
+    const harness = createHarness({ memory: { read } });
+
+    await harness.runtime.start(SERVER_ID, { profileId: null });
+
+    expect(read).toHaveBeenCalledWith(SERVER_ID, null);
+    expect(harness.client.startLiveVoice.mock.calls[0]?.[0]).not.toHaveProperty("profileId");
+  });
+
   it("continues a thread without naming a profile and still skips the per-call overrides", async () => {
     const harness = createHarness({
       voice: "juniper",
