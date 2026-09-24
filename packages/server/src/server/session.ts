@@ -54,7 +54,6 @@ import {
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
 import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
-import { collectAgentMessageActivity } from "./agent/message-activity.js";
 import {
   sendPromptToAgent,
   waitForAgentRunStartWithTimeout,
