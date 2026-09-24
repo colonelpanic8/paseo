@@ -26,6 +26,7 @@ import {
 import { isWeb } from "@/constants/platform";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useToast } from "@/contexts/toast-context";
 import { useHostFeature } from "@/runtime/host-features";
@@ -107,6 +108,8 @@ export interface SidebarWorkspaceMenuProps {
   workspaceKey: string;
   serverId?: string;
   workspaceId?: string;
+  /** Drives the clear-attention item's label: a failed workspace dismisses, an unread one reads. */
+  statusBucket?: SidebarStateBucket;
   workspaceLabels?: readonly string[];
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
@@ -165,6 +168,7 @@ function SidebarWorkspaceMenuItems({
   workspaceKey,
   serverId,
   workspaceId,
+  statusBucket,
   onCopyPath,
   onCopyBranchName,
   onRename,
@@ -238,7 +242,9 @@ function SidebarWorkspaceMenuItems({
           leading={markAsReadLeadingIcon}
           onSelect={onMarkAsRead}
         >
-          {t("sidebar.workspace.actions.markAsRead")}
+          {statusBucket === "failed"
+            ? "Dismiss error"
+            : t("sidebar.workspace.actions.markAsRead")}
         </WorkspaceMenuItem>
       ) : null}
       {onMarkAsUnread ? (
@@ -315,6 +321,7 @@ export function SidebarWorkspaceMenu({
   workspaceKey,
   serverId,
   workspaceId,
+  statusBucket,
   workspaceLabels,
   onCopyPath,
   onCopyBranchName,
@@ -363,6 +370,7 @@ export function SidebarWorkspaceMenu({
           workspaceKey={workspaceKey}
           serverId={serverId}
           workspaceId={workspaceId}
+          statusBucket={statusBucket}
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
@@ -522,6 +530,7 @@ export function SidebarWorkspaceContextMenu({
   hostBadgeLabel,
   serviceSummary,
   workspaceKey,
+  statusBucket,
   onCopyPath,
   onCopyBranchName,
   onRename,
@@ -591,6 +600,7 @@ export function SidebarWorkspaceContextMenu({
         <SidebarWorkspaceMenuItems
           surface="context"
           workspaceKey={workspaceKey}
+          statusBucket={statusBucket ?? workspace.statusBucket}
           serverId={workspace.serverId}
           workspaceId={workspace.workspaceId}
           onCopyPath={onCopyPath}
