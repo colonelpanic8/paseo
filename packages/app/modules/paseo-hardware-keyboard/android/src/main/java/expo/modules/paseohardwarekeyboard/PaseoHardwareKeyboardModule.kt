@@ -1,12 +1,19 @@
 package expo.modules.paseohardwarekeyboard
 
+import android.app.Activity
 import android.content.Context
 import android.hardware.input.InputManager
 import android.view.InputDevice
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.view.Window
+import com.facebook.react.views.modal.ReactModalHostView
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.lang.ref.WeakReference
 
 private const val HARDWARE_SUBMIT_EVENT_NAME = "onHardwareKeyboardSubmit"
 private const val HARDWARE_KEY_DOWN_EVENT_NAME = "onHardwareKeyDown"
@@ -37,6 +44,11 @@ class PaseoHardwareKeyboardModule : Module() {
       inputManager =
         appContext.reactContext?.getSystemService(Context.INPUT_SERVICE) as? InputManager
       inputManager?.registerInputDeviceListener(inputDeviceListener, null)
+      appContext.currentActivity?.let(PaseoModalKeyForwarding::watch)
+    }
+
+    OnActivityEntersForeground {
+      appContext.currentActivity?.let(PaseoModalKeyForwarding::watch)
     }
 
     Function("setHardwareKeyboardSubmitEnabled") { enabled: Boolean ->
@@ -100,7 +112,18 @@ object PaseoHardwareKeyboardKeyDispatcher {
   @Volatile internal var isKeyEventsEnabled = false
 
   @JvmStatic
-  fun dispatchKeyEvent(event: KeyEvent): Boolean {
+  fun dispatchKeyEvent(event: KeyEvent): Boolean = dispatch(event, inModal = false)
+
+  /**
+   * Key events inside a React Native Modal. The Modal closes itself on Escape
+   * (onRequestClose), and the composer's Enter-to-send must not fire behind
+   * it, so only shortcut keys are forwarded.
+   */
+  internal fun dispatchModalKeyEvent(event: KeyEvent) {
+    dispatch(event, inModal = true)
+  }
+
+  private fun dispatch(event: KeyEvent, inModal: Boolean): Boolean {
     val module = this.module ?: return false
     // Soft keyboards deliver their return key as a virtual-device key event.
     // Those must reach the text input as a newline — the on-screen send button
@@ -132,7 +155,8 @@ object PaseoHardwareKeyboardKeyDispatcher {
     // Matches desktop: Enter sends, Ctrl/Cmd+Enter takes the alternate send
     // (queue while the agent runs), Shift+Enter falls through as a newline.
     // Consume the ones we act on so the text input doesn't also insert one.
-    if (isSubmitEnabled && event.keyCode == KeyEvent.KEYCODE_ENTER && !shiftKey && !altKey) {
+    val isSubmitKey = event.keyCode == KeyEvent.KEYCODE_ENTER && !shiftKey && !altKey
+    if (!inModal && isSubmitEnabled && isSubmitKey) {
       if (ctrlKey || metaKey) {
         module.emitHardwareKeyboardSubmit(true)
         return true
@@ -146,7 +170,8 @@ object PaseoHardwareKeyboardKeyDispatcher {
     }
     val code = domCode(event.keyCode) ?: return false
     val isFunctionKey = event.keyCode in KeyEvent.KEYCODE_F1..KeyEvent.KEYCODE_F12
-    val isShortcutWorthy = ctrlKey || altKey || metaKey || code == "Escape" || isFunctionKey
+    val isEscape = code == "Escape" && !inModal
+    val isShortcutWorthy = ctrlKey || altKey || metaKey || isEscape || isFunctionKey
     if (!isShortcutWorthy) {
       return false
     }
@@ -219,6 +244,61 @@ object PaseoHardwareKeyboardKeyDispatcher {
       KeyEvent.KEYCODE_PAGE_UP -> "PageUp"
       KeyEvent.KEYCODE_PAGE_DOWN -> "PageDown"
       else -> null
+    }
+  }
+}
+
+/**
+ * React Native renders each Modal into its own Dialog window, whose key events
+ * never reach MainActivity.dispatchKeyEvent. A window losing focus means a
+ * Modal may have opened over it, so wrap the Window.Callback of every Modal
+ * dialog then. Walking from the activity root reaches nested Modals too:
+ * ReactModalHostView reports the dialog's content as its children.
+ */
+internal object PaseoModalKeyForwarding {
+  private var activityRoot: WeakReference<View>? = null
+
+  private val focusListener =
+    ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+      if (!hasFocus) wrapModalDialogs()
+    }
+
+  fun watch(activity: Activity) {
+    val root = activity.window?.decorView ?: return
+    if (activityRoot?.get() === root) return
+    activityRoot = WeakReference(root)
+    root.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
+  }
+
+  fun wrapModalDialogs() {
+    val root = activityRoot?.get() ?: return
+    forEachModalHost(root) { host ->
+      val window = host.dialog?.window ?: return@forEachModalHost
+      val callback = window.callback ?: return@forEachModalHost
+      if (callback !is ModalKeyCallback) {
+        window.callback = ModalKeyCallback(callback)
+      }
+    }
+  }
+
+  private fun forEachModalHost(view: View, action: (ReactModalHostView) -> Unit) {
+    if (view is ReactModalHostView) action(view)
+    if (view !is ViewGroup) return
+    for (index in 0 until view.childCount) {
+      view.getChildAt(index)?.let { forEachModalHost(it, action) }
+    }
+  }
+
+  private class ModalKeyCallback(private val delegate: Window.Callback) :
+    Window.Callback by delegate {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+      PaseoHardwareKeyboardKeyDispatcher.dispatchModalKeyEvent(event)
+      return delegate.dispatchKeyEvent(event)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+      delegate.onWindowFocusChanged(hasFocus)
+      if (!hasFocus) wrapModalDialogs()
     }
   }
 }
