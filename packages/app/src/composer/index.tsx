@@ -47,6 +47,11 @@ import {
   DraftAgentControls,
   type DraftAgentControlsProps,
 } from "@/composer/agent-controls";
+import {
+  pickAgentModelDisplaySource,
+  type AgentModelDisplay,
+} from "@/composer/agent-controls/utils";
+import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
 import { ContextWindowMeter } from "@/components/context-window-meter";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
@@ -281,7 +286,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
       contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
-      model: agent?.model ?? null,
+      ...pickAgentModelDisplaySource(agent),
       provider: agent?.provider ?? null,
     };
   };
@@ -294,6 +299,7 @@ function renderContextWindowMeter(
   showPercentage: boolean,
   serverId: string,
   provider: string | null,
+  modelDisplay: AgentModelDisplay,
   pending: boolean,
   glyphSize: number,
 ): ReactElement | null {
@@ -309,6 +315,8 @@ function renderContextWindowMeter(
       showPercentage={showPercentage}
       serverId={serverId}
       provider={provider}
+      modelLabel={modelDisplay.modelLabel}
+      thinkingLabel={modelDisplay.thinkingLabel}
       pending={pending}
       glyphSize={glyphSize}
     />
@@ -1316,6 +1324,15 @@ function ComposerContentImpl({
   const { settings: appSettings } = useAppSettings();
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
+  const agentModelDisplay = useAgentModelDisplay({
+    serverId,
+    cwd,
+    provider: agentState.provider,
+    model: agentState.model,
+    runtimeModelId: agentState.runtimeModelId,
+    thinkingOptionId: agentState.thinkingOptionId,
+    effectiveThinkingOptionId: agentState.effectiveThinkingOptionId,
+  });
 
   const queuedMessagesRaw = useSessionStore((state) =>
     state.sessions[serverId]?.queuedMessages?.get(agentId),
@@ -2102,6 +2119,7 @@ function ComposerContentImpl({
         false,
         serverId,
         agentState.provider,
+        agentModelDisplay,
         contextWindowPending,
         contextWindowMeterGlyphSize,
       ),
@@ -2111,6 +2129,7 @@ function ComposerContentImpl({
       agentState.totalCostUsd,
       serverId,
       agentState.provider,
+      agentModelDisplay,
       contextWindowPending,
       contextWindowMeterGlyphSize,
     ],
