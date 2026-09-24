@@ -36,7 +36,7 @@ import type {
 import type { TerminalClipboardWriter } from "../terminal/native-renderer/terminal-selection";
 import type { TerminalRendererReadyChange } from "../utils/terminal-renderer-readiness";
 import { openExternalUrl } from "../utils/open-external-url";
-import { focusWithRetries } from "../utils/web-focus";
+import { focusWithRetries } from "../utils/focus-with-retries";
 import {
   extractTerminalDropPaths,
   isTerminalDragLeaveOutside,
