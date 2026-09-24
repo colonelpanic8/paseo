@@ -4,7 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePaseoNodeEnv } from "./paseo-env.js";
 import { z } from "zod";
-import { expandTilde } from "../utils/path.js";
+import { resolveConfiguredPath } from "../utils/path.js";
+import type { VoiceProfile } from "@getpaseo/protocol/voice-profiles";
+import type { DeclaredVoiceProfiles } from "./voice-profiles/voice-profile-store.js";
 
 import type { PaseoDaemonConfig } from "./bootstrap.js";
 import {
@@ -396,7 +398,7 @@ function resolveWebUiConfig(
   const rawDistDir = env.PASEO_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
   const trimmedDistDir = rawDistDir?.trim();
   const distDir = trimmedDistDir
-    ? path.resolve(path.isAbsolute(trimmedDistDir) ? trimmedDistDir : paseoHome, trimmedDistDir)
+    ? resolveConfiguredPath(paseoHome, trimmedDistDir)
     : BUNDLED_WEB_UI_DIST_DIR;
   return {
     enabled,
@@ -416,6 +418,36 @@ function resolveVoiceLlmConfig(
     provider: envVoiceLlmProvider ?? persistedVoiceLlmProvider ?? null,
     providerExplicit: envVoiceLlmProvider !== null || persistedVoiceLlmProvider !== null,
     model: persisted.features?.voiceMode?.llm?.model ?? null,
+  };
+}
+
+function resolveLiveVoiceProfiles(
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): DeclaredVoiceProfiles | undefined {
+  const configured = persisted.liveVoice;
+  if (!configured?.contextProfiles?.length) return undefined;
+  const declaredAt = new Date().toISOString();
+  const profiles: VoiceProfile[] = configured.contextProfiles.map((profile) => ({
+    id: `cfg_${profile.id}`,
+    name: profile.label ?? profile.id,
+    source: "config",
+    configuration: {
+      instructions: profile.instructions ?? "",
+      context: profile.context ?? "",
+      files: profile.files ?? [],
+      voice: profile.voice ?? null,
+      backendModel: profile.backendModel ?? null,
+      backendThinkingOptionId: profile.backendThinkingOptionId ?? null,
+    },
+    revision: 1,
+    createdAt: declaredAt,
+    updatedAt: declaredAt,
+  }));
+  return {
+    profiles,
+    defaultProfileId: configured.defaultContextProfile
+      ? `cfg_${configured.defaultContextProfile}`
+      : null,
   };
 }
 
@@ -503,10 +535,7 @@ function resolveWorktreesRoot(
     return undefined;
   }
 
-  const expandedRoot = expandTilde(configuredRoot);
-  return path.isAbsolute(expandedRoot)
-    ? path.resolve(expandedRoot)
-    : path.resolve(paseoHome, expandedRoot);
+  return resolveConfiguredPath(paseoHome, configuredRoot);
 }
 
 function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedConfig>): string {
@@ -660,6 +689,7 @@ export function resolveConfigFromPersisted(
     voiceLlmProvider: voiceLlm.provider,
     voiceLlmProviderExplicit: voiceLlm.providerExplicit,
     voiceLlmModel: voiceLlm.model,
+    liveVoiceProfiles: resolveLiveVoiceProfiles(persisted),
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
     metadataGeneration: persisted.agents?.metadataGeneration,
