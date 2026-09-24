@@ -9,6 +9,7 @@ import { createProviderSnapshot, findByType } from "../../test-utils/session-stu
 import type { SessionOutboundMessage } from "../../messages.js";
 import {
   GLOBAL_PROVIDER_SNAPSHOT_KEY,
+  resolveSnapshotCwd,
   type ProviderSnapshotManager,
   type ProviderSnapshot,
   type ProviderSnapshotTransition,
@@ -70,6 +71,7 @@ function makeSubsystem(options: MakeOptions = {}) {
       changeHandler = handler;
     },
     off: () => {},
+    revalidateSnapshotForCwd: async () => {},
     ...options.snapshot,
   });
   const subsystem = new ProviderCatalogSession({
@@ -225,6 +227,26 @@ describe("ProviderCatalogSession", () => {
       requestId: "compact-2",
     });
     expect(second?.payload.compactSnapshot).toBeUndefined();
+  });
+
+  it("revalidates the read target so a catalogue that changed underneath is refreshed", async () => {
+    const revalidateSnapshotForCwd = vi.fn(async () => {});
+    const { subsystem } = makeSubsystem({
+      snapshot: {
+        getSnapshot: () => createProviderSnapshot(makeEntries()),
+        revalidateSnapshotForCwd,
+      },
+    });
+
+    await subsystem.handleGetProvidersSnapshotRequest({
+      type: "get_providers_snapshot_request",
+      cwd: "/workspace/repo",
+      requestId: "revalidate-1",
+    });
+
+    expect(revalidateSnapshotForCwd).toHaveBeenCalledWith({
+      cwd: resolveSnapshotCwd("/workspace/repo"),
+    });
   });
 
   it("reports a disabled provider on list_provider_models without warming the snapshot", async () => {

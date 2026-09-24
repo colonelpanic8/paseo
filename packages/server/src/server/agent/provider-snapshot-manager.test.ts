@@ -3607,3 +3607,92 @@ test("binding a settled catalogue publishes once and rebinding an equal settled 
     manager.destroy();
   }
 });
+
+test("revalidation refetches only catalogues that report a new key", async () => {
+  let key = "catalog-1";
+  let codexFetches = 0;
+  let claudeFetches = 0;
+  const manager = new ProviderSnapshotManager({
+    logger: createTestLogger(),
+    extraClients: {
+      codex: createExtraClient("codex", {
+        isAvailable: async () => true,
+        getCatalogCacheKey: async () => key,
+        fetchCatalog: async () => {
+          codexFetches++;
+          return { models: [], modes: [] };
+        },
+      }),
+      claude: createExtraClient("claude", {
+        isAvailable: async () => true,
+        getCatalogCacheKey: undefined,
+        fetchCatalog: async () => {
+          claudeFetches++;
+          return { models: [], modes: [] };
+        },
+      }),
+    },
+  });
+  try {
+    await manager.listProviders({ wait: true, providers: ["codex", "claude"] });
+    expect([codexFetches, claudeFetches]).toEqual([1, 1]);
+
+    await manager.revalidateSnapshotForCwd({ providers: ["codex", "claude"] });
+    expect([codexFetches, claudeFetches]).toEqual([1, 1]);
+
+    key = "catalog-2";
+    await manager.revalidateSnapshotForCwd({ providers: ["codex", "claude"] });
+    expect([codexFetches, claudeFetches]).toEqual([2, 1]);
+  } finally {
+    manager.destroy();
+  }
+});
+
+test("revalidation refetches an aged catalogue whose key never changes", async () => {
+  let fetches = 0;
+  const manager = new ProviderSnapshotManager({
+    logger: createTestLogger(),
+    catalogRevalidateMaxAgeMs: 0,
+    extraClients: {
+      codex: createExtraClient("codex", {
+        isAvailable: async () => true,
+        getCatalogCacheKey: async () => "unchanged",
+        fetchCatalog: async () => {
+          fetches++;
+          return { models: [], modes: [] };
+        },
+      }),
+    },
+  });
+  try {
+    await manager.listProviders({ wait: true, providers: ["codex"] });
+    expect(fetches).toBe(1);
+    await manager.revalidateSnapshotForCwd({ providers: ["codex"] });
+    expect(fetches).toBe(2);
+  } finally {
+    manager.destroy();
+  }
+});
+
+test("revalidation does nothing for a target that was never warmed", async () => {
+  let fetches = 0;
+  const manager = new ProviderSnapshotManager({
+    logger: createTestLogger(),
+    extraClients: {
+      codex: createExtraClient("codex", {
+        isAvailable: async () => true,
+        getCatalogCacheKey: async () => "unchanged",
+        fetchCatalog: async () => {
+          fetches++;
+          return { models: [], modes: [] };
+        },
+      }),
+    },
+  });
+  try {
+    await manager.revalidateSnapshotForCwd({ cwd: "/tmp/never-warmed", providers: ["codex"] });
+    expect(fetches).toBe(0);
+  } finally {
+    manager.destroy();
+  }
+});
