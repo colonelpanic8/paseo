@@ -25,9 +25,17 @@ import {
   type HostBadgeDisplay,
   type HostColor,
 } from "@/hosts/appearance";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
-import { useHostMutations } from "@/runtime/host-runtime";
+import { useHostMutations, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import { HostCustomColorModal } from "@/screens/settings/host-custom-color-modal";
+import {
+  IDENTITY_COLOR_NAMES,
+  deriveIdentityColorName,
+  parseIdentityColorName,
+  type IdentityColorName,
+} from "@/styles/identity-colors";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
@@ -184,6 +192,77 @@ function ColorRow({
   );
 }
 
+type HostDefaultColorValue = "auto" | IdentityColorName;
+
+function HostDefaultColorRow({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const isConnected = useHostRuntimeIsConnected(host.serverId);
+  const supported = useSessionStore(
+    (state) => state.sessions[host.serverId]?.serverInfo?.features?.hostAppearance === true,
+  );
+  const { config, patchConfig } = useDaemonConfig(supported && isConnected ? host.serverId : null);
+  const value: HostDefaultColorValue = parseIdentityColorName(config?.appearance?.color) ?? "auto";
+  const resolvedColor = value === "auto" ? deriveIdentityColorName(host.serverId) : value;
+  const handleChange = useCallback(
+    async (next: HostDefaultColorValue) => {
+      try {
+        await patchConfig({ appearance: { color: next === "auto" ? null : next } });
+      } catch {
+        toast.error(t("errors.unableToSave"));
+      }
+    },
+    [patchConfig, t, toast],
+  );
+
+  if (!supported || !isConnected || !config) return null;
+
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.host.appearance.hostColor.label")}</Text>
+        <Text style={settingsStyles.rowHint}>{t("settings.host.appearance.hostColor.hint")}</Text>
+      </View>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          testID="host-appearance-host-color"
+          style={dropdownTriggerStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.host.appearance.hostColor.accessibilityLabel", {
+            value:
+              value === "auto"
+                ? t("settings.host.appearance.hostColor.options.auto")
+                : colorLabel(t, value),
+          })}
+        >
+          <ColorSwatch color={resolvedColor} />
+          <Text style={styles.triggerText}>
+            {value === "auto"
+              ? t("settings.host.appearance.hostColor.options.auto")
+              : colorLabel(t, value)}
+          </Text>
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end" width={200}>
+          <DropdownMenuItem selected={value === "auto"} onSelect={() => void handleChange("auto")}>
+            {t("settings.host.appearance.hostColor.options.auto")}
+          </DropdownMenuItem>
+          {IDENTITY_COLOR_NAMES.map((color) => (
+            <DropdownMenuItem
+              key={color}
+              selected={value === color}
+              onSelect={() => void handleChange(color)}
+              leading={<ColorSwatch color={color} />}
+            >
+              {colorLabel(t, color)}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </View>
+  );
+}
+
 function BadgeDisplayRow({
   badgeDisplay,
   onChange,
@@ -333,6 +412,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
           </View>
         </View>
         <ColorRow color={host.appearance.color} onChange={handleColorChange} />
+        <HostDefaultColorRow host={host} />
         {badgeDisplay === null ? null : (
           <>
             <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
