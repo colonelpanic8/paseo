@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { hashDaemonPassword } from "./auth.js";
 import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
 import { hashDaemonPassword } from "./auth.js";
 

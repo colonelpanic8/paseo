@@ -229,6 +229,68 @@ function normalizeAgentProviders(value: unknown): unknown {
   };
 }
 
+const LiveVoiceProfileFilePathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => path.isAbsolute(value) || value === "~" || value.startsWith("~/"), {
+    message: "Expected an absolute or ~-rooted path",
+  });
+
+const LiveVoiceProfileIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, {
+    message: "Expected a lowercase slug containing letters, numbers, dots, underscores, or hyphens",
+  });
+
+/**
+ * A Live Voice profile declared in config rather than created in the app. It
+ * is read-only to clients and shared by every principal, which is what makes it
+ * the right place for machine-managed setups.
+ */
+const LiveVoiceProfileSchema = z
+  .object({
+    id: LiveVoiceProfileIdSchema,
+    label: z.string().trim().min(1).max(120).optional(),
+    files: z.array(LiveVoiceProfileFilePathSchema).max(16).optional(),
+    instructions: z.string().max(1000).optional(),
+    context: z.string().max(8000).optional(),
+    voice: z.string().trim().min(1).max(120).optional(),
+    backendModel: z.string().trim().min(1).max(200).optional(),
+    backendThinkingOptionId: z.string().trim().min(1).max(80).optional(),
+  })
+  .strict();
+
+const LiveVoiceConfigSchema = z
+  .object({
+    contextProfiles: z.array(LiveVoiceProfileSchema).optional(),
+    defaultContextProfile: LiveVoiceProfileIdSchema.optional(),
+  })
+  .strict()
+  .superRefine((config, context) => {
+    const ids = new Set<string>();
+    for (const [index, profile] of (config.contextProfiles ?? []).entries()) {
+      if (ids.has(profile.id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["contextProfiles", index, "id"],
+          message: `Duplicate Live Voice profile id '${profile.id}'`,
+        });
+      }
+      ids.add(profile.id);
+    }
+    if (config.defaultContextProfile !== undefined && !ids.has(config.defaultContextProfile)) {
+      context.addIssue({
+        code: "custom",
+        path: ["defaultContextProfile"],
+        message: `Unknown Live Voice profile '${config.defaultContextProfile}'`,
+      });
+    }
+  });
+
 export const PersistedConfigSchema = z
   .object({
     $schema: z.string().optional(),
@@ -333,6 +395,8 @@ export const PersistedConfigSchema = z
       })
       .strict()
       .optional(),
+
+    liveVoice: LiveVoiceConfigSchema.optional(),
 
     log: LogConfigSchema.optional(),
   })

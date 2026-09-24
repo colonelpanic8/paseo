@@ -21,6 +21,7 @@ import {
   shouldReconcileHiddenKeyboardEnd,
 } from "./policy";
 import { KeyboardShiftContext, SettledKeyboardShiftContext, useKeyboardShift } from "./context";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 
 type KeyboardShiftMode = "translate" | "padding";
 
@@ -124,9 +125,19 @@ export function useKeyboardShiftStyle(input: { mode: KeyboardShiftMode; enabled?
   shift: SharedValue<number>;
   style: ReturnType<typeof useAnimatedStyle<ViewStyle>>;
 } {
-  const { shift, bottomInset } = useKeyboardShift();
+  const { shift } = useKeyboardShift();
   const mode = input.mode;
   const enabled = input.enabled ?? true;
+
+  // Padding mode pads for the home indicator itself, so it uses the screen inset,
+  // which collapses when the Live Voice strip already owns the bottom edge. The
+  // shift below keeps using root insets: keyboard geometry is window-relative.
+  const screenBottomInset = useScreenBottomInset();
+  const screenBottomInsetValue = useSharedValue(screenBottomInset);
+
+  useEffect(() => {
+    screenBottomInsetValue.value = screenBottomInset;
+  }, [screenBottomInsetValue, screenBottomInset]);
 
   const style = useAnimatedStyle<ViewStyle>(() => {
     "worklet";
@@ -135,7 +146,7 @@ export function useKeyboardShiftStyle(input: { mode: KeyboardShiftMode; enabled?
         return { paddingBottom: 0 };
       }
       // Include safe-area bottom inset so content clears the home indicator even without a keyboard.
-      return { paddingBottom: bottomInset.value + shift.value };
+      return { paddingBottom: screenBottomInsetValue.value + shift.value };
     }
 
     return { transform: [{ translateY: enabled ? -shift.value : 0 }] };
