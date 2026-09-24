@@ -3,7 +3,7 @@ import {
   resolvePaseoHome,
   type DaemonInstance,
 } from "@getpaseo/server/daemon-control";
-import { describeDaemonTarget, type DaemonTarget } from "./daemon-target.js";
+import { describeDaemonTarget, localDaemonCommand, type DaemonTarget } from "./daemon-target.js";
 export type { DaemonTarget } from "./daemon-target.js";
 import {
   buildDaemonWebSocketUrl,
@@ -54,7 +54,7 @@ export function buildDaemonConnectionCommandError(options: ConnectOptions & { er
     message: `Cannot connect to daemon at ${describeDaemonTarget(options.target)}: ${message}`,
     details:
       options.target.kind === "instance"
-        ? `Start with: paseo daemon start --home ${JSON.stringify(options.target.home)}`
+        ? `Start with: ${localDaemonCommand("start", options.target)}`
         : "Check the selected endpoint and credentials. SSH transport does not install or start the daemon.",
   };
 }
@@ -278,9 +278,12 @@ async function connectSelectedDaemon(options: ConnectOptions): Promise<DaemonCli
           await waitForDaemonReady(options.target.home, {
             timeoutMs: timeout,
             instance: options.instance,
+            paths: options.target.paths,
           })
         ).listen;
-  const clientId = await getOrCreateCliClientId(resolvePaseoHome({}));
+  const identityEnv = { ...process.env };
+  delete identityEnv.PASEO_HOME;
+  const clientId = await getOrCreateCliClientId(resolvePaseoHome(identityEnv));
   const nodeWebSocketFactory = createNodeWebSocketFactory();
 
   if (explicitHost?.trim().startsWith("ssh://")) {
