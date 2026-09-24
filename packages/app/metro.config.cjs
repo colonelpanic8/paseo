@@ -11,6 +11,13 @@ const isFdroidBuild = process.env.PASEO_FDROID_BUILD === "1";
 const fdroidModuleOverrides = {
   "expo-camera": path.resolve(appSrcRoot, "fdroid/expo-camera.tsx"),
   "expo-notifications": path.resolve(appSrcRoot, "fdroid/expo-notifications.ts"),
+  // The AOT-compiled WS-outbound validator is a single multi-MB function
+  // that exhausts Hermes' memory (20GB+ peak) during F-Droid bundling.
+  // Validate with the interpreted schema on mobile instead.
+  "@getpaseo/protocol/validation/ws-outbound": path.resolve(
+    appSrcRoot,
+    "fdroid/ws-outbound-validation.ts",
+  ),
 };
 const customWebPlatform = (process.env.PASEO_WEB_PLATFORM ?? "")
   .trim()
