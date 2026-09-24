@@ -116,6 +116,7 @@ import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
+import { ComposerStash } from "@/composer/stash";
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
@@ -2385,6 +2386,13 @@ function ComposerContentImpl({
   );
   const messageInputContainerRef = useRef<View>(null);
 
+  // Stash queues are scoped per provider: the live agent's provider when one
+  // exists, otherwise the draft flow's selected provider.
+  const stashProvider =
+    resolveAgentControlsMode(agentControls) === "draft" && agentControls
+      ? agentControls.selectedProvider
+      : agentState.provider;
+
   const isSubmitLoadingVisible =
     isProcessing || isSubmitLoading || isUploadingFile || pendingNativeImagePastes > 0;
   const isSubmitDisabled =
@@ -2438,6 +2446,16 @@ function ComposerContentImpl({
             {sendErrorNode}
 
             <View ref={messageInputContainerRef} style={styles.messageInputContainer}>
+              <ComposerStash
+                provider={stashProvider}
+                anchorRef={messageInputContainerRef}
+                textSource={textSource}
+                setUserInput={replaceUserInput}
+                attachments={attachments}
+                setAttachments={setSelectedAttachments}
+                disabled={isComposerLocked || isSubmitDisabled}
+                focusInput={focusInput}
+              />
               <ComposerAutocompleteBinding
                 text={textSource}
                 cursor={cursor}
