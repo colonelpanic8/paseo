@@ -618,6 +618,8 @@ export interface AgentSessionConfig {
   providerOptions?: ProviderOptions;
   toolPolicy?: ToolPolicy;
   mcpServers?: Record<string, McpServerConfig>;
+  /** Runtime-only host isolation; not accepted from client agent configuration. */
+  inheritMcpServers?: boolean;
   /**
    * Internal agents are hidden from listings and don't trigger notifications.
    * They are used for ephemeral system tasks like commit/PR generation.
@@ -731,6 +733,10 @@ export interface ProviderCatalog {
   defaultModeId?: string | null;
 }
 
+export interface LiveVoiceVoiceCatalog {
+  voices: string[];
+}
+
 export interface ResolveAgentDefaultModeInput {
   config: AgentSessionConfig;
   env?: Record<string, string>;
@@ -769,6 +775,7 @@ export interface AgentClient {
   ): Promise<ProviderCatalog>;
   /** Apply provider-owned defaults to a model supplied through provider configuration. */
   resolveConfiguredModel?(model: AgentModelDefinition): AgentModelDefinition;
+  listLiveVoiceVoices?(): Promise<LiveVoiceVoiceCatalog>;
   resolveDefaultModeId?(input: ResolveAgentDefaultModeInput): Promise<string | undefined>;
   resolveCreateConfig?(input: ResolveAgentCreateConfigInput): ResolveAgentCreateConfigResult;
   isCreateConfigUnattended?(input: AgentCreateConfigUnattendedInput): boolean;
