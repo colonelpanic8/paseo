@@ -246,6 +246,7 @@ import {
 } from "../services/github-service.js";
 import type { ForgeService } from "../services/forge-service.js";
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
+import type { UsageHistoryService } from "../services/usage-history/service.js";
 import {
   resolveWorkspaceRootAgent,
   summarizeFetchWorkspacesEntries,
@@ -566,6 +567,7 @@ export interface SessionOptions {
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
+  usageHistoryService: UsageHistoryService;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
   serviceProxy?: ServiceProxySubsystem;
@@ -894,6 +896,7 @@ export class Session {
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
+      usageHistoryService,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
@@ -1072,6 +1075,7 @@ export class Session {
       },
       providerSnapshotManager,
       providerUsageService,
+      usageHistoryService,
       logger: this.sessionLogger,
     });
     this.agentConfigSession = new AgentConfigSession({
@@ -3433,6 +3437,8 @@ export class Session {
         return this.providerCatalogSession.handleCodexBankedResetConsumeRequest(msg);
       case "provider.usage.list.request":
         return this.providerCatalogSession.handleProviderUsageListRequest(msg);
+      case "provider.usage_history.read.request":
+        return this.providerCatalogSession.handleProviderUsageHistoryReadRequest(msg);
       default:
         return undefined;
     }
