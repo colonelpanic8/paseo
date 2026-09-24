@@ -1775,6 +1775,7 @@ export class VoiceAssistantWebSocketServer {
 
   private buildServerInfoStatusPayload(session: Session): ServerInfoStatusPayload {
     const build = getBuildInfo();
+    const hostColor = this.daemonConfigStore.get().appearance?.color;
     return {
       status: "server_info",
       serverId: this.serverId,
@@ -1790,12 +1791,15 @@ export class VoiceAssistantWebSocketServer {
         worktreesRoot: this.worktreesRoot,
       }),
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
+      ...(hostColor ? { appearance: { color: hostColor } } : {}),
       features: {
         ownedSubscriptions: true,
         agentRequestReceipts: true,
         workspaceRequestReceipts: true,
         creationLifecycle: true,
         hubAgentRpc: true,
+        // COMPAT(hostAppearance): added in v0.7.3, remove gate after 2027-09-06.
+        hostAppearance: true,
         // COMPAT(directorySync): added in v0.3.x, remove gate after 2027-02-12.
         directorySync: true,
         // COMPAT(workspaceLabels): added in v0.5.0, remove after 2027-08-14.
