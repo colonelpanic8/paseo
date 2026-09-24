@@ -1,6 +1,9 @@
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import pino from "pino";
 import type { Logger } from "pino";
-import { expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import {
   setupAutoArchiveOnMerge,
@@ -8,6 +11,44 @@ import {
   type AutoArchiveOnMergeOptions,
 } from "./index.js";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
+import {
+  FileBackedWorkspaceRegistry,
+  createPersistedWorkspaceRecord,
+  createPersistedProjectRecord,
+  FileBackedProjectRegistry,
+} from "../workspace-registry.js";
+import { createWorkspaceProvisioningService } from "../session/workspace-provisioning/workspace-provisioning-service.js";
+import { createNoopWorkspaceGitService } from "../test-utils/workspace-git-service-stub.js";
+
+let directory: string;
+let workspaceRegistry: FileBackedWorkspaceRegistry;
+const logger = pino({ level: "silent" });
+beforeEach(async () => {
+  directory = mkdtempSync(join(tmpdir(), "auto-archive-restore-"));
+  workspaceRegistry = new FileBackedWorkspaceRegistry(join(directory, "workspaces.json"), logger);
+  for (const [workspaceId, cwd] of [
+    ["workspace-a", "/repo/worktree"],
+    ["workspace-b", "/repo/worktree"],
+    ["workspace-other", "/repo/other"],
+  ]) {
+    await workspaceRegistry.upsert(
+      createPersistedWorkspaceRecord({
+        workspaceId,
+        cwd,
+        projectId: "project",
+        kind: "worktree",
+        worktreeRoot: cwd,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+        displayName: workspaceId,
+      }),
+    );
+  }
+});
+afterEach(() => {
+  rmSync(directory, { recursive: true, force: true });
+  vi.restoreAllMocks();
+});
 
 function createSnapshot(
   cwd: string,
@@ -52,6 +93,7 @@ test("fans one fresh observation out to every workspace attached to its exact cw
   const freshSnapshot = createSnapshot("/repo/worktree");
   const getSnapshot = vi.fn(async () => freshSnapshot);
   const options = {
+    workspaceRegistry,
     logger: { child: () => ({ warn: vi.fn() }) } as unknown as Logger,
     daemonConfigStore: { get: () => ({ autoArchiveAfterMerge: true }) },
     workspaceGitService: {
@@ -100,6 +142,7 @@ test("serializes the complete fan-out for duplicate merge events on one cwd", as
   let onSnapshotUpdated: ((snapshot: WorkspaceGitRuntimeSnapshot) => void) | null = null;
   const snapshot = createSnapshot("/repo/worktree/.");
   const options = {
+    workspaceRegistry,
     logger: { child: () => ({ warn: vi.fn() }) } as unknown as Logger,
     daemonConfigStore: { get: () => ({ autoArchiveAfterMerge: true }) },
     workspaceGitService: {
@@ -157,6 +200,7 @@ test("does not fan out a stale merged event when the fresh observation has no PR
   const archiveIfSafe = vi.fn();
   const getSnapshot = vi.fn(async () => freshSnapshot);
   const options = {
+    workspaceRegistry,
     logger: { child: () => ({ warn: vi.fn() }) } as unknown as Logger,
     daemonConfigStore: { get: () => ({ autoArchiveAfterMerge: true }) },
     workspaceGitService: {
@@ -186,6 +230,7 @@ test("logs and skips when the fresh observation cannot be read", async () => {
   const warn = vi.fn();
   const archiveIfSafe = vi.fn();
   const options = {
+    workspaceRegistry,
     logger: { child: () => ({ warn }) } as unknown as Logger,
     daemonConfigStore: { get: () => ({ autoArchiveAfterMerge: true }) },
     workspaceGitService: {
@@ -219,6 +264,7 @@ test("does not read an observation when auto-archive is disabled", async () => {
   const getSnapshot = vi.fn();
   const archiveIfSafe = vi.fn();
   const options = {
+    workspaceRegistry,
     logger: { child: () => ({ warn: vi.fn() }) } as unknown as Logger,
     daemonConfigStore: { get: () => ({ autoArchiveAfterMerge: false }) },
     workspaceGitService: {
@@ -236,4 +282,191 @@ test("does not read an observation when auto-archive is disabled", async () => {
   onSnapshotUpdated(createSnapshot("/repo/worktree"));
   expect(getSnapshot).not.toHaveBeenCalled();
   expect(archiveIfSafe).not.toHaveBeenCalled();
+});
+
+function createDeferred<T>() {
+  let resolvePromise!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolvePromise = done;
+  });
+  return { promise, resolve: resolvePromise };
+}
+
+function createRestoreHarness() {
+  let listener: (snapshot: WorkspaceGitRuntimeSnapshot) => void = () => {};
+  const baseline = createDeferred<WorkspaceGitRuntimeSnapshot>();
+  const getSnapshot = vi.fn<AutoArchiveOnMergeOptions["workspaceGitService"]["getSnapshot"]>(
+    async (cwd, options) => (options?.force ? baseline.promise : createSnapshot(cwd)),
+  );
+  const archive = vi.fn(
+    async ({
+      workspaceId,
+      snapshot,
+    }: Parameters<AutoArchiveOnMergeDependencies["archiveIfSafe"]>[0]) => {
+      const current = await workspaceRegistry.get(workspaceId);
+      if (current?.autoArchivedChangeRequestUrl !== snapshot.forge.pullRequest?.url) {
+        await workspaceRegistry.archive(workspaceId, new Date().toISOString());
+      }
+    },
+  );
+  const options = {
+    workspaceRegistry,
+    logger,
+    daemonConfigStore: { get: () => ({ autoArchiveAfterMerge: true }) },
+    workspaceGitService: {
+      getSnapshot,
+      onSnapshotUpdated: (next: typeof listener) => {
+        listener = next;
+        return { unsubscribe: () => {} };
+      },
+    },
+    listActiveWorkspaces: async () =>
+      (await workspaceRegistry.list()).filter((workspace) => !workspace.archivedAt),
+  } as unknown as AutoArchiveOnMergeOptions;
+  const subscription = setupAutoArchiveOnMerge(options, {
+    archiveIfSafe: archive,
+    resolvePath: resolve,
+  });
+  return {
+    baseline,
+    getSnapshot,
+    archive,
+    subscription,
+    emit: (snapshot: WorkspaceGitRuntimeSnapshot) => listener(snapshot),
+  };
+}
+
+async function restoreWorkspace(workspaceId = "workspace-a") {
+  const workspace = await workspaceRegistry.get(workspaceId);
+  if (!workspace) throw new Error("Missing test workspace");
+  await workspaceRegistry.upsert({ ...workspace, archivedAt: null }, { restored: true });
+}
+
+test("restores immediately, ignores cached open snapshots, and persists the fresh merged PR", async () => {
+  const harness = createRestoreHarness();
+  await workspaceRegistry.archive("workspace-a", "2026-03-01T00:00:00Z");
+  await restoreWorkspace();
+  expect(harness.getSnapshot).toHaveBeenCalledWith("/repo/worktree", {
+    force: true,
+    includeForge: true,
+    queueIfBusy: true,
+    reason: "workspace-restore-auto-archive-latch",
+  });
+  harness.emit(createSnapshot("/repo/worktree", "open"));
+  harness.emit(createSnapshot("/repo/worktree"));
+  await vi.waitFor(() => expect(harness.archive).toHaveBeenCalledTimes(1));
+  expect((await workspaceRegistry.get("workspace-a"))?.archivedAt).toBeNull();
+
+  harness.baseline.resolve(createSnapshot("/repo/worktree"));
+  await vi.waitFor(async () =>
+    expect((await workspaceRegistry.get("workspace-a"))?.autoArchivedChangeRequestUrl).toBe(
+      "https://github.com/acme/repo/pull/12",
+    ),
+  );
+  harness.emit(createSnapshot("/repo/worktree"));
+  await vi.waitFor(() => expect(harness.archive).toHaveBeenCalledTimes(2));
+  expect((await workspaceRegistry.get("workspace-a"))?.archivedAt).toBeNull();
+  harness.subscription.unsubscribe();
+});
+
+test("a restore leaves a same-cwd sibling eligible when the next observation is merged", async () => {
+  const harness = createRestoreHarness();
+  harness.emit(createSnapshot("/repo/worktree", "open"));
+  await workspaceRegistry.archive("workspace-a", "2026-03-01T00:00:00Z");
+  await restoreWorkspace();
+  harness.emit(createSnapshot("/repo/worktree"));
+  await vi.waitFor(async () =>
+    expect((await workspaceRegistry.get("workspace-b"))?.archivedAt).not.toBeNull(),
+  );
+  expect((await workspaceRegistry.get("workspace-a"))?.archivedAt).toBeNull();
+  harness.subscription.unsubscribe();
+  harness.baseline.resolve(createSnapshot("/repo/worktree"));
+});
+
+test("a fresh open baseline allows the restored workspace to archive on a later merge", async () => {
+  const harness = createRestoreHarness();
+  await restoreWorkspace();
+  harness.baseline.resolve(createSnapshot("/repo/worktree", "open"));
+  await harness.baseline.promise;
+  await new Promise<void>((resolveDone) => setImmediate(resolveDone));
+  harness.emit(createSnapshot("/repo/worktree", "open"));
+  harness.emit(createSnapshot("/repo/worktree"));
+  await vi.waitFor(async () =>
+    expect((await workspaceRegistry.get("workspace-a"))?.archivedAt).not.toBeNull(),
+  );
+  harness.subscription.unsubscribe();
+});
+
+test("CLI unarchive waits for an in-flight automatic archive before restoring the record", async () => {
+  const harness = createRestoreHarness();
+  const archiveStarted = createDeferred<void>();
+  const finishArchive = createDeferred<void>();
+  harness.archive.mockImplementation(async ({ workspaceId }) => {
+    if (workspaceId !== "workspace-a") return;
+    archiveStarted.resolve();
+    await finishArchive.promise;
+    await workspaceRegistry.archive(workspaceId, "2026-03-01T00:00:00Z");
+  });
+  const projectRegistry = new FileBackedProjectRegistry(join(directory, "projects.json"), logger);
+  await projectRegistry.upsert(
+    createPersistedProjectRecord({
+      projectId: "project",
+      rootPath: "/repo/worktree",
+      kind: "non_git",
+      displayName: "repo",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    }),
+  );
+  const provisioning = createWorkspaceProvisioningService({
+    workspaceRegistry,
+    projectRegistry,
+    workspaceGitService: createNoopWorkspaceGitService(),
+    logger,
+  });
+  harness.emit(createSnapshot("/repo/worktree", "open"));
+  harness.emit(createSnapshot("/repo/worktree"));
+  await archiveStarted.promise;
+  await workspaceRegistry.archive("workspace-a", "2026-03-01T00:00:00Z");
+  const archived = await workspaceRegistry.get("workspace-a");
+  if (!archived) throw new Error("Missing test workspace");
+  let restored = false;
+  const restore = provisioning.ensureWorkspaceRecordUnarchived(archived).then((record) => {
+    restored = true;
+    return record;
+  });
+  await Promise.resolve();
+  expect(restored).toBe(false);
+  finishArchive.resolve();
+  await restore;
+  expect((await workspaceRegistry.get("workspace-a"))?.archivedAt).toBeNull();
+  harness.subscription.unsubscribe();
+  harness.baseline.resolve(createSnapshot("/repo/worktree"));
+});
+
+test("keeps a restored workspace protected after a failed baseline and retries a fresh read", async () => {
+  const harness = createRestoreHarness();
+  let now = Date.now();
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  harness.getSnapshot.mockRejectedValueOnce(new Error("Forge unavailable"));
+  await restoreWorkspace();
+  await new Promise<void>((resolveDone) => setImmediate(resolveDone));
+  harness.emit(createSnapshot("/repo/worktree", "open"));
+  harness.emit(createSnapshot("/repo/worktree"));
+  await vi.waitFor(async () =>
+    expect((await workspaceRegistry.get("workspace-b"))?.archivedAt).not.toBeNull(),
+  );
+  expect((await workspaceRegistry.get("workspace-a"))?.archivedAt).toBeNull();
+
+  now += 30_001;
+  harness.emit(createSnapshot("/repo/worktree"));
+  expect(harness.getSnapshot.mock.calls.filter(([, options]) => options?.force)).toHaveLength(2);
+  harness.baseline.resolve(createSnapshot("/repo/worktree"));
+  await vi.waitFor(async () =>
+    expect((await workspaceRegistry.get("workspace-a"))?.autoArchivedChangeRequestUrl).toBe(
+      "https://github.com/acme/repo/pull/12",
+    ),
+  );
+  expect((await workspaceRegistry.get("workspace-a"))?.archivedAt).toBeNull();
+  harness.subscription.unsubscribe();
 });

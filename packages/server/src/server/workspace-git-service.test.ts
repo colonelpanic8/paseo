@@ -1076,6 +1076,41 @@ describe("WorkspaceGitServiceImpl", () => {
     service.dispose();
   });
 
+  test("a restore can require a fresh read after an already-running forced refresh", async () => {
+    const firstRead = createDeferred<PullRequestStatusResult>();
+    const started = createDeferred<void>();
+    const merged = createPullRequestStatusResult({
+      status: { ...createPullRequestStatusResult().status!, state: "merged", isMerged: true },
+    });
+    const getPullRequestStatus = vi.fn(async () => {
+      if (getPullRequestStatus.mock.calls.length === 1) {
+        started.resolve();
+        return firstRead.promise;
+      }
+      return merged;
+    });
+    const service = createService({ getPullRequestStatus });
+    try {
+      const beforeRestore = service.getSnapshot(REPO_CWD, {
+        force: true,
+        reason: "before-restore",
+      });
+      await started.promise;
+      const afterRestore = service.getSnapshot(REPO_CWD, {
+        force: true,
+        includeForge: true,
+        queueIfBusy: true,
+        reason: "workspace-restore-auto-archive-latch",
+      });
+      firstRead.resolve(createPullRequestStatusResult());
+      await beforeRestore;
+      expect((await afterRestore).forge.pullRequest?.isMerged).toBe(true);
+      expect(getPullRequestStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      service.dispose();
+    }
+  });
+
   test("explicit forced snapshot refresh recomputes github state and notifies listeners", async () => {
     const getPullRequestStatus = vi
       .fn<() => Promise<PullRequestStatusResult>>()
