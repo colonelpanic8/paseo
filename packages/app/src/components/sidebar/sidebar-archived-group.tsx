@@ -3,12 +3,17 @@ import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react-native";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { isWeb as platformIsWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
-import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
+import {
+  archivedWorkspaceRestoreMutationKey,
+  beginArchivedWorkspaceRestore,
+  settleArchivedWorkspaceRestore,
+  type ArchivedWorkspaceEntry,
+} from "@/hooks/use-archived-workspaces";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { ARCHIVED_GROUP_KEY } from "@/hooks/sidebar-status-view-model";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -200,10 +205,14 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
   const isArchiving = entry.phase === "archiving";
 
+  // Callbacks live on the mutation, not on mutate(): the row unmounts as soon as
+  // the optimistic removal lands, and only mutation-level callbacks outlive it.
   const unarchiveMutation = useMutation({
+    mutationKey: archivedWorkspaceRestoreMutationKey(entry.workspaceKey),
     mutationFn: async () => {
       const client = getHostRuntimeStore().getClient(entry.serverId);
       if (!client) {
@@ -212,11 +221,18 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
       // The daemon picks unarchive vs. worktree restore; the client never decides.
       await client.restoreWorkspace(entry.workspaceId);
     },
+    onMutate: () => beginArchivedWorkspaceRestore({ queryClient, entry }),
     onError: (error: unknown) => {
       toast.error(
         error instanceof Error ? error.message : t("sidebar.workspace.archived.unarchiveFailed"),
       );
     },
+    onSettled: (_result, error) =>
+      settleArchivedWorkspaceRestore({
+        queryClient,
+        entry,
+        outcome: error ? "failed" : "restored",
+      }),
   });
 
   const isUnarchiving = unarchiveMutation.isPending;
@@ -227,6 +243,13 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
 
   const handleHoverIn = useCallback(() => setIsHovered(true), []);
   const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const unarchiveButtonStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      styles.unarchiveButton,
+      pressed && styles.unarchiveButtonPressed,
+    ],
+    [],
+  );
   const listSettle = useSidebarListSettle();
 
   return (
@@ -259,12 +282,13 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
             look inert on desktop. Hover only lifts it out of its greyed resting
             state — opacity never changes the slot's geometry, per docs/hover.md.
             While the row is still animating in, the slot holds a spinner instead
-            and takes no input.
+            and takes no input. Restore shows a spinner until the optimistic
+            removal unmounts the row.
           */}
           <View
             style={[
               styles.unarchiveSlot,
-              !isArchiving && !isHovered && styles.unarchiveSlotResting,
+              !isArchiving && !isHovered && !isUnarchiving && styles.unarchiveSlotResting,
             ]}
             pointerEvents={isArchiving ? "none" : "auto"}
           >
@@ -287,12 +311,17 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
                       ? "sidebar.workspace.archived.unarchiving"
                       : "sidebar.workspace.archived.unarchive",
                   )}
+                  accessibilityState={isUnarchiving ? BUSY_ACCESSIBILITY_STATE : undefined}
                   disabled={isUnarchiving}
                   onPress={handleUnarchive}
-                  style={styles.unarchiveButton}
+                  style={unarchiveButtonStyle}
                   testID={`sidebar-archived-unarchive-${entry.workspaceKey}`}
                 >
-                  <ThemedArchiveRestore size={14} uniProps={foregroundMutedColorMapping} />
+                  {isUnarchiving ? (
+                    <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+                  ) : (
+                    <ThemedArchiveRestore size={14} uniProps={foregroundMutedColorMapping} />
+                  )}
                 </Pressable>
               </Animated.View>
             )}
@@ -397,5 +426,8 @@ const styles = StyleSheet.create((theme) => ({
   unarchiveButton: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  unarchiveButtonPressed: {
+    opacity: 0.5,
   },
 }));
