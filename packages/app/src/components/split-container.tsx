@@ -1,5 +1,6 @@
 import {
   Fragment,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -33,7 +34,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { ResizeHandle } from "@/components/resize-handle";
 import {
   resolveExplorerSidebarDockSizes,
@@ -425,22 +426,26 @@ export function SplitContainer({
   );
   const resizeExplorerSidebar = useWorkspaceLayoutStore((state) => state.resizeExplorerSidebar);
   const [workspaceShellWidth, setWorkspaceShellWidth] = useState(0);
-  const [previewExplorerSidebarWidth, setPreviewExplorerSidebarWidth] = useState<number | null>(
-    null,
-  );
-  const requestedExplorerSidebarWidth = previewExplorerSidebarWidth ?? storedExplorerSidebarWidth;
   const explorerSidebarWidth = resolveExplorerSidebarWidth({
-    requestedWidth: requestedExplorerSidebarWidth,
+    requestedWidth: storedExplorerSidebarWidth,
     containerWidth: workspaceShellWidth,
   });
   const explorerSidebarDockSizes = useMemo(
     () =>
       resolveExplorerSidebarDockSizes({
-        requestedWidth: requestedExplorerSidebarWidth,
+        requestedWidth: storedExplorerSidebarWidth,
         containerWidth: workspaceShellWidth,
       }),
-    [requestedExplorerSidebarWidth, workspaceShellWidth],
+    [storedExplorerSidebarWidth, workspaceShellWidth],
   );
+  // Drag previews write the dock width on the UI side only; React sees the width once, on commit.
+  const explorerSidebarDockWidth = useSharedValue(explorerSidebarWidth);
+  useEffect(() => {
+    explorerSidebarDockWidth.value = explorerSidebarWidth;
+  }, [explorerSidebarDockWidth, explorerSidebarWidth]);
+  const explorerSidebarDockWidthStyle = useAnimatedStyle(() => ({
+    width: explorerSidebarDockWidth.value,
+  }));
   const renderExplorerSidebarDock = Boolean(
     !focusModeEnabled && explorerSidebarPane && explorerSidebarPane.hidden !== true,
   );
@@ -448,10 +453,6 @@ export function SplitContainer({
     ? removeWindowChromeCorner(inheritedWindowChromeCorners, "top-right")
     : inheritedWindowChromeCorners;
   const mainColumnStyle = styles.mainColumn;
-  const explorerSidebarDockStyle = useMemo(
-    () => [styles.explorerSidebarDock, { width: explorerSidebarWidth }],
-    [explorerSidebarWidth],
-  );
   const handleWorkspaceShellLayout = useCallback((event: LayoutChangeEvent) => {
     const nextWidth = event.nativeEvent.layout.width;
     setWorkspaceShellWidth((current) => (current === nextWidth ? current : nextWidth));
@@ -460,19 +461,16 @@ export function SplitContainer({
     (_groupId: string, sizes: number[]) => {
       const nextRatio = sizes[1];
       if (nextRatio !== undefined) {
-        setPreviewExplorerSidebarWidth(
-          resolveExplorerSidebarWidth({
-            requestedWidth: nextRatio * workspaceShellWidth,
-            containerWidth: workspaceShellWidth,
-          }),
-        );
+        explorerSidebarDockWidth.value = resolveExplorerSidebarWidth({
+          requestedWidth: nextRatio * workspaceShellWidth,
+          containerWidth: workspaceShellWidth,
+        });
       }
     },
-    [workspaceShellWidth],
+    [explorerSidebarDockWidth, workspaceShellWidth],
   );
   const commitExplorerSidebarResize = useCallback(
     (_groupId: string, sizes: number[]) => {
-      setPreviewExplorerSidebarWidth(null);
       const nextRatio = sizes[1];
       if (nextRatio !== undefined) {
         resizeExplorerSidebar(
@@ -718,7 +716,7 @@ export function SplitContainer({
                 onPreviewResizeSplit={previewExplorerSidebarResize}
                 onResizeSplit={commitExplorerSidebarResize}
               />
-              <View style={explorerSidebarDockStyle}>
+              <Animated.View style={[styles.explorerSidebarDock, explorerSidebarDockWidthStyle]}>
                 <ExplorerSidebarDock
                   pane={explorerSidebarPane}
                   uiTabs={uiTabs}
@@ -736,7 +734,7 @@ export function SplitContainer({
                   tabDropPreview={tabDropPreview}
                   headerAction={renderExplorerSidebarHeaderAction?.()}
                 />
-              </View>
+              </Animated.View>
             </>
           ) : null}
         </View>
@@ -801,22 +799,6 @@ function DragOverlayTabChipInner({
   normalizedWorkspaceId: string;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
-
-  const chipStyle = useMemo(
-    () => [
-      styles.dragOverlayChip,
-      {
-        backgroundColor: theme.colors.surface1,
-        borderColor: theme.colors.borderAccent,
-      },
-    ],
-    [theme.colors.surface1, theme.colors.borderAccent],
-  );
-  const chipLabelStyle = useMemo(
-    () => [styles.dragOverlayLabel, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
 
   return (
     <WorkspaceTabPresentationResolver
@@ -829,9 +811,9 @@ function DragOverlayTabChipInner({
           presentation.titleState === "loading" ? t("common.states.loading") : presentation.label;
 
         return (
-          <View style={chipStyle}>
+          <View style={styles.dragOverlayChip}>
             <WorkspaceTabIcon presentation={presentation} active size={14} backdrop="surface1" />
-            <Text numberOfLines={1} style={chipLabelStyle}>
+            <Text numberOfLines={1} style={styles.dragOverlayLabel}>
               {label}
             </Text>
           </View>
@@ -924,7 +906,11 @@ function isSplitNodeHidden(node: SplitNode): boolean {
   return node.group.children.every(isSplitNodeHidden);
 }
 
-function SplitNodeView({
+// Declared separately so the recursive `<SplitNodeView>` below resolves to the memoized binding. A
+// named function expression inside `memo()` would bind its own name and recurse unmemoized.
+const SplitNodeView = memo(SplitNodeViewContent);
+
+function SplitNodeViewContent({
   node,
   workspaceKey,
   uiTabs,
@@ -1128,7 +1114,7 @@ function SplitNodeView({
   );
 }
 
-function SplitPaneView({
+const SplitPaneView = memo(function SplitPaneView({
   pane,
   uiTabs,
   isFocused,
@@ -1321,7 +1307,7 @@ function SplitPaneView({
       </View>
     </RenderProfile>
   );
-}
+});
 
 function collectPanesById(node: SplitNode): Map<string, SplitPane> {
   const next = new Map<string, SplitPane>();
@@ -1406,7 +1392,6 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
     minWidth: 240,
     minHeight: 0,
-    backgroundColor: theme.colors.surfaceSidebar,
   },
   group: {
     flex: 1,
@@ -1450,10 +1435,13 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
     maxWidth: 200,
   },
   dragOverlayLabel: {
     fontSize: theme.fontSize.base,
+    color: theme.colors.foreground,
     flexShrink: 1,
   },
 }));
