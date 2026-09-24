@@ -46,6 +46,7 @@ import {
 } from "../settings/desktop-settings-commands.js";
 import type { DesktopSettings } from "../settings/desktop-settings.js";
 import {
+  getClientSettingsStore,
   getDesktopSettingsStore,
   loadDesktopSettingsSeed,
 } from "../settings/desktop-settings-electron.js";
@@ -406,6 +407,7 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
   return {
     ...createDesktopSettingsCommandHandlers({
       settingsStore: getDesktopSettingsStore(),
+      clientSettingsStore: getClientSettingsStore(),
       loadSettingsSeed: loadDesktopSettingsSeed,
     }),
     desktop_get_runtime_info: () => ({
