@@ -61,6 +61,7 @@ export const CLAUDE_MODEL_MANIFEST = [
     id: "claude-fable-5-1",
     label: "Fable 5.1",
     description: "Fable 5.1 · Most powerful model",
+    minimumClaudeCodeVersion: "2.1.257",
     contextWindowMaxTokens: 1_000_000,
     effortLevels: CLAUDE_EFFORT_LEVELS.xhigh,
   },
