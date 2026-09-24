@@ -117,8 +117,10 @@ export interface WorkspaceDescriptor {
   title?: string | null;
   pinnedAt?: string | null;
   labels?: string[];
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
   status: WorkspaceDescriptorPayload["status"];
   statusEnteredAt: Date | null;
+  activityAt: Date | null;
   archivingAt: string | null;
   diffStat: { additions: number; deletions: number } | null;
   scripts: WorkspaceDescriptorPayload["scripts"];
@@ -135,6 +137,11 @@ export function normalizeWorkspaceDescriptor(
   const statusEnteredAt: Date | null =
     typeof statusEnteredAtRaw === "string" && statusEnteredAtRaw.length > 0
       ? new Date(statusEnteredAtRaw)
+      : null;
+  const activityAtCandidate = payload.activityAt ? new Date(payload.activityAt) : null;
+  const activityAt =
+    activityAtCandidate && !Number.isNaN(activityAtCandidate.getTime())
+      ? activityAtCandidate
       : null;
   return {
     id: normalizeWorkspaceOpaqueId(payload.id) ?? payload.id,
@@ -155,8 +162,10 @@ export function normalizeWorkspaceDescriptor(
     pinnedAt: payload.pinnedAt ?? null,
     // COMPAT(workspaceLabels): old daemons omit assignments.
     labels: payload.labels ?? [],
+    snoozeStatus: payload.snoozeStatus ?? null,
     status: payload.status,
     statusEnteredAt,
+    activityAt,
     archivingAt: payload.archivingAt ?? null,
     diffStat: payload.diffStat ?? null,
     scripts: (payload.scripts ?? []).map((s) => Object.assign({}, s)),
@@ -203,25 +212,50 @@ function preserveWorkspaceDescriptorIdentity(
   return incoming;
 }
 
-function preserveMapIdentity<Key, Value>(
-  existing: Map<Key, Value>,
-  incoming: Map<Key, Value>,
-): Map<Key, Value> {
+function preserveWorkspaceMapIdentity(
+  existing: Map<string, WorkspaceDescriptor>,
+  incoming: Map<string, WorkspaceDescriptor>,
+): Map<string, WorkspaceDescriptor> {
   if (existing === incoming) {
     return existing;
   }
 
-  const next = new Map<Key, Value>();
+  const next = new Map<string, WorkspaceDescriptor>();
   let changed = existing.size !== incoming.size;
   const existingEntries = existing.entries();
 
   for (const [key, workspace] of incoming) {
     const existingWorkspace = existing.get(key);
-    const nextWorkspace =
-      existingWorkspace && equal(existingWorkspace, workspace) ? existingWorkspace : workspace;
+    const nextWorkspace = preserveWorkspaceDescriptorIdentity(workspace, existingWorkspace);
     next.set(key, nextWorkspace);
     const existingEntry = existingEntries.next().value;
     if (!existingEntry || existingEntry[0] !== key || existingEntry[1] !== nextWorkspace) {
+      changed = true;
+    }
+  }
+
+  return changed ? next : existing;
+}
+
+// A snapshot that re-sends an unchanged project must not hand out a new object: every
+// consumer keyed on identity would re-render for nothing.
+function preserveProjectMapIdentity(
+  existing: Map<string, ProjectDescriptor>,
+  incoming: Map<string, ProjectDescriptor>,
+): Map<string, ProjectDescriptor> {
+  if (existing === incoming) return existing;
+
+  const next = new Map<string, ProjectDescriptor>();
+  let changed = existing.size !== incoming.size;
+  const existingEntries = existing.entries();
+
+  for (const [key, project] of incoming) {
+    const existingProject = existing.get(key);
+    const nextProject =
+      existingProject && equal(existingProject, project) ? existingProject : project;
+    next.set(key, nextProject);
+    const existingEntry = existingEntries.next().value;
+    if (!existingEntry || existingEntry[0] !== key || existingEntry[1] !== nextProject) {
       changed = true;
     }
   }
@@ -294,6 +328,20 @@ export interface AgentTimelineCursorState {
     endSeq: number;
     hasOlder?: boolean;
   }>;
+}
+
+export interface SessionReplicaTimeline {
+  agentId: string;
+  items: StreamItem[];
+  range: AgentTimelineCursorState | null;
+  hasOlder: boolean;
+}
+
+export interface SessionReplica {
+  agents: Map<string, Agent>;
+  workspaces: Map<string, WorkspaceDescriptor>;
+  projects: Map<string, ProjectDescriptor>;
+  timeline: SessionReplicaTimeline | null;
 }
 
 export type AgentTimelineState =
@@ -439,6 +487,7 @@ interface SessionStoreActions {
     client: DaemonClient | null,
     clientGeneration?: number,
   ) => void;
+  restoreSessionReplica: (serverId: string, replica: SessionReplica) => void;
   clearSession: (serverId: string) => void;
   getSession: (serverId: string) => SessionState | undefined;
   updateSessionClient: (serverId: string, client: DaemonClient, clientGeneration?: number) => void;
@@ -741,6 +790,58 @@ export const useSessionStore = create<SessionStore>()(
               ...prev.sessions,
               [serverId]: createInitialSessionState(serverId, client, clientGeneration),
             },
+          };
+        });
+      },
+
+      restoreSessionReplica: (serverId, replica) => {
+        set((prev) => {
+          if (prev.sessions[serverId]) {
+            return prev;
+          }
+          const session = createInitialSessionState(serverId, null);
+          const timeline = replica.timeline;
+          const agentStreamTail = new Map<string, StreamItem[]>();
+          const agentTasks = new Map<string, TodoEntry[]>();
+          if (timeline) {
+            agentStreamTail.set(timeline.agentId, timeline.items);
+            const tasks = latestTasksFromStream(timeline.items);
+            if (tasks.length > 0) agentTasks.set(timeline.agentId, tasks);
+          }
+          const agentTimelineCursor = new Map<string, AgentTimelineCursorState>();
+          const agentTimelineHasOlder = new Map<string, boolean>();
+          const agentTimelineHasNewer = new Map<string, boolean>();
+          const agentAuthoritativeHistoryApplied = new Map<string, boolean>();
+          if (timeline?.range) {
+            agentTimelineCursor.set(timeline.agentId, timeline.range);
+            agentTimelineHasOlder.set(timeline.agentId, timeline.hasOlder);
+            agentTimelineHasNewer.set(timeline.agentId, false);
+            agentAuthoritativeHistoryApplied.set(timeline.agentId, true);
+          }
+          const agentLastActivity = new Map(prev.agentLastActivity);
+          for (const agent of replica.agents.values()) {
+            agentLastActivity.set(agent.id, agent.lastActivityAt);
+          }
+          return {
+            ...prev,
+            sessions: {
+              ...prev.sessions,
+              [serverId]: {
+                ...session,
+                agents: replica.agents,
+                workspaceAgentActivity: buildWorkspaceAgentActivityIndex(replica.agents),
+                workspaces: replica.workspaces,
+                projects: replica.projects,
+                hasWorkspaceDirectorySnapshot: true,
+                agentStreamTail,
+                agentTasks,
+                agentTimelineCursor,
+                agentTimelineHasOlder,
+                agentTimelineHasNewer,
+                agentAuthoritativeHistoryApplied,
+              },
+            },
+            agentLastActivity,
           };
         });
       },
@@ -1521,7 +1622,10 @@ export const useSessionStore = create<SessionStore>()(
           }
           const nextWorkspaces =
             typeof workspaces === "function" ? workspaces(session.workspaces) : workspaces;
-          const preservedWorkspaces = preserveMapIdentity(session.workspaces, nextWorkspaces);
+          const preservedWorkspaces = preserveWorkspaceMapIdentity(
+            session.workspaces,
+            nextWorkspaces,
+          );
           if (session.workspaces === preservedWorkspaces) {
             return prev;
           }
@@ -1541,7 +1645,7 @@ export const useSessionStore = create<SessionStore>()(
         set((prev) => {
           const session = prev.sessions[serverId];
           if (!session) return prev;
-          const preservedProjects = preserveMapIdentity(session.projects, next);
+          const preservedProjects = preserveProjectMapIdentity(session.projects, next);
           if (session.projects === preservedProjects) return prev;
           return {
             ...prev,

@@ -40,7 +40,7 @@ import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
   useSidebarWorkspacePinController,
@@ -57,11 +57,16 @@ import {
 } from "@/utils/host-routes";
 import {
   shouldShowSidebarHostLabels,
-  useSidebarProjectStatusBucket,
+  resolveSidebarServerIds,
+  useSidebarProjectStatus,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
+import {
+  useArchivedWorkspaces,
+  type ArchivedWorkspaceEntry,
+} from "@/hooks/use-archived-workspaces";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import {
   hasActiveSidebarLabelFilter,
@@ -243,6 +248,7 @@ interface ProjectHeaderRowProps {
   displayName: string;
   iconDataUri: string | null;
   statusBucket: SidebarStateBucket | null;
+  readyToReview?: boolean;
   selected?: boolean;
   chevron: "expand" | "collapse" | null;
   onPress: () => void;
@@ -852,6 +858,7 @@ function ProjectHeaderRow({
   displayName,
   iconDataUri,
   statusBucket,
+  readyToReview = false,
   selected = false,
   chevron,
   onPress,
@@ -946,7 +953,8 @@ function ProjectHeaderRow({
         <ProjectLeadingVisual
           displayName={displayName}
           iconDataUri={iconDataUri}
-          statusBucket={statusBucket}
+          statusBucket={statusBucket === "attention" ? "done" : statusBucket}
+          readyToReview={readyToReview}
           projectViewKey={project.viewKey}
           backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
           chevron={chevron}
@@ -1260,6 +1268,7 @@ function WorkspaceRowWithMenu({
     workspaceId: workspace.workspaceId,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
+    projectName: workspace.projectName,
     ...toWorktreeArchiveRisk(workspace),
     onArchiveStarted: redirectAfterArchive,
     onSetHiding: setIsHidingWorkspace,
@@ -1609,7 +1618,7 @@ function ProjectBlock({
 
   // Collapsed rows hide their workspace rows, so the project row carries the most urgent
   // status among them; expanded rows leave the signal to the child rows themselves.
-  const aggregateStatusBucket = useSidebarProjectStatusBucket({
+  const aggregateStatus = useSidebarProjectStatus({
     workspaces: project.workspaces,
     enabled: collapsed,
   });
@@ -1797,7 +1806,8 @@ function ProjectBlock({
         project={project}
         displayName={displayName}
         iconDataUri={iconDataUri}
-        statusBucket={aggregateStatusBucket}
+        statusBucket={aggregateStatus?.statusBucket ?? null}
+        readyToReview={aggregateStatus?.readyToReview ?? false}
         selected={false}
         chevron={rowModel.chevron}
         onPress={handleToggleCollapsed}
@@ -1914,6 +1924,16 @@ export function SidebarWorkspaceList({
     enabled: rowItems.host && shouldShowSidebarHostLabels(projects),
   });
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const hostFilters = useSidebarViewStore((state) => state.hostFilters);
+  const hostRegistryLoaded = useHostRegistryLoaded();
+  const archivedServerIds = useMemo(
+    () =>
+      groupMode === "status"
+        ? resolveSidebarServerIds({ allServerIds: serverIds, hostFilters, hostRegistryLoaded })
+        : [],
+    [groupMode, hostFilters, hostRegistryLoaded, serverIds],
+  );
+  const archivedWorkspaces = useArchivedWorkspaces({ serverIds: archivedServerIds });
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
   const onToggleWorkspacePin = useSidebarWorkspacePinController();
@@ -1966,6 +1986,7 @@ export function SidebarWorkspaceList({
     groupMode !== "project" ? (
       <SidebarGroupedModeList
         workspaceGroups={workspaceGroups}
+        archivedWorkspaces={archivedWorkspaces}
         pinnedGroups={pinnedGroups}
         workspaceEntriesByKey={workspaceEntriesByKey}
         projectIconByProjectViewKey={projectIconByProjectViewKey}
@@ -2018,6 +2039,7 @@ export function SidebarWorkspaceList({
  */
 function SidebarGroupedModeList({
   workspaceGroups,
+  archivedWorkspaces,
   pinnedGroups,
   workspaceEntriesByKey,
   projectIconByProjectViewKey,
@@ -2033,6 +2055,7 @@ function SidebarGroupedModeList({
   dragGestureHostActive,
 }: {
   workspaceGroups: SidebarWorkspaceGroup[];
+  archivedWorkspaces: ArchivedWorkspaceEntry[];
   pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -2059,7 +2082,12 @@ function SidebarGroupedModeList({
 
   return (
     <SidebarStatusWorkspaceList
-      groups={workspaceGroups}
+      groups={workspaceGroups.map((group) => ({
+        bucket: group.leading.bucket,
+        label: group.label,
+        rows: group.rows,
+      }))}
+      archivedWorkspaces={archivedWorkspaces}
       pinnedWorkspaces={pinnedWorkspaces}
       projectIconByProjectViewKey={projectIconByProjectViewKey}
       shortcutIndexByWorkspaceKey={_projectShortcutIndex}
