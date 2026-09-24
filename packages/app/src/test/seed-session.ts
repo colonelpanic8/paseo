@@ -47,6 +47,7 @@ export function seedSessionHosts(serverIds: readonly string[]): void {
     serverIds.map((serverId) => ({
       serverId,
       label: serverId,
+      declaredColor: null,
       appearance: defaultHostAppearance(),
       lifecycle: {},
       connections: [],
