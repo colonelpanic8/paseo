@@ -1,5 +1,6 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
+import { mapWithConcurrency } from "./parallel.js";
 import {
   initialCodexScanState,
   mightCarryUsage,
@@ -48,41 +49,79 @@ function fnv1a(buffer: Buffer): number {
   return hash >>> 0;
 }
 
-/** Individual entries may rotate during a walk; only failure to read the root is fatal. */
+const WALK_CONCURRENCY = 32;
+
+interface DirectoryChildren {
+  readonly directories: readonly string[];
+  readonly transcripts: readonly string[];
+}
+
+const NO_CHILDREN: DirectoryChildren = { directories: [], transcripts: [] };
+
+function splitChildren(dir: string, entries: readonly Dirent[]): DirectoryChildren {
+  const directories: string[] = [];
+  const transcripts: string[] = [];
+  for (const entry of entries) {
+    const child = path.join(dir, entry.name);
+    if (entry.isDirectory()) directories.push(child);
+    else if (entry.name.endsWith(".jsonl")) transcripts.push(child);
+  }
+  return { directories, transcripts };
+}
+
+async function readChildren(dir: string): Promise<DirectoryChildren> {
+  try {
+    return splitChildren(dir, await fs.readdir(dir, { withFileTypes: true }));
+  } catch {
+    // A session directory rotated away mid-walk.
+    return NO_CHILDREN;
+  }
+}
+
+/**
+ * Individual entries may rotate during a walk; only failure to read the root is fatal.
+ *
+ * Results are sorted by path so a scan is reproducible: the directories are read and the files
+ * stat'd concurrently, which leaves completion order up to the scheduler, and the aggregator's
+ * global dedupe keeps whichever copy of a record it sees first.
+ */
 export async function listTranscriptFiles(
   root: string,
   sinceMs: number,
 ): Promise<readonly TranscriptFile[]> {
-  const found: TranscriptFile[] = [];
+  const transcripts: string[] = [];
+  const rootChildren = splitChildren(root, await fs.readdir(root, { withFileTypes: true }));
+  transcripts.push(...rootChildren.transcripts);
+  let pendingDirs: readonly string[] = rootChildren.directories;
 
-  async function walk(dir: string, isRoot: boolean): Promise<void> {
-    let entries;
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch (error) {
-      if (isRoot) throw error;
-      return;
+  while (pendingDirs.length > 0) {
+    const listed = await mapWithConcurrency(pendingDirs, WALK_CONCURRENCY, readChildren);
+    const nextDirs: string[] = [];
+    for (const children of listed) {
+      transcripts.push(...children.transcripts);
+      nextDirs.push(...children.directories);
     }
-    for (const entry of entries) {
-      const child = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(child, false);
-        continue;
-      }
-      if (!entry.name.endsWith(".jsonl")) continue;
-      try {
-        const stats = await fs.stat(child);
-        if (stats.mtimeMs >= sinceMs) {
-          found.push({ path: child, size: stats.size, mtimeMs: stats.mtimeMs });
-        }
-      } catch {
-        // The file vanished between readdir and stat.
-      }
-    }
+    pendingDirs = nextDirs;
   }
 
-  await walk(root, true);
-  return found;
+  const found = await mapWithConcurrency(
+    transcripts,
+    WALK_CONCURRENCY,
+    async (child): Promise<TranscriptFile | null> => {
+      try {
+        const stats = await fs.stat(child);
+        if (stats.mtimeMs < sinceMs) return null;
+        return { path: child, size: stats.size, mtimeMs: stats.mtimeMs };
+      } catch {
+        // The file vanished between readdir and stat.
+        return null;
+      }
+    },
+  );
+
+  return found
+    .filter((file): file is TranscriptFile => file !== null)
+    .sort((left, right) => left.path.localeCompare(right.path));
 }
 
 async function guardMatches(

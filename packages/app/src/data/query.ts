@@ -31,6 +31,12 @@ type FetchQueryInput<TQueryFnData, TError, TData, TQueryKey extends QueryKey> = 
 > & {
   dataShape: "list" | "value";
   queryFn: QueryFnOption<TQueryFnData, TError, TData, TQueryKey>;
+  /**
+   * Fetch queries refetch on every mount by default so a screen never shows a stale
+   * answer. `true` refetches only once `staleTimeMs` has elapsed, for reads that are
+   * expensive to answer and change slowly.
+   */
+  refetchOnMount?: true | "always";
 } & (
     | { staleTimeMs: number; immutableWhen?: never }
     | { staleTimeMs?: never; immutableWhen: (data: TQueryFnData) => boolean }
@@ -57,10 +63,11 @@ export function useFetchQuery<
   return useQuery(fetchQueryOptions(input), queryClient);
 }
 
-export function useFetchQueries<TData>(
+export function useFetchQueries<TData, TCombined = UseQueryResult<TData, Error>[]>(
   inputs: FetchQueryInput<TData, Error, TData, QueryKey>[],
-): UseQueryResult<TData, Error>[] {
-  return useQueries({ queries: inputs.map((input) => fetchQueryOptions(input)) });
+  combine?: (results: UseQueryResult<TData, Error>[]) => TCombined,
+): TCombined {
+  return useQueries({ queries: inputs.map((input) => fetchQueryOptions(input)), combine });
 }
 
 function replicaQueryOptions<
@@ -102,7 +109,14 @@ export function fetchQueryOptions<
     throw new Error("Fetch queries must declare a finite staleTimeMs.");
   }
 
-  const { dataShape, meta, staleTimeMs, immutableWhen, ...options } = input;
+  const {
+    dataShape,
+    meta,
+    staleTimeMs,
+    immutableWhen,
+    refetchOnMount = "always",
+    ...options
+  } = input;
   return {
     ...options,
     ...(dataShape === "list" ? { placeholderData: keepPreviousData } : {}),
@@ -113,7 +127,7 @@ export function fetchQueryOptions<
         dataShape,
       },
     },
-    refetchOnMount: immutableWhen ? true : "always",
+    refetchOnMount: immutableWhen ? true : refetchOnMount,
     staleTime: immutableWhen
       ? (query) =>
           query.state.data !== undefined && immutableWhen(query.state.data) ? Infinity : 0
