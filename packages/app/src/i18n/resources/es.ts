@@ -2657,6 +2657,11 @@ export const es: TranslationResources = {
         description:
           "Permite que los enlaces paseo:// y otras apps envíen una instrucción a un agente sin confirmación",
       },
+      assistantAutomation: {
+        label: "Permitir que EVA ejecute agentes",
+        description:
+          "Permite que el asistente EVA inicie agentes y les envíe instrucciones sin confirmación, incluso con el teléfono bloqueado",
+      },
       language: {
         label: "Idioma",
         description: "Idioma de la aplicación",

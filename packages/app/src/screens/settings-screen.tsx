@@ -94,6 +94,7 @@ import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-
 import { EditorSection } from "@/screens/settings/editor-section";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { androidIntents } from "@/native/android-intents";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
@@ -430,6 +431,35 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
   );
 }
 
+// Stored natively: the EVA extension service checks it before starting any
+// JavaScript, so it cannot live in the app settings blob.
+function AssistantAutomationRow() {
+  const { t } = useTranslation();
+  const [allowed, setAllowed] = useState(() => androidIntents.isAssistantAutomationAllowed());
+  const handleChange = useCallback((next: boolean) => {
+    androidIntents.setAssistantAutomationAllowed(next);
+    setAllowed(next);
+  }, []);
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]} testID="assistant-automation-row">
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {t("settings.general.assistantAutomation.label")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.general.assistantAutomation.description")}
+        </Text>
+      </View>
+      <Switch
+        value={allowed}
+        onValueChange={handleChange}
+        accessibilityLabel={t("settings.general.assistantAutomation.label")}
+        testID="assistant-automation-switch"
+      />
+    </View>
+  );
+}
+
 function GeneralSection({
   settings,
   isDesktopApp,
@@ -606,6 +636,7 @@ function GeneralSection({
             testID="link-prompt-send-switch"
           />
         </View>
+        {androidIntents.isAvailable ? <AssistantAutomationRow /> : null}
         {isDesktopApp ? (
           <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
             <View style={settingsStyles.rowContent}>

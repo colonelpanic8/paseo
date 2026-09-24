@@ -2606,6 +2606,11 @@ export const ko: TranslationResources = {
         description:
           "paseo:// 링크와 다른 앱이 확인 없이 에이전트에 프롬프트를 보낼 수 있게 합니다",
       },
+      assistantAutomation: {
+        label: "EVA가 에이전트를 실행하도록 허용",
+        description:
+          "EVA 어시스턴트가 확인 없이 에이전트를 시작하고 프롬프트를 보낼 수 있게 합니다. 휴대폰이 잠겨 있어도 적용됩니다",
+      },
       language: {
         label: "언어",
         description: "앱 언어",

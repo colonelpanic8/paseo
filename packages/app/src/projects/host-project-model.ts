@@ -27,8 +27,8 @@ export function canCreateWorktreeForProjectKind(
 
 export function hostProjectFromRoute(route: HostProjectRouteContext): HostProjectListItem | null {
   const projectId = route.projectId?.trim() || undefined;
-  const iconWorkingDir = trimOptional(route.sourceDirectory);
-  if (!projectId || !iconWorkingDir) {
+  const iconWorkingDir = trimOptional(route.sourceDirectory) ?? "";
+  if (!projectId) {
     return null;
   }
   return {
@@ -113,7 +113,7 @@ export function getHostProjectSourceDirectory(
   project: HostProjectListItem,
   serverId: string,
 ): string | null {
-  return getHostProjectPlacement(project, serverId)?.iconWorkingDir ?? null;
+  return getHostProjectPlacement(project, serverId)?.iconWorkingDir || null;
 }
 
 export function getHostProjectId(project: HostProjectListItem, serverId: string): string | null {

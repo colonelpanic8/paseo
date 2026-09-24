@@ -2637,6 +2637,11 @@ export const ptBR: TranslationResources = {
         description:
           "Permitir que links paseo:// e outros apps enviem um prompt a um agente sem confirmação",
       },
+      assistantAutomation: {
+        label: "Permitir que o EVA execute agentes",
+        description:
+          "Permitir que o assistente EVA inicie agentes e envie prompts sem confirmação, mesmo com o telefone bloqueado",
+      },
       language: {
         label: "Idioma",
         description: "Idioma do app",
