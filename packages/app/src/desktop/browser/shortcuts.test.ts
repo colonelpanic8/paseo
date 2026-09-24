@@ -3,10 +3,50 @@ import {
   buildBrowserKeyboardPolicy,
   parseBrowserShortcutInput,
   shouldPublishBrowserShortcutPolicy,
+  type BrowserShortcutPrefix,
 } from "./shortcuts";
-import { buildEffectiveBindings, resolveKeyboardShortcut } from "../../keyboard/keyboard-shortcuts";
+import {
+  buildCommandShortcutBindings,
+  buildEffectiveBindings,
+  resolveKeyboardShortcut,
+} from "../../keyboard/keyboard-shortcuts";
 
 describe("buildBrowserKeyboardPolicy", () => {
+  it("forwards collision-free F13-F24 command shortcuts without a modifier", () => {
+    const bindings = buildCommandShortcutBindings(["thinking:high"], {
+      "command-center.shortcut:thinking:high": "F24",
+    });
+
+    expect(buildBrowserKeyboardPolicy({ bindings, isMac: true, isDesktop: true }).prefixes).toEqual(
+      [
+        {
+          alt: false,
+          code: "F24",
+          codeFallback: true,
+          control: false,
+          meta: false,
+          repeat: false,
+          shift: false,
+        },
+      ],
+    );
+  });
+
+  it("does not broaden unmodified browser capture to ordinary fallback keys", () => {
+    const prefixes = buildBrowserKeyboardPolicy({
+      bindings: buildEffectiveBindings({}),
+      isMac: true,
+      isDesktop: true,
+    }).prefixes;
+
+    // A chord that names one of these keys behind a real modifier is still fair game; what
+    // must never reach the browser is the bare keypress.
+    const isUnmodified = (prefix: BrowserShortcutPrefix) =>
+      !prefix.meta && !prefix.control && !prefix.alt;
+    expect(prefixes.some((prefix) => prefix.code === "Space" && isUnmodified(prefix))).toBe(false);
+    expect(prefixes.some((prefix) => prefix.code === "Enter" && isUnmodified(prefix))).toBe(false);
+  });
+
   it("publishes only chord starts while no browser chord is pending", () => {
     const bindings = buildEffectiveBindings({
       "workspace-tab-new-ctrl-t-non-mac": "Ctrl+Y",

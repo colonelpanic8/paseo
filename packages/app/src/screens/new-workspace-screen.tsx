@@ -95,6 +95,9 @@ import type { UserComposerAttachment } from "@/attachments/types";
 import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { AgentProvider } from "@getpaseo/protocol/agent-types";
+import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
+import { useAgentControlCommandCenterActions } from "@/command-center/agent-control-registration";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
@@ -136,6 +139,17 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 const addProjectIcon = (
   <ThemedFolderPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
+
+const EMPTY_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
+const EMPTY_MODEL_SELECTOR_PROVIDERS: ProviderSelectorProvider[] = [];
+
+function ignoreModelSelection(): void {
+  return;
+}
+
+function ignoreOptionSelection(): void {
+  return;
+}
 
 function useIsNewWorkspaceDraftHandoffActive(input: {
   draftId: string | undefined;
@@ -866,6 +880,49 @@ interface SubmitDraftInput {
 type NewWorkspaceComposerState = NonNullable<
   ReturnType<typeof useAgentInputDraft>["composerState"]
 >;
+
+function useNewWorkspaceShortcutRegistration(input: {
+  draftKey: string;
+  serverId: string;
+  composerState: NewWorkspaceComposerState | null;
+  isPending: boolean;
+}): void {
+  const { composerState } = input;
+  useAgentControlCommandCenterActions({
+    sourceId: `new-workspace:${input.draftKey}`,
+    enabled: Boolean(composerState) && !input.isPending,
+    controls: {
+      serverId: input.serverId,
+      ownerKey: input.draftKey,
+      provider: composerState?.selectedProvider,
+      providerDefinitions: composerState?.providerDefinitions ?? EMPTY_PROVIDER_DEFINITIONS,
+      models: {
+        providers: composerState?.modelSelectorProviders ?? EMPTY_MODEL_SELECTOR_PROVIDERS,
+        selectedProvider: composerState?.selectedProvider,
+        selectedModelId: composerState?.effectiveModelId,
+        select: composerState?.setProviderAndModelFromUser ?? ignoreModelSelection,
+      },
+      thinking: {
+        options: composerState?.availableThinkingOptions,
+        selectedId: composerState?.selectedThinkingOptionId,
+        select: composerState?.setThinkingOptionFromUser ?? ignoreOptionSelection,
+      },
+      ...(composerState
+        ? {
+            modes: {
+              options: composerState.modeOptions,
+              selectedId: composerState.selectedMode,
+              select: composerState.setModeFromUser,
+            },
+          }
+        : {}),
+      features: {
+        list: composerState?.agentControls.features,
+        set: composerState?.agentControls.onSetFeature,
+      },
+    },
+  });
+}
 
 interface WorkspaceDraftSubmissionConfig {
   cwd: string;
@@ -2384,6 +2441,13 @@ export function NewWorkspaceScreen({
         : undefined,
     [composerState, isPending],
   );
+
+  useNewWorkspaceShortcutRegistration({
+    draftKey,
+    serverId: selectedServerId,
+    composerState,
+    isPending,
+  });
 
   const pickerEmptyText =
     branchSuggestionsQuery.isFetching || githubPrSearchQuery.isFetching
