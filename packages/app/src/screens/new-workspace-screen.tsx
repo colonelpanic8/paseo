@@ -24,7 +24,6 @@ import {
 } from "@/composer/attachments/submit";
 import { dispatchComposerAgentMessage } from "@/composer/actions";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
-import { encodeImages } from "@/utils/encode-images";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -2289,7 +2288,7 @@ export function NewWorkspaceScreen({
             destinationSourceDirectory: selectedSourceDirectory,
             prompt: payload.text,
             namingAttachments: getWorkspaceNamingAttachments(forkNamingAttachments),
-            ensureWorkspace,
+            ensureWorkspace: async (request) => (await ensureWorkspace(request)).workspace,
             failureMessage: t("message.actions.forkFailed"),
           });
           useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId: draftId ?? "" });
@@ -2389,6 +2388,7 @@ export function NewWorkspaceScreen({
       creationIdentity,
       clearChatDraft,
       draftKey,
+      draftId,
       ensureWorkspace,
       forkDraftSetup,
       isStillOnCreateScreen,
