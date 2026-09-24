@@ -42,7 +42,7 @@ import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import type { ComposerSigils } from "@/composer/tokens/sigils";
 import { collectComposerTokens, type ComposerTokenCatalog } from "@/composer/tokens/tokens";
 import { ComposerTokenHighlightLayer } from "./token-highlight";
-import { focusWithRetries } from "@/utils/web-focus";
+import { focusWithRetries } from "@/utils/focus-with-retries";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
 import {
