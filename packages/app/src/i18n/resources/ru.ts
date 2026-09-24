@@ -977,11 +977,8 @@ export const ru: TranslationResources = {
         refresh: "Обновить",
         refreshState: "Обновить состояние Git и {{brand}}",
         failedRefresh: "Не удалось обновить состояние Git.",
-        emptyHiddenWhitespace: "После скрытия пробельных изменений видимых изменений нет",
-        emptyUncommitted: "Нет незафиксированных изменений",
         seeUncommittedChanges: "Показать незафиксированные изменения",
         seeCommittedChanges: "Показать зафиксированные изменения",
-        emptyAgainstBase: "Нет изменений относительно {{baseRef}}",
         checkingRepository: "Проверяем репозиторий...",
         notRepository: "Это не репозиторий Git",
         diffMode: "Режим диффа",
@@ -1152,7 +1149,6 @@ export const ru: TranslationResources = {
         branch: "Ветка",
         project: "Проект",
         host: "Хост",
-        alwaysShowHost: "Всегда показывать хост",
         changeRequest: "PR",
         checks: "Проверки",
         services: "Сервисы",
@@ -2703,14 +2699,6 @@ export const ru: TranslationResources = {
           auto: "Системная",
         },
       },
-      sidebar: {
-        title: "Боковая панель",
-        alwaysShowHostLabels: {
-          title: "Всегда показывать метки хоста",
-          description:
-            "Показывает метки хоста, даже когда все видимые рабочие области находятся на этом устройстве",
-        },
-      },
       detailLevel: {
         title: "Уровень детализации",
       },
@@ -2720,6 +2708,11 @@ export const ru: TranslationResources = {
       },
       sidebar: {
         title: "Боковая панель",
+        alwaysShowHostLabels: {
+          title: "Всегда показывать метки хоста",
+          description:
+            "Показывает метки хоста, даже когда все видимые рабочие области находятся на этом устройстве",
+        },
         description:
           "Выберите, какие элементы отображаются вверху боковой панели и в каком порядке",
         moveUp: "Переместить вверх",

@@ -114,6 +114,7 @@ import {
 
 import { AgentManager, AgentRunCancellationError } from "./agent/agent-manager.js";
 import { buildTimelinePromptIndex } from "./agent/timeline-prompt-index.js";
+import { collectAgentMessageActivity } from "./agent/message-activity.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import type {
   AgentManagerEvent,
@@ -2825,6 +2826,7 @@ export class Session {
     );
   }
 
+  // oxlint-disable-next-line complexity
   private async handleLiveVoiceStartRequest(
     msg: Extract<SessionInboundMessage, { type: "voice.live.start.request" }>,
     source?: object,
