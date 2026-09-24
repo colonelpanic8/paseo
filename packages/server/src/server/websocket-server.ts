@@ -1219,6 +1219,7 @@ export class VoiceAssistantWebSocketServer {
     this.providerSnapshotManager.destroy();
     this.checkoutDiffManager.dispose();
     await this.workspaceGitService.dispose();
+    await this.usageHistoryService.flushScanCache();
     this.pendingConnections.clear();
     this.sessions.clear();
     this.socketIdentities.clear();
