@@ -441,6 +441,24 @@ function resolveInitialLastMessageAt(
   return options?.lastMessageAt ?? options?.lastUserMessageAt ?? null;
 }
 
+function resolveInitialAgentState(
+  options:
+    | {
+        lastUsage?: AgentUsage;
+        promptCache?: AgentPromptCacheStatus;
+        lastError?: string;
+        lastFailure?: ManagedAgentBase["lastFailure"];
+      }
+    | undefined,
+) {
+  return {
+    lastUsage: options?.lastUsage,
+    promptCache: options?.promptCache,
+    lastError: options?.lastError,
+    lastFailure: options?.lastFailure,
+  };
+}
+
 interface ManagedAgentBase {
   id: string;
   provider: AgentProvider;
@@ -4080,10 +4098,7 @@ export class AgentManager {
       summaryUpdatedAt,
       summaryCursor,
       summaryTurnsSinceUpdate,
-      lastUsage: options?.lastUsage,
-      promptCache: options?.promptCache,
-      lastError: options?.lastError,
-      lastFailure: options?.lastFailure,
+      ...resolveInitialAgentState(options),
       attention: resolveInitialAttention(options?.attention),
       internal: config.internal ?? false,
       labels: options?.labels ?? {},
