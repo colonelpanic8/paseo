@@ -64,7 +64,10 @@ export function createWorkspaceRecoveryService(deps: {
   getWorkspace: (workspaceId: string) => Promise<PersistedWorkspaceRecord | null>;
   getProject: (projectId: string) => Promise<PersistedProjectRecord | null>;
   isDirectory: (path: string) => Promise<boolean>;
-  unarchiveWorkspace: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  unarchiveWorkspace: (
+    workspace: PersistedWorkspaceRecord,
+    prepareDirectory: () => Promise<void>,
+  ) => Promise<void>;
 }): WorkspaceRecoveryService {
   async function resolveRecovery(
     workspaceId: string,
@@ -146,11 +149,18 @@ export function createWorkspaceRecoveryService(deps: {
       throw new Error(resolved.message);
     }
 
-    if (resolved.kind === "restore") {
-      await recreateArchivedWorktree(resolved.workspace, resolved.sourceRepoRoot);
-    }
-    await deps.unarchiveWorkspace(resolved.workspace);
-    return { workspaceId, action: resolved.kind };
+    let action = resolved.kind;
+    await deps.unarchiveWorkspace(resolved.workspace, async () => {
+      // An automatic archive may have removed the directory while restore waited
+      // for the lifecycle lock. Inspect again before choosing how to recover it.
+      const current = await resolveRecovery(workspaceId);
+      if (current.kind === "unavailable") throw new Error(current.message);
+      action = current.kind;
+      if (current.kind === "restore") {
+        await recreateArchivedWorktree(current.workspace, current.sourceRepoRoot);
+      }
+    });
+    return { workspaceId, action };
   }
 
   async function recreateArchivedWorktree(
