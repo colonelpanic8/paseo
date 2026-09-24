@@ -94,6 +94,7 @@ import {
   executePluginClientSlashCommand,
   resolvePluginClientSlashCommand,
 } from "@/plugins/client-slash-commands/model";
+import { useListSearchHandler } from "@/keyboard/list-search-dispatcher";
 import {
   useHostRuntimeAgentDirectoryStatus,
   useHostRuntimeClient,
@@ -1029,6 +1030,7 @@ function ComposerAutocompleteBinding({
   anchorRef,
   show,
   ref,
+  onVisibleChange,
 }: {
   text: ComposerTextSource;
   cursor: StoreApi<number>;
@@ -1040,6 +1042,7 @@ function ComposerAutocompleteBinding({
   anchorRef: React.RefObject<View | null>;
   show: boolean;
   ref: React.Ref<ComposerAutocompleteHandle>;
+  onVisibleChange?: (visible: boolean) => void;
 }) {
   const userInput = useSyncExternalStore(text.subscribe, text.getSnapshot, text.getSnapshot);
   const cursorIndex = useStore(cursor);
@@ -1052,6 +1055,10 @@ function ComposerAutocompleteBinding({
   useImperativeHandle(ref, () => ({ onKeyPress: autocomplete.onKeyPress }), [
     autocomplete.onKeyPress,
   ]);
+  const isVisible = autocomplete.isVisible && show;
+  useEffect(() => {
+    onVisibleChange?.(isVisible);
+  }, [isVisible, onVisibleChange]);
   const selectOption = autocomplete.onSelectOption;
   const onSelect = useCallback(
     (option: AutocompleteOption) => selectOption(option, inputRef.current?.getInputSnapshot()),
@@ -1376,6 +1383,7 @@ function ComposerContentImpl({
   );
   useEffect(() => () => cursorPublication.cancel(), [cursorPublication]);
   const autocompleteRef = useRef<ComposerAutocompleteHandle>(null);
+  const [autocompleteVisible, setAutocompleteVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFileAttachment[]>([]);
   const nextPendingFileId = useRef(0);
@@ -2398,6 +2406,19 @@ function ComposerContentImpl({
   const githubEmptyText = githubSearchResultsQuery.isFetching
     ? t("composer.github.searching")
     : t("composer.github.noResults");
+  useListSearchHandler({
+    active: isNative && autocompleteVisible,
+    priority: 80,
+    handle: (_action, event) =>
+      autocompleteRef.current?.onKeyPress({
+        ...event,
+        preventDefault: () => {},
+        input: messageInputRef.current?.getInputSnapshot() ?? {
+          text: textSource.getSnapshot(),
+          selection: { start: cursor.getState(), end: cursor.getState() },
+        },
+      }) ?? false,
+  });
 
   return (
     <>
@@ -2427,6 +2448,7 @@ function ComposerContentImpl({
                 anchorRef={messageInputContainerRef}
                 show={mode.showAutocomplete}
                 ref={autocompleteRef}
+                onVisibleChange={setAutocompleteVisible}
                 configuration={autocompleteConfiguration}
               />
               <ComposerForgeBinding
@@ -2474,6 +2496,7 @@ function ComposerContentImpl({
                   onQueue={handleQueue}
                   onSubmitLoadingPress={submitLoadingPressHandler}
                   onKeyPress={handleCommandKeyPress}
+                  ownsListNavigation={autocompleteVisible}
                   onSelectionChange={handleSelectionChange}
                   onFocusChange={handleFocusChange}
                   onHeightChange={onComposerHeightChange}
