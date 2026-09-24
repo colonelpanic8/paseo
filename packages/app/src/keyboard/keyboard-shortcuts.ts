@@ -169,6 +169,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "workspace-jump-index",
     "workspace-prev",
     "workspace-next",
+    "workspace-next-ready-waiting",
     "pin-workspace",
     "archive-workspace",
   ],
@@ -379,6 +380,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "toggle-workspace-isolation",
       section: "workspaces",
       label: "Toggle workspace isolation",
+      keys: ["alt", "I"],
     },
   },
   {
@@ -390,6 +392,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-starting-ref",
       section: "workspaces",
       label: "Select starting ref",
+      keys: ["alt", "B"],
     },
   },
   {
@@ -401,6 +404,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-host",
       section: "workspaces",
       label: "Select host",
+      keys: ["alt", "H"],
     },
   },
 
@@ -414,6 +418,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-model",
       section: "agent-input",
       label: "Select model",
+      keys: ["alt", "M"],
     },
   },
   {
@@ -425,6 +430,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-thinking",
       section: "agent-input",
       label: "Select thinking effort",
+      keys: ["alt", "E"],
     },
   },
   {
@@ -436,6 +442,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "select-agent-mode",
       section: "agent-input",
       label: "Select agent mode",
+      keys: ["alt", "A"],
     },
   },
   {
@@ -448,6 +455,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "toggle-fast-mode",
       section: "agent-input",
       label: "Toggle fast mode",
+      keys: ["alt", "F"],
     },
   },
   {
@@ -460,6 +468,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "toggle-plan-mode",
       section: "agent-input",
       label: "Toggle plan mode",
+      keys: ["alt", "P"],
     },
   },
 
@@ -850,7 +859,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     when: { commandCenter: false, editable: false, terminal: false },
     help: {
       id: "workspace-next-ready-waiting",
-      section: "navigation",
+      section: "workspaces",
       label: "Next ready/waiting workspace",
       keys: ["alt", "R"],
     },
@@ -1417,6 +1426,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "live-voice-mute-toggle",
       section: "agent-input",
       label: "Mute/unmute live voice",
+      keys: ["mod", "shift", "M"],
     },
   },
   {
@@ -1429,6 +1439,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "live-voice-mute-toggle",
       section: "agent-input",
       label: "Mute/unmute live voice",
+      keys: ["mod", "shift", "M"],
     },
   },
 
@@ -1447,6 +1458,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "agent-input",
       label: "Hold to invert live voice mute",
       note: "Push-to-talk while muted, push-to-mute while live.",
+      keys: ["mod", "shift", "Space"],
     },
   },
   {
@@ -1460,6 +1472,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "agent-input",
       label: "Hold to invert live voice mute",
       note: "Push-to-talk while muted, push-to-mute while live.",
+      keys: ["mod", "shift", "Space"],
     },
   },
 ];

@@ -70,6 +70,7 @@ interface CombinedModelSelectorProps {
   onOpenChange?: (open: boolean) => void;
 }
 
+// oxlint-disable-next-line complexity
 export function CombinedModelSelector({
   providers,
   selectedProvider,

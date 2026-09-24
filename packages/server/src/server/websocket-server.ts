@@ -652,6 +652,7 @@ export class VoiceAssistantWebSocketServer {
     }
   }
 
+  // oxlint-disable-next-line complexity
   constructor(
     server: HTTPServer,
     logger: pino.Logger,

@@ -611,6 +611,7 @@ function startAgentPurposeSummaryService(
   return service;
 }
 
+// oxlint-disable-next-line complexity
 export async function createPaseoDaemon(
   config: PaseoDaemonConfig,
   rootLogger: Logger,

@@ -1,7 +1,6 @@
 import {
   deepMerge,
   loadConfigStack,
-  loadPersistedConfig,
   restoreConfigWriteTarget,
   saveConfigStack,
   type ConfigStack,
@@ -242,6 +241,7 @@ function compactOwnedPaths(paths: readonly string[], owners: readonly string[]):
   return Array.from(compacted).sort();
 }
 
+// oxlint-disable-next-line complexity
 function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
   return {
     ...(patch.relay?.enabled !== undefined ? { relay: { enabled: patch.relay.enabled } } : {}),
