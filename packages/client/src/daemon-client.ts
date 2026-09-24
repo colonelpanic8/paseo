@@ -125,6 +125,7 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  ArchivedWorkspacePayload,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -2979,6 +2980,26 @@ export class DaemonClient {
     return { title: payload.title };
   }
 
+  async regenerateWorkspaceTitle(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<{ title: string | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.title.regenerate.request",
+        workspaceId,
+      },
+      responseType: "workspace.title.regenerate.response",
+      // Structured generation retries and falls back across providers.
+      timeout: 180_000,
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "regenerateWorkspaceTitle rejected");
+    }
+    return { title: payload.title };
+  }
+
   async setWorkspacePinned(
     workspaceId: string,
     pinned: boolean,
@@ -2999,6 +3020,26 @@ export class DaemonClient {
     return { pinnedAt: payload.pinnedAt };
   }
 
+  async setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId?: string,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.snooze.set.request",
+        workspaceId,
+        snoozedUntil,
+      },
+      responseType: "workspace.snooze.set.response",
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "setWorkspaceSnooze rejected");
+    }
+    return { snoozeStatus: payload.snoozeStatus };
+  }
+
   async inspectWorkspaceRecovery(
     workspaceId: string,
     requestId?: string,
@@ -3012,6 +3053,17 @@ export class DaemonClient {
         },
       });
     return payload.state;
+  }
+
+  async listArchivedWorkspaces(requestId?: string): Promise<ArchivedWorkspacePayload[]> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.archived.list.response">({
+        requestId,
+        message: {
+          type: "workspace.archived.list.request",
+        },
+      });
+    return payload.entries;
   }
 
   async restoreWorkspace(workspaceId: string, requestId?: string): Promise<void> {
