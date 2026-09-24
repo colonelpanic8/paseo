@@ -91,6 +91,7 @@ import {
   type OpenCodeEventSource,
   type OpenCodeEventSourceInput,
 } from "./opencode/event-consumer.js";
+import { readOpenCodeCatalogFingerprint } from "./opencode/catalog-fingerprint.js";
 import { resolveOpenCodeHomeDir } from "./opencode/paths.js";
 import {
   formatProviderDiagnostic,
@@ -1416,6 +1417,7 @@ interface OpenCodeAgentClientDeps {
   resolveHomeDir?: () => string;
   managedProcesses?: ManagedProcessRegistry;
   bridge?: OpenCodeBridge;
+  readCatalogFingerprint?: (env: NodeJS.ProcessEnv, directory: string) => Promise<string>;
 }
 
 type OpenCodeClientFactory = (options: { baseUrl: string; directory: string }) => OpencodeClient;
@@ -1437,6 +1439,13 @@ export class OpenCodeAgentClient implements AgentClient {
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly modelContextWindows = new Map<string, number>();
   private readonly bridge?: OpenCodeBridge;
+  private readonly readCatalogFingerprint: (
+    env: NodeJS.ProcessEnv,
+    directory: string,
+  ) => Promise<string>;
+  /** Catalogue key last reported per directory, and the one that produced its cached catalogue. */
+  private readonly reportedCatalogKeys = new Map<string, string>();
+  private readonly fetchedCatalogKeys = new Map<string, string>();
 
   constructor(
     logger: Logger,
@@ -1468,6 +1477,24 @@ export class OpenCodeAgentClient implements AgentClient {
           : undefined,
       });
     this.resolveHomeDir = deps.resolveHomeDir ?? resolveOpenCodeHomeDir;
+    this.readCatalogFingerprint = deps.readCatalogFingerprint ?? readOpenCodeCatalogFingerprint;
+  }
+
+  private catalogEnv(): NodeJS.ProcessEnv {
+    return { ...process.env, ...this.runtimeSettings?.env };
+  }
+
+  /**
+   * Keys the cached catalogue to the OpenCode files that produced it, so a
+   * catalogue OpenCode refreshed in the background is picked up on the next
+   * read instead of living until the daemon restarts.
+   */
+  async getCatalogCacheKey(options: FetchCatalogOptions): Promise<string> {
+    const { directory } = openCodeCatalogDirectory(options, this.resolveHomeDir);
+    const fingerprint = await this.readCatalogFingerprint(this.catalogEnv(), directory);
+    const key = JSON.stringify(["opencode", directory, fingerprint]);
+    this.reportedCatalogKeys.set(directory, key);
+    return key;
   }
 
   async createSession(
@@ -1611,16 +1638,24 @@ export class OpenCodeAgentClient implements AgentClient {
   ): Promise<ProviderCatalog> {
     let acquisition: OpenCodeServerAcquisition | undefined;
     try {
+      const catalogDirectory = openCodeCatalogDirectory(options, this.resolveHomeDir);
+      const { directory } = catalogDirectory;
+      // A live server answers from the catalogue it booted with, so a key that
+      // moved since the cached catalogue can only be honoured by replacing it.
+      const reportedKey = this.reportedCatalogKeys.get(directory);
+      const catalogChanged =
+        reportedKey !== undefined &&
+        this.fetchedCatalogKeys.has(directory) &&
+        this.fetchedCatalogKeys.get(directory) !== reportedKey;
       await runProviderRefreshActivity(context, "server.acquire", async () => {
-        acquisition = options.force
-          ? await this.serverManager.acquireNew(context?.signal)
-          : await this.serverManager.acquireCurrent(context?.signal);
+        acquisition =
+          options.force || catalogChanged
+            ? await this.serverManager.acquireNew(context?.signal)
+            : await this.serverManager.acquireCurrent(context?.signal);
       });
       if (!acquisition) throw new Error("OpenCode server acquisition did not complete");
       context?.signal.throwIfAborted();
       const { url } = acquisition.server;
-      const catalogDirectory = openCodeCatalogDirectory(options, this.resolveHomeDir);
-      const { directory } = catalogDirectory;
 
       if (catalogDirectory.needsDirectory) {
         await fs.mkdir(directory, { recursive: true });
@@ -1635,6 +1670,7 @@ export class OpenCodeAgentClient implements AgentClient {
         this.fetchModelsFromClient(client, directory, context),
         this.fetchModesFromClient(client, directory, context),
       ]);
+      if (reportedKey !== undefined) this.fetchedCatalogKeys.set(directory, reportedKey);
       return { models, modes };
     } finally {
       await acquisition?.release();
