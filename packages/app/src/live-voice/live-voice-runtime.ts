@@ -150,9 +150,20 @@ export interface LiveVoiceRuntimeDeps {
    * continues it.
    */
   memory?: {
-    read(serverId: string): LiveVoiceMemoryRequest | undefined;
+    /**
+     * `override` comes from a quick-launch link: an explicit profile id, or
+     * `null` for the host default even though the launcher has one selected.
+     */
+    read(serverId: string, override?: LiveVoiceProfileOverride): LiveVoiceMemoryRequest | undefined;
     remembered?(serverId: string, threadId: string): void;
   };
+}
+
+/** `undefined` defers to the launcher's selection; `null` forces the host default. */
+export type LiveVoiceProfileOverride = string | null | undefined;
+
+export interface LiveVoiceStartOptions {
+  profileId?: LiveVoiceProfileOverride;
 }
 
 /** How a call should be remembered. Absent means a call the daemon forgets. */
@@ -165,7 +176,7 @@ export interface LiveVoiceMemoryRequest {
 export interface LiveVoiceRuntime {
   subscribe(listener: () => void): () => void;
   getSnapshot(): LiveVoiceSnapshot;
-  start(serverId: string): Promise<void>;
+  start(serverId: string, options?: LiveVoiceStartOptions): Promise<void>;
   /** Pending platform startup cannot be cancelled; its lease survives until it settles. */
   stop(): Promise<void>;
   /** Drive mute to an absolute value. No-op unless a call is active. */
@@ -357,6 +368,13 @@ function toCallSettingsStartFields(
 }
 
 export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRuntime {
+  function readMemory(
+    serverId: string,
+    options: LiveVoiceStartOptions | undefined,
+  ): LiveVoiceMemoryRequest | null {
+    return deps.memory?.read(serverId, options?.profileId) ?? null;
+  }
+
   const listeners = new Set<() => void>();
   let snapshot: LiveVoiceSnapshot = IDLE_SNAPSHOT;
   let currentCall: LiveVoiceCall | null = null;
@@ -624,7 +642,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
     getSnapshot() {
       return snapshot;
     },
-    async start(serverId) {
+    async start(serverId, options) {
       if (snapshot.phase === "starting" || snapshot.phase === "active") {
         throw new LiveVoiceStartError({ code: "already_active", message: null });
       }
@@ -634,7 +652,7 @@ export function createLiveVoiceRuntime(deps: LiveVoiceRuntimeDeps): LiveVoiceRun
       if (!deps.isSessionSupported) failStart(serverId, { code: "unsupported", message: null });
       let memory: LiveVoiceMemoryRequest | null;
       try {
-        memory = deps.memory?.read(serverId) ?? null;
+        memory = readMemory(serverId, options);
       } catch (error) {
         failStart(serverId, error instanceof LiveVoiceStartError ? error.info : toErrorInfo(error));
       }

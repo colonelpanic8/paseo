@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import {
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   Switch as NativeSwitch,
@@ -128,6 +127,8 @@ import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availabi
 import { resolveLiveVoiceUnavailableMessage } from "@/live-voice/live-voice-unavailable-message";
 import { useLiveVoiceVoiceOptions } from "@/hooks/use-live-voice-voice-options";
 import { VoiceProfilesSheet } from "@/voice-profiles/voice-profiles-sheet";
+import { useVoiceProfiles } from "@/voice-profiles/voice-profile-queries";
+import { useVoiceSelection, useVoiceSelectionStore } from "@/voice-profiles/voice-selection-store";
 import { useLiveVoiceBackendModelOptions } from "@/live-voice/live-voice-backend-model-catalog";
 import {
   LIVE_VOICE_OPTIONAL_PROMPT_COMPONENTS,
@@ -781,7 +782,7 @@ function LiveVoiceSettingsCard() {
           </DropdownMenuContent>
         </DropdownMenu>
       </View>
-      {Platform.OS === "android" ? <DispatchSettingsRows /> : null}
+      {isNative ? <ShortcutSettingsRows /> : null}
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("liveVoice.settings.agentReports.label")}</Text>
@@ -946,6 +947,148 @@ function LiveVoiceSettingsCard() {
   );
 }
 
+/** The two link targets, native only: web has no `paseo://` handler to reach them. */
+function ShortcutSettingsRows() {
+  return (
+    <>
+      <QuickLaunchSettingsRows />
+      <DispatchSettingsRows />
+    </>
+  );
+}
+
+/**
+ * Where a `paseo://live-voice` shortcut lands. The profile row edits the
+ * launcher's own selection for that host rather than a second setting, so the
+ * shortcut and the menu can never disagree about who answers.
+ */
+function QuickLaunchSettingsRows() {
+  const { t } = useTranslation();
+  const hosts = useLiveVoiceHostAvailability().filter(
+    (host) => host.connectionStatus === "online" && host.supportsLiveVoice === true,
+  );
+  const quickLaunchServerId = useLiveVoiceSettingsStore((state) => state.quickLaunchServerId);
+  const setQuickLaunchServerId = useLiveVoiceSettingsStore((state) => state.setQuickLaunchServerId);
+  const selectedHost = hosts.find((host) => host.serverId === quickLaunchServerId) ?? null;
+  const profileHost = selectedHost ?? (hosts.length === 1 ? hosts[0] : null);
+  const profileHostId = profileHost?.supportsVoiceProfiles === true ? profileHost.serverId : null;
+  const { profiles, defaultProfileId } = useVoiceProfiles(profileHostId);
+  const { profileId: selectedProfileId } = useVoiceSelection(profileHostId);
+  const selectProfile = useVoiceSelectionStore((state) => state.selectProfile);
+  const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
+  const defaultProfile = profiles.find((profile) => profile.id === defaultProfileId) ?? null;
+  const clearHost = useCallback(() => setQuickLaunchServerId(null), [setQuickLaunchServerId]);
+  const clearProfile = useCallback(() => {
+    if (profileHostId) selectProfile(profileHostId, null);
+  }, [profileHostId, selectProfile]);
+  const hostDefaultLabel = defaultProfile
+    ? `${t("liveVoice.settings.quickLaunch.hostDefault")} · ${defaultProfile.name}`
+    : t("liveVoice.settings.quickLaunch.hostDefault");
+
+  return (
+    <>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("liveVoice.settings.quickLaunch.hostLabel")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("liveVoice.settings.quickLaunch.description")}
+          </Text>
+        </View>
+        <DropdownMenu>
+          <DropdownTrigger
+            accessibilityRole="button"
+            accessibilityLabel={t("liveVoice.settings.quickLaunch.hostLabel")}
+            style={themeTriggerStyle}
+            testID="quick-launch-host-picker"
+          >
+            <Text style={styles.themeTriggerText} numberOfLines={1}>
+              {selectedHost?.label ?? t("liveVoice.settings.quickLaunch.auto")}
+            </Text>
+          </DropdownTrigger>
+          <DropdownMenuContent side="bottom" align="end" width={240}>
+            <DropdownMenuItem selected={selectedHost === null} onSelect={clearHost}>
+              {t("liveVoice.settings.quickLaunch.auto")}
+            </DropdownMenuItem>
+            {hosts.map((host) => (
+              <DispatchHostMenuItem
+                key={host.serverId}
+                host={host}
+                selected={host.serverId === quickLaunchServerId}
+                onChange={setQuickLaunchServerId}
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </View>
+      {profileHostId ? (
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("liveVoice.settings.quickLaunch.profileLabel")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("liveVoice.settings.quickLaunch.profileHint")}
+            </Text>
+          </View>
+          <DropdownMenu>
+            <DropdownTrigger
+              accessibilityRole="button"
+              accessibilityLabel={t("liveVoice.settings.quickLaunch.profileLabel")}
+              style={themeTriggerStyle}
+              testID="quick-launch-profile-picker"
+            >
+              <Text style={styles.themeTriggerText} numberOfLines={1}>
+                {selectedProfile?.name ?? hostDefaultLabel}
+              </Text>
+            </DropdownTrigger>
+            <DropdownMenuContent side="bottom" align="end" width={280}>
+              <DropdownMenuItem selected={selectedProfile === null} onSelect={clearProfile}>
+                {hostDefaultLabel}
+              </DropdownMenuItem>
+              {profiles.map((profile) => (
+                <QuickLaunchProfileMenuItem
+                  key={profile.id}
+                  serverId={profileHostId}
+                  profileId={profile.id}
+                  name={profile.name}
+                  selected={profile.id === selectedProfileId}
+                  onChange={selectProfile}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+function QuickLaunchProfileMenuItem({
+  serverId,
+  profileId,
+  name,
+  selected,
+  onChange,
+}: {
+  serverId: string;
+  profileId: string;
+  name: string;
+  selected: boolean;
+  onChange: (serverId: string, profileId: string | null) => void;
+}) {
+  const handleSelect = useCallback(
+    () => onChange(serverId, profileId),
+    [onChange, profileId, serverId],
+  );
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {name}
+    </DropdownMenuItem>
+  );
+}
+
 function DispatchSettingsRows() {
   const { t } = useTranslation();
   const hosts = useHosts();
@@ -1072,7 +1215,7 @@ function DispatchHostMenuItem({
   selected,
   onChange,
 }: {
-  host: HostProfile;
+  host: Pick<HostProfile, "serverId" | "label">;
   selected: boolean;
   onChange: (serverId: string) => void;
 }) {

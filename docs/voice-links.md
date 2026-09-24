@@ -22,12 +22,14 @@ Parameters, all optional:
   Settings → Voice; without that, the only eligible host; with several
   eligible hosts and nothing configured, the launcher menu opens instead of
   guessing.
-- `assistant=<id or name>` — who answers. Without it, the launcher's selected
-  assistant on that host (which is what the **Shortcut assistant** row in
-  Settings edits). An id (`ast_…`) matches exactly; a name matches
+- `profile=<id or name>` — which profile answers. Without it, the launcher's
+  selected profile on that host (which is what the **Shortcut profile** row in
+  Settings edits). An id (`prf_…` or `cfg_…`) matches exactly; a name matches
   case-insensitively and only when unique. A name that matches nothing starts a
-  call with **no** assistant rather than a different one — a shortcut wired to
-  "Reviewer" must not quietly call whoever was last selected.
+  call with the host's **default** profile rather than a different one — a
+  shortcut wired to "Reviewer" must not quietly call whoever was last selected.
+  The call continues the launcher's picked thread only when it belongs to the
+  same profile; otherwise it opens a new one.
 
 The shortcut waits for Paseo to become visible before starting microphone access.
 Opening the link during a call does nothing. If startup fails, or a previous
@@ -74,7 +76,7 @@ is:
 
 Choose **Link** as the action type and `sh.paseo.assembly` (or `sh.paseo`) as
 the package. The parameters above are how one gesture reaches a specific
-assistant or agent when the settings default is not the one wanted.
+profile or agent when the settings default is not the one wanted.
 
 From a shell, the same thing:
 

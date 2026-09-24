@@ -1631,7 +1631,8 @@ describe("WearBridge live voice", () => {
 
   const IDLE_SNAPSHOT: LiveVoiceSnapshot = {
     phase: "idle",
-    assistantId: null,
+    profileId: null,
+    threadId: null,
     serverId: null,
     liveSessionId: null,
     isMuted: false,
@@ -1938,7 +1939,8 @@ describe("WearBridge dispatch", () => {
   };
   const snapshot: LiveVoiceSnapshot = {
     phase: "idle",
-    assistantId: null,
+    profileId: null,
+    threadId: null,
     serverId: null,
     liveSessionId: null,
     isMuted: false,
