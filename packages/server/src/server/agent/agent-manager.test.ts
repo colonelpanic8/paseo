@@ -50,6 +50,10 @@ import type {
 } from "./agent-sdk-types.js";
 import type { PaseoToolCatalog } from "./tools/types.js";
 import type { ProviderDefinition } from "./provider-registry.js";
+import {
+  archiveWorkspaceContents,
+  unarchiveWorkspaceContents,
+} from "../workspace-archive-service.js";
 
 const DESKTOP_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("desktop-client");
 const MOBILE_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("mobile-client");
@@ -381,10 +385,14 @@ class NativeArchiveRecordingClient extends TestAgentClient {
   readonly unarchivedHandles: AgentPersistenceHandle[] = [];
   readArchivedAtDuringUnarchive: (() => Promise<string | null | undefined>) | null = null;
   archivedAtDuringUnarchive: string | null | undefined;
+  archiveFailure: Error | null = null;
   unarchiveFailure: Error | null = null;
 
   async archiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
     this.archivedHandles.push(handle);
+    if (this.archiveFailure) {
+      throw this.archiveFailure;
+    }
   }
 
   async unarchiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
