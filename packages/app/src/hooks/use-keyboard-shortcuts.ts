@@ -12,6 +12,7 @@ import {
   resolveKeyboardShortcut,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
+  isShortcutModifierDown,
 } from "@/keyboard/keyboard-shortcuts";
 import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
 import {
@@ -118,6 +119,7 @@ export function useKeyboardShortcuts({
     { isMac, isDesktop: isDesktopApp },
     bindings,
   );
+  const controlShortcutModifierKey = "Alt";
 
   // The keyup listener matches the released key against the current modifier,
   // so a modifier held while the jump binding changes could never be released
@@ -344,11 +346,17 @@ export function useKeyboardShortcuts({
     if (key === badgeModifierKey && !event.shiftKey) {
       setBadgeModifierDown(true);
     }
+    if (key === controlShortcutModifierKey && !event.shiftKey) {
+      useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(true);
+    }
     if (key === "Shift") {
+      // Shift chords hide workspace badges and prompt-control hints.
       const state = useKeyboardShortcutsStore.getState();
       if (state.altDown || state.cmdOrCtrlDown) {
-        state.resetModifiers();
+        state.setAltDown(false);
+        state.setCmdOrCtrlDown(false);
       }
+      state.setControlShortcutModifierDown(false);
     }
 
     const focusScope = resolveKeyboardFocusScope({
@@ -366,6 +374,13 @@ export function useKeyboardShortcuts({
     const key = event.key ?? "";
     if (key === badgeModifierKey) {
       setBadgeModifierDown(false);
+    }
+    if (key === controlShortcutModifierKey) {
+      useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(false);
+    }
+    if (key === "Shift") {
+      setBadgeModifierDown(isShortcutModifierDown(event, badgeModifierKey));
+      useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(event.altKey);
     }
   });
 
