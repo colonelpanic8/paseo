@@ -633,7 +633,7 @@ function createDefaultDeps(
   const appCapabilities = {
     [CLIENT_CAPS.selectiveAgentTimeline]: true,
     [CLIENT_CAPS.timelineReplacementInvalidation]: true,
-     [CLIENT_CAPS.liveVoiceCrossHostRouter]: true,
+    [CLIENT_CAPS.liveVoiceCrossHostRouter]: true,
     ...browserAutomationCapabilities,
   };
 
