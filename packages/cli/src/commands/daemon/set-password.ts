@@ -2,9 +2,7 @@ import type { Command } from "commander";
 import { isCancel, password as passwordPrompt } from "@clack/prompts";
 import { hashDaemonPassword } from "@getpaseo/server/auth";
 import {
-  hashDaemonPassword,
   loadConfigStack,
-  savePersistedConfig,
   savePersistedConfig,
   type PersistedConfig,
 } from "@getpaseo/server/configuration";
