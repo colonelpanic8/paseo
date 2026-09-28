@@ -49,6 +49,7 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
+import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
 import {
   SidebarWorkspaceRowFrame,
   SidebarWorkspaceAgentTreeToggle,
@@ -718,6 +719,10 @@ function StatusWorkspaceRowWithMenu({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
   });
+  const { canMarkUnread, markUnread } = useWorkspaceReadState({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+  });
   const handleMarkAsRead = useCallback(() => {
     void clearAttention().catch((error) => {
       toast.error(
@@ -725,6 +730,11 @@ function StatusWorkspaceRowWithMenu({
       );
     });
   }, [clearAttention, t, toast]);
+  const handleMarkAsUnread = useCallback(() => {
+    void markUnread().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as unread");
+    });
+  }, [markUnread, toast]);
 
   // Subscribed here rather than threaded through the memoized row above, and
   // keyed by workspaceKey so an expansion carries across grouping modes.
@@ -779,6 +789,7 @@ function StatusWorkspaceRowWithMenu({
         onRename={handleOpenRename}
         onSubmitRename={handleSubmitRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
+        onMarkAsUnread={canMarkUnread ? handleMarkAsUnread : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
         onTogglePin={onTogglePin}
@@ -837,6 +848,7 @@ interface StatusWorkspaceRowInnerProps {
   onRename?: () => void;
   onSubmitRename?: (value: string) => Promise<void>;
   onMarkAsRead?: () => void;
+  onMarkAsUnread?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
@@ -884,6 +896,7 @@ function StatusWorkspaceRowInnerContent({
   onRename,
   onSubmitRename,
   onMarkAsRead,
+  onMarkAsUnread,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -997,6 +1010,7 @@ function StatusWorkspaceRowInnerContent({
                   onCopyBranchName={onCopyBranchName}
                   onRename={onRename}
                   onMarkAsRead={onMarkAsRead}
+                  onMarkAsUnread={onMarkAsUnread}
                   onArchive={onArchive}
                   archiveLabel={archiveLabel}
                   archiveStatus={archiveStatus}
@@ -1045,6 +1059,7 @@ function StatusWorkspaceRowInnerContent({
                         onCopyBranchName={onCopyBranchName}
                         onRename={onRename}
                         onMarkAsRead={onMarkAsRead}
+                        onMarkAsUnread={onMarkAsUnread}
                         onArchive={onArchive}
                         archiveLabel={archiveLabel}
                         archiveStatus={archiveStatus}
@@ -1099,6 +1114,7 @@ function StatusWorkspaceQuickActions({
   onCopyBranchName,
   onRename,
   onMarkAsRead,
+  onMarkAsUnread,
   onArchive,
   open,
   onOpenChange,
@@ -1115,6 +1131,7 @@ function StatusWorkspaceQuickActions({
   onCopyBranchName?: () => void;
   onRename?: () => void;
   onMarkAsRead?: () => void;
+  onMarkAsUnread?: () => void;
   onArchive: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -1147,6 +1164,7 @@ function StatusWorkspaceQuickActions({
         onCopyBranchName={onCopyBranchName}
         onRename={onRename}
         onMarkAsRead={onMarkAsRead}
+        onMarkAsUnread={onMarkAsUnread}
         onArchive={onArchive}
         archiveLabel={archiveLabel}
         archiveStatus={archiveStatus}
