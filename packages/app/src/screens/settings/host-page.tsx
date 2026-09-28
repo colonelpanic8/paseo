@@ -1985,9 +1985,10 @@ function AgentEnvironmentSection({ serverId }: { serverId: string }) {
           accessibilityRole="button"
           accessibilityLabel={t("settings.host.agentEnvironment.add")}
           disabled={!isConnected || !entries}
+          leading={addProfileIcon}
           testID="agent-environment-add-button"
         >
-          {addProfileIcon}
+          {t("settings.host.agentEnvironment.add")}
         </DropdownTrigger>
         <DropdownMenuContent side="bottom" align="end" width={280}>
           {AGENT_ENVIRONMENT_PRESETS.map((preset) => (
