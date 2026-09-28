@@ -159,10 +159,6 @@ describe("loadAppSettingsFromStorage", () => {
 
     expect(deps.storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
 
-    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(
-      JSON.stringify(DEFAULT_CLIENT_SETTINGS),
-    );
-
     // Persisted defaults would shadow a seed layer that supplies its own values.
     expect(deps.storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
   });
