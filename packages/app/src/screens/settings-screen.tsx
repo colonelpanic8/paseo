@@ -373,6 +373,7 @@ interface GeneralSectionProps {
   handleModelPickerStartChange: (enabled: boolean) => void;
   handleCommandTriggerSigilChange: (sigil: ComposerSigil) => void;
   handleSkillTriggerSigilChange: (sigil: ComposerSigil) => void;
+  handleLinkPromptSendChange: (enabled: boolean) => void;
 }
 
 interface LanguageMenuItemProps {
@@ -405,6 +406,7 @@ function GeneralSection({
   handleModelPickerStartChange,
   handleCommandTriggerSigilChange,
   handleSkillTriggerSigilChange,
+  handleLinkPromptSendChange,
 }: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
@@ -493,6 +495,22 @@ function GeneralSection({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]} testID="link-prompt-send-row">
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.general.linkPromptSend.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.linkPromptSend.description")}
+            </Text>
+          </View>
+          <Switch
+            value={settings.linkPromptSend}
+            onValueChange={handleLinkPromptSendChange}
+            accessibilityLabel={t("settings.general.linkPromptSend.label")}
+            testID="link-prompt-send-switch"
+          />
         </View>
       </View>
     </SettingsSection>
@@ -2134,6 +2152,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     [settings.commandTriggerSigil, settings.skillTriggerSigil, updateSettings],
   );
 
+  const handleLinkPromptSendChange = useCallback(
+    (linkPromptSend: boolean) => {
+      void updateSettings({ linkPromptSend });
+    },
+    [updateSettings],
+  );
+
   const handleUseLegacyTerminalRendererChange = useCallback(
     (useLegacyTerminalRenderer: boolean) => {
       void updateSettings({ useLegacyTerminalRenderer });
@@ -2367,6 +2392,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                 handleModelPickerStartChange={handleModelPickerStartChange}
                 handleCommandTriggerSigilChange={handleCommandTriggerSigilChange}
                 handleSkillTriggerSigilChange={handleSkillTriggerSigilChange}
+                handleLinkPromptSendChange={handleLinkPromptSendChange}
               />
               <SendingSection />
               {isDesktopApp ? <OpenLocationSection /> : null}
