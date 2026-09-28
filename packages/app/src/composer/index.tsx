@@ -2472,7 +2472,7 @@ function ComposerContentImpl({
             >
               <ComposerStash
                 provider={stashProvider}
-                userInput={userInput}
+                textSource={textSource}
                 setUserInput={replaceUserInput}
                 attachments={attachments}
                 setAttachments={setSelectedAttachments}
