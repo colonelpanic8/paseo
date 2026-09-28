@@ -457,6 +457,9 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
 
   const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
     const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
+    for (const command of pluginClientSlashCommands) {
+      commandNames.add(command.name);
+    }
     const skillNames = new Set<string>();
     for (const command of commands) {
       commandNames.add(command.name);
@@ -465,7 +468,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       }
     }
     return { commandNames, skillNames };
-  }, [commands]);
+  }, [commands, pluginClientSlashCommands]);
 
   const isVisible = resolveAutocompleteIsVisible({
     mode,
