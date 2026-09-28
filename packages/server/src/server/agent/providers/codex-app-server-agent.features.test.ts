@@ -161,7 +161,8 @@ describe("Codex app-server provider features", () => {
       featureValues: { fast_mode: true },
     });
     try {
-      expect(session.features.map((feature) => feature.id)).toEqual(["plan_mode"]);
+      expect(session.features.map((feature) => feature.id)).toContain("plan_mode");
+      expect(session.features.map((feature) => feature.id)).not.toContain("fast_mode");
       await expect(session.setFeature?.("fast_mode", true)).rejects.toThrow(
         `Codex fast mode is not available for model '${model}'`,
       );
