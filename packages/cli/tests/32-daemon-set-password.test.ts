@@ -110,7 +110,6 @@ try {
     console.log("✓ command refuses password mismatch\n");
   }
 
-
   {
     console.log("Test 4: piped stdin fails with a message instead of exiting silently");
     const pipedHome = join(root, "piped");
@@ -131,8 +130,6 @@ try {
     await assert.rejects(readFile(join(pipedHome, "config.json"), "utf-8"));
     console.log("✓ piped stdin reports that a terminal is required\n");
   }
-
-
 
   {
     console.log("Test 4: layered config writes and reports the configured target");
@@ -170,7 +167,6 @@ try {
     assert.strictEqual(writable.daemon.listen, undefined);
     console.log("✓ set-password writes and reports the layered target\n");
   }
-
 } finally {
   await rm(root, { recursive: true, force: true });
 }
