@@ -5,6 +5,7 @@ import {
   type DaemonInstance,
   readLocalCredentialForTarget,
 } from "@getpaseo/server/daemon-control";
+import { resolvePaseoPaths } from "@getpaseo/server";
 import { describeDaemonTarget, localDaemonCommand, type DaemonTarget } from "./daemon-target.js";
 export type { DaemonTarget } from "./daemon-target.js";
 import {
@@ -191,8 +192,9 @@ async function connectSelectedDaemon(options: ConnectOptions): Promise<DaemonCli
         ).listen;
   const home = resolveClientPaseoHome(options.target);
   const credential = resolveDaemonCredential(host, home);
+  const identityPaths = resolvePaseoPaths({ ...process.env, PASEO_HOME: undefined });
   const client = createHostClient(host, {
-    clientId: await getOrCreateCliClientId(home),
+    clientId: await getOrCreateCliClientId(identityPaths.data),
     clientType: "cli",
     appVersion: resolveCliVersion(),
     ...(credential?.kind === "password" ? { password: credential.password } : {}),
