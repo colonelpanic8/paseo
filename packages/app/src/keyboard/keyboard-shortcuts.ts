@@ -167,6 +167,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "workspace-jump-index",
     "workspace-prev",
     "workspace-next",
+    "workspace-next-ready-waiting",
     "pin-workspace",
     "archive-workspace",
   ],
@@ -700,9 +701,9 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     when: { commandCenter: false, editable: false, terminal: false },
     help: {
       id: "workspace-next-ready-waiting",
-      section: "navigation",
+      section: "workspaces",
       label: "Next ready/waiting workspace",
-      keys: ["alt", "R"],
+      defaultDisplayKeys: ["alt", "R"],
     },
   },
 
