@@ -19,12 +19,8 @@ import {
   loadPersistedConfig,
   loadPersistedConfigAsync,
   PersistedConfigSchema,
-
   readPersistedConfig,
-
-
   saveConfigStack,
-
   savePersistedConfig,
   savePersistedConfigAsync,
 } from "./persisted-config.js";

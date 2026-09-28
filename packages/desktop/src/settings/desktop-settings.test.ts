@@ -292,7 +292,6 @@ describe("desktop-settings", () => {
     expect(ignoredSecondMigration).toEqual(migrated);
   });
 
-
   it("keeps keys written by another build across a patch", async () => {
     const userDataPath = await createTempUserDataDir();
     directories.add(userDataPath);
@@ -377,8 +376,6 @@ describe("desktop-settings", () => {
     expect(persisted.settings.releaseChannel).toBe("stable");
     expect(persisted.settings.tray).toEqual({ enabled: true });
   });
-
-
 
   describe("settings seed", () => {
     it("layers the seed under the persisted settings without copying it into them", async () => {
@@ -546,5 +543,4 @@ describe("desktop-settings", () => {
       });
     });
   });
-
 });
