@@ -230,6 +230,25 @@ export class SessionDelivery {
     }
   }
 
+  /**
+   * Output of work a domain retained past its request and tears down itself.
+   * With a socket, it goes to that source while it stays attached. Without one,
+   * the reconnectable session owns the work, so it follows the session to
+   * whichever sources are attached now.
+   */
+  emitRetained(message: SessionOutboundMessage, socket?: object): void {
+    const targets = socket ? [this.sources.get(socket)] : [...this.sources.values()];
+    for (const source of targets) {
+      if (!source?.active) continue;
+      const owner: DeliveryOwner = { source, active: true };
+      try {
+        this.sendOwned(owner, message);
+      } finally {
+        owner.active = false;
+      }
+    }
+  }
+
   authorizeReply(message: SessionOutboundMessage, socket: object): SessionOutboundMessage {
     message = this.project(socket, message);
     const owner = this.currentRequest;
