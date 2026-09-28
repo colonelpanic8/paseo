@@ -19,7 +19,7 @@ import {
 import { AgentProfileSchema, AgentSkillSelectionSchema } from "@getpaseo/protocol/agent-profile";
 import { PluginIdSchema, PluginSourceSchema } from "@getpaseo/protocol/plugin-config";
 import { TerminalProfileSchema } from "@getpaseo/protocol/terminal-profile";
-import { DaemonPushConfigSchema } from "@getpaseo/protocol/messages";
+import { DaemonPushConfigSchema } from "@getpaseo/protocol/daemon-push-config";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
