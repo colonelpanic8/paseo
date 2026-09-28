@@ -10,7 +10,7 @@ import {
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 import { AgentProfileSchema, AgentSkillSelectionSchema } from "@getpaseo/protocol/agent-profile";
-import { IdentityColorNameSchema } from "@getpaseo/protocol/messages";
+import { IdentityColorNameSchema } from "@getpaseo/protocol/identity-color";
 import { PluginIdSchema, PluginSourceSchema } from "@getpaseo/protocol/plugin-config";
 import { TerminalProfileSchema } from "@getpaseo/protocol/terminal-profile";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
