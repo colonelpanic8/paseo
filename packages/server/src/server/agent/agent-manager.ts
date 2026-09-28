@@ -13,6 +13,7 @@ import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@getpaseo/protocol/agent-lifecycle";
+import { FALLBACK_LIVE_VOICE_OPTIONS } from "@getpaseo/protocol/live-voice-voices";
 import {
   getParentAgentIdFromLabels,
   hasOpenAgentTab,
@@ -57,6 +58,7 @@ import {
   type ImportedTimelineEntry,
   type ImportableProviderSession,
   type ListImportableSessionsOptions,
+  type LiveVoiceVoiceCatalog,
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import { toStoredAgentRecord } from "./agent-projections.js";
@@ -483,6 +485,12 @@ interface ManagedAgentBase {
   activeTurnStartedAt: Date | null;
   lastUsage?: AgentUsage;
   lastError?: string;
+  lastFailure?: {
+    kind: "authentication_required" | "provider_error";
+    message: string;
+    code?: string;
+    diagnostic?: string;
+  };
   attention: AttentionState;
   foregroundTurnWaiters: Set<ForegroundTurnWaiter>;
   finalizedForegroundTurnIds: Set<string>;
@@ -643,6 +651,25 @@ const AgentIdSchema = z.guid();
 
 function isAgentBusy(status: AgentLifecycleStatus): boolean {
   return BUSY_STATUSES.has(status);
+}
+
+function classifyAgentFailure(
+  event: Extract<AgentStreamEvent, { type: "turn_failed" }>,
+): NonNullable<ManagedAgentBase["lastFailure"]> {
+  const evidence = [event.error, event.code, event.diagnostic]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n")
+    .toLowerCase();
+  const authenticationRequired =
+    /\bauth_required\b|\bauthentication (?:is )?(?:required|failed)\b|\boauth\b|\bunauthori[sz]ed\b|\b(?:log|sign) in\b/.test(
+      evidence,
+    );
+  return {
+    kind: authenticationRequired ? "authentication_required" : "provider_error",
+    message: event.error,
+    ...(event.code ? { code: event.code } : {}),
+    ...(event.diagnostic ? { diagnostic: event.diagnostic } : {}),
+  };
 }
 
 function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
@@ -1324,6 +1351,14 @@ export class AgentManager {
     }
   }
 
+  async listLiveVoiceVoices(): Promise<LiveVoiceVoiceCatalog> {
+    const client = this.clients.get("codex");
+    if (!client?.listLiveVoiceVoices) {
+      return { voices: [...FALLBACK_LIVE_VOICE_OPTIONS] };
+    }
+    return await client.listLiveVoiceVoices();
+  }
+
   async listDraftCommands(config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
     const normalizedConfig = await this.normalizeConfig(config, { resolveDefaultModel: false });
     const client = this.requireClient(normalizedConfig.provider);
@@ -1815,6 +1850,7 @@ export class AgentManager {
     const preservedHistoryPrimed = existing.historyPrimed;
     const preservedLastUsage = existing.lastUsage;
     const preservedLastError = existing.lastError;
+    const preservedLastFailure = existing.lastFailure;
     const preservedAttention = existing.attention;
     const handle = existing.persistence;
     const provider = handle?.provider ?? existing.provider;
@@ -1896,6 +1932,7 @@ export class AgentManager {
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
         lastError: preservedLastError,
+        lastFailure: preservedLastFailure,
         attention: preservedAttention,
         restoring: true,
       });
@@ -2348,6 +2385,7 @@ export class AgentManager {
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
+        lastFailure: record.lastFailure,
         attention,
         internal: record.internal,
         background: record.background,
@@ -3027,6 +3065,7 @@ export class AgentManager {
     const agent = existingAgent;
     const isReplacement = agent.pendingReplacement;
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
 
     const pendingRun = this.runs.createPendingRun(agentId);
 
@@ -4008,6 +4047,7 @@ export class AgentManager {
       historyPrimed?: boolean;
       lastUsage?: AgentUsage;
       lastError?: string;
+      lastFailure?: ManagedAgentBase["lastFailure"];
       attention?: AttentionState;
       /**
        * Bringing a known agent back, rather than starting a new one. Its timestamps and
@@ -4204,6 +4244,7 @@ export class AgentManager {
           historyPrimed?: boolean;
           lastUsage?: AgentUsage;
           lastError?: string;
+          lastFailure?: ManagedAgentBase["lastFailure"];
           attention?: AttentionState;
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
@@ -4247,6 +4288,7 @@ export class AgentManager {
       lastUserMessageAt: options?.lastUserMessageAt ?? null,
       lastUsage: options?.lastUsage,
       lastError: options?.lastError,
+      lastFailure: options?.lastFailure,
       attention: resolveInitialAttention(options?.attention),
       internal: config.internal ?? false,
       background: params.background,
@@ -5058,6 +5100,7 @@ export class AgentManager {
     // data accumulated during streaming isn't lost when the provider omits
     // it from the completion event.
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
     if (
       !isForegroundEvent &&
       !agent.activeForegroundTurnId &&
@@ -5099,6 +5142,7 @@ export class AgentManager {
       agent.lifecycle = "error";
     }
     agent.lastError = event.error;
+    agent.lastFailure = classifyAgentFailure(event);
     await this.appendSystemErrorTimelineMessage(
       agent,
       event.provider,
@@ -5141,6 +5185,7 @@ export class AgentManager {
       agent.lifecycle = "idle";
     }
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
     this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Interrupted");
     if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);

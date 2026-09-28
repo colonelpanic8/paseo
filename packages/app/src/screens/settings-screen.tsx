@@ -10,6 +10,7 @@ import {
   View,
   type PressableStateCallbackType,
 } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -352,7 +353,6 @@ function getLiveVoiceVoiceLabel(t: TFunction, voice: string | null): string {
   return `${voice.charAt(0).toUpperCase()}${voice.slice(1)}`;
 }
 
-const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
 // ---------------------------------------------------------------------------
 // Section components
 // ---------------------------------------------------------------------------
@@ -552,10 +552,9 @@ function LiveVoiceSettingsCard() {
           <DropdownTrigger
             accessibilityRole="button"
             accessibilityLabel={t("liveVoice.settings.voice.label")}
-            style={themeTriggerStyle}
             testID="live-voice-voice-picker"
           >
-            <Text style={styles.themeTriggerText}>{getLiveVoiceVoiceLabel(t, voice)}</Text>
+            {getLiveVoiceVoiceLabel(t, voice)}
           </DropdownTrigger>
           <DropdownMenuContent side="bottom" align="end" width={200}>
             <LiveVoiceVoiceMenuItem value={null} selected={voice === null} onChange={setVoice} />
@@ -617,10 +616,9 @@ function LiveVoiceSettingsCard() {
           <DropdownTrigger
             accessibilityRole="button"
             accessibilityLabel={t("liveVoice.settings.backendModel.label")}
-            style={themeTriggerStyle}
             testID="live-voice-backend-model-picker"
           >
-            <Text style={styles.themeTriggerText}>{backendModelLabel}</Text>
+            {backendModelLabel}
           </DropdownTrigger>
           <DropdownMenuContent side="bottom" align="end" width={240}>
             <LiveVoiceBackendOptionMenuItem
@@ -655,10 +653,9 @@ function LiveVoiceSettingsCard() {
             <DropdownTrigger
               accessibilityRole="button"
               accessibilityLabel={t("liveVoice.settings.backendThinking.label")}
-              style={themeTriggerStyle}
               testID="live-voice-backend-thinking-picker"
             >
-              <Text style={styles.themeTriggerText}>{backendThinkingLabel}</Text>
+              {backendThinkingLabel}
             </DropdownTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
               <LiveVoiceBackendOptionMenuItem
@@ -1973,20 +1970,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-  },
-  themeTrigger: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  themeTriggerText: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
   },
   liveVoiceGuidanceRow: {
     // The input sits under its own label rather than beside it: this is a
