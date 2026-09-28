@@ -3090,7 +3090,6 @@ export class DaemonClient {
         workspaceId,
       },
       responseType: "workspace.title.regenerate.response",
-      // Structured generation retries and falls back across providers.
       timeout: 180_000,
     });
     if (!payload.accepted) {
