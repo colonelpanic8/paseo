@@ -1,5 +1,5 @@
 import { parseHostTarget } from "@getpaseo/protocol/host-target";
-import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server";
+import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server/paths";
 
 export type DaemonTarget =
   | { kind: "instance"; home: string; paths?: PaseoPaths }
