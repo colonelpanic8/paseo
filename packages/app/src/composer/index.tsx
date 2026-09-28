@@ -1017,6 +1017,7 @@ function ComposerAutocompleteBinding({
   children,
   anchorStyle,
   show,
+  onVisibilityChange,
   ref,
 }: {
   text: ComposerTextSource;
@@ -1030,6 +1031,7 @@ function ComposerAutocompleteBinding({
   children: React.ReactNode;
   anchorStyle: React.ComponentProps<typeof View>["style"];
   show: boolean;
+  onVisibilityChange: (visible: boolean) => void;
   ref: React.Ref<ComposerAutocompleteHandle>;
 }) {
   const userInput = useSyncExternalStore(text.subscribe, text.getSnapshot, text.getSnapshot);
@@ -1042,6 +1044,8 @@ function ComposerAutocompleteBinding({
   });
   // A recalled message is sent as is; its leading `/command` must not open the picker.
   const isShown = show && !recall.isShowing(userInput);
+  const visible = autocomplete.isVisible && isShown;
+  useEffect(() => onVisibilityChange(visible), [onVisibilityChange, visible]);
   const handleKeyPress = autocomplete.onKeyPress;
   useImperativeHandle(ref, () => ({ onKeyPress: (event) => isShown && handleKeyPress(event) }), [
     isShown,
@@ -1054,7 +1058,7 @@ function ComposerAutocompleteBinding({
   );
   return (
     <ComposerAutocomplete
-      visible={autocomplete.isVisible && isShown}
+      visible={visible}
       anchorStyle={anchorStyle}
       options={autocomplete.options}
       selectedIndex={autocomplete.selectedIndex}
@@ -1386,6 +1390,7 @@ function ComposerContentImpl({
   useEffect(() => () => cursorPublication.cancel(), [cursorPublication]);
   const autocompleteRef = useRef<ComposerAutocompleteHandle>(null);
   const recall = useMemo(() => new ComposerRecall(), []);
+  const [autocompleteVisible, setAutocompleteVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFileAttachment[]>([]);
   const nextPendingFileId = useRef(0);
@@ -2428,19 +2433,19 @@ function ComposerContentImpl({
   const githubEmptyText = githubSearchResultsQuery.isFetching
     ? t("composer.github.searching")
     : t("composer.github.noResults");
-  const autocompleteVisible = autocomplete.isVisible && mode.showAutocomplete;
   useListSearchHandler({
     active: isNative && autocompleteVisible,
     priority: 80,
     handle: (_action, event) =>
-      autocompleteOnKeyPressRef.current({
+      autocompleteRef.current?.onKeyPress({
         ...event,
+        hasModifier: Boolean(event.ctrlKey || event.metaKey || event.altKey || event.shiftKey),
         preventDefault: () => {},
         input: messageInputRef.current?.getInputSnapshot() ?? {
-          text: userInput,
-          selection: { start: cursorIndex, end: cursorIndex },
+          text: textSource.getSnapshot(),
+          selection: { start: cursor.getState(), end: cursor.getState() },
         },
-      }),
+      }) ?? false,
   });
 
   return (
@@ -2474,6 +2479,7 @@ function ComposerContentImpl({
               inputRef={messageInputRef}
               anchorStyle={messageInputContainerStyle}
               show={mode.showAutocomplete && !isFullscreen}
+              onVisibilityChange={setAutocompleteVisible}
               ref={autocompleteRef}
               configuration={autocompleteConfiguration}
             >
