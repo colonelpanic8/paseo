@@ -31,6 +31,7 @@ import {
   Network,
   Bot,
   Boxes,
+  ChartColumn,
   Gauge,
   Keyboard,
   Stethoscope,
@@ -156,6 +157,7 @@ import {
   HostWorkspacesPage,
   HostTerminalsPage,
 } from "@/screens/settings/host-page";
+import { ProviderUsageHistorySection } from "@/provider-usage-history/section";
 import { PluginSettingsContent } from "@/plugins/settings";
 import { useInstalledPlugins } from "@/plugins/registry";
 import { HostPluginsPage } from "@/screens/settings/plugins-page";
@@ -268,6 +270,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     Content: DesktopPermissionsSection,
   },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
+  { id: "usage-history", labelKey: "settings.sections.usageHistory", icon: ChartColumn },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -1572,6 +1575,7 @@ function SidebarSectionButton({
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       onPress={handlePress}
+      testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
@@ -1893,6 +1897,11 @@ function SettingsSidebar({
 export interface SettingsScreenProps {
   view: SettingsView;
   openAddHostIntent?: string | null;
+}
+
+function settingsContentStyle(view: SettingsView) {
+  const isUsageHistory = view.kind === "section" && view.section === "usage-history";
+  return [styles.content, isUsageHistory ? styles.wideContent : null];
 }
 
 export default function SettingsScreen({ view, openAddHostIntent = null }: SettingsScreenProps) {
@@ -2238,6 +2247,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               handlePlaybackTest={handlePlaybackTest}
             />
           );
+        case "usage-history":
+          return <ProviderUsageHistorySection />;
         case "about":
           return (
             <AboutSection
@@ -2362,7 +2373,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                 title lives in the content, like a document heading. */}
             <ScreenHeader borderless />
             <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-              <View style={styles.content}>
+              <View style={settingsContentStyle(view)}>
                 {desktopPageTitle}
                 {content}
               </View>
@@ -2407,6 +2418,7 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 720,
     alignSelf: "center",
   },
+  wideContent: { maxWidth: "100%" },
   pageTitleRow: {
     flexDirection: "row",
     alignItems: "center",
