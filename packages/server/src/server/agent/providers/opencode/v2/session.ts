@@ -1,6 +1,7 @@
 import { SessionChildren } from "./children.js";
 import { SessionTurns } from "./turns.js";
 import { V2Timeline } from "./timeline.js";
+import { definedProcessEnv } from "../../../../paseo-env.js";
 import { waitForLocationReady, awaitPaseoPlugin } from "./readiness.js";
 
 import type { SessionInfo, SessionMessageInfo } from "@opencode/client";
@@ -107,7 +108,7 @@ export class OpenCodeV2Session implements AgentSession {
     return this.connection.client;
   }
   async initialize(launch?: AgentLaunchContext) {
-    this.launchEnv = launch?.env;
+    this.launchEnv = definedProcessEnv(launch?.env);
     this.watchExit(this.connection);
     await this.configureConnection();
     const location = { directory: this.config.cwd };
