@@ -422,6 +422,7 @@ test("CLI unarchive waits for an in-flight automatic archive before restoring th
     workspaceRegistry,
     projectRegistry,
     workspaceGitService: createNoopWorkspaceGitService(),
+    isDirectory: async () => true,
     logger,
   });
   harness.emit(createSnapshot("/repo/worktree", "open"));
