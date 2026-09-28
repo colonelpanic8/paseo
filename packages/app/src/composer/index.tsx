@@ -1044,7 +1044,10 @@ function ComposerAutocompleteBinding({
   // A recalled message is sent as is; its leading `/command` must not open the picker.
   const isShown = show && !recall.isShowing(userInput);
   const visible = autocomplete.isVisible && isShown;
-  useEffect(() => onVisibilityChange(visible), [onVisibilityChange, visible]);
+  useEffect(() => {
+    onVisibilityChange(visible);
+    return () => onVisibilityChange(false);
+  }, [onVisibilityChange, visible]);
   const handleKeyPress = autocomplete.onKeyPress;
   useImperativeHandle(ref, () => ({ onKeyPress: (event) => isShown && handleKeyPress(event) }), [
     isShown,
