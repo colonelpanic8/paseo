@@ -474,7 +474,6 @@ describe("upsertHostConnectionInProfiles", () => {
           id: "direct:ryzen-shine:6767",
           type: "directTcp",
           endpoint: "ryzen-shine:6767",
-          password: "old-secret",
         },
       ],
       preferredConnectionId: "direct:ryzen-shine:6767",
@@ -487,8 +486,8 @@ describe("upsertHostConnectionInProfiles", () => {
         id: "direct:ryzen-shine:6767",
         type: "directTcp",
         endpoint: "ryzen-shine:6767",
-        password: "new-secret",
       },
+      password: "new-secret",
     });
 
     expect(updated[0]?.connections).toEqual([
@@ -496,9 +495,9 @@ describe("upsertHostConnectionInProfiles", () => {
         id: "direct:ryzen-shine:6767",
         type: "directTcp",
         endpoint: "ryzen-shine:6767",
-        password: "new-secret",
       },
     ]);
+    expect(updated[0]?.password).toBe("new-secret");
   });
 });
 

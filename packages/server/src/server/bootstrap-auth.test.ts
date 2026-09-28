@@ -153,7 +153,14 @@ describe("daemon bearer auth", () => {
       const serverInfo = new Promise<unknown>((resolve) => {
         ws.once("message", (data) => resolve(JSON.parse(data.toString())));
       });
-      ws.send(JSON.stringify({ type: "hello", clientId: "encoded", clientType: "cli", protocolVersion: 1 }));
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          clientId: "encoded",
+          clientType: "cli",
+          protocolVersion: 1,
+        }),
+      );
       await expect(serverInfo).resolves.toMatchObject({
         type: "session",
         message: { payload: { status: "server_info" } },
