@@ -147,8 +147,8 @@ export async function runAddCommand(
     } satisfies CommandError;
   }
 
-  const host = getDaemonHost({ host: options.host });
-  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+  const host = getDaemonHost({ target: options.daemonTarget });
+  const client = await connectToDaemon({ target: options.daemonTarget }).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     throw {
       code: "DAEMON_NOT_RUNNING",
