@@ -341,6 +341,7 @@ interface SessionForTestOptions {
   pushNotifications?: SessionOptions["pushNotifications"];
   messages?: unknown[];
   targetedMessages?: Array<{ source: object; message: SessionOutboundMessage }>;
+  onMessageToSource?: SessionOptions["onMessageToSource"];
   binaryMessages?: Uint8Array[];
   pluginRuntime?: SessionOptions["pluginRuntime"];
   orchestrationSkills?: SessionOptions["orchestrationSkills"];
@@ -378,6 +379,12 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     ...options.workspaceGitService,
   };
   const messages = options.messages ?? [];
+  const onMessageToSource =
+    options.onMessageToSource ??
+    ((source: object, message: SessionOutboundMessage) => {
+      if (options.targetedMessages) options.targetedMessages.push({ source, message });
+      else messages.push(message);
+    });
 
   const sessionOptions: SessionOptions = {
     messageReceipts: createMessageReceiptsStub(),
@@ -385,15 +392,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     clientId: options.clientId ?? "test-client",
     clientCapabilities: options.clientCapabilities,
     onMessage: (message) => messages.push(message),
-    ...(options.targetedMessages
-      ? {
-          onMessageToSource: (source: object, message: SessionOutboundMessage) =>
-            options.targetedMessages?.push({ source, message }),
-        }
-      : {
-          onMessageToSource: (_source: object, message: SessionOutboundMessage) =>
-            messages.push(message),
-        }),
+    onMessageToSource,
     onBinaryMessage: createBinaryMessageHandler(options.binaryMessages),
     logger,
     downloadTokenStore: options.downloadTokenStore ?? asDownloadTokenStore(),
@@ -896,31 +895,30 @@ describe("Live Voice routing session boundary", () => {
     ]);
   });
 
-  test("routes a capable owner's reverse requests through its reconnectable session", async () => {
+  test("delivers a modern owner's route requests and updates after the start request, across socket replacement", async () => {
     const source = {};
+    const replacementSource = {};
     const otherSource = {};
-    const messages: SessionOutboundMessage[] = [];
-    const targetedMessages: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    let session!: Session;
+    const delivered: Array<{ source: object; message: SessionOutboundMessage }> = [];
+    let call!: Parameters<LiveVoiceCoordinator["start"]>[0];
     const start = vi.fn().mockImplementation(async (request) => {
-      await request.sendRouteRequest({
-        type: "voice.live.route.request",
-        requestId: "route-request-1",
-        liveSessionId: "live-session-1",
-        operation: { kind: "list_hosts" },
-      });
-      return {
-        accepted: true,
-        liveSessionId: "live-session-1",
-        answerSdp: "answer-sdp",
-      };
+      call = request;
+      return { accepted: true, liveSessionId: "live-session-1", answerSdp: "answer-sdp" };
     });
-    const session = createSessionForTest({
-      messages,
-      targetedMessages,
+    session = createSessionForTest({
+      // The websocket server drops any message the owned-delivery gate refuses.
+      onMessageToSource: (target, message) => {
+        if (session.delivery.permits(target, message)) delivered.push({ source: target, message });
+      },
       liveVoiceCoordinator: { start } as unknown as LiveVoiceCoordinator,
     });
-    session.updateClientCapabilities({ [CLIENT_CAPS.liveVoiceCrossHostRouter]: true }, source);
-    session.updateClientCapabilities({}, otherSource);
+    const modern = {
+      [CLIENT_CAPS.ownedSubscriptions]: true,
+      [CLIENT_CAPS.liveVoiceCrossHostRouter]: true,
+    };
+    session.updateClientCapabilities(modern, source);
+    session.updateClientCapabilities({ [CLIENT_CAPS.ownedSubscriptions]: true }, otherSource);
 
     await session.handleMessage(
       {
@@ -930,15 +928,32 @@ describe("Live Voice routing session boundary", () => {
       },
       source,
     );
+    delivered.length = 0;
+    await session.delivery.detach(otherSource);
 
-    expect(start.mock.calls[0]?.[0].owner).toEqual({ sessionKey: session });
-    expect(messages).toContainEqual({
-      type: "voice.live.route.request",
+    const routeRequest = {
+      type: "voice.live.route.request" as const,
       requestId: "route-request-1",
       liveSessionId: "live-session-1",
-      operation: { kind: "list_hosts" },
-    });
-    expect(targetedMessages.some((entry) => entry.source === otherSource)).toBe(false);
+      operation: { kind: "list_hosts" as const },
+    };
+    await call.sendRouteRequest?.(routeRequest);
+    call.emit({ liveSessionId: "live-session-1", seq: 1, event: { kind: "started" } });
+
+    expect(start.mock.calls[0]?.[0].owner).toEqual({ sessionKey: session });
+    expect(delivered.map((entry) => [entry.source, entry.message.type])).toEqual([
+      [source, "voice.live.route.request"],
+      [source, "voice.live.update"],
+    ]);
+
+    await session.delivery.detach(source);
+    session.updateClientCapabilities(modern, replacementSource);
+    delivered.length = 0;
+    await call.sendRouteRequest?.({ ...routeRequest, requestId: "route-request-2" });
+
+    expect(delivered).toEqual([
+      { source: replacementSource, message: { ...routeRequest, requestId: "route-request-2" } },
+    ]);
   });
 
   test("accepts reverse route responses from a replacement socket in the owning session", async () => {
