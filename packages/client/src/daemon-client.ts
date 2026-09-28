@@ -175,7 +175,6 @@ import type {
   BrowserAutomationExecuteRequest,
   BrowserAutomationExecuteResponse,
 } from "@getpaseo/protocol/browser-automation/rpc-schemas";
-import { encodeWebSocketBearerProtocol } from "@getpaseo/protocol/websocket-auth";
 import type {
   LiveVoiceJsonObject,
   VoiceLiveAgentNotification,
