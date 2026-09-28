@@ -2244,6 +2244,8 @@ export class AgentManager {
       ...(updates?.workspaceId ? { workspaceId: updates.workspaceId } : {}),
       ...(updates?.labels ? { labels: applyLabelPatch(record.labels, updates.labels) } : {}),
       archivedAt: null,
+      // Once an agent is back, it is no longer owed to any workspace-archive
+      // gesture — a later workspace restore must not touch it again.
       archivedWithWorkspaceId: null,
       updatedAt: new Date().toISOString(),
     };
@@ -2252,6 +2254,8 @@ export class AgentManager {
     if (this.getAgent(agentId)) {
       this.notifyAgentState(agentId);
     } else if (!restoredRecord.internal) {
+      // Archived agents were closed, so there is no live agent to notify.
+      // Dispatch the stored record so every connected client sees it return.
       this.dispatchStoredAgentState(restoredRecord);
     }
     return true;
