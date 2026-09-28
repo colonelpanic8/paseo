@@ -51,7 +51,7 @@ import type {
   AgentPermissionResponse,
 } from "@getpaseo/protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
-import { useSessionStore } from "@/stores/session-store";
+import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
@@ -741,7 +741,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         encodeImages,
         submission: createMessageSubmissionWriter(resolvedServerId),
         activeTurnBehavior: "steer",
-        activeTurnId: session?.agents.get(agentId)?.activeTurn?.turnId ?? undefined,
+        activeTurnId: selectAgentTurnPresentation(session, agentId).turnId ?? undefined,
       });
     });
 
