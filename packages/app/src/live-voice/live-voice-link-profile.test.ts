@@ -19,6 +19,7 @@ describe("matchLinkProfile", () => {
 
   it("refuses ambiguous or unknown names", () => {
     expect(matchLinkProfile(profiles, "Reviewer")).toBeNull();
+    expect(matchLinkProfile(profiles, "")).toBeNull();
     expect(matchLinkProfile(profiles, "Nobody")).toBeNull();
   });
 });
