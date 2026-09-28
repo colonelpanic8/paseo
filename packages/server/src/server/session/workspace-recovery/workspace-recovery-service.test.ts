@@ -340,7 +340,8 @@ async function createBaseRecoveryFixture(baseBranch: string | null) {
     getWorkspace: (id) => registry.get(id),
     getProject: async () => project,
     isDirectory: async (target) => existsSync(target) && statSync(target).isDirectory(),
-    unarchiveWorkspace: async (record) => {
+    unarchiveWorkspace: async (record, prepareDirectory) => {
+      await prepareDirectory();
       await registry.update(record.workspaceId, (value) => ({ ...value, archivedAt: null }));
     },
   });
