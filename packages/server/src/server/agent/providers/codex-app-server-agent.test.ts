@@ -1133,7 +1133,7 @@ describe("Codex app-server provider", () => {
         throw new Error("Test session cannot spawn Codex app-server");
       },
     ) as CodexTestSession;
-    session.connected = true;
+    session.connectionState = "connected";
     session.client = {
       request: async (method) => {
         if (method === "thread/start") {
