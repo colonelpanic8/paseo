@@ -772,12 +772,9 @@ function DispatchSettingsRows() {
           <DropdownTrigger
             accessibilityRole="button"
             accessibilityLabel={t("liveVoice.settings.dispatch.hostLabel")}
-            style={themeTriggerStyle}
             testID="dispatch-host-picker"
           >
-            <Text style={styles.themeTriggerText} numberOfLines={1}>
-              {selectedHost?.label ?? t("liveVoice.settings.dispatch.chooseHost")}
-            </Text>
+            {selectedHost?.label ?? t("liveVoice.settings.dispatch.chooseHost")}
           </DropdownTrigger>
           <DropdownMenuContent side="bottom" align="end" width={240}>
             {hosts.length === 0 ? (
@@ -806,12 +803,9 @@ function DispatchSettingsRows() {
           <DropdownTrigger
             accessibilityRole="button"
             accessibilityLabel={t("liveVoice.settings.dispatch.agentLabel")}
-            style={themeTriggerStyle}
             testID="dispatch-agent-picker"
           >
-            <Text style={styles.themeTriggerText} numberOfLines={1}>
-              {selectedAgentLabel}
-            </Text>
+            {selectedAgentLabel}
           </DropdownTrigger>
           <DropdownMenuContent side="bottom" align="end" width={280}>
             <DropdownMenuItem selected={target === null} onSelect={clearTarget}>
