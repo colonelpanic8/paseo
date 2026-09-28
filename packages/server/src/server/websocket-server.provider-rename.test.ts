@@ -62,6 +62,7 @@ function createWebSocketServer(params: {
 }): VoiceAssistantWebSocketServer {
   const agentManager = {
     setAgentAttentionCallback() {},
+    onAgentClosing: () => () => {},
     subscribe: () => () => {},
     updateProviderRegistry() {},
     renameProviderOnLiveAgents: params.renameProviderOnLiveAgents,
@@ -118,6 +119,8 @@ function createWebSocketServer(params: {
     undefined,
     undefined,
     createProviderSnapshotManagerStub().manager,
+    undefined,
+    undefined,
     undefined,
     undefined,
     undefined,
