@@ -212,14 +212,20 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
 
   if (input.mode === "command") {
     const providerCommands = input.commands.map(
-      (command): AvailableCommand => ({ source: "provider", command }),
+      (command): AvailableCommand => ({
+        source: "provider",
+        command,
+      }),
     );
     const clientCommandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
     const rootCommands: AvailableCommand[] = input.isDraftContext
       ? providerCommands
       : [
           ...CLIENT_SLASH_COMMANDS.map(
-            (command): AvailableCommand => ({ source: "client", command }),
+            (command): AvailableCommand => ({
+              source: "client",
+              command,
+            }),
           ),
           ...providerCommands.filter((entry) => !clientCommandNames.has(entry.command.name)),
         ];
