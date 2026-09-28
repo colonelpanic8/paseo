@@ -86,6 +86,10 @@ function formatProviderLabel(provider: string): string {
     .join(" ");
 }
 
+function isUnsupportedProviderSubagentPanel(serverInfo: unknown, supported: boolean): boolean {
+  return serverInfo !== null && serverInfo !== undefined && !supported;
+}
+
 function useProviderSubagentDescriptor(
   target: { kind: "provider_subagent"; parentAgentId: string; subagentId: string },
   context: { serverId: string },
@@ -244,7 +248,7 @@ function ProviderSubagentPanel() {
     [descriptor?.status],
   );
 
-  if (serverInfo && !supported) {
+  if (isUnsupportedProviderSubagentPanel(serverInfo, supported)) {
     return (
       <View style={styles.unsupported} testID="provider-subagent-panel-unsupported">
         <Text style={styles.unsupportedText}>{t("message.actions.forkUnavailable")}</Text>
