@@ -35,6 +35,7 @@ type AttachmentListUpdater =
 interface ComposerStashProps {
   /** Provider the composer is currently targeting; scopes the stash queue. */
   provider: string | null;
+  /** Live composer text; read on demand so keystrokes do not re-render the stash. */
   textSource: ComposerTextSource;
   setUserInput: (text: string) => void;
   attachments: UserComposerAttachment[];
