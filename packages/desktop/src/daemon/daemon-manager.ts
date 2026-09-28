@@ -11,7 +11,7 @@ import {
   readLocalCredentialForTarget,
   type DaemonInstance,
 } from "@getpaseo/server/daemon-control";
-import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server";
+import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server/paths";
 import {
   copyAttachmentFileToManagedStorage,
   deleteManagedAttachmentFile,

@@ -6,7 +6,7 @@ import {
   savePersistedConfig,
   type PersistedConfig,
 } from "@getpaseo/server/configuration";
-import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server";
+import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server/paths";
 import { resolvePaseoHome } from "@getpaseo/server/daemon-control";
 import type {
   CommandError,

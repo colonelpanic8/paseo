@@ -7,7 +7,7 @@ import {
   DaemonInstanceError,
 } from "@getpaseo/server/daemon-control";
 import { readPersistedConfig, resolveConfigFromPersisted } from "@getpaseo/server/configuration";
-import type { PaseoPaths } from "@getpaseo/server";
+import type { PaseoPaths } from "@getpaseo/server/paths";
 import { connectToDaemon, buildDaemonConnectionCommandError } from "../../utils/client.js";
 import { withOutput, toCommandError, type CommandOptions } from "../../output/index.js";
 import { addJsonAndDaemonHostOptions } from "../../utils/command-options.js";
