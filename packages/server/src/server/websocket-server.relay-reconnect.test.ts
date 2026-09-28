@@ -67,7 +67,6 @@ const sessionMock = vi.hoisted(() => {
     clearAgentTimelineSubscription = vi.fn((source: object) => {
       void this.delivery.detach(source);
     });
-    clearAgentTimelineSubscription = vi.fn();
     releaseLiveVoiceSocketResources = vi.fn();
     hasActiveLiveVoiceCall = vi.fn(() => false);
     getClientActivity = vi.fn(() => null);
