@@ -161,6 +161,7 @@ export function normalizeWorkspaceDescriptor(
     title: payload.title ?? null,
     pinnedAt: payload.pinnedAt ?? null,
     snoozeStatus: payload.snoozeStatus ?? null,
+    labels: payload.labels ?? [],
     status: payload.status,
     statusEnteredAt,
     activityAt,
