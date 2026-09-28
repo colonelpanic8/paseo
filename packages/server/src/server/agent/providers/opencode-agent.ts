@@ -3469,7 +3469,6 @@ class OpenCodeAgentSession implements AgentSession {
   private selectedModelContextWindowMaxTokens: number | undefined;
   private observedModel: string | undefined;
   private pendingObservedModelReset = false;
-  private releaseServer: (() => Promise<void>) | null;
   private releaseBridge: (() => void) | null;
   private ingress = Promise.resolve();
   private gapRepairRevision = 0;
