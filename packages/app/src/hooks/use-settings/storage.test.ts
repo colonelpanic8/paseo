@@ -166,7 +166,6 @@ describe("loadAppSettingsFromStorage", () => {
 
     // Persisted defaults would shadow a seed layer that supplies its own values.
     expect(deps.storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
-
   });
 
   it("defaults language to system when storage is empty", async () => {

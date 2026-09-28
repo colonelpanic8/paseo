@@ -15,12 +15,8 @@ import {
   loadConfigStack,
   loadPersistedConfig,
   PersistedConfigSchema,
-
   readPersistedConfig,
-
-
   saveConfigStack,
-
   savePersistedConfig,
 } from "./persisted-config.js";
 import { PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE } from "./private-files.js";

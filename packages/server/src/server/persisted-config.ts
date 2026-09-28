@@ -493,6 +493,23 @@ export function readPersistedConfig(
 }
 
 function parseConfigFile(raw: string, configPath: string): Omit<ConfigLayer, "path" | "raw"> {
+  let parsed: unknown;
+  try {
+    parsed = parseConfigText(raw);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[Config] Invalid JSON in ${configPath}: ${message}`, { cause: err });
+  }
+
+  const result = PersistedConfigSchema.safeParse(stripRemovedConfigFields(parsed));
+  if (!result.success) {
+    throw new Error(
+      `[Config] Invalid config in ${configPath}:\n${formatValidationIssues(result.error)}`,
+    );
+  }
+  return splitConfig(result.data);
+}
+
 function resolveConfigReference(configPath: string, reference: string): string {
   const expanded = reference.startsWith("~/")
     ? path.join(homedir(), reference.slice(2))

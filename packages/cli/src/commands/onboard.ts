@@ -50,24 +50,6 @@ function renderNote(message: string, title: string): void {
   note(message, title, { format: plainNoteFormat });
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function parseTimeoutMs(raw: string | undefined): number {
-  if (!raw || raw.trim().length === 0) {
-    return DEFAULT_READY_TIMEOUT_MS;
-  }
-
-  const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    throw new Error(`Invalid timeout value: ${raw}`);
-  }
-
-  return Math.ceil(seconds * 1000);
-}
 function applyVoiceSelection(
   config: OnboardPersistedConfig,
   enabled: boolean,
