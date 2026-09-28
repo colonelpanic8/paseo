@@ -8,7 +8,6 @@ import { useProviderIcon } from "@/components/provider-icons";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { CONTROL_HEIGHTS } from "@/components/ui/control-geometry";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -460,12 +459,9 @@ function HostFilter({
       <DropdownTrigger
         accessibilityRole="button"
         accessibilityLabel={`${t("settings.usageHistory.hostFilter.label")}: ${label}`}
-        style={styles.hostFilterTrigger}
         testID="usage-history-host-filter"
       >
-        <Text style={styles.hostFilterLabel} numberOfLines={1}>
-          {label}
-        </Text>
+        {label}
       </DropdownTrigger>
       <DropdownMenuContent side="bottom" align="end" width={240}>
         <DropdownMenuItem
@@ -1099,20 +1095,6 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     flexShrink: 1,
     gap: theme.spacing[2],
-  },
-  hostFilterTrigger: {
-    minHeight: CONTROL_HEIGHTS.tight,
-    maxWidth: 180,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  hostFilterLabel: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    flexShrink: 1,
   },
   // The page is flat rather than carded, so its content sits on the same
   // leading rail as the section headers above it.
