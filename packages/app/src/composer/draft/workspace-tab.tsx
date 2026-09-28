@@ -660,7 +660,7 @@ export function WorkspaceDraftAgentTab({
     <FileDropZone style={styles.container}>
       <ComposerDock>
         {dockContent}
-        <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
+        <View style={inputAreaWrapperStyle} onLayout={onInputAreaLayout}>
           {importPillPress ? (
             <View style={styles.importPillRow}>
               <View style={styles.importPillContent}>

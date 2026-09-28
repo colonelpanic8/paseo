@@ -68,7 +68,6 @@ import {
   useWorkspaceDraftSubmissionStore,
   type PendingWorkspaceDraftSetup,
 } from "@/stores/workspace-draft-submission-store";
-import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
@@ -1634,7 +1633,6 @@ export function NewWorkspaceScreen({
   const queryClient = useQueryClient();
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const screenBottomInset = useScreenBottomInset();
   const isCompact = useIsCompactFormFactor();
   const toast = useToast();
   const mergeWorkspaces = useCallback(
@@ -2290,10 +2288,6 @@ export function NewWorkspaceScreen({
     ],
   );
 
-  const contentStyle = useMemo(
-    () => getContentStyle({ isCompact, insetBottom: screenBottomInset }),
-    [isCompact, screenBottomInset],
-  );
   const agentControlsWithDisabled = useMemo(
     () =>
       composerState
