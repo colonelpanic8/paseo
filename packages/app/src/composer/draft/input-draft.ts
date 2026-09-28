@@ -22,7 +22,6 @@ import {
   type ProviderSelectionState,
 } from "@/provider-selection/provider-selection";
 import { useDraftStore } from "@/stores/draft-store";
-import { toDraftInputIfReady } from "@/stores/draft-store/state";
 import { mergePendingPrompt, usePendingPromptStore } from "@/intents/pending-prompt-store";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { useShallow } from "zustand/shallow";
