@@ -1053,7 +1053,17 @@ function appendAssistantMessage(
   }
 
   if (chunk === "" && messageId !== undefined) {
-    return applyAssistantAttribution(state, messageId, attributionFields, questionsPatch);
+    const attributed = applyAssistantAttribution(
+      state,
+      messageId,
+      attributionFields,
+      questionsPatch,
+    );
+    // An empty frame that only carries questions has no row to attribute yet, and the
+    // questions still have to appear.
+    if (attributed !== state || !hasQuestions) {
+      return attributed;
+    }
   }
 
   if (!hasAssistantDisplayContent(hasContent, hasQuestions)) {
