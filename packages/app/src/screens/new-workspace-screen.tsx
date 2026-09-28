@@ -2251,7 +2251,7 @@ export function NewWorkspaceScreen({
       composerState,
       draftContextScopeKey,
       creationIdentity,
-      chatDraft.clear,
+      clearChatDraft,
       draftId,
       draftKey,
       ensureWorkspace,
