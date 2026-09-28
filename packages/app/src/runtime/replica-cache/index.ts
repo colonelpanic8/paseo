@@ -1243,13 +1243,18 @@ export class ReplicaCache {
             if (!evicted.has(serverId)) this.invalidatedHosts.delete(serverId);
           }
           this.persistFailures = 0;
-        } catch {
+        } catch (error) {
           this.restorePendingChanges(pending);
           this.persistFailures += 1;
           const retryDelayMs = Math.min(
             PERSIST_DELAY_MS * 2 ** (this.persistFailures - 1),
             PERSIST_RETRY_MAX_DELAY_MS,
           );
+          console.warn("[ReplicaCache] Failed to persist replica rows", {
+            failures: this.persistFailures,
+            retryDelayMs,
+            error,
+          });
           if (this.hasPendingChanges()) this.schedulePersist(retryDelayMs);
           return false;
         }
