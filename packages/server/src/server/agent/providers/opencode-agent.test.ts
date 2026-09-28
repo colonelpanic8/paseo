@@ -995,7 +995,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
     rmSync(paseoHome, { recursive: true, force: true });
   });
 
-  test("fetchCatalog releases the acquired server when opencode-home cannot be resolved", async () => {
+  test("fetchCatalog does not acquire a server when opencode-home cannot be resolved", async () => {
     const runtime = new TestOpenCodeHarness();
     const client = new OpenCodeAgentClient(logger, undefined, {
       serverManager: runtime,
@@ -1009,7 +1009,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       "cannot resolve opencode-home",
     );
 
-    expect(runtime.acquisitions).toEqual([{ kind: "current", releaseCount: 1 }]);
+    expect(runtime.acquisitions).toEqual([]);
     expect(runtime.clientCreations).toEqual([]);
   });
 
