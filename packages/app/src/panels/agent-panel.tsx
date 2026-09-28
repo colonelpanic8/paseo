@@ -565,8 +565,6 @@ function AgentPanelContent({
   if (!resolvedServerId || (!runtimeClient && !hasCachedAgent)) {
     return <AgentSessionUnavailableState {...hostUnavailable} />;
   }
-  const connectionStatus = hostUnavailable.connectionStatus;
-
   return (
     <AgentPanelBody
       serverId={resolvedServerId}
