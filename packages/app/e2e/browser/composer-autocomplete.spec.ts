@@ -10,6 +10,16 @@ import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { getServerId } from "../support/helpers/server-id";
 import { switchWorkspaceViaSidebar } from "../support/helpers/workspace-ui";
 import { expectMobileAgentSidebarVisible } from "../support/helpers/sidebar";
+import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
+import { openProjectDirectoryWithHosts } from "../support/helpers/project-grouping";
+import {
+  expectNewWorkspaceProjectSelected,
+  openGlobalNewWorkspaceComposer,
+  selectNewWorkspaceHost,
+  selectNewWorkspaceProject,
+} from "../support/helpers/new-workspace";
+import { connectSeedClient } from "../support/helpers/seed-client";
+import { createTempGitRepo } from "../support/helpers/workspace";
 
 const TEST_COMMANDS = [
   {
@@ -359,6 +369,70 @@ function expectPopoverDoesNotDisappearAfterFirstVisible(frames: PopoverFrame[]):
 }
 
 test.describe("Composer autocomplete", () => {
+  test("asks for a project after New workspace switches to a host without one", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const secondaryDaemon = await startIsolatedHostDaemon("autocomplete-draft-secondary");
+    const repo = await createTempGitRepo("autocomplete-draft-");
+    const client = await connectSeedClient();
+    let projectId: string | null = null;
+
+    try {
+      const created = await client.createWorkspace({
+        source: { kind: "directory", path: repo.path },
+        title: "Autocomplete draft workspace",
+      });
+      if (!created.workspace) {
+        throw new Error(created.error ?? "Failed to create the primary project");
+      }
+      projectId = created.workspace.projectId;
+      await client.renameProject(projectId, "Autocomplete draft project");
+      const project = (await client.listProjects()).projects.find(
+        (candidate) => candidate.projectId === projectId,
+      );
+      if (!project?.projectKey) {
+        throw new Error("Primary project has no project key");
+      }
+
+      await openProjectDirectoryWithHosts(page, {
+        hosts: [
+          {
+            serverId: secondaryDaemon.serverId,
+            label: "Secondary host",
+            port: secondaryDaemon.port,
+          },
+        ],
+        primaryLabel: "Primary host",
+      });
+      await openGlobalNewWorkspaceComposer(page);
+      await selectNewWorkspaceProject(page, {
+        projectKey: project.projectKey,
+        projectDisplayName: "Autocomplete draft project",
+      });
+      await selectNewWorkspaceHost(page, "Secondary host");
+      await expectNewWorkspaceProjectSelected(page, "Choose project");
+
+      await composerLocator(page).fill("/");
+      const popover = page
+        .getByTestId("composer-autocomplete-popover")
+        .filter({ visible: true })
+        .first();
+      await expect(popover).toContainText("Choose a project to see commands", {
+        timeout: 30_000,
+      });
+      await expect(popover).not.toContainText("/clear");
+      await expect(popover).not.toContainText("Agent not found");
+    } finally {
+      if (projectId) {
+        await client.removeProject(projectId).catch(() => undefined);
+      }
+      await client.close().catch(() => undefined);
+      await repo.cleanup().catch(() => undefined);
+      await secondaryDaemon.close().catch(() => undefined);
+    }
+  });
+
   test("stays visible after returning from app-wide routes", async ({ page }) => {
     await installListCommandsStub(page);
     const serverId = getServerId();
