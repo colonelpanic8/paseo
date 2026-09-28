@@ -31,6 +31,7 @@ import { validateWSOutboundMessage } from "@getpaseo/protocol/validation/ws-outb
 import type {
   AgentStreamEventPayload,
   AgentSnapshotPayload,
+  ArchivedWorkspacePayload,
   ProjectPlacementPayload,
   AgentPermissionResolvedMessage,
   CreateAgentRequestMessage,
@@ -3059,6 +3060,25 @@ export class DaemonClient {
     return { title: payload.title };
   }
 
+  async regenerateWorkspaceTitle(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<{ title: string | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.title.regenerate.request",
+        workspaceId,
+      },
+      responseType: "workspace.title.regenerate.response",
+      timeout: 180_000,
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "regenerateWorkspaceTitle rejected");
+    }
+    return { title: payload.title };
+  }
+
   async setWorkspacePinned(
     workspaceId: string,
     pinned: boolean,
@@ -3077,6 +3097,35 @@ export class DaemonClient {
       throw new Error(payload.error ?? "setWorkspacePinned rejected");
     }
     return { pinnedAt: payload.pinnedAt };
+  }
+
+  async setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId?: string,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "workspace.snooze.set.request",
+        workspaceId,
+        snoozedUntil,
+      },
+      responseType: "workspace.snooze.set.response",
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "setWorkspaceSnooze rejected");
+    }
+    return { snoozeStatus: payload.snoozeStatus };
+  }
+
+  async listArchivedWorkspaces(requestId?: string): Promise<ArchivedWorkspacePayload[]> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.archived.list.response">({
+        requestId,
+        message: { type: "workspace.archived.list.request" },
+      });
+    return payload.entries;
   }
 
   async inspectWorkspaceRecovery(

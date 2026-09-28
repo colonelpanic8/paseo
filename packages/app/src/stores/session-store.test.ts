@@ -75,6 +75,7 @@ function createWorkspace(
     name: input.name ?? "main",
     status: input.status ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
+    activityAt: input.activityAt ?? null,
     archivingAt: input.archivingAt ?? null,
     diffStat: input.diffStat ?? null,
     scripts: input.scripts ?? [],
@@ -450,6 +451,28 @@ describe("message submission ordering", () => {
 });
 
 describe("normalizeWorkspaceDescriptor", () => {
+  it("preserves workspace labels from the host", () => {
+    const workspace = normalizeWorkspaceDescriptor({
+      id: "1",
+      projectId: "1",
+      projectDisplayName: "Project 1",
+      projectRootPath: "/repo",
+      workspaceDirectory: "/repo",
+      projectKind: "git",
+      workspaceKind: "checkout",
+      name: "main",
+      archivingAt: null,
+      status: "done",
+      statusEnteredAt: null,
+      activityAt: null,
+      diffStat: null,
+      scripts: [],
+      labels: ["priority", "review"],
+    });
+
+    expect(workspace.labels).toEqual(["priority", "review"]);
+  });
+
   it("normalizes workspace scripts and invalid activity timestamps", () => {
     const scripts = [
       {
@@ -495,6 +518,28 @@ describe("normalizeWorkspaceDescriptor", () => {
       },
     ]);
     expect(workspace.scripts).not.toBe(scripts);
+    expect(workspace.activityAt).toBeNull();
+  });
+
+  it("normalizes workspace activity timestamps", () => {
+    const workspace = normalizeWorkspaceDescriptor({
+      id: "1",
+      projectId: "1",
+      projectDisplayName: "Project 1",
+      projectRootPath: "/repo",
+      workspaceDirectory: "/repo",
+      projectKind: "git",
+      workspaceKind: "checkout",
+      name: "main",
+      archivingAt: null,
+      status: "done",
+      statusEnteredAt: null,
+      activityAt: "2026-08-02T12:34:00.000Z",
+      diffStat: null,
+      scripts: [],
+    });
+
+    expect(workspace.activityAt).toEqual(new Date("2026-08-02T12:34:00.000Z"));
   });
 
   it("canonicalizes the workspace directory and treats a blank one as empty", () => {

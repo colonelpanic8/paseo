@@ -52,12 +52,12 @@ async function switchToStatusGrouping(page: Page): Promise<void> {
 // is discovered from the rows container it sits in rather than assumed.
 async function collapseStatusGroupContaining(page: Page, workspaceId: string): Promise<void> {
   const rows = page
-    .locator('[data-testid^="sidebar-status-group-rows-"]')
+    .locator('[data-testid^="sidebar-status-row-"]')
     .filter({ has: workspaceRow(page, workspaceId) });
   await expect(rows).toHaveCount(1, { timeout: 30_000 });
 
   const rowsTestId = await rows.getAttribute("data-testid");
-  const bucket = rowsTestId?.replace("sidebar-status-group-rows-", "");
+  const bucket = rowsTestId?.replace("sidebar-status-row-", "");
   expect(bucket).toBeTruthy();
 
   await page.getByTestId(`sidebar-status-group-${bucket}`).click();
