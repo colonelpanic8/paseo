@@ -61,8 +61,6 @@ vi.mock("@getpaseo/server", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolvePaseoPaths: () => mocks.paseoPaths,
 }));
-  spawnProcess: mocks.spawnProcess,
-}));
 
 vi.mock("../settings/desktop-settings-electron.js", () => ({
   getDesktopSettingsStore: () => ({
@@ -146,7 +144,6 @@ describe("daemon-manager commands", () => {
     });
   });
 
-
   it("returns a local credential only for its live managed daemon listen", async () => {
     mkdirSync(mocks.paseoHome);
     const token = "a".repeat(43);
@@ -167,7 +164,6 @@ describe("daemon-manager commands", () => {
     writeFileSync(lockPath, JSON.stringify({ ...lock, desktopManaged: false }));
     expect(await handler({ listen: "localhost:6799" })).toBeNull();
   });
-
 
   it("forces the XDG daemon status probe to remain local", async () => {
     mocks.paseoPaths = {
@@ -197,5 +193,4 @@ describe("daemon-manager commands", () => {
     });
     expect(mocks.runExternalCliJsonCommand.mock.calls[0]?.[1]?.env.PASEO_HOST).toBeUndefined();
   });
-
 });
