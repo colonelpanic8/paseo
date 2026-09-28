@@ -4202,7 +4202,7 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     },
   });
   expect(resumed.lastMessageAt).toEqual(lastMessageAt);
-  expect(resumed.updatedAt.getTime()).toBeGreaterThan(lastMessageAt.getTime());
+  expect(resumed.updatedAt).toEqual(lastMessageAt);
 });
 
 test("importProviderSession imports the selected session without listing and publishes ready state", async () => {
