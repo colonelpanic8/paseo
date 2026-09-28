@@ -4,6 +4,7 @@ import {
   type DaemonInstance,
   readLocalCredentialForTarget,
 } from "@getpaseo/server/daemon-control";
+import { resolvePaseoPaths } from "@getpaseo/server";
 import { describeDaemonTarget, localDaemonCommand, type DaemonTarget } from "./daemon-target.js";
 export type { DaemonTarget } from "./daemon-target.js";
 import {
@@ -317,7 +318,8 @@ async function connectSelectedDaemon(options: ConnectOptions): Promise<DaemonCli
           })
         ).listen;
   const home = resolveClientPaseoHome(options.target);
-  const clientId = await getOrCreateCliClientId(home);
+  const identityPaths = resolvePaseoPaths({ ...process.env, PASEO_HOME: undefined });
+  const clientId = await getOrCreateCliClientId(identityPaths.data);
   const nodeWebSocketFactory = createNodeWebSocketFactory();
 
   if (explicitHost?.trim().startsWith("ssh://")) {
