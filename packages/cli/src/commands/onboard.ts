@@ -8,7 +8,7 @@ import {
   type PersistedConfig,
 } from "@getpaseo/server/configuration";
 import { readDaemonInstance, waitForDaemonReady } from "@getpaseo/server/daemon-control";
-import type { PaseoPaths } from "@getpaseo/server";
+import type { PaseoPaths } from "@getpaseo/server/paths";
 import { withGlobalOptions } from "../utils/command-options.js";
 import type { CommandOptions } from "../output/index.js";
 import { launchLocalDaemon, parseTimeoutMs } from "./daemon/local-daemon.js";
