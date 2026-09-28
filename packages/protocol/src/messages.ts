@@ -22,6 +22,12 @@ import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
 import { AgentProviderSchema } from "./provider-manifest.js";
+import { IdentityColorNameSchema } from "./identity-color.js";
+export {
+  IDENTITY_COLOR_NAMES,
+  IdentityColorNameSchema,
+  type IdentityColorName,
+} from "./identity-color.js";
 import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
 import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import { WORKSPACE_LABEL_COLORS } from "./workspace-labels.js";
@@ -158,27 +164,6 @@ const MutableMetadataGenerationConfigSchema = z
   })
   .passthrough();
 
-/**
- * The ten identity colors clients draw hosts, projects, and profiles in. Order is load-bearing:
- * clients derive a default color by indexing into this array, so reordering silently recolors
- * every host and project that never chose one.
- */
-export const IDENTITY_COLOR_NAMES = [
-  "violet",
-  "sky",
-  "emerald",
-  "orange",
-  "pink",
-  "indigo",
-  "teal",
-  "red",
-  "amber",
-  "blue",
-] as const;
-
-export const IdentityColorNameSchema = z.enum(IDENTITY_COLOR_NAMES);
-
-export type IdentityColorName = z.infer<typeof IdentityColorNameSchema>;
 const MutableBrowserToolsConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
