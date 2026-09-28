@@ -1,14 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Pencil } from "lucide-react-native";
+import { ChevronDown, Pencil } from "lucide-react-native";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
@@ -21,20 +22,35 @@ import {
   hostColorValue,
   isCustomHostColor,
   resolveHostBadgeDisplay,
+  resolveHostColor,
+  resolveHostDefaultColor,
   type CustomHostColor,
   type HostBadgeDisplay,
   type HostColor,
 } from "@/hosts/appearance";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
-import { useHostMutations } from "@/runtime/host-runtime";
+import { useHostMutations, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { HostCustomColorModal } from "@/screens/settings/host-custom-color-modal";
+import { useSessionStore } from "@/stores/session-store";
+import {
+  IDENTITY_COLOR_NAMES,
+  deriveIdentityColorName,
+  parseIdentityColorName,
+  type IdentityColorName,
+} from "@/styles/identity-colors";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 
+const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedPencil = withUnistyles(Pencil);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+
+function dropdownTriggerStyle({ pressed }: PressableStateCallbackType) {
+  return pressed ? [styles.trigger, styles.triggerPressed] : styles.trigger;
+}
 
 function HostRenameButton({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
@@ -99,44 +115,114 @@ function ColorSwatch({ color }: { color: HostColor }) {
   return <View style={swatchStyle} />;
 }
 
-function ColorMenuItem({
-  color,
+interface ColorOption<V extends string> {
+  value: V;
+  label: string;
+  color: IdentityColorName;
+}
+
+function ColorMenuItem<V extends string>({
+  option,
   selected,
   onChange,
 }: {
-  color: HostColor;
+  option: ColorOption<V>;
   selected: boolean;
-  onChange: (color: HostColor) => Promise<void>;
+  onChange: (value: V) => void;
 }) {
-  const { t } = useTranslation();
-  const handleSelect = useCallback(() => void onChange(color), [color, onChange]);
-  const leading = useMemo(() => <ColorSwatch color={color} />, [color]);
+  const handleSelect = useCallback(() => onChange(option.value), [option.value, onChange]);
+  const leading = useMemo(() => <ColorSwatch color={option.color} />, [option.color]);
   return (
     <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
-      {colorLabel(t, color)}
+      {option.label}
     </DropdownMenuItem>
   );
 }
 
+/**
+ * A row whose value is one of a fixed list of swatched options. The first option of either
+ * color row is an inherited default, so every option carries the color it resolves to rather
+ * than the menu special-casing "none".
+ */
+function ColorPickerRow<V extends string>({
+  title,
+  hint,
+  accessibilityLabel,
+  options,
+  value,
+  onChange,
+  testID,
+}: {
+  title: string;
+  hint?: string;
+  accessibilityLabel: string;
+  options: readonly ColorOption<V>[];
+  value: V;
+  onChange: (value: V) => void;
+  testID?: string;
+}) {
+  const selected = options.find((option) => option.value === value) ?? options[0];
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{title}</Text>
+        {hint ? <Text style={settingsStyles.rowHint}>{hint}</Text> : null}
+      </View>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          testID={testID}
+          style={dropdownTriggerStyle}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+        >
+          <ColorSwatch color={selected.color} />
+          <Text style={styles.triggerText}>{selected.label}</Text>
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end" width={200}>
+          {options.map((option) => (
+            <ColorMenuItem
+              key={option.value}
+              option={option}
+              selected={option.value === value}
+              onChange={onChange}
+            />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </View>
+  );
+}
+
 function ColorRow({
-  color,
+  host,
   onChange,
 }: {
-  color: HostColor;
+  host: HostProfile;
   onChange: (color: HostColor) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const color = host.appearance.color;
+  const inherited = resolveHostDefaultColor(host);
   const [isCustomColorOpen, setIsCustomColorOpen] = useState(false);
+  const options = useMemo(
+    () =>
+      HOST_COLORS.map((preset) => ({
+        value: preset,
+        label: colorLabel(t, preset),
+        color: preset === "none" ? inherited : preset,
+      })),
+    [inherited, t],
+  );
   const selectedLabel = colorLabel(t, color);
-  const leading = useMemo(() => <ColorSwatch color={color} />, [color]);
   const isCustomColor = isCustomHostColor(color);
+  const handlePresetChange = useCallback((preset: HostColor) => void onChange(preset), [onChange]);
   const openCustomColor = useCallback(() => setIsCustomColorOpen(true), []);
   const closeCustomColor = useCallback(() => setIsCustomColorOpen(false), []);
   const submitCustomColor = useCallback(
     async (customColor: CustomHostColor) => onChange(customColor),
     [onChange],
   );
-
   return (
     <>
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
@@ -144,22 +230,24 @@ function ColorRow({
           <Text style={settingsStyles.rowTitle}>{t("settings.host.appearance.color.label")}</Text>
         </View>
         <DropdownMenu>
-          <DropdownTrigger
+          <DropdownMenuTrigger
+            style={dropdownTriggerStyle}
             accessibilityRole="button"
             accessibilityLabel={t("settings.host.appearance.color.accessibilityLabel", {
               value: selectedLabel,
             })}
-            leading={leading}
           >
-            {selectedLabel}
-          </DropdownTrigger>
+            <ColorSwatch color={resolveHostColor(host)} />
+            <Text style={styles.triggerText}>{selectedLabel}</Text>
+            <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" width={200}>
-            {HOST_COLORS.map((option) => (
+            {options.map((option) => (
               <ColorMenuItem
-                key={option}
-                color={option}
-                selected={option === color}
-                onChange={onChange}
+                key={option.value}
+                option={option}
+                selected={option.value === color}
+                onChange={handlePresetChange}
               />
             ))}
             <DropdownMenuSeparator />
@@ -176,6 +264,67 @@ function ColorRow({
         onSubmit={submitCustomColor}
       />
     </>
+  );
+}
+
+type HostDefaultColorValue = "auto" | IdentityColorName;
+
+/**
+ * The color the host declares for itself, stored in the daemon config so every device that has
+ * not picked its own color agrees. Rendered only against a daemon that advertises the setting.
+ */
+function HostDefaultColorRow({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const isConnected = useHostRuntimeIsConnected(host.serverId);
+  const supported = useSessionStore(
+    (state) => state.sessions[host.serverId]?.serverInfo?.features?.hostAppearance === true,
+  );
+  const { config, patchConfig } = useDaemonConfig(supported && isConnected ? host.serverId : null);
+  const value: HostDefaultColorValue = parseIdentityColorName(config?.appearance?.color) ?? "auto";
+  const options = useMemo(
+    () => [
+      {
+        value: "auto" as const,
+        label: t("settings.host.appearance.hostColor.options.auto"),
+        color: deriveIdentityColorName(host.serverId),
+      },
+      ...IDENTITY_COLOR_NAMES.map((color) => ({
+        value: color,
+        label: colorLabel(t, color),
+        color,
+      })),
+    ],
+    [host.serverId, t],
+  );
+  const handleChange = useCallback(
+    async (next: HostDefaultColorValue) => {
+      try {
+        await patchConfig({ appearance: { color: next === "auto" ? null : next } });
+      } catch {
+        toast.error(t("errors.unableToSave"));
+      }
+    },
+    [patchConfig, t, toast],
+  );
+
+  if (!supported || !isConnected || !config) {
+    return null;
+  }
+
+  const selectedLabel = options.find((option) => option.value === value)?.label ?? "";
+  return (
+    <ColorPickerRow
+      title={t("settings.host.appearance.hostColor.label")}
+      hint={t("settings.host.appearance.hostColor.hint")}
+      accessibilityLabel={t("settings.host.appearance.hostColor.accessibilityLabel", {
+        value: selectedLabel,
+      })}
+      options={options}
+      value={value}
+      onChange={handleChange}
+      testID="host-appearance-host-color"
+    />
   );
 }
 
@@ -256,10 +405,10 @@ function BadgePreview({
         : {
             serverId: host.serverId,
             label: host.label,
-            color: host.appearance.color,
+            color: resolveHostColor(host),
             showLabel: badgeDisplay === "name",
           },
-    [badgeDisplay, host.serverId, host.label, host.appearance.color],
+    [badgeDisplay, host],
   );
   // The real sidebar row, so the preview can't drift from what the setting actually does.
   return (
@@ -325,7 +474,8 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
             <HostRenameButton host={host} />
           </View>
         </View>
-        <ColorRow color={host.appearance.color} onChange={handleColorChange} />
+        <ColorRow host={host} onChange={handleColorChange} />
+        <HostDefaultColorRow host={host} />
         {badgeDisplay === null ? null : (
           <>
             <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
@@ -338,6 +488,23 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
 }
 
 const styles = StyleSheet.create((theme) => ({
+  trigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+  },
+  triggerPressed: {
+    opacity: 0.85,
+  },
+  triggerText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+  },
   swatch: {
     width: ICON_SIZE.md,
     height: ICON_SIZE.md,
