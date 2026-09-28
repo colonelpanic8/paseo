@@ -352,6 +352,9 @@ export function useKeyboardShortcuts({
       }
     }
 
+    // This listener runs at window capture, so a menu that navigates its own
+    // result list never sees Ctrl+N/Ctrl+P (new workspace / switch project on
+    // non-mac) unless we stand down here.
     if (resolveListSearchKeyAction(event) !== null && ownsListNavigationKeys(event.target)) {
       return;
     }
