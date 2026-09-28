@@ -140,7 +140,7 @@ test("managed two-home restart retains its supervisor and never routes ordinary 
     const beforeA = await f.liveStatus(a);
     const beforeB = await f.liveStatus(b, poisoned);
     if (process.platform !== "win32") {
-const defaultHome =
+      const defaultHome =
         process.platform === "linux"
           ? path.join(f.root, ".local", "share", "paseo")
           : path.join(f.root, ".paseo");

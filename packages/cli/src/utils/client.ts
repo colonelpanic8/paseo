@@ -56,15 +56,18 @@ export function buildDaemonConnectionCommandError(options: ConnectOptions & { er
   if (typeof error === "object" && error !== null && "code" in error) code = String(error.code);
   else if (message === "Password required") code = "AUTH_REQUIRED";
   else if (message === "Incorrect password") code = "AUTH_FAILED";
+  let details: string;
+  if (code === "AUTH_REQUIRED" || code === "AUTH_FAILED") {
+    details = describeConnectionRemedy(code, options.target);
+  } else if (options.target.kind === "instance") {
+    details = `Start with: ${localDaemonCommand("start", options.target)}`;
+  } else {
+    details = describeConnectionRemedy(code, options.target);
+  }
   return {
     code,
     message: `Cannot connect to daemon at ${describeDaemonTarget(options.target)}: ${message}`,
-    details:
-      code === "AUTH_REQUIRED" || code === "AUTH_FAILED"
-        ? describeConnectionRemedy(code, options.target)
-        : options.target.kind === "instance"
-          ? `Start with: ${localDaemonCommand("start", options.target)}`
-          : describeConnectionRemedy(code, options.target),
+    details,
   };
 }
 
