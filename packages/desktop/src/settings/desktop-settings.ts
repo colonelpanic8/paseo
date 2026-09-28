@@ -160,8 +160,14 @@ function mergeDesktopSettings(
 ): DesktopSettings {
   return {
     releaseChannel: patch.releaseChannel ?? current.releaseChannel,
-    notifications: { ...current.notifications, ...patch.notifications },
-    daemon: { ...current.daemon, ...patch.daemon },
+    notifications: {
+      playSound: patch.notifications?.playSound ?? current.notifications.playSound,
+    },
+    daemon: {
+      manageBuiltInDaemon: patch.daemon?.manageBuiltInDaemon ?? current.daemon.manageBuiltInDaemon,
+      keepRunningAfterQuit:
+        patch.daemon?.keepRunningAfterQuit ?? current.daemon.keepRunningAfterQuit,
+    },
   };
 }
 
@@ -193,6 +199,44 @@ function diffDesktopSettings(
   return delta;
 }
 
+function mergeUnmodelled(
+  previous: unknown,
+  next: Record<string, unknown> | undefined,
+  modelled: readonly string[],
+): Record<string, unknown> | undefined {
+  const carried = isRecord(previous) ? { ...previous } : {};
+  for (const key of modelled) delete carried[key];
+  const merged = { ...carried, ...next };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function preserveUnmodelledSettings(
+  previous: DesktopSettingsPatch,
+  next: DesktopSettingsPatch,
+): DesktopSettingsPatch {
+  const previousRecord = previous as Record<string, unknown>;
+  const nextRecord = next as Record<string, unknown>;
+  const stored =
+    mergeUnmodelled(previousRecord, nextRecord, ["releaseChannel", "notifications", "daemon"]) ??
+    {};
+
+  if (next.releaseChannel !== undefined) stored.releaseChannel = next.releaseChannel;
+  const notifications = mergeUnmodelled(
+    previousRecord.notifications,
+    nextRecord.notifications as Record<string, unknown> | undefined,
+    ["playSound"],
+  );
+  if (notifications) stored.notifications = notifications;
+  const daemon = mergeUnmodelled(
+    previousRecord.daemon,
+    nextRecord.daemon as Record<string, unknown> | undefined,
+    ["manageBuiltInDaemon", "keepRunningAfterQuit"],
+  );
+  if (daemon) stored.daemon = daemon;
+
+  return stored as DesktopSettingsPatch;
+}
+
 function hasLegacyRendererOwnedPatch(patch: DesktopSettingsPatch): boolean {
   return patch.releaseChannel !== undefined || patch.daemon?.manageBuiltInDaemon !== undefined;
 }
@@ -204,15 +248,12 @@ function withoutKeepRunningAfterQuit(settings: DesktopSettingsPatch): DesktopSet
     return settings;
   }
 
-  const { keepRunningAfterQuit: _dropped, ...daemon } = settings.daemon;
-  const next: DesktopSettingsPatch = {};
-  if (settings.releaseChannel !== undefined) {
-    next.releaseChannel = settings.releaseChannel;
-  }
-  if (Object.keys(daemon).length > 0) {
-    next.daemon = daemon;
-  }
-  return next;
+  const next = { ...(settings as Record<string, unknown>) };
+  const daemon = isRecord(next.daemon) ? { ...next.daemon } : {};
+  delete daemon.keepRunningAfterQuit;
+  if (Object.keys(daemon).length > 0) next.daemon = daemon;
+  else delete next.daemon;
+  return next as DesktopSettingsPatch;
 }
 
 function coerceDocument(input: unknown, hasSeed: boolean): PersistedDesktopSettingsDocument {
@@ -221,8 +262,24 @@ function coerceDocument(input: unknown, hasSeed: boolean): PersistedDesktopSetti
   }
 
   let settings = coerceDesktopSettingsPatch(input.settings);
+  if (isRecord(input.settings)) {
+    const raw = { ...input.settings };
+    for (const key of ["releaseChannel", "notifications", "daemon"]) delete raw[key];
+    const previousRecord = settings as Record<string, unknown>;
+    Object.assign(previousRecord, raw);
+    for (const key of ["notifications", "daemon"] as const) {
+      if (!isRecord(input.settings[key])) continue;
+      const known = previousRecord[key];
+      const nested = { ...input.settings[key] };
+      const modeled =
+        key === "notifications" ? ["playSound"] : ["manageBuiltInDaemon", "keepRunningAfterQuit"];
+      for (const modeledKey of modeled) delete nested[modeledKey];
+      previousRecord[key] = { ...(isRecord(known) ? known : {}), ...nested };
+    }
+  }
   const migrations = isRecord(input.migrations)
     ? {
+        ...input.migrations,
         legacyRendererSettingsImported: input.migrations.legacyRendererSettingsImported === true,
         daemonStopOnQuitDefaultApplied: input.migrations.daemonStopOnQuitDefaultApplied === true,
       }
@@ -237,10 +294,11 @@ function coerceDocument(input: unknown, hasSeed: boolean): PersistedDesktopSetti
   }
 
   return {
+    ...input,
     version: 1,
     settings,
     migrations,
-  };
+  } as PersistedDesktopSettingsDocument;
 }
 
 interface ResolvedDesktopSettings {
@@ -334,8 +392,12 @@ export function createDesktopSettingsStore({
     migrations: PersistedDesktopSettingsDocument["migrations"],
   ): Promise<void> {
     await persistDocument({
+      ...resolved.document,
       version: 1,
-      settings: resolved.hasSeed ? diffDesktopSettings(desired, resolved.base) : desired,
+      settings: preserveUnmodelledSettings(
+        resolved.document.settings,
+        resolved.hasSeed ? diffDesktopSettings(desired, resolved.base) : desired,
+      ),
       migrations,
     });
   }
