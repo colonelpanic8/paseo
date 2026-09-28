@@ -319,7 +319,10 @@ export function upsertHostConnectionInProfiles(input: {
       // A routed candidate names its origin; its destination belongs to the host profile.
       (normalizedConnection.type !== "routed" &&
         daemon.connections.some((existingConnection) =>
-          hostConnectionEquals(existingConnection, normalizedConnection),
+          // A relay id omits the daemon key, so only a full match names the same daemon.
+          normalizedConnection.type === "relay"
+            ? hostConnectionEquals(existingConnection, normalizedConnection)
+            : existingConnection.id === normalizedConnection.id,
         ))
     ) {
       matches.push(index);
