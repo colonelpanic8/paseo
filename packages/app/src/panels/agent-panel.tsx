@@ -96,6 +96,8 @@ import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-w
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
+import { resolveAgentPurposeSummary } from "@/agents/purpose-summary";
+import { buildAgentPurposePresentation } from "@/panels/agent-purpose-presentation";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -325,34 +327,55 @@ function storeFetchedAgentDetail(input: {
   return hydrated;
 }
 
+function resolveAgentPanelPurposeSummary(
+  agent: Agent | null,
+  session: ReturnType<typeof useSessionStore.getState>["sessions"][string] | undefined,
+) {
+  return resolveAgentPurposeSummary({
+    summary: agent?.summary,
+    serverInfo: session?.serverInfo,
+  });
+}
+
+function selectAgentPanelDescriptorState(
+  state: ReturnType<typeof useSessionStore.getState>,
+  serverId: string,
+  agentId: string,
+) {
+  const session = state.sessions[serverId];
+  const agent = session?.agents?.get(agentId) ?? session?.agentDetails?.get(agentId) ?? null;
+  return {
+    provider: agent?.provider ?? "codex",
+    title: agent?.title ?? null,
+    summary: resolveAgentPanelPurposeSummary(agent, session),
+    status: agent?.status ?? null,
+    pendingPermissionCount: agent?.pendingPermissions.length ?? 0,
+    requiresAttention: agent?.requiresAttention ?? false,
+    attentionReason: agent?.attentionReason ?? null,
+    isTurnActive: selectAgentTurnPresentation(session, agentId).isActive,
+  };
+}
+
 function useAgentPanelDescriptor(
   target: { kind: "agent"; agentId: string },
   context: { serverId: string },
 ): PanelDescriptor {
   const descriptorState = useSessionStore(
-    useShallow((state) => {
-      const session = state.sessions[context.serverId];
-      const agent =
-        session?.agents?.get(target.agentId) ?? session?.agentDetails?.get(target.agentId) ?? null;
-      return {
-        provider: agent?.provider ?? "codex",
-        title: agent?.title ?? null,
-        status: agent?.status ?? null,
-        pendingPermissionCount: agent?.pendingPermissions.length ?? 0,
-        requiresAttention: agent?.requiresAttention ?? false,
-        attentionReason: agent?.attentionReason ?? null,
-        isTurnActive: selectAgentTurnPresentation(session, target.agentId).isActive,
-      };
-    }),
+    useShallow((state) => selectAgentPanelDescriptorState(state, context.serverId, target.agentId)),
   );
   const provider = descriptorState.provider;
   const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
+  const purposePresentation = buildAgentPurposePresentation({
+    label,
+    summary: descriptorState.summary,
+    providerLabel: formatProviderLabel(provider),
+  });
   const icon = useProviderIcon(provider, context.serverId);
 
   return {
     label: label ?? "",
-    subtitle: `${formatProviderLabel(provider)} agent`,
-    tooltip: label ?? `${formatProviderLabel(provider)} agent`,
+    subtitle: purposePresentation.subtitle,
+    tooltip: purposePresentation.tooltip,
     titleState: label ? "ready" : "loading",
     icon,
     statusBucket: descriptorState.status
@@ -1748,19 +1771,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
-  },
-  purposeSummaryHeader: {
-    flexShrink: 0,
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
-  },
-  purposeSummaryText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
-    textAlign: "center",
   },
   timelineSyncCalloutRail: {
     width: "100%",
