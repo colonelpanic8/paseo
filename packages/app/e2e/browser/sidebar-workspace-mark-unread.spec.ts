@@ -7,7 +7,11 @@ import {
   type MockAgentWorkspace,
 } from "../support/helpers/mock-agent";
 import { getServerId } from "../support/helpers/server-id";
-import { closeMobileAgentSidebar, openMobileAgentSidebar } from "../support/helpers/sidebar";
+import {
+  closeMobileAgentSidebar,
+  openMobileAgentSidebar,
+  selectSidebarStatusGrouping,
+} from "../support/helpers/sidebar";
 
 interface FinishedWorkspaces {
   subject: MockAgentWorkspace;
@@ -203,6 +207,17 @@ test("manual unread survives departure and clears on reopening without changing 
   await leaveMarkedWorkspaceAndReopen(page, workspaces);
   await completeTurnAndLeave(page, workspaces);
   await markBackgroundWorkspaceAndRead(page, workspaces.subject.workspaceId);
+});
+
+test("status-grouped workspace row can mark a finished workspace unread", async ({
+  page,
+  workspaces,
+}) => {
+  await gotoAppShell(page);
+  await selectSidebarStatusGrouping(page);
+  await expectStatus(page, workspaces.subject.workspaceId, "done");
+  await markAsUnread(page, workspaces.subject.workspaceId);
+  await markAsRead(page, workspaces.subject.workspaceId);
 });
 
 test("clicking a multi-agent workspace reveals and clears its marked agent", async ({

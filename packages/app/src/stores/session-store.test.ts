@@ -451,6 +451,28 @@ describe("message submission ordering", () => {
 });
 
 describe("normalizeWorkspaceDescriptor", () => {
+  it("preserves workspace labels from the host", () => {
+    const workspace = normalizeWorkspaceDescriptor({
+      id: "1",
+      projectId: "1",
+      projectDisplayName: "Project 1",
+      projectRootPath: "/repo",
+      workspaceDirectory: "/repo",
+      projectKind: "git",
+      workspaceKind: "checkout",
+      name: "main",
+      archivingAt: null,
+      status: "done",
+      statusEnteredAt: null,
+      activityAt: null,
+      diffStat: null,
+      scripts: [],
+      labels: ["priority", "review"],
+    });
+
+    expect(workspace.labels).toEqual(["priority", "review"]);
+  });
+
   it("normalizes workspace scripts and invalid activity timestamps", () => {
     const scripts = [
       {
