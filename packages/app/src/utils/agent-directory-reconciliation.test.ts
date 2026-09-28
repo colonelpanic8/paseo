@@ -228,7 +228,6 @@ describe("agent directory reconciliation", () => {
 
   it("accepts prompt cache status from a stale buffered upsert without regressing metadata", () => {
     const result = reconcileAgentDirectory({
-      previous: new Map(),
       snapshot: [
         {
           ...entry("agent", "idle"),
@@ -265,9 +264,9 @@ describe("agent directory reconciliation", () => {
     });
 
     expect({
-      title: result.entries[0]?.agent.title,
-      status: result.entries[0]?.agent.status,
-      promptCache: result.entries[0]?.agent.promptCache,
+      title: result[0]?.agent.title,
+      status: result[0]?.agent.status,
+      promptCache: result[0]?.agent.promptCache,
     }).toEqual({
       title: "newer page",
       status: "idle",
@@ -282,7 +281,6 @@ describe("agent directory reconciliation", () => {
 
   it("preserves prompt cache status when a stale buffered upsert omits it", () => {
     const result = reconcileAgentDirectory({
-      previous: new Map(),
       snapshot: [
         {
           ...entry("agent", "idle"),
@@ -310,7 +308,7 @@ describe("agent directory reconciliation", () => {
       ],
     });
 
-    expect(result.entries[0]?.agent.promptCache).toEqual({
+    expect(result[0]?.agent.promptCache).toEqual({
       observedAt: "2026-07-12T11:30:00.000Z",
       ttlSeconds: 300,
       lastRequest: { inputTokens: 10, cachedInputTokens: 90 },
