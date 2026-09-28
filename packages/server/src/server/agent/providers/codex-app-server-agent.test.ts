@@ -4633,15 +4633,19 @@ describe("Codex app-server provider", () => {
         history.push(event);
       }
 
-      expect(history.filter((event) => event.type === "timeline")).toEqual([
+      expect(history.filter((event) => event.type === "timeline")).toMatchObject([
         {
           type: "timeline",
           provider: "codex",
           item: {
-            type: "assistant_message",
-            messageId: "async-history",
-            text: "Which?",
-            questions: [{ title: "Which?" }, { title: "Mode?", options: ["Fast", "Careful"] }],
+            type: "tool_call",
+            callId: "async-history",
+            name: "request_user_input_async",
+            status: "completed",
+            detail: {
+              type: "plain_text",
+              text: "Which?\n\nMode?\nFast, Careful",
+            },
           },
         },
         {
@@ -6473,6 +6477,8 @@ describe("Codex app-server provider", () => {
     try {
       const resultPromise = session.run("Ask without blocking the turn.");
       await appServer.waitForTurnStart();
+      const permissionPromise = waitForNextPermission(session);
+      const questionTimelinePromise = waitForTimelineToolCall(session, "async-1");
       appServer.startsAsyncQuestion({
         threadId: "thread-1",
         itemId: "async-1",
@@ -6498,26 +6504,33 @@ describe("Codex app-server provider", () => {
       });
       appServer.completeTurn();
 
+      await expect(permissionPromise).resolves.toMatchObject({
+        request: {
+          name: "request_user_input_async",
+          kind: "question",
+          input: {
+            questions: [
+              { question: "Which?", options: [] },
+              { question: "Mode?", options: [{ label: "Fast" }, { label: "Careful" }] },
+            ],
+          },
+        },
+      });
+      await expect(questionTimelinePromise).resolves.toMatchObject({
+        item: {
+          type: "tool_call",
+          callId: "async-1",
+          name: "request_user_input_async",
+          status: "completed",
+        },
+      });
       const result = await resultPromise;
       expect(result.finalText).toBe("Which?");
       expect(result.timeline.filter((item) => item.type === "assistant_message")).toEqual([
         {
           type: "assistant_message",
           messageId: "async-1",
-          text: "",
-          questions: [{ title: "Which?" }, { title: "Mode?", options: ["Fast", "Careful"] }],
-        },
-        {
-          type: "assistant_message",
-          messageId: "async-1",
           text: "Which?",
-          questions: [{ title: "Which?" }, { title: "Mode?", options: ["Fast", "Careful"] }],
-        },
-        {
-          type: "assistant_message",
-          messageId: "async-1",
-          text: "",
-          questions: [{ title: "Which?" }, { title: "Mode?", options: ["Fast", "Careful"] }],
         },
       ]);
       appServer.assertNoErrors();
