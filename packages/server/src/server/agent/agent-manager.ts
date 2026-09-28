@@ -3935,6 +3935,7 @@ export class AgentManager {
     });
   }
 
+  // oxlint-disable-next-line complexity
   private async registerSession(
     session: AgentSession,
     config: AgentSessionConfig,

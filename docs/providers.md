@@ -110,7 +110,6 @@ V2.0.4 also removed the activation endpoint that gated a cold location, and a co
 
 Paseo installs its OpenCode tool bridge through `OPENCODE_CONFIG_CONTENT`. V1 accepts a plugin file; v2 silently skips configured files and requires a package directory with a server entry point. Both versions use the daemon's private loopback bridge for caller-scoped tools. Bridge context lives only in daemon memory and is removed when the Paseo session closes. The content-addressed plugin artifacts contain no session data or secrets. V2 also needs this plugin when native Paseo tools are disabled: its prompt API has no structured-output format, so the plugin supplies a schema-validated final-answer tool.
 
-
 OpenCode reads its model catalogue once per process from a cache file it refreshes in the
 background, so a running server keeps answering with the catalogue it booted with and asking it
 again can never reveal a newly published model. The OpenCode catalogue key is a fingerprint of the

@@ -746,6 +746,7 @@ function areServerInfoBuildsEqual(
   return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
 }
 
+// oxlint-disable-next-line complexity
 function isSessionServerInfoUnchanged(input: {
   currentServerInfo: SessionState["serverInfo"] | undefined;
   nextHostname: string | null;

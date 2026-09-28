@@ -528,6 +528,7 @@ function buildOpenChangeHandler(
   };
 }
 
+// oxlint-disable-next-line complexity
 function ControlledAgentControls({
   provider,
   providerOptions,
