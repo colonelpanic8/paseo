@@ -57,7 +57,7 @@ vi.mock("@getpaseo/server/daemon-control", async (importOriginal) => ({
   resolvePaseoHome: () => mocks.paseoHome,
 }));
 
-vi.mock("@getpaseo/server", async (importOriginal) => ({
+vi.mock("@getpaseo/server/paths", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolvePaseoPaths: () => mocks.paseoPaths,
 }));

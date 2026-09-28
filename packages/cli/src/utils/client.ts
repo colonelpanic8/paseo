@@ -4,7 +4,7 @@ import {
   type DaemonInstance,
   readLocalCredentialForTarget,
 } from "@getpaseo/server/daemon-control";
-import { resolvePaseoPaths } from "@getpaseo/server";
+import { resolvePaseoPaths } from "@getpaseo/server/paths";
 import { describeDaemonTarget, localDaemonCommand, type DaemonTarget } from "./daemon-target.js";
 export type { DaemonTarget } from "./daemon-target.js";
 import {
