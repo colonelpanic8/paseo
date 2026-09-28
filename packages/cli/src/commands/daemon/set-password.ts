@@ -1,7 +1,11 @@
 import type { Command } from "commander";
 import { isCancel, password as passwordPrompt } from "@clack/prompts";
 import { hashDaemonPassword } from "@getpaseo/server/auth";
-import { loadConfigStack, savePersistedConfig, type PersistedConfig } from "@getpaseo/server/configuration";
+import {
+  loadConfigStack,
+  savePersistedConfig,
+  type PersistedConfig,
+} from "@getpaseo/server/configuration";
 import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server";
 import { resolvePaseoHome } from "@getpaseo/server/daemon-control";
 import type {
