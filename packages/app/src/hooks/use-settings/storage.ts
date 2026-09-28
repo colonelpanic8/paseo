@@ -389,7 +389,6 @@ async function readAppSettings(
     };
   }
 
-
   const defaultStored = StoredAppSettingsSchema.parse({});
   // Do not persist defaults before the seed layer has a chance to contribute.
   return { settings: DEFAULT_CLIENT_SETTINGS, needsWrite: false, stored: defaultStored };
