@@ -126,8 +126,8 @@ export function formatClockTime(date: Date): string {
 /**
  * Format a chat-message timestamp for hover-revealed UI.
  * - Same day: "10:11 PM" or "22:11" depending on user preference
- * - Within ~6 days: "Wednesday 10:11 PM"
- * - Older: "14 May 2026, 10:11 PM"
+ * - The previous 6 calendar days: "Wednesday 10:11 PM"
+ * - Older, including today's weekday last week: "14 May 2026, 10:11 PM"
  */
 export function formatMessageTimestamp(date: Date, now: Date = new Date()): string {
   const time = formatClockTime(date);
@@ -136,9 +136,8 @@ export function formatMessageTimestamp(date: Date, now: Date = new Date()): stri
     return time;
   }
 
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays >= 0 && diffDays < 7) {
+  const daysAgo = countCalendarDaysBetween(date, now);
+  if (daysAgo > 0 && daysAgo < 7) {
     const weekday = date.toLocaleDateString(undefined, { weekday: "long" });
     return `${weekday} ${time}`;
   }
