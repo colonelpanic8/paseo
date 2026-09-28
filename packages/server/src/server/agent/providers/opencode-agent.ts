@@ -1147,6 +1147,7 @@ function buildOpenCodeReplayTimelineEvent(params: {
 
 function buildOpenCodeReplayPartTimelineEvent(params: {
   part: OpenCodePart;
+  model?: string;
   message: {
     id: string;
     structured?: unknown;
@@ -1156,7 +1157,12 @@ function buildOpenCodeReplayPartTimelineEvent(params: {
   const { part, message } = params;
   if (part.type === "text" && part.text) {
     return buildOpenCodeReplayTimelineEvent({
-      item: { type: "assistant_message", text: part.text, messageId: message.id },
+      item: {
+        type: "assistant_message",
+        text: part.text,
+        messageId: message.id,
+        ...(params.model ? { model: params.model } : {}),
+      },
       message,
       part,
     });
@@ -1335,13 +1341,14 @@ function buildOpenCodeReplayTimelineEvents(
       : [];
   }
 
+  const model = resolveOpenCodeModelLookupKeyFromAssistantMessage(info) ?? undefined;
   const events: Extract<AgentStreamEvent, { type: "timeline" }>[] = [];
   let emittedAssistantText = false;
   for (const part of parts) {
     if (part.type === "text" && part.text) {
       emittedAssistantText = true;
     }
-    const event = buildOpenCodeReplayPartTimelineEvent({ part, message: info });
+    const event = buildOpenCodeReplayPartTimelineEvent({ part, message: info, model });
     if (event) {
       events.push(event);
     }
@@ -1352,7 +1359,12 @@ function buildOpenCodeReplayTimelineEvents(
     if (text) {
       events.push(
         buildOpenCodeReplayTimelineEvent({
-          item: { type: "assistant_message", text, messageId: info.id },
+          item: {
+            type: "assistant_message",
+            text,
+            messageId: info.id,
+            ...(model ? { model } : {}),
+          },
           message: info,
         }),
       );
@@ -1955,6 +1967,7 @@ export interface OpenCodeEventTranslationState {
   sessionId: string;
   cwd?: string;
   messageRoles: Map<string, OpenCodeMessageRole>;
+  assistantModelByMessageId?: Map<string, string>;
   pendingUserMessageText?: string | null;
   pendingClientMessageId?: string | null;
   pendingSteerSubmissions?: OpenCodePendingSteerSubmission[];
@@ -1974,6 +1987,7 @@ export interface OpenCodeEventTranslationState {
   knownChildSessionIds?: Set<string>;
   subagentPresentationByChildId?: Map<string, OpenCodeSubagentPresentationState>;
   modelContextWindowsByModelKey?: ReadonlyMap<string, number>;
+  onAssistantModelResolved?: (modelId: string) => void;
   onAssistantModelContextWindowResolved?: (contextWindowMaxTokens: number) => void;
   onMaterializationMismatch?: (diagnostic: {
     partId: string;
@@ -2693,6 +2707,20 @@ function appendOpenCodeSessionDeleted(
   });
 }
 
+function buildObservedOpenCodeAssistantMessage(params: {
+  messageId: string;
+  state: OpenCodeEventTranslationState;
+  text: string;
+}): Extract<AgentTimelineItem, { type: "assistant_message" }> {
+  const model = params.state.assistantModelByMessageId?.get(params.messageId);
+  return {
+    type: "assistant_message",
+    text: params.text,
+    messageId: params.messageId,
+    ...(model ? { model } : {}),
+  };
+}
+
 function appendOpenCodeMessageUpdated(
   event: Extract<OpenCodeEvent, { type: "message.updated" }>,
   state: OpenCodeEventTranslationState,
@@ -2723,6 +2751,10 @@ function appendOpenCodeMessageUpdated(
   }
   const modelLookupKey = resolveOpenCodeModelLookupKeyFromAssistantMessage(info);
   if (modelLookupKey) {
+    const assistantModelByMessageId = state.assistantModelByMessageId ?? new Map<string, string>();
+    state.assistantModelByMessageId = assistantModelByMessageId;
+    assistantModelByMessageId.set(info.id, modelLookupKey);
+    state.onAssistantModelResolved?.(modelLookupKey);
     const contextWindowMaxTokens = state.modelContextWindowsByModelKey?.get(modelLookupKey);
     if (contextWindowMaxTokens !== undefined) {
       state.onAssistantModelContextWindowResolved?.(contextWindowMaxTokens);
@@ -2739,7 +2771,11 @@ function appendOpenCodeMessageUpdated(
   events.push({
     type: "timeline",
     provider: "opencode",
-    item: { type: "assistant_message", text, messageId: info.id },
+    item: buildObservedOpenCodeAssistantMessage({
+      messageId: info.id,
+      state,
+      text,
+    }),
   });
 }
 
@@ -2911,7 +2947,11 @@ function appendOpenCodeTextPart(
     events.push({
       type: "timeline",
       provider: "opencode",
-      item: { type: "assistant_message", text: suffix, messageId: part.messageID },
+      item: buildObservedOpenCodeAssistantMessage({
+        messageId: part.messageID,
+        state,
+        text: suffix,
+      }),
     });
   }
 }
@@ -3000,11 +3040,11 @@ function appendOpenCodeMessagePartDelta(
   events.push({
     type: "timeline",
     provider: "opencode",
-    item: {
-      type: "assistant_message",
-      text: delta,
+    item: buildObservedOpenCodeAssistantMessage({
       messageId: assistantMessageId,
-    },
+      state,
+      text: delta,
+    }),
   });
 }
 
@@ -3381,6 +3421,7 @@ class OpenCodeAgentSession implements AgentSession {
   private sessionTotalCostUsd: number | undefined;
   private mcpSetup: Promise<void> | null = null;
   private messageRoles = new Map<string, OpenCodeMessageRole>();
+  private assistantModelByMessageId = new Map<string, string>();
   private pendingUserMessageText: string | null = null;
   private pendingClientMessageId: string | null = null;
   private pendingSteerSubmissions: OpenCodePendingSteerSubmission[] = [];
@@ -3426,6 +3467,8 @@ class OpenCodeAgentSession implements AgentSession {
   private childHydrationCompleted = false;
   private readonly unrelatedSessionIds = new Set<string>();
   private selectedModelContextWindowMaxTokens: number | undefined;
+  private observedModel: string | undefined;
+  private pendingObservedModelReset = false;
   private releaseBridge: (() => void) | null;
   private ingress = Promise.resolve();
   private gapRepairRevision = 0;
@@ -3544,10 +3587,11 @@ class OpenCodeAgentSession implements AgentSession {
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
+    const model = this.observedModel ?? this.config.model;
     return {
       provider: "opencode",
       sessionId: this.sessionId,
-      model: this.config.model ?? null,
+      ...(model ? { model } : {}),
       modeId: this.currentMode,
     };
   }
@@ -3556,9 +3600,30 @@ class OpenCodeAgentSession implements AgentSession {
     const normalizedModelId =
       typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
     this.config.model = normalizedModelId ?? undefined;
+    // The observation predates this selection; without a reset, `observed ?? config`
+    // would keep reporting the old model until the next assistant message re-observes it.
+    // A running turn keeps the model it started with, so defer the reset until it
+    // ends rather than relabeling that turn with a selection it never used.
+    if (this.activeForegroundTurnId) {
+      this.pendingObservedModelReset = true;
+    } else {
+      this.observedModel = undefined;
+    }
     this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
       this.config.model,
     );
+  }
+
+  /**
+   * Drops an observation the mid-turn selection invalidated. A model the finished
+   * turn observed after that selection belongs to the old turn too, so it goes here.
+   */
+  private applyPendingObservedModelReset(): void {
+    if (!this.pendingObservedModelReset) {
+      return;
+    }
+    this.pendingObservedModelReset = false;
+    this.observedModel = undefined;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
@@ -4686,6 +4751,7 @@ class OpenCodeAgentSession implements AgentSession {
     this.pendingSteerSubmissions = [];
     this.turnState = { status: "idle" };
     this.abortController = null;
+    this.applyPendingObservedModelReset();
     this.notifySubscribers(event, turnId);
   }
 
@@ -4777,6 +4843,7 @@ class OpenCodeAgentSession implements AgentSession {
     const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
     this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
     this.turnState = { status: "idle" };
+    this.applyPendingObservedModelReset();
     stop.terminal.resolve();
   }
 
@@ -5163,6 +5230,7 @@ class OpenCodeAgentSession implements AgentSession {
       sessionId: this.sessionId,
       cwd: this.config.cwd,
       messageRoles: this.messageRoles,
+      assistantModelByMessageId: this.assistantModelByMessageId,
       pendingUserMessageText: this.pendingUserMessageText,
       pendingClientMessageId: this.pendingClientMessageId,
       pendingSteerSubmissions: this.pendingSteerSubmissions,
@@ -5186,6 +5254,9 @@ class OpenCodeAgentSession implements AgentSession {
           "OpenCode final part snapshot replaced streamed content",
         );
       },
+      onAssistantModelResolved: (modelId) => {
+        this.observedModel = modelId;
+      },
       onAssistantModelContextWindowResolved: (contextWindowMaxTokens) => {
         this.accumulatedUsage.contextWindowMaxTokens = contextWindowMaxTokens;
         if (!this.config.model) {
@@ -5204,6 +5275,7 @@ class OpenCodeAgentSession implements AgentSession {
       sessionId,
       cwd: this.config.cwd,
       messageRoles: new Map(),
+      assistantModelByMessageId: new Map(),
       emittedUserMessageIds: new Set(),
       accumulatedUsage: {},
       materializedParts: new Map(),
