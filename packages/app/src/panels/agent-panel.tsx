@@ -103,6 +103,7 @@ import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agen
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
+import { resolveAgentPurposeSummary } from "@/agents/purpose-summary";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -1816,19 +1817,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
-  },
-  purposeSummaryHeader: {
-    flexShrink: 0,
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
-  },
-  purposeSummaryText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
-    textAlign: "center",
   },
   timelineSyncCalloutRail: {
     width: "100%",
