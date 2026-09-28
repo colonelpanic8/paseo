@@ -128,6 +128,7 @@ function ColorRow({
   const { t } = useTranslation();
   const [isCustomColorOpen, setIsCustomColorOpen] = useState(false);
   const selectedLabel = colorLabel(t, color);
+  const leading = useMemo(() => <ColorSwatch color={color} />, [color]);
   const isCustomColor = isCustomHostColor(color);
   const openCustomColor = useCallback(() => setIsCustomColorOpen(true), []);
   const closeCustomColor = useCallback(() => setIsCustomColorOpen(false), []);
@@ -148,7 +149,7 @@ function ColorRow({
             accessibilityLabel={t("settings.host.appearance.color.accessibilityLabel", {
               value: selectedLabel,
             })}
-            leading={<ColorSwatch color={color} />}
+            leading={leading}
           >
             {selectedLabel}
           </DropdownTrigger>
