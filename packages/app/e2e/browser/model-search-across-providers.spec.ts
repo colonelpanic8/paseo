@@ -1,5 +1,4 @@
 import path from "node:path";
-import type { Locator } from "@playwright/test";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { test, expect, type Page } from "../support/fixtures";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
