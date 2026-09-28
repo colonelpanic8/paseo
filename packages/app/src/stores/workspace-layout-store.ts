@@ -711,14 +711,14 @@ interface WorkspaceLayoutStoreOptions {
   scheduler?: PersistenceScheduler;
 }
 
-export function createWorkspaceLayoutStore(options: WorkspaceLayoutStoreOptions = {}) {
-  const ids = options.ids ?? defaultWorkspaceLayoutIds;
+export function createWorkspaceLayoutStore(storeOptions: WorkspaceLayoutStoreOptions = {}) {
+  const ids = storeOptions.ids ?? defaultWorkspaceLayoutIds;
   const persistStorage = createThrottledPersistStorage(
     createValidatedPersistStorage(
-      options.storage ?? AsyncStorage,
+      storeOptions.storage ?? AsyncStorage,
       WorkspaceLayoutPersistedStateSchema,
     ),
-    { intervalMs: WORKSPACE_LAYOUT_PERSIST_INTERVAL_MS, scheduler: options.scheduler },
+    { intervalMs: WORKSPACE_LAYOUT_PERSIST_INTERVAL_MS, scheduler: storeOptions.scheduler },
   );
   const store = create<WorkspaceLayoutStore>()(
     persist(
