@@ -13,7 +13,6 @@ export interface ProviderListItem {
   modes: string;
 }
 
-
 /** Schema for provider ls output */
 export const providerLsSchema: OutputSchema<ProviderListItem> = {
   idField: "provider",
