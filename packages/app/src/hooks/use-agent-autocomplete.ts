@@ -7,6 +7,7 @@ import {
   useAgentCommandsQuery,
   type AgentSlashCommand,
   type DraftCommandConfig,
+  type DraftCommandTarget,
 } from "./use-agent-commands-query";
 import { orderAutocompleteOptions } from "@/components/ui/autocomplete-utils";
 import { useAutocomplete, type AutocompleteKeyEvent } from "./use-autocomplete";
@@ -36,7 +37,7 @@ interface UseAgentAutocompleteInput {
   setUserInput: (nextValue: string) => void;
   serverId: string;
   agentId: string;
-  draftConfig?: DraftCommandConfig;
+  draft?: DraftCommandTarget;
   onAutocompleteApplied?: () => void;
   onClientSlashCommand?: (command: ClientSlashCommand) => void;
   canExecuteClientSlashCommand?: boolean;
@@ -120,18 +121,8 @@ type AvailableCommand =
   | { source: "plugin"; command: PluginClientSlashCommand }
   | { source: "provider"; command: AgentSlashCommand };
 
-function normalizeDraftCommandConfig(
-  draftConfig?: DraftCommandConfig,
-): DraftCommandConfig | undefined {
-  if (!draftConfig) {
-    return undefined;
-  }
-
+function normalizeDraftCommandConfig(draftConfig: DraftCommandConfig): DraftCommandConfig {
   const cwd = draftConfig.cwd.trim();
-  if (!cwd) {
-    return undefined;
-  }
-
   const modeId = draftConfig.modeId?.trim() ?? "";
   const model = draftConfig.model?.trim() ?? "";
   const thinkingOptionId = draftConfig.thinkingOptionId?.trim() ?? "";
@@ -298,15 +289,49 @@ export function resolveAutocompleteIsVisible(args: {
   return false;
 }
 
-function resolveCanLoadCommands(args: {
+const NO_COMMANDS_QUERY_RESULT = {
+  commands: [] as AgentSlashCommand[],
+  isLoading: false,
+  isError: false,
+  error: null,
+};
+
+type CommandSource =
+  | { kind: "unavailable" }
+  | { kind: "session" }
+  | { kind: "draft"; config: DraftCommandConfig }
+  | { kind: "draft-incomplete"; missing: "project" | "provider" };
+
+function describeCommandSource(source: CommandSource) {
+  return {
+    isDraftContext: source.kind === "draft" || source.kind === "draft-incomplete",
+    queryDraftConfig: source.kind === "draft" ? source.config : undefined,
+    canLoadCommands: source.kind !== "unavailable",
+    canFetchCommands: source.kind === "session" || source.kind === "draft",
+  };
+}
+
+// A draft never falls back to the session path: its agentId is a draft key the daemon
+// does not know, so asking by agentId only ever returns "Agent not found".
+export function resolveCommandSource(args: {
   serverId: string;
   agentId: string;
-  isDraftContext: boolean;
-}): boolean {
+  draft: DraftCommandTarget | undefined;
+}): CommandSource {
   if (!args.serverId) {
-    return false;
+    return { kind: "unavailable" };
   }
-  return Boolean(args.agentId) || args.isDraftContext;
+  if (args.draft) {
+    switch (args.draft.status) {
+      case "ready":
+        return { kind: "draft", config: normalizeDraftCommandConfig(args.draft.config) };
+      case "needs-project":
+        return { kind: "draft-incomplete", missing: "project" };
+      case "needs-provider":
+        return { kind: "draft-incomplete", missing: "provider" };
+    }
+  }
+  return args.agentId ? { kind: "session" } : { kind: "unavailable" };
 }
 
 function resolveAutocompleteIsLoading(args: {
@@ -325,6 +350,22 @@ function resolveAutocompleteIsLoading(args: {
     );
   }
   return false;
+}
+
+function resolveAutocompleteEmptyText(args: {
+  mode: AutocompleteMode;
+  commandSource: CommandSource;
+  t: TFunction;
+}): string {
+  if (args.mode === "file") {
+    return args.t("agentAutocomplete.noFiles");
+  }
+  if (args.commandSource.kind === "draft-incomplete") {
+    return args.commandSource.missing === "project"
+      ? args.t("agentAutocomplete.chooseProjectForCommands")
+      : args.t("agentAutocomplete.chooseModelForCommands");
+  }
+  return args.t("agentAutocomplete.noCommands");
 }
 
 function resolveAutocompleteErrorMessage(args: {
@@ -355,7 +396,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     setUserInput,
     serverId,
     agentId,
-    draftConfig,
+    draft,
     onAutocompleteApplied,
     onClientSlashCommand,
     canExecuteClientSlashCommand,
@@ -396,14 +437,12 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     return () => clearTimeout(timer);
   }, [fileFilterQuery]);
 
-  const normalizedDraftConfig = useMemo(
-    () => normalizeDraftCommandConfig(draftConfig),
-    [draftConfig],
+  const commandSource = useMemo(
+    () => resolveCommandSource({ serverId, agentId, draft }),
+    [agentId, draft, serverId],
   );
-
-  const isDraftContext = normalizedDraftConfig !== undefined;
-  const queryDraftConfig = normalizedDraftConfig;
-  const canLoadCommands = resolveCanLoadCommands({ serverId, agentId, isDraftContext });
+  const { isDraftContext, queryDraftConfig, canLoadCommands, canFetchCommands } =
+    describeCommandSource(commandSource);
 
   const agentCwd = useSessionStore(
     (state) => state.sessions[serverId]?.agents?.get(agentId)?.cwd ?? "",
@@ -419,17 +458,18 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const isConnected = useHostRuntimeIsConnected(serverId);
 
   const mode = resolveAutocompleteMode({ showFileAutocomplete, showCommandAutocomplete });
+  const commandsQuery = useAgentCommandsQuery({
+    serverId,
+    agentId,
+    enabled: hasTokenCandidate && canFetchCommands,
+    draftConfig: queryDraftConfig,
+  });
   const {
     commands,
     isLoading: isCommandsLoading,
     isError,
     error,
-  } = useAgentCommandsQuery({
-    serverId,
-    agentId,
-    enabled: hasTokenCandidate && canLoadCommands,
-    draftConfig: queryDraftConfig,
-  });
+  } = canFetchCommands ? commandsQuery : NO_COMMANDS_QUERY_RESULT;
 
   const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
     const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
@@ -623,8 +663,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     mode === "file"
       ? t("agentAutocomplete.searchingWorkspace")
       : t("agentAutocomplete.loadingCommands");
-  const emptyText =
-    mode === "file" ? t("agentAutocomplete.noFiles") : t("agentAutocomplete.noCommands");
+  const emptyText = resolveAutocompleteEmptyText({ mode, commandSource, t });
 
   return {
     isVisible,
