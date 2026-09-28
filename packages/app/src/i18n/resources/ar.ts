@@ -1605,6 +1605,7 @@ export const ar: TranslationResources = {
     profiles: "الملفات الشخصية",
     providers: "المزودون",
     model: "النموذج",
+    allModels: "جميع النماذج",
     editProfiles: "تحرير",
     editProfilesLabel: "تحرير ملفات الوكيل",
     createProfile: "إنشاء ملف شخصي",
@@ -2099,6 +2100,11 @@ export const ar: TranslationResources = {
       autoExpandReasoning: {
         label: "عرض التفكير دائماً",
         description: "إظهار تفكير الوكيل وخطوات الاستدلال بشكل كامل بشكل افتراضي",
+      },
+      modelPickerAllModels: {
+        label: "فتح منتقي النماذج على جميع النماذج",
+        description:
+          "ابدأ منتقي النماذج بقائمة واحدة قابلة للبحث تضم جميع النماذج من جميع المزودين، بدلاً من قائمة المزودين",
       },
       toolCallDetail: {
         label: "عرض استدعاءات الأدوات",
