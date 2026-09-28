@@ -608,6 +608,9 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   });
   const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
     const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
+    for (const command of pluginClientSlashCommands) {
+      commandNames.add(command.name);
+    }
     const skillNames = new Set<string>();
     for (const command of commandsQuery.commands) {
       commandNames.add(command.name);
@@ -616,8 +619,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       }
     }
     return { commandNames, skillNames };
-  }, [commandsQuery.commands]);
-
+  }, [commandsQuery.commands, pluginClientSlashCommands]);
 
   const fileSuggestionsQuery = useQuery({
     queryKey: [
