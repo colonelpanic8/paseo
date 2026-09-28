@@ -5272,6 +5272,7 @@ test("workspace recovery stays accepted when git observer warming fails", async 
   session.workspaceRegistry.upsert = async (record: PersistedWorkspaceRecord) => {
     workspace = record;
   };
+  session.agentStorage.listByArchivedWorkspace = async () => [];
   await session.handleMessage({
     type: "fetch_workspaces_request",
     requestId: "sub-recovery-warm-failure",
@@ -5780,6 +5781,7 @@ test("legacy refresh_agent_request restores a real deleted worktree", async () =
   session.workspaceRegistry.list = async () => Array.from(workspaces.values());
   session.agentStorage.get = async (id: string) => (id === agentId ? storedAgent : null);
   session.agentStorage.upsert = async () => {};
+  session.agentStorage.listByArchivedWorkspace = async () => [];
 
   const managed = makeManagedAgent({
     id: agentId,
