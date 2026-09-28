@@ -2,6 +2,7 @@
   lib,
   stdenv,
   buildNpmPackage,
+  fetchNpmDeps,
   nodejs_22,
   python3,
   makeWrapper,
@@ -80,6 +81,17 @@ buildNpmPackage rec {
   };
 
   nodejs = nodejs_22;
+
+  # Keep the fixed-output npm cache reproducible: the pinned fetcher writes
+  # duplicate package entries in parallel when this lockfile is expanded.
+  npmDeps = fetchNpmDeps {
+    inherit src;
+    name = "${pname}-${version}-npm-deps-serial";
+    hash = npmDepsHash;
+    preBuild = ''
+      export NIX_BUILD_CORES=1
+    '';
+  };
 
   # Default hash lives in nix/npm-deps.hash (see arg default above).
   # CI auto-updates that file when package-lock.json changes (see .github/workflows/).
