@@ -37,6 +37,7 @@ interface ComposerStashProps {
   provider: string | null;
   /** Anchor for the picker popover (the message input container). */
   anchorRef: RefObject<View | null>;
+  /** Live composer text; read on demand so keystrokes do not re-render the stash. */
   textSource: ComposerTextSource;
   setUserInput: (text: string) => void;
   attachments: UserComposerAttachment[];
