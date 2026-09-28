@@ -61,8 +61,6 @@ vi.mock("@getpaseo/server", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolvePaseoPaths: () => mocks.paseoPaths,
 }));
-  spawnProcess: mocks.spawnProcess,
-}));
 
 vi.mock("../settings/desktop-settings-electron.js", () => ({
   getDesktopSettingsStore: () => ({
@@ -197,7 +195,6 @@ describe("daemon-manager commands", () => {
     expect(await handler({ listen: "localhost:6799" })).toBeNull();
   });
 
-
   it("forces the XDG daemon status probe to remain local", async () => {
     mocks.paseoPaths = {
       home: path.join(fixtureRoot, "xdg-data", "paseo"),
@@ -226,5 +223,4 @@ describe("daemon-manager commands", () => {
     });
     expect(mocks.runExternalCliJsonCommand.mock.calls[0]?.[1]?.env.PASEO_HOST).toBeUndefined();
   });
-
 });
