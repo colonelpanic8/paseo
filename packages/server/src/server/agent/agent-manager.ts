@@ -181,6 +181,10 @@ interface TimeoutOptions {
   onLateError?: (error: unknown) => void;
 }
 
+export interface ArchiveSnapshotOptions {
+  nativeArchiveMode: "best-effort" | "required";
+}
+
 function formatProviderList(providers: readonly string[]): string {
   return providers.length > 0 ? providers.join(", ") : "none";
 }
@@ -2235,16 +2239,20 @@ export class AgentManager {
     if (this.agents.has(agentId)) await this.closeAgentRuntime(agentId);
     await this.syncNativeArchiveState(record.provider, record.persistence, "restore");
 
-    await registry.upsert({
+    const restoredRecord: StoredAgentRecord = {
       ...record,
       ...(updates?.workspaceId ? { workspaceId: updates.workspaceId } : {}),
       ...(updates?.labels ? { labels: applyLabelPatch(record.labels, updates.labels) } : {}),
       archivedAt: null,
+      archivedWithWorkspaceId: null,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await registry.upsert(restoredRecord);
 
     if (this.getAgent(agentId)) {
       this.notifyAgentState(agentId);
+    } else if (!restoredRecord.internal) {
+      this.dispatchStoredAgentState(restoredRecord);
     }
     return true;
   }
