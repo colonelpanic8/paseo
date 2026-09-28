@@ -234,9 +234,7 @@ export function upsertHostConnectionInProfiles(input: {
   const matchingIndexes = existing.reduce<number[]>((matches, daemon, index) => {
     if (
       daemon.serverId === serverId ||
-      daemon.connections.some((existingConnection) =>
-        hostConnectionEquals(existingConnection, normalizedConnection),
-      )
+      daemon.connections.some((connection) => connection.id === normalizedConnection.id)
     ) {
       matches.push(index);
     }

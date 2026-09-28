@@ -279,7 +279,7 @@ describe("upsertHostConnectionInProfiles", () => {
 
     const updated = upsertHostConnectionInProfiles({
       profiles: [existing],
-      serverId: "srv_managed",
+      serverId: "srv_reidentified",
       connection: {
         id: "direct:ryzen-shine:6767",
         type: "directTcp",
@@ -295,6 +295,7 @@ describe("upsertHostConnectionInProfiles", () => {
         endpoint: "ryzen-shine:6767",
       },
     ]);
+    expect(updated[0]?.serverId).toBe("srv_reidentified");
     expect(updated[0]?.password).toBe("new-secret");
   });
 });
