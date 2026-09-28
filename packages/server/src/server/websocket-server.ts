@@ -550,6 +550,17 @@ function resolveLiveVoiceToolExecution(toolExecutor?: LiveVoiceToolExecutor): {
   };
 }
 
+function resolveLiveVoiceServices(
+  toolExecutor: LiveVoiceToolExecutor | undefined,
+  routeBroker: LiveVoiceRouteBroker | undefined,
+) {
+  const execution = resolveLiveVoiceToolExecution(toolExecutor);
+  return {
+    ...execution,
+    routeBroker: routeBroker ?? new LiveVoiceRouteBroker(),
+  };
+}
+
 /**
  * WebSocket server that only accepts sockets + parses/forwards messages to the session layer.
  */
@@ -714,10 +725,10 @@ export class VoiceAssistantWebSocketServer {
     this.credentialSource = auth;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.browserToolsBroker = browserToolsBroker ?? null;
-    const liveVoiceToolExecution = resolveLiveVoiceToolExecution(liveVoiceToolExecutor);
-    this.liveVoiceToolExecutionAvailable = liveVoiceToolExecution.available;
-    this.liveVoiceRouteBroker = liveVoiceRouteBroker ?? new LiveVoiceRouteBroker();
-    this.liveVoiceToolExecutor = liveVoiceToolExecution.executor;
+    const liveVoiceServices = resolveLiveVoiceServices(liveVoiceToolExecutor, liveVoiceRouteBroker);
+    this.liveVoiceToolExecutionAvailable = liveVoiceServices.available;
+    this.liveVoiceRouteBroker = liveVoiceServices.routeBroker;
+    this.liveVoiceToolExecutor = liveVoiceServices.executor;
     this.liveVoiceAgentNotifier = new LiveVoiceAgentNotifier({
       agentManager,
       agentStorage,

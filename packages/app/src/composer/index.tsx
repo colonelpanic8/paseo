@@ -22,7 +22,6 @@ import {
   useImperativeHandle,
   memo,
   type ReactElement,
-  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
