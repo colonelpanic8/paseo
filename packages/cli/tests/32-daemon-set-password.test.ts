@@ -205,7 +205,10 @@ try {
 
       assert.strictEqual(result.configPath, configPath);
       assert.strictEqual(
-        await isBearerTokenValidAsync({ password: config.daemon.auth.password, token: "xdg-secret" }),
+        await isBearerTokenValidAsync({
+          password: config.daemon.auth.password,
+          token: "xdg-secret",
+        }),
         true,
       );
       await assert.rejects(readFile(join(dataRoot, "paseo", "config.json"), "utf-8"));
@@ -256,7 +259,7 @@ try {
       assert.strictEqual(layeredResult.data.configPath, machinePath);
       assert.strictEqual(machine.features.webUi.enabled, true);
       assert.strictEqual(
-        isBearerTokenValid({
+        await isBearerTokenValidAsync({
           password: machine.daemon.auth.password,
           token: "xdg-layered-secret",
         }),
@@ -267,7 +270,6 @@ try {
       restoreEnvironment(originalEnv);
     }
   }
-
 } finally {
   await rm(root, { recursive: true, force: true });
 }
