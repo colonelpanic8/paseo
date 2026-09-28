@@ -93,6 +93,7 @@ import {
   type CodexThreadRollbackResponse,
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
+import { runCodexAppServerStartup } from "./codex/app-server-startup.js";
 import {
   type CodexUserMessageTurnIndex,
   forkCodexThreadAt,
@@ -323,6 +324,7 @@ interface CodexAppServerAgentDeps {
     logger: Logger,
     getTraceContext: () => CodexAppServerTraceContext,
   ) => CodexAppServerClientLike;
+  _spawnAppServer?: () => Promise<ChildProcessWithoutNullStreams>;
   resolveSlashCommandInvocation?: (
     prompt: AgentPromptInput,
   ) => Promise<{ commandName: string; args?: string } | null>;
@@ -3441,7 +3443,7 @@ const CodexNotificationSchema = z.union([
 ]);
 
 async function readCodexConfiguredDefaults(
-  client: CodexAppServerClient,
+  client: CodexAppServerClientLike,
   logger: Logger,
 ): Promise<CodexConfiguredDefaults> {
   let savedConfigDefaults: CodexConfiguredDefaults = {};
@@ -3607,6 +3609,21 @@ function buildCodexAppServerInitializeParams(): {
       mcpServerOpenaiFormElicitation: true,
     },
   };
+}
+
+async function disposeFailedCodexStartup(
+  client: CodexAppServerClientLike,
+  logger: Logger,
+  startupError: unknown,
+): Promise<void> {
+  try {
+    await client.dispose();
+  } catch (disposeError) {
+    logger.warn(
+      { err: disposeError, startupError },
+      "Failed to dispose Codex app-server after startup failure",
+    );
+  }
 }
 
 function normalizeOpenAICompatibleBaseUrl(value: string): string | null {
@@ -3890,26 +3907,58 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
       this.connectionState = "history-ready";
       return;
     }
-    const child = await this.spawnAppServer();
-    const client = new CodexAppServerClient(child, this.logger, () => this.traceContext());
-    if (this.closed) {
-      await client.dispose();
-      throw this.createClosedError();
-    }
-    this.client = client;
-    client.setUnexpectedTerminationHandler((error) => {
-      this.handleUnexpectedTermination(error);
-    });
-    client.setNotificationHandler((method, params) => this.handleNotification(method, params));
-    this.unsubscribeTransportClose?.();
-    this.unsubscribeTransportClose = this.client.onClose((reason) => {
-      this.notifyRealtimeSubscribers({ kind: "transport_closed", reason });
-    });
-    this.registerRequestHandlers();
-
+    let client: CodexAppServerClient | null = null;
+    let startupClient: CodexAppServerClient | null = null;
     try {
-      await client.request("initialize", buildCodexAppServerInitializeParams());
-      client.notify("initialized", {});
+      client = await runCodexAppServerStartup({
+        start: async (_attempt, signal) => {
+          const child = await this.spawnAppServer();
+          const attemptClient = new CodexAppServerClient(child, this.logger, () =>
+            this.traceContext(),
+          );
+          startupClient = attemptClient;
+          if (this.closed) {
+            await attemptClient.dispose();
+            throw this.createClosedError();
+          }
+          this.client = attemptClient;
+          attemptClient.setUnexpectedTerminationHandler((error) => {
+            this.handleUnexpectedTermination(error);
+          });
+          attemptClient.setNotificationHandler((method, params) =>
+            this.handleNotification(method, params),
+          );
+          this.unsubscribeTransportClose?.();
+          this.unsubscribeTransportClose = attemptClient.onClose((reason) => {
+            this.notifyRealtimeSubscribers({ kind: "transport_closed", reason });
+          });
+          this.registerRequestHandlers();
+          try {
+            signal.throwIfAborted();
+            await attemptClient.request("initialize", buildCodexAppServerInitializeParams());
+            attemptClient.notify("initialized", {});
+            return attemptClient;
+          } catch (error) {
+            if (this.client === attemptClient) {
+              this.client = null;
+            }
+            await disposeFailedCodexStartup(attemptClient, this.logger, error);
+            throw error;
+          } finally {
+            if (startupClient === attemptClient) {
+              startupClient = null;
+            }
+          }
+        },
+        onAbort: async () => await startupClient?.dispose(),
+        onRetry: (error, nextAttempt, maxAttempts) => {
+          this.logger.warn(
+            { err: error, nextAttempt, maxAttempts },
+            "Retrying Codex app-server after SQLite initialization failure",
+          );
+        },
+      });
+      this.client = client;
 
       await this.loadResolvedWorkspaceWrite();
       await this.loadCollaborationModes();
@@ -3926,9 +3975,9 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
       this.connectionState = "connected";
     } catch (error) {
       try {
-        if (this.client === client) {
+        if (client && this.client === client) {
           await this.disposeClient();
-        } else {
+        } else if (client) {
           await client.dispose();
         }
       } catch (disposeError) {
@@ -7850,6 +7899,9 @@ export class CodexAppServerAgentClient implements AgentClient {
     launchEnv?: ProcessEnvRecord,
     options?: { goalsEnabled?: boolean; liveVoiceEnabled?: boolean; agentId?: string },
   ): Promise<ChildProcessWithoutNullStreams> {
+    if (this.deps._spawnAppServer) {
+      return await this.deps._spawnAppServer();
+    }
     const launchPrefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
     const args = [...launchPrefix.args, "app-server"];
     if (options?.goalsEnabled) {
@@ -7878,6 +7930,39 @@ export class CodexAppServerAgentClient implements AgentClient {
     });
     assertChildWithPipes(child);
     return child;
+  }
+
+  private startInitializedAppServer(): Promise<CodexAppServerClientLike> {
+    let startupClient: CodexAppServerClientLike | null = null;
+    return runCodexAppServerStartup({
+      start: async (_attempt, signal) => {
+        const child = await this.spawnAppServer();
+        const client =
+          this.deps._createCodexClient?.(child, this.logger, () => ({})) ??
+          new CodexAppServerClient(child, this.logger);
+        startupClient = client;
+        try {
+          signal.throwIfAborted();
+          await client.request("initialize", buildCodexAppServerInitializeParams());
+          client.notify("initialized", {});
+          return client;
+        } catch (error) {
+          await disposeFailedCodexStartup(client, this.logger, error);
+          throw error;
+        } finally {
+          if (startupClient === client) {
+            startupClient = null;
+          }
+        }
+      },
+      onAbort: async () => await startupClient?.dispose(),
+      onRetry: (error, nextAttempt, maxAttempts) => {
+        this.logger.warn(
+          { err: error, nextAttempt, maxAttempts },
+          "Retrying Codex app-server after SQLite initialization failure",
+        );
+      },
+    });
   }
 
   async createSession(
@@ -7961,15 +8046,9 @@ export class CodexAppServerAgentClient implements AgentClient {
   async listImportableSessions(
     options?: ListImportableSessionsOptions,
   ): Promise<ImportableProviderSession[]> {
-    const child = await this.spawnAppServer();
-    const client =
-      this.deps._createCodexClient?.(child, this.logger, () => ({})) ??
-      new CodexAppServerClient(child, this.logger);
+    const client = await this.startInitializedAppServer();
 
     try {
-      await client.request("initialize", buildCodexAppServerInitializeParams());
-      client.notify("initialized", {});
-
       const limit = options?.limit ?? 20;
       const scanLimit = Math.min(options?.scanLimit ?? limit, 500);
       // thread/list returns the cheap `cwd` field. Fetch a wider window when
@@ -8087,7 +8166,7 @@ export class CodexAppServerAgentClient implements AgentClient {
     context?: ProviderRefreshContext,
   ): Promise<AgentModelDefinition[]> {
     // Codex model/list is global to the app server in this flow; cwd/force are intentionally ignored.
-    let client: CodexAppServerClient | undefined;
+    let client: CodexAppServerClientLike | undefined;
     let disposePromise: Promise<void> | undefined;
     const dispose = () => {
       if (!client) return Promise.resolve();
@@ -8097,16 +8176,37 @@ export class CodexAppServerAgentClient implements AgentClient {
     const unregisterAbortCleanup = context?.registerAbortCleanup(dispose);
 
     try {
-      await runProviderRefreshActivity(context, "app-server.start", async () => {
-        const child = await this.spawnAppServer();
-        client = new CodexAppServerClient(child, this.logger);
-        if (context?.signal.aborted) await dispose();
+      client = await runCodexAppServerStartup({
+        signal: context?.signal,
+        start: async (_attempt, signal) => {
+          await runProviderRefreshActivity(context, "app-server.start", async () => {
+            const child = await this.spawnAppServer();
+            client = new CodexAppServerClient(child, this.logger);
+            if (signal.aborted) await dispose();
+          });
+          if (!client) throw new Error("Codex app-server did not start");
+          try {
+            signal.throwIfAborted();
+            await runProviderRefreshActivity(context, "initialize", () =>
+              client!.request("initialize", buildCodexAppServerInitializeParams()),
+            );
+            client.notify("initialized", {});
+            return client;
+          } catch (error) {
+            await disposeFailedCodexStartup(client, this.logger, error);
+            client = undefined;
+            disposePromise = undefined;
+            throw error;
+          }
+        },
+        onAbort: dispose,
+        onRetry: (error, nextAttempt, maxAttempts) => {
+          this.logger.warn(
+            { err: error, nextAttempt, maxAttempts },
+            "Retrying Codex app-server after SQLite initialization failure",
+          );
+        },
       });
-      if (!client) throw new Error("Codex app-server did not start");
-      await runProviderRefreshActivity(context, "initialize", () =>
-        client!.request("initialize", buildCodexAppServerInitializeParams()),
-      );
-      client.notify("initialized", {});
 
       const rawResponse = await runProviderRefreshActivity(context, "model/list", () =>
         client!.request("model/list", {}),
@@ -8150,12 +8250,9 @@ export class CodexAppServerAgentClient implements AgentClient {
     const threadId = handle.nativeHandle ?? handle.sessionId;
     if (!threadId) return;
 
-    const child = await this.spawnAppServer();
-    const client = new CodexAppServerClient(child, this.logger);
+    const client = await this.startInitializedAppServer();
 
     try {
-      await client.request("initialize", buildCodexAppServerInitializeParams());
-      client.notify("initialized", {});
       if (state === "archive") {
         await client.request("thread/archive", { threadId });
         return;
