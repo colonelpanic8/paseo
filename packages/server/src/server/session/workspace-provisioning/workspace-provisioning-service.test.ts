@@ -557,6 +557,7 @@ test("rolls back the project and workspace when workspace activation fails", asy
     workspaceRegistry: failingWorkspaceRegistry,
     projectRegistry,
     workspaceGitService: gitService(),
+    isDirectory,
     logger,
   });
 
