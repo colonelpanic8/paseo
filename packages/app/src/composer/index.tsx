@@ -2424,7 +2424,7 @@ function ComposerContentImpl({
               <ComposerStash
                 provider={stashProvider}
                 anchorRef={messageInputContainerRef}
-                userInput={userInput}
+                textSource={textSource}
                 setUserInput={replaceUserInput}
                 attachments={attachments}
                 setAttachments={setSelectedAttachments}
