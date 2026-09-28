@@ -406,9 +406,7 @@ export function useKeyboardShortcuts({
     const held = heldShortcutRef.current;
     if (
       held &&
-      (key.toLowerCase() === held.key ||
-        event.code === held.code ||
-        HOLD_MODIFIER_KEYS.has(key))
+      (key.toLowerCase() === held.key || event.code === held.code || HOLD_MODIFIER_KEYS.has(key))
     ) {
       releaseHeldShortcut();
     }
