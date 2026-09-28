@@ -22,6 +22,12 @@ import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
 import { AgentProviderSchema } from "./provider-manifest.js";
+import { DaemonPushConfigSchema } from "./daemon-push-config.js";
+export {
+  DaemonPushConfigSchema,
+  type DaemonPushConfig,
+  type DaemonPushNtfyConfig,
+} from "./daemon-push-config.js";
 import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
 import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import { WORKSPACE_LABEL_COLORS } from "./workspace-labels.js";
@@ -168,22 +174,6 @@ const MutableRelayConfigSchema = z
     enabled: z.boolean(),
   })
   .passthrough();
-
-const DaemonPushNtfyConfigSchema = z
-  .object({
-    serverUrl: z.string().min(1),
-    topic: z.string().min(1),
-  })
-  .passthrough();
-export const DaemonPushConfigSchema = z
-  .object({
-    ntfy: DaemonPushNtfyConfigSchema.optional(),
-    presenceThresholdMs: z.number().int().nonnegative().optional(),
-    ignorePresence: z.boolean().optional(),
-  })
-  .passthrough();
-export type DaemonPushConfig = z.infer<typeof DaemonPushConfigSchema>;
-export type DaemonPushNtfyConfig = z.infer<typeof DaemonPushNtfyConfigSchema>;
 
 export const MutableDaemonConfigSchema = z
   .object({
