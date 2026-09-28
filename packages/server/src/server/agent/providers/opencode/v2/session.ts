@@ -1,7 +1,7 @@
 import { SessionChildren } from "./children.js";
 import { SessionTurns } from "./turns.js";
 import { V2Timeline } from "./timeline.js";
-import { definedProcessEnv } from "../../../paseo-env.js";
+import { definedProcessEnv } from "../../../../paseo-env.js";
 import { waitForLocationReady, awaitPaseoPlugin } from "./readiness.js";
 
 import type { SessionInfo, SessionMessageInfo } from "@opencode/client";
