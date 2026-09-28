@@ -1793,8 +1793,7 @@ export const zhCN: TranslationResources = {
         description: "paseo://live-voice 快捷方式呼叫的主机。“自动”使用唯一可用的主机。",
         auto: "自动",
         profileLabel: "快捷方式配置",
-        profileHint:
-          "在该主机上应答快捷方式通话的配置，与实时语音菜单中的选择相同。",
+        profileHint: "在该主机上应答快捷方式通话的配置，与实时语音菜单中的选择相同。",
         hostDefault: "主机默认",
       },
       dispatch: {
