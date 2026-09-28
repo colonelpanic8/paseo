@@ -27,9 +27,10 @@ import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostn
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 
 export {
-  loadPersistedConfig,
   loadConfigStack,
+  loadPersistedConfig,
   readPersistedConfig,
+  saveConfigStack,
   savePersistedConfig,
   getPersistedConfigValue,
   editPersistedConfig,
