@@ -52,6 +52,7 @@ import {
 import { getDesktopHost } from "@/desktop/host";
 import { readDesktopManagedLocalCredential } from "@/desktop/daemon/local-credential";
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
+import { findLatestAssistantMessageFromTimeline } from "@getpaseo/protocol/agent-attention-notification";
 import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
 import {
   useSessionStore,
@@ -68,6 +69,11 @@ import {
   mountServerDataPushRouter,
 } from "@/data/push-router";
 import { mountBrowserAutomationDaemonClientHandler } from "@/desktop/browser/automation/handler";
+import {
+  mountLiveVoiceCrossHostRouter,
+  type LiveVoiceCrossHostRouterDeps,
+} from "@/live-voice/live-voice-cross-host-router";
+import { isAuthorizedLiveVoiceRoute } from "@/live-voice/live-voice-route-authority";
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
 import { dispatchComposerAgentMessage, sendQueuedComposerMessageNow } from "@/composer/actions";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
@@ -125,6 +131,15 @@ export interface HostRuntimeSnapshot {
   connectionEpoch: number;
 }
 
+export interface HostRuntimeConnectionPin {
+  readonly serverId: string;
+  readonly connectionId: string;
+  readonly connection: ActiveConnection;
+  readonly client: DaemonClient;
+  readonly clientGeneration: number;
+  release(): void;
+}
+
 type HostRuntimeSnapshotPatch = Partial<Omit<HostRuntimeSnapshot, "serverId" | "clientGeneration">>;
 
 function setSnapshotPatchField<Key extends keyof HostRuntimeSnapshotPatch>(
@@ -154,6 +169,48 @@ export function isHostRuntimeDirectoryLoading(snapshot: HostRuntimeSnapshot | nu
     (snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "online")
   );
 }
+
+export const liveVoiceCrossHostRouterDeps: LiveVoiceCrossHostRouterDeps = {
+  getSavedHosts: () => getHostRuntimeStore().getHosts(),
+  getHostRuntimeSnapshot: (serverId) => getHostRuntimeStore().getSnapshot(serverId),
+  getHostServerInfo: (serverId) =>
+    useSessionStore.getState().sessions[serverId]?.serverInfo ?? null,
+  getAgentSummary: (serverId, agentId) => {
+    const session = useSessionStore.getState().sessions[serverId];
+    const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
+    if (!agent) {
+      return null;
+    }
+    const workspace = agent.workspaceId ? session?.workspaces.get(agent.workspaceId) : undefined;
+    return {
+      title: agent.title,
+      status: agent.status,
+      lastError: agent.lastError ?? null,
+      workspaceName: workspace?.title?.trim() || workspace?.name?.trim() || null,
+      projectName:
+        workspace?.projectCustomName?.trim() || workspace?.projectDisplayName?.trim() || null,
+    };
+  },
+  readAgentCompletionSummary: async (serverId, agentId) => {
+    const pin = getHostRuntimeStore().pinActiveConnection(serverId);
+    if (!pin) {
+      return null;
+    }
+    try {
+      const page = await pin.client.fetchAgentTimeline(agentId, {
+        direction: "tail",
+        projection: "canonical",
+        limit: 40,
+        timeout: 10_000,
+      });
+      return findLatestAssistantMessageFromTimeline(page.entries.map((entry) => entry.item));
+    } finally {
+      pin.release();
+    }
+  },
+  pinActiveConnection: (serverId) => getHostRuntimeStore().pinActiveConnection(serverId),
+  isAuthorizedSourceCall: isAuthorizedLiveVoiceRoute,
+};
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -513,6 +570,9 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       }
     : undefined;
   const appCapabilities = {
+    [CLIENT_CAPS.selectiveAgentTimeline]: true,
+    [CLIENT_CAPS.timelineReplacementInvalidation]: true,
+    [CLIENT_CAPS.liveVoiceCrossHostRouter]: true,
     ...browserAutomationCapabilities,
   };
 
@@ -604,14 +664,29 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         queryClient,
         serverId: host.serverId,
       });
+      const unmountLiveVoiceRouter = mountLiveVoiceCrossHostRouter({
+        sourceServerId: host.serverId,
+        sourceClient: client,
+        deps: liveVoiceCrossHostRouterDeps,
+        onError: (error) => {
+          console.error("[LiveVoice] Cross-host route failed", {
+            sourceServerId: host.serverId,
+            error: toErrorMessage(error),
+          });
+        },
+      });
       if (!browserAutomationCapabilities) {
-        return unmountServerData;
+        return () => {
+          unmountLiveVoiceRouter();
+          unmountServerData();
+        };
       }
       const unmountBrowserAutomation = mountBrowserAutomationDaemonClientHandler(client, {
         serverId: host.serverId,
       });
       return () => {
         unmountBrowserAutomation();
+        unmountLiveVoiceRouter();
         unmountServerData();
       };
     },
@@ -641,6 +716,8 @@ export class HostRuntimeController {
   private probeRequestVersion = 0;
   private probeCycleInFlight: Promise<void> | null = null;
   private readonly authRejectedConnectionIds = new Set<string>();
+  private reconnectEnabled = true;
+  private connectionPinsByClient = new Map<DaemonClient, Set<symbol>>();
 
   constructor(input: {
     host: HostProfile;
@@ -671,6 +748,48 @@ export class HostRuntimeController {
 
   getClient(): DaemonClient | null {
     return this.snapshot.client;
+  }
+
+  pinActiveConnection(): HostRuntimeConnectionPin | null {
+    const { activeConnection, activeConnectionId, client, clientGeneration, connectionStatus } =
+      this.snapshot;
+    if (
+      !this.started ||
+      !client ||
+      !activeConnection ||
+      !activeConnectionId ||
+      connectionStatus !== "online"
+    ) {
+      return null;
+    }
+
+    const token = Symbol("host-runtime-connection-pin");
+    const pins = this.connectionPinsByClient.get(client) ?? new Set<symbol>();
+    pins.add(token);
+    this.connectionPinsByClient.set(client, pins);
+
+    let released = false;
+    return {
+      serverId: this.snapshot.serverId,
+      connectionId: activeConnectionId,
+      connection: activeConnection,
+      client,
+      clientGeneration,
+      release: () => {
+        if (released) {
+          return;
+        }
+        released = true;
+        const currentPins = this.connectionPinsByClient.get(client);
+        if (!currentPins) {
+          return;
+        }
+        currentPins.delete(token);
+        if (currentPins.size === 0) {
+          this.connectionPinsByClient.delete(client);
+        }
+      },
+    };
   }
 
   subscribe(listener: () => void): () => void {
@@ -716,6 +835,7 @@ export class HostRuntimeController {
       this.unsubscribeClientHandlers();
       this.unsubscribeClientHandlers = null;
     }
+    this.connectionPinsByClient.clear();
     if (this.activeClient) {
       const prev = this.activeClient;
       this.activeClient = null;
@@ -1229,8 +1349,17 @@ export class HostRuntimeController {
     if (this.activeClient) {
       const previousClient = this.activeClient;
       this.activeClient = null;
+      this.connectionPinsByClient.delete(previousClient);
       await previousClient.close().catch(() => undefined);
     }
+  }
+
+  private isActiveClientPinnedForProbe(expectedProbeVersion: number | undefined): boolean {
+    if (expectedProbeVersion === undefined) {
+      return false;
+    }
+    const client = this.activeClient;
+    return client !== null && (this.connectionPinsByClient.get(client)?.size ?? 0) > 0;
   }
 
   private buildAgentDirectoryStatusPatch(): Partial<HostRuntimeSnapshotPatch> {
@@ -1254,7 +1383,10 @@ export class HostRuntimeController {
     existingClient?: DaemonClient;
   }): Promise<void> {
     const { connectionId, expectedProbeVersion, existingClient } = input;
-    if (!this.canProceedForProbe(expectedProbeVersion)) {
+    if (
+      !this.canProceedForProbe(expectedProbeVersion) ||
+      this.isActiveClientPinnedForProbe(expectedProbeVersion)
+    ) {
       await this.abortSwitchWithClient(existingClient);
       return;
     }
@@ -1268,7 +1400,10 @@ export class HostRuntimeController {
     const clientId = await this.resolveClientIdForSwitch({ existingClient, requestVersion });
     if (clientId === null) return;
 
-    if (!this.isSwitchStillValid(requestVersion, expectedProbeVersion)) {
+    if (
+      !this.isSwitchStillValid(requestVersion, expectedProbeVersion) ||
+      this.isActiveClientPinnedForProbe(expectedProbeVersion)
+    ) {
       await this.abortSwitchWithClient(existingClient);
       return;
     }
@@ -1486,6 +1621,10 @@ function normalizeManagedHostColor(
 export class HostRuntimeStore {
   private controllers = new Map<string, HostRuntimeController>();
   private serverListeners = new Map<string, Set<() => void>>();
+  private agentStoppedRunningListeners = new Map<string, Set<(agentId: string) => void>>();
+  private globalAgentStoppedRunningListeners = new Set<
+    (serverId: string, agentId: string) => void
+  >();
   private globalListeners = new Set<() => void>();
   private hostListListeners = new Set<() => void>();
   private version = 0;
@@ -1857,7 +1996,7 @@ export class HostRuntimeStore {
     const directory = new DirectorySync(
       newServerId,
       {
-        onAgentStoppedRunning: (agentId) => this.drainQueuedAgentMessage(newServerId, agentId),
+        onAgentStoppedRunning: (agentId) => this.onAgentStoppedRunning(newServerId, agentId),
         markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
         markAgentReady: () => controller.markAgentDirectorySyncReady(),
         markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2368,7 +2507,7 @@ export class HostRuntimeStore {
       const directory = new DirectorySync(
         host.serverId,
         {
-          onAgentStoppedRunning: (agentId) => this.drainQueuedAgentMessage(host.serverId, agentId),
+          onAgentStoppedRunning: (agentId) => this.onAgentStoppedRunning(host.serverId, agentId),
           markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
           markAgentReady: () => controller.markAgentDirectorySyncReady(),
           markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2580,6 +2719,10 @@ export class HostRuntimeStore {
     return this.controllers.get(serverId)?.getClient() ?? null;
   }
 
+  pinActiveConnection(serverId: string): HostRuntimeConnectionPin | null {
+    return this.controllers.get(serverId)?.pinActiveConnection() ?? null;
+  }
+
   subscribe(serverId: string, listener: () => void): () => void {
     const existing = this.serverListeners.get(serverId) ?? new Set<() => void>();
     existing.add(listener);
@@ -2596,6 +2739,24 @@ export class HostRuntimeStore {
     };
   }
 
+  subscribeAgentStoppedRunning(serverId: string, listener: (agentId: string) => void): () => void {
+    const listeners = this.agentStoppedRunningListeners.get(serverId) ?? new Set();
+    listeners.add(listener);
+    this.agentStoppedRunningListeners.set(serverId, listeners);
+    return () => {
+      const current = this.agentStoppedRunningListeners.get(serverId);
+      if (!current) return;
+      current.delete(listener);
+      if (current.size === 0) this.agentStoppedRunningListeners.delete(serverId);
+    };
+  }
+
+  subscribeAllAgentStoppedRunning(
+    listener: (serverId: string, agentId: string) => void,
+  ): () => void {
+    this.globalAgentStoppedRunningListeners.add(listener);
+    return () => this.globalAgentStoppedRunningListeners.delete(listener);
+  }
   subscribeAll(listener: () => void): () => void {
     this.globalListeners.add(listener);
     return () => {
@@ -2738,6 +2899,23 @@ export class HostRuntimeStore {
       listener();
     }
   }
+
+  /**
+   * The one funnel for "an agent stopped running". Draining its queued message
+   * is only half of it — Live Voice subscribes here to report the agent it was
+   * waiting on. Wiring a caller straight to `drainQueuedAgentMessage` still
+   * sends the message, so the loss is silent: the queue looks right and the
+   * call simply never speaks.
+   */
+  private onAgentStoppedRunning(serverId: string, agentId: string): void {
+    this.drainQueuedAgentMessage(serverId, agentId);
+    for (const listener of this.agentStoppedRunningListeners.get(serverId) ?? []) {
+      listener(agentId);
+    }
+    for (const listener of this.globalAgentStoppedRunningListeners) {
+      listener(serverId, agentId);
+    }
+  }
 }
 
 let singletonHostRuntimeStore: HostRuntimeStore | null = null;
@@ -2799,25 +2977,37 @@ export function useHostRuntimeConnectionStatus(serverId: string): HostRuntimeCon
   );
 }
 
+interface HostRuntimeConnectionStatusStore {
+  subscribeAll(listener: () => void): () => void;
+  getSnapshot(serverId: string): Pick<HostRuntimeSnapshot, "connectionStatus"> | null;
+}
+
+export function useHostRuntimeConnectionStatusesFromStore(
+  store: HostRuntimeConnectionStatusStore,
+  serverIds: readonly string[],
+): ReadonlyMap<string, HostRuntimeConnectionStatus> {
+  const statusSnapshot = useSyncExternalStore(
+    (onStoreChange) => store.subscribeAll(onStoreChange),
+    () =>
+      serverIds
+        .map((serverId) => store.getSnapshot(serverId)?.connectionStatus ?? "connecting")
+        .join("|"),
+    () =>
+      serverIds
+        .map((serverId) => store.getSnapshot(serverId)?.connectionStatus ?? "connecting")
+        .join("|"),
+  );
+
+  const statuses = statusSnapshot.split("|") as HostRuntimeConnectionStatus[];
+  return new Map(
+    serverIds.map((serverId, index) => [serverId, statuses[index] ?? "connecting"] as const),
+  );
+}
+
 export function useHostRuntimeConnectionStatuses(
   serverIds: readonly string[],
 ): ReadonlyMap<string, HostRuntimeConnectionStatus> {
-  const store = getHostRuntimeStore();
-  const version = useSyncExternalStore(
-    (onStoreChange) => store.subscribeAll(onStoreChange),
-    () => store.getVersion(),
-    () => store.getVersion(),
-  );
-
-  return useMemo(() => {
-    // The aggregate version is the reactivity trigger; re-read snapshots on every host tick.
-    void version;
-    const entries: Array<[string, HostRuntimeConnectionStatus]> = serverIds.map((serverId) => [
-      serverId,
-      store.getSnapshot(serverId)?.connectionStatus ?? "connecting",
-    ]);
-    return new Map(entries);
-  }, [serverIds, store, version]);
+  return useHostRuntimeConnectionStatusesFromStore(getHostRuntimeStore(), serverIds);
 }
 
 export function useHostRuntimeLastError(serverId: string): string | null {

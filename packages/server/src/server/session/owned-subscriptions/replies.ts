@@ -34,6 +34,8 @@ const exceptions = {
   "daemon.update.progress": ["daemon.update.request"],
   // Transcription belongs to the explicitly retained voice operation, not a request ID.
   transcription_result: [],
+  // Agent updates are deferred source-targeted notifications, including ambient reports.
+  "voice.live.agent.update": [],
   // This legacy requestId is a producer marker; checkout updates require event demand.
   checkout_status_update: [],
 } satisfies Record<ExceptionalReply, readonly Request["type"][]>;

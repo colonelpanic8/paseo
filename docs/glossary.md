@@ -54,6 +54,9 @@ Authoritative terminology. UI label wins. Don't invent synonyms; use what's here
 - **Conflict** — Two distinct senses; do NOT use the bare word in UI copy without qualifying which: (a) **stale-write conflict** on `paseo.json` ("Config changed on disk", code `stale_project_config`, `packages/app/src/screens/project-settings-screen.tsx:593`); (b) **git merge conflict** (no current UI string).
 - **Product discussion** — Where non-bug product talk goes: [GitHub Discussions](https://github.com/getpaseo/paseo/discussions) and `#product` in Discord. Covers workflows, features, and product direction. The container term; the ask inside it is always a **workflow** — what you're doing, how you do it today, where Paseo gets in the way. Issues are bugs only. Forbidden: "Feature request" as a Paseo surface, label, or invitation; the phrase is only used when answering someone who arrived with it. Don't invent "feature discussion", "idea", or "workflow thread" as synonyms. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+- **Profile** (Live Voice) — Configuration for a call: instructions, context, context files, voice, and action model. Either created in the app or declared in the daemon's `config.json`. Code: `packages/protocol/src/voice-profiles.ts`. Forbidden: "assistant", "template", "context profile".
+- **Thread** (Live Voice) — What a call remembers: the journal and summary one line of calls accumulates under a profile. Opened automatically when a call starts without continuing one. Forbidden: "assistant", "instance", "conversation".
+
 ## Inconsistencies (documented, not papered over)
 
 - CLI `--host <host>` description `"Daemon host target"` (`packages/cli/src/utils/command-options.ts:5`) blurs daemon/host; the app keeps them distinct.
