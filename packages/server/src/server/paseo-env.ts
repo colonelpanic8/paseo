@@ -14,6 +14,15 @@ export type PaseoNodeEnv = "development" | "production" | "test";
 export type ProcessEnvRecord = Record<string, string | undefined>;
 export type ExternalProcessEnv = NodeJS.ProcessEnv & Record<string, string>;
 
+export function definedProcessEnv(
+  env: ProcessEnvRecord | undefined,
+): Record<string, string> | undefined {
+  if (!env) return undefined;
+  return Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
+}
+
 function buildInternalProcessEnv<T extends ProcessEnvRecord>(baseEnv: T): T {
   return { ...baseEnv };
 }
