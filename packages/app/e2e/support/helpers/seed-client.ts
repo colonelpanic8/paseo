@@ -6,6 +6,7 @@ import { withProjectOwnership } from "./project-ownership";
 import { createTempDirectory, createTempGitRepo } from "./workspace";
 
 export interface SeedWorkspaceDescriptor {
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
   id: string;
   name: string;
   projectId: string;
@@ -14,7 +15,6 @@ export interface SeedWorkspaceDescriptor {
   workspaceDirectory: string;
   diffStat: { additions: number; deletions: number } | null;
   labels?: string[];
-  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
 }
 
 interface SeedProjectDescriptor {
@@ -46,16 +46,17 @@ export interface SeedDaemonClient {
     entries: SeedWorkspaceDescriptor[];
   }>;
   setWorkspacePinned(workspaceId: string, pinned: boolean): Promise<{ pinnedAt: string | null }>;
+  setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }>;
+  clearWorkspaceAttention(workspaceId: string): Promise<void>;
   setWorkspaceLabel(input: {
     workspaceId: string;
     label: { name: string; color: "red" };
     assigned: boolean;
   }): Promise<unknown>;
   listProjects(): Promise<{ projects: SeedProjectDescriptor[] }>;
-  setWorkspaceSnooze(
-    workspaceId: string,
-    snoozedUntil: string | null,
-  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }>;
   createWorkspace(input: {
     source:
       | { kind: "directory"; path: string; projectId?: string }
@@ -164,6 +165,7 @@ export interface SeedDaemonClient {
     features?: {
       projectAdd?: boolean;
       workspaceRecovery?: boolean;
+      workspaceMarkUnread?: boolean;
     } | null;
   } | null;
   fetchAgentHistory(options?: {

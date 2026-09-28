@@ -117,6 +117,7 @@ export interface WorkspaceDescriptor {
   title?: string | null;
   pinnedAt?: string | null;
   snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
+  labels?: string[];
   status: WorkspaceDescriptorPayload["status"];
   statusEnteredAt: Date | null;
   activityAt: Date | null;
@@ -650,6 +651,7 @@ interface SessionStoreActions {
   // Hydration
   setHasHydratedAgents: (serverId: string, hydrated: boolean) => void;
   setHasHydratedWorkspaces: (serverId: string, hydrated: boolean) => void;
+  setHasWorkspaceDirectorySnapshot: (serverId: string, ready: boolean) => void;
 
   // Agent directory (derived from agents)
   getAgentDirectory: (serverId: string) => AgentDirectoryEntry[] | undefined;
@@ -1926,6 +1928,20 @@ export const useSessionStore = create<SessionStore>()(
             sessions: {
               ...prev.sessions,
               [serverId]: { ...session, hasHydratedWorkspaces: hydrated },
+            },
+          };
+        });
+      },
+
+      setHasWorkspaceDirectorySnapshot: (serverId, ready) => {
+        set((prev) => {
+          const session = prev.sessions[serverId];
+          if (!session || session.hasWorkspaceDirectorySnapshot === ready) return prev;
+          return {
+            ...prev,
+            sessions: {
+              ...prev.sessions,
+              [serverId]: { ...session, hasWorkspaceDirectorySnapshot: ready },
             },
           };
         });

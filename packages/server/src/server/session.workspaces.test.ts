@@ -8294,7 +8294,7 @@ test("workspace.pin.set.request stores the pin timestamp and emits an updated de
   });
 });
 
-function createSnoozeSessionFixture() {
+async function createSnoozeSessionFixture() {
   const emitted: SessionOutboundMessage[] = [];
   const session = asTestSession(
     createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) }),
@@ -8327,18 +8327,17 @@ function createSnoozeSessionFixture() {
     workspaces.set(id, updated);
     return updated;
   };
-  session.workspaceUpdatesSubscription = {
-    subscriptionId: "sub-workspaces",
-    filter: {},
-    isBootstrapping: false,
-    lastEmittedByWorkspaceId: new Map(),
-    pendingUpdatesByWorkspaceId: new Map(),
-  };
+  await session.handleMessage({
+    type: "fetch_workspaces_request",
+    requestId: "sub-workspaces",
+    subscribe: { subscriptionId: "sub-workspaces" },
+  });
+  emitted.length = 0;
   return { emitted, session, workspace, workspaces };
 }
 
 test("workspace.snooze.set.request stores the snooze pair and emits an updated descriptor", async () => {
-  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+  const { emitted, session, workspace, workspaces } = await createSnoozeSessionFixture();
   const snoozedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
   await session.handleMessage({
@@ -8370,7 +8369,7 @@ test("workspace.snooze.set.request stores the snooze pair and emits an updated d
 });
 
 test("workspace.snooze.set.request with null wakes the workspace", async () => {
-  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+  const { emitted, session, workspace, workspaces } = await createSnoozeSessionFixture();
   workspaces.set(workspace.workspaceId, {
     ...workspace,
     snoozeStatus: {
@@ -8398,7 +8397,7 @@ test("workspace.snooze.set.request with null wakes the workspace", async () => {
 });
 
 test("workspace.snooze.set.request rejects past wake times and unknown workspaces", async () => {
-  const { emitted, session, workspace, workspaces } = createSnoozeSessionFixture();
+  const { emitted, session, workspace, workspaces } = await createSnoozeSessionFixture();
 
   await session.handleMessage({
     type: "workspace.snooze.set.request",

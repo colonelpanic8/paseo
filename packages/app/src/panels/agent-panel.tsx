@@ -85,6 +85,7 @@ import {
   type Agent,
   useSessionStore,
 } from "@/stores/session-store";
+import { usePanelStore } from "@/stores/panel-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
