@@ -228,7 +228,6 @@ function assertOptionsAbsent(
   }
 }
 
-
 /**
  * Local workspace creation adopts a directory that already exists; it never
  * provisions one. Nothing downstream checked that, so a caller that guessed a
@@ -255,7 +254,6 @@ async function assertExistingWorkspaceDirectory(cwd: string): Promise<void> {
     throw new Error(`Not a directory: ${cwd}. Local workspace creation requires a directory path.`);
   }
 }
-
 
 function resolveWorkspaceWorktreeTarget(input: WorkspaceWorktreeOptions): WorkspaceWorktreeTarget {
   switch (input.mode ?? "branch-off") {
@@ -994,7 +992,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
               path: z
                 .string()
                 .optional()
-                .describe("Optional directory path. Defaults to the caller's cwd."),
+                .describe(
+                  "Optional directory path. Defaults to the caller's cwd. Must already exist; this tool never creates the directory.",
+                ),
             })
             .strict(),
           z
