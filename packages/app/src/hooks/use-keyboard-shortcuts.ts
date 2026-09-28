@@ -191,10 +191,14 @@ export function useKeyboardShortcuts({
           workspaceId: action.workspaceId,
         };
         navigateToWorkspace({ serverId: action.serverId, workspaceId: action.workspaceId });
+        // A keyboard-driven native workspace switch should focus the composer so typing can
+        // continue without touching the screen.
         if (isNative) requestComposerAutoFocus();
         return true;
       case "navigate-last-workspace": {
         if (navigateToLastWorkspace()) {
+          // A keyboard-driven native workspace switch should focus the composer so typing can
+          // continue without touching the screen.
           if (isNative) requestComposerAutoFocus();
           return true;
         }
@@ -262,6 +266,9 @@ export function useKeyboardShortcuts({
     if (handled && isWorkspaceFocusModeEnabled && input.action.startsWith("sidebar.")) {
       exitFocusMode();
     }
+    // If no composer handled focus (for example, a terminal tab is active or a screen is
+    // transitioning), leave a pending request for the next composer to settle and pick up.
+    // Cmd/Ctrl+L should always land in the prompt.
     if (
       !handled &&
       isNative &&
@@ -410,6 +417,8 @@ export function useKeyboardShortcuts({
     const store = useKeyboardShortcutsStore.getState();
     if (store.capturingShortcut) return;
 
+    // Native cannot resolve DOM focus scopes; a focused TextInput is its only text-editing
+    // surface, so it maps to "editable".
     const focusScope: KeyboardFocusScope = hasFocusedTextInput() ? "editable" : "other";
     routeNativeListSearchBeforeShortcut({
       event: nativeEvent,
@@ -418,6 +427,7 @@ export function useKeyboardShortcuts({
     });
   });
 
+  // Bare modifier presses drive the workspace-number badges, mirroring web keydown/keyup handling.
   const handleHardwareModifier = useStableEvent((modifierEvent: HardwareModifierEvent) => {
     if (modifierEvent.key === badgeModifierKey) {
       setBadgeModifierDown(modifierEvent.down);
