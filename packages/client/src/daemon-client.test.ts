@@ -959,6 +959,7 @@ test("sends a password containing spaces in hello without an invalid WebSocket s
   expect(transportFactory).toHaveBeenCalledWith({
     url: "ws://test",
     headers: {},
+    protocols: ["paseo.bearer64.dHdvIHdvcmRz"],
   });
   expect(JSON.parse(assertStr(mock.sent[0]))).toMatchObject({
     type: "hello",

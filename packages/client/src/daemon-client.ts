@@ -268,7 +268,9 @@ function chooseConnectionAuth(
   return {
     helloAuth,
     headers,
-    ...(password ? { protocols: [encodeWebSocketBearerProtocol(password)] } : {}),
+    ...(!localCredential && password
+      ? { protocols: [encodeWebSocketBearerProtocol(password)] }
+      : {}),
   };
 }
 
