@@ -1062,7 +1062,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
               path: z
                 .string()
                 .optional()
-                .describe("Optional directory path. Defaults to the caller's cwd."),
+                .describe(
+                  "Optional directory path. Defaults to the caller's cwd. Must already exist; this tool never creates the directory.",
+                ),
             })
             .strict(),
           z
