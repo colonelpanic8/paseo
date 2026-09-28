@@ -101,6 +101,7 @@ function createServer(agentManagerOverrides?: Record<string, unknown>) {
     ...agentManagerOverrides,
   };
   const daemonConfigStore = {
+    get: vi.fn(() => ({ push: {} })),
     onApply: vi.fn(() => () => {}),
     onChange: vi.fn(() => () => {}),
   };
