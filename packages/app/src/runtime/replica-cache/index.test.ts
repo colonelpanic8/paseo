@@ -908,12 +908,15 @@ describe("ReplicaCache", () => {
   describe("persist retry", () => {
     afterEach(() => {
       vi.useRealTimers();
+      vi.restoreAllMocks();
     });
 
     it("backs off exponentially while storage keeps failing", async () => {
       vi.useFakeTimers();
+      const warn = vi.spyOn(console, "warn").mockImplementation(vi.fn());
       const storage = new MemoryStorage();
-      storage.persistentWriteFailure = new Error("quota exceeded");
+      const error = new Error("quota exceeded");
+      storage.persistentWriteFailure = error;
       const cache = createCache(storage);
       cache.commitTimeline(SERVER_ID, "agent-1", timeline());
       const writeSeconds: number[] = [];
@@ -923,10 +926,23 @@ describe("ReplicaCache", () => {
       }
 
       expect(writeSeconds).toEqual([1, 2, 4, 8, 16]);
+      expect(warn).toHaveBeenCalledTimes(5);
+      for (const [index, retryDelayMs] of [1_000, 2_000, 4_000, 8_000, 16_000].entries()) {
+        expect(warn).toHaveBeenNthCalledWith(
+          index + 1,
+          "[ReplicaCache] Failed to persist replica rows",
+          {
+            failures: index + 1,
+            retryDelayMs,
+            error,
+          },
+        );
+      }
       storage.persistentWriteFailure = null;
       await vi.advanceTimersByTimeAsync(2_000);
       expect(storage.writes).toBe(6);
       expect(storage.rows.size).toBe(1);
+      expect(warn).toHaveBeenCalledTimes(5);
     });
   });
 });
