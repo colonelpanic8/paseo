@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { redirectSystemPath } from "@/app/+native-intent";
 import { parseDispatchLink } from "@/dispatch/dispatch-link";
 
 describe("parseDispatchLink", () => {
@@ -25,6 +26,22 @@ describe("parseDispatchLink", () => {
     "rejects %s",
     (url) => {
       expect(parseDispatchLink(url)).toBeNull();
+    },
+  );
+});
+
+describe("dispatch native routing", () => {
+  it.each(["paseo://dispatch", "paseo://dispatch?host=host%2Fa&agent=agent-1"])(
+    "opens the normal app route on a cold launch: %s",
+    (path) => {
+      expect(redirectSystemPath({ path, initial: true })).toBe("/");
+    },
+  );
+
+  it.each(["paseo://dispatch", "paseo://dispatch?host=host%2Fa&agent=agent-1"])(
+    "keeps the current screen on a warm launch: %s",
+    (path) => {
+      expect(redirectSystemPath({ path, initial: false })).toBe("");
     },
   );
 });
