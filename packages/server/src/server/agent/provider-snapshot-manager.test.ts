@@ -2652,7 +2652,6 @@ describe("provider-owned catalogue identity", () => {
     }
   });
 
-
   test("key lookup failure detaches a view from its previous shared catalogue", async () => {
     let broken = false;
     let calls = 0;
