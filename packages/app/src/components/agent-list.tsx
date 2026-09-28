@@ -162,10 +162,22 @@ function SessionRowTrailingAttention({
   );
 }
 
-function AgentPurposeSummary({ summary, agentKey }: { summary: string | null; agentKey: string }) {
+function AgentPurposeSummary({
+  summary,
+  serverId,
+  agentId,
+}: {
+  summary: string | null;
+  serverId: string;
+  agentId: string;
+}) {
   if (!summary) return null;
   return (
-    <Text style={styles.sessionSummary} numberOfLines={1} testID={`agent-row-summary-${agentKey}`}>
+    <Text
+      style={styles.sessionSummary}
+      numberOfLines={1}
+      testID={`agent-row-summary-${serverId}-${agentId}`}
+    >
       {summary}
     </Text>
   );
@@ -278,7 +290,11 @@ function SessionRow({
           />
         </View>
         {isMobile ? agentTitle : null}
-        <AgentPurposeSummary summary={purposeSummary} agentKey={agentKey} />
+        <AgentPurposeSummary
+          summary={purposeSummary}
+          serverId={agent.serverId}
+          agentId={agent.id}
+        />
         {isMobile ? (
           <View style={styles.rowMetaRow}>
             <HighlightedText
