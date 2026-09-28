@@ -25,8 +25,6 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { HighlightedText } from "@/components/ui/highlighted-text";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { findHighlightRanges } from "@/components/ui/highlighted-text-segments";
-import type { AgentSearchMatch } from "@getpaseo/protocol/messages";
-import type { MatchRange } from "@getpaseo/protocol/search/text-match";
 import { resolveAgentPurposeSummary } from "@/agents/purpose-summary";
 
 interface AgentListProps {
@@ -164,6 +162,15 @@ function SessionRowTrailingAttention({
   );
 }
 
+function AgentPurposeSummary({ summary, agentKey }: { summary: string | null; agentKey: string }) {
+  if (!summary) return null;
+  return (
+    <Text style={styles.sessionSummary} numberOfLines={1} testID={`agent-row-summary-${agentKey}`}>
+      {summary}
+    </Text>
+  );
+}
+
 function SessionRow({
   agent,
   search,
@@ -271,15 +278,7 @@ function SessionRow({
           />
         </View>
         {isMobile ? agentTitle : null}
-        {purposeSummary ? (
-          <Text
-            style={styles.sessionSummary}
-            numberOfLines={1}
-            testID={`agent-row-summary-${agent.serverId}-${agent.id}`}
-          >
-            {purposeSummary}
-          </Text>
-        ) : null}
+        <AgentPurposeSummary summary={purposeSummary} agentKey={agentKey} />
         {isMobile ? (
           <View style={styles.rowMetaRow}>
             <HighlightedText
