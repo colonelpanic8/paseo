@@ -936,10 +936,38 @@ test("sends a password containing spaces in hello without an invalid WebSocket s
   expect(transportFactory).toHaveBeenCalledWith({
     url: "ws://test",
     headers: {},
+    protocols: ["paseo.bearer64.dHdvIHdvcmRz"],
   });
   expect(JSON.parse(assertStr(mock.sent[0]))).toMatchObject({
     type: "hello",
     auth: { kind: "password", password: "two words" },
+  });
+});
+
+test("encodes passwords with WebSocket-incompatible characters as a subprotocol", async () => {
+  const mock = createMockTransport();
+  const transportFactory = vi.fn(() => mock.transport);
+  const password = "base64+/= 🔐";
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    password,
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ preserveSent: true });
+  await connected;
+  expect(transportFactory).toHaveBeenCalledWith({
+    url: "ws://test",
+    headers: {},
+    protocols: ["paseo.bearer64.YmFzZTY0Ky89IPCflJA"],
+  });
+  expect(JSON.parse(assertStr(mock.sent[0]))).toMatchObject({
+    type: "hello",
+    auth: { kind: "password", password },
   });
 });
 
@@ -1037,6 +1065,7 @@ test("advertises client capabilities in hello", async () => {
       plugin_timeline_items: true,
       workspace_setup_blocked: true,
       hello_rejection: true,
+      live_voice_cross_host_router: true,
       browser_host: {
         supportedCommands: ["list_tabs"],
         hostKind: "desktop app",
