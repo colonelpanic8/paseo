@@ -1082,6 +1082,11 @@ export interface SettingsScreenProps {
   openAddHostIntent?: string | null;
 }
 
+function settingsContentStyle(view: SettingsView) {
+  const isUsageHistory = view.kind === "section" && view.section === "usage-history";
+  return [styles.content, isUsageHistory ? styles.wideContent : null];
+}
+
 export default function SettingsScreen({ view, openAddHostIntent = null }: SettingsScreenProps) {
   const router = useRouter();
   const { t } = useTranslation();
