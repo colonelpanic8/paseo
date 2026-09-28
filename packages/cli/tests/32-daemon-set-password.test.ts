@@ -161,7 +161,10 @@ try {
     assert.strictEqual(result.configPath, writablePath);
     assert.strictEqual(writable.version, 1);
     assert.strictEqual(
-      isBearerTokenValid({ password: writable.daemon.auth.password, token: "layered-secret" }),
+      await isBearerTokenValidAsync({
+        password: writable.daemon.auth.password,
+        token: "layered-secret",
+      }),
       true,
     );
     assert.strictEqual(writable.daemon.listen, undefined);
