@@ -639,7 +639,7 @@ export function WorkspaceDraftAgentTab({
     <FileDropZone style={styles.container}>
       <ComposerDock fullscreen={isComposerFullscreen}>
         {dockContent}
-        <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
+        <View style={inputAreaWrapperStyle} onLayout={onInputAreaLayout}>
           {importPillPress && !isComposerFullscreen ? (
             <View style={styles.importPillRow}>
               <View style={styles.importPillContent}>

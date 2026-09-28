@@ -1637,7 +1637,7 @@ function ActiveAgentComposer({
     [screenBottomInset],
   );
   return (
-    <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
+    <View style={inputAreaStyle} onLayout={onInputAreaLayout}>
       <Composer
         agentId={agentId}
         serverId={serverId}

@@ -2962,6 +2962,12 @@ test("createAgent injects paseo MCP server only into provider launch config", as
     clients: {
       codex: client,
     },
+    providerDefinitions: {
+      codex: {
+        enabled: true,
+        applyToolPolicy: (config, toolPolicy) => ({ ...config, toolPolicy }),
+      },
+    },
     registry: storage,
     logger,
     mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",

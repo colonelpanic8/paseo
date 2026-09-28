@@ -40,7 +40,7 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
   }, [client, isConnected, isUnarchiving, agentId]);
 
   return (
-    <KeyboardTranslateView style={styles.container}>
+    <KeyboardTranslateView style={containerStyle}>
       <View style={styles.inputAreaContainer}>
         <View style={styles.inputAreaContent}>
           <View style={styles.calloutStack}>
