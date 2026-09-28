@@ -3158,7 +3158,10 @@ export class Session {
       return;
     }
     if (msg.enabled) {
-      notifier.watchAll({ sourceKey, emit: (update) => this.emitForSource(update, source) });
+      notifier.watchAll({
+        sourceKey,
+        emit: (update) => this.delivery.emitRetained(update, source),
+      });
     } else {
       notifier.stopWatchingAll(sourceKey);
     }
@@ -3207,12 +3210,12 @@ export class Session {
       // ignores the per-call overrides below when one applies.
       ...resolveLiveVoiceMemoryFields(msg),
       emit: (update) => {
-        this.emit({ type: "voice.live.update", payload: update });
+        this.delivery.emitRetained({ type: "voice.live.update", payload: update });
       },
       ...(crossHostRoutingAvailable
         ? {
             sendRouteRequest: (request) => {
-              this.emit(request);
+              this.delivery.emitRetained(request);
             },
           }
         : {}),
@@ -3281,7 +3284,7 @@ export class Session {
               agentId,
               requestId: msg.requestId,
               sourceKey,
-              emit: (update) => this.emitForSource(update, source),
+              emit: (update) => this.delivery.emitRetained(update, source),
             });
           },
         }
