@@ -6,6 +6,7 @@ import type {
   AgentSessionConfig,
 } from "./agent/agent-sdk-types.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
+import type { AttentionState } from "./agent/agent-manager.js";
 
 interface LoggerLike {
   child(bindings: Record<string, unknown>): LoggerLike;
@@ -106,6 +107,21 @@ export function isStoredAgentProviderAvailable(
   return isProviderRegistered(validProviders, record.provider);
 }
 
+/**
+ * Preserve the newest stored activity or state-change timestamp when a record
+ * is hydrated after restart.
+ */
+export function resolveStoredAgentUpdatedAt(record: StoredAgentRecord): string {
+  const timestamps = [record.updatedAt, record.lastActivityAt]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .map((value) => ({ raw: value, parsed: Date.parse(value) }))
+    .filter((value) => !Number.isNaN(value.parsed));
+
+  if (timestamps.length === 0) return record.updatedAt;
+  timestamps.sort((a, b) => b.parsed - a.parsed);
+  return timestamps[0].raw;
+}
+
 export function extractTimestamps(record: StoredAgentRecord): {
   createdAt: Date;
   updatedAt: Date;
@@ -118,12 +134,24 @@ export function extractTimestamps(record: StoredAgentRecord): {
   const lastMessageAt = record.lastMessageAt ?? record.lastUserMessageAt;
   return {
     createdAt: new Date(record.createdAt),
-    updatedAt: new Date(record.updatedAt),
+    updatedAt: new Date(resolveStoredAgentUpdatedAt(record)),
     lastMessageAt: lastMessageAt ? new Date(lastMessageAt) : null,
     lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
     labels: record.labels,
     workspaceId: record.workspaceId,
     owner: record.owner,
+  };
+}
+
+/** Unread state survives resume until the user explicitly reads the chat. */
+export function extractAttention(record: StoredAgentRecord): AttentionState {
+  if (!record.requiresAttention || !record.attentionReason || !record.attentionTimestamp) {
+    return { requiresAttention: false };
+  }
+  return {
+    requiresAttention: true,
+    attentionReason: record.attentionReason,
+    attentionTimestamp: new Date(record.attentionTimestamp),
   };
 }
 
