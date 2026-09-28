@@ -1866,7 +1866,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         testID="message-input-root"
         dataSet={listNavigationDataSet(ownsListNavigation)}
         onLayout={handleComposerLayout}
-        dataSet={listNavigationDataSet(ownsListNavigation)}
       >
         <MessageInputAutoFocus
           enabled={autoFocus}
