@@ -83,7 +83,6 @@ describe("Codex executable discovery", () => {
 });
 
 import { runProviderRefreshWithDeadline } from "../provider-refresh-deadline.js";
-import { ProviderIntrospectionQueue } from "../provider-introspection-queue.js";
 
 import { CodexAppServerClient } from "./codex/app-server-transport.js";
 import {
@@ -1114,7 +1113,54 @@ describe("Codex app-server provider", () => {
     expect((startCall!.params as Record<string, unknown>).ephemeral).toBeUndefined();
   });
 
-  test("keeps catalog cleanup in the queue when the deadline fires during disposal", async () => {
+  test("discovers draft skills without model lookup or conversation creation", async () => {
+    const appServer = createFakeCodexAppServer({
+      "skills/list": (params) => {
+        expect(params).toEqual({ cwds: ["/workspace/project"] });
+        return {
+          data: [
+            {
+              skills: [
+                {
+                  name: "project-review",
+                  path: "/workspace/project/SKILL.md",
+                  description: "Review this project",
+                  enabled: true,
+                },
+              ],
+            },
+          ],
+        };
+      },
+      "model/list": () => {
+        throw new Error("Command discovery must not load models");
+      },
+      "thread/start": () => {
+        throw new Error("Command discovery must not create a conversation");
+      },
+    });
+    const provider = createProviderWithFakeAppServer(appServer);
+    const createSessionSpy = vi.spyOn(provider, "createSession");
+    const kill = vi.spyOn(appServer.child, "kill");
+    const commands = await provider.listCommands({ provider: "codex", cwd: "/workspace/project" });
+    expect(commands).toContainEqual({
+      name: "project-review",
+      description: "Review this project",
+      argumentHint: "",
+      kind: "skill",
+    });
+    expect(commands).toContainEqual({
+      name: "compact",
+      description: "Summarize conversation to prevent hitting the context limit",
+      argumentHint: "",
+      kind: "command",
+    });
+    expect(createSessionSpy).not.toHaveBeenCalled();
+    expect(kill).toHaveBeenCalledWith("SIGTERM");
+    appServer.assertNoErrors();
+  });
+
+  test("waits for catalog disposal when the deadline fires during cleanup", async () => {
     vi.useFakeTimers();
     const appServer = createFakeCodexAppServer();
     const provider = createProviderWithFakeAppServer(appServer);
@@ -1126,33 +1172,36 @@ describe("Codex app-server provider", () => {
       disposalStarted();
       return true;
     });
-    const queue = new ProviderIntrospectionQueue();
-    let nextStarted = false;
-    const refresh = queue.run("codex", () =>
-      runProviderRefreshWithDeadline({
-        label: "Codex",
-        timeoutMs: 100,
-        operation: (context) => provider.fetchCatalog({ scope: "global", force: false }, context),
-      }),
-    );
-    const rejected = expect(refresh).rejects.toThrow("Timed out refreshing Codex after 100ms");
-    const next = queue.run("codex", async () => {
-      nextStarted = true;
+    let settled = false;
+    const refresh = runProviderRefreshWithDeadline({
+      label: "Codex",
+      timeoutMs: 100,
+      operation: (context) => provider.fetchCatalog({ scope: "global", force: false }, context),
     });
+    const rejected = expect(refresh).rejects.toThrow("Timed out refreshing Codex after 100ms");
+    void refresh.then(
+      () => {
+        settled = true;
+        return undefined;
+      },
+      () => {
+        settled = true;
+        return undefined;
+      },
+    );
     try {
       await disposing;
       await vi.advanceTimersByTimeAsync(100);
-      expect(nextStarted).toBe(false);
+      expect(settled).toBe(false);
       appServer.child.exitCode = 0;
       appServer.child.emit("exit", 0, null);
       await rejected;
-      await next;
-      expect(nextStarted).toBe(true);
+      expect(settled).toBe(true);
       appServer.assertNoErrors();
     } finally {
       appServer.child.exitCode = 0;
       appServer.child.emit("exit", 0, null);
-      await Promise.allSettled([refresh, next, rejected]);
+      await Promise.allSettled([refresh, rejected]);
       vi.useRealTimers();
     }
   });

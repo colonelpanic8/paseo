@@ -26,6 +26,7 @@ import {
   getAgentStreamEventTurnId,
   type AgentCapabilityFlags,
   type AgentClient,
+  type ProviderRefreshContext,
   type AgentCreateSessionOptions,
   type AgentResumePurpose,
   type AgentResumeSessionOptions,
@@ -95,7 +96,6 @@ import {
   DEFAULT_PROVIDER_REFRESH_TIMEOUT_MS,
   runProviderRefreshWithDeadline,
 } from "./provider-refresh-deadline.js";
-import { ProviderIntrospectionQueue } from "./provider-introspection-queue.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -325,7 +325,6 @@ export interface AgentManagerOptions {
   pluginLifecycle?: PluginLifecycle;
   clients?: ProviderClientMap;
   providerDefinitions?: ProviderEnabledMap;
-  providerIntrospectionQueue?: ProviderIntrospectionQueue;
   idFactory?: () => string;
   registry?: AgentStorage;
   onAgentAttention?: AgentAttentionCallback;
@@ -725,7 +724,6 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
 export class AgentManager {
   private readonly pluginLifecycle: PluginLifecycle | undefined;
   private readonly clients = new Map<AgentProvider, AgentClient>();
-  private readonly providerIntrospectionQueue: ProviderIntrospectionQueue;
   private readonly inFlightDraftCommands = new Map<string, Promise<AgentSlashCommand[]>>();
   private readonly inFlightDraftFeatures = new Map<string, Promise<AgentFeature[]>>();
   private readonly providerEnabled = new Map<AgentProvider, boolean>();
@@ -768,8 +766,6 @@ export class AgentManager {
 
   constructor(options: AgentManagerOptions) {
     this.pluginLifecycle = options.pluginLifecycle;
-    this.providerIntrospectionQueue =
-      options.providerIntrospectionQueue ?? new ProviderIntrospectionQueue();
     this.idFactory = options.idFactory ?? (() => randomUUID());
     this.registry = options.registry;
     this.durableTimelineStore = options.durableTimelineStore;
@@ -1116,35 +1112,46 @@ export class AgentManager {
         );
       }
 
-      return await this.providerIntrospectionQueue.run(requestedConfig.provider, async () => {
-        if (client.listCommands) {
-          return await client.listCommands(requestedConfig);
-        }
+      return await runProviderRefreshWithDeadline({
+        label: `${requestedConfig.provider} commands`,
+        timeoutMs: DEFAULT_PROVIDER_REFRESH_TIMEOUT_MS,
+        operation: async (context) => {
+          if (client.listCommands) {
+            return await client.listCommands(requestedConfig, context);
+          }
 
-        const normalizedConfig = await this.resolveDraftModel(requestedConfig);
-        if (!normalizedConfig.model) {
-          throw new Error(
-            `Provider '${normalizedConfig.provider}' has no models available, so its commands cannot be listed.`,
-          );
-        }
-        const session = await client.createSession(normalizedConfig);
-        try {
-          if (!session.listCommands) {
+          const normalizedConfig = await this.resolveDraftModel(requestedConfig, context);
+          context.signal.throwIfAborted();
+          if (!normalizedConfig.model) {
             throw new Error(
-              `Provider '${normalizedConfig.provider}' does not support listing commands`,
+              `Provider '${normalizedConfig.provider}' has no models available, so its commands cannot be listed.`,
             );
           }
-          return await session.listCommands();
-        } finally {
+          const session = await client.createSession(normalizedConfig);
+          let closing: Promise<void> | undefined;
+          const close = () => (closing ??= session.close());
+          const unregister = context.registerAbortCleanup(close);
           try {
-            await session.close();
-          } catch (error) {
-            this.logger.warn(
-              { err: error, provider: normalizedConfig.provider },
-              "Failed to close draft command listing session",
-            );
+            context.signal.throwIfAborted();
+            if (!session.listCommands) {
+              throw new Error(
+                `Provider '${normalizedConfig.provider}' does not support listing commands`,
+              );
+            }
+            return await session.listCommands();
+          } finally {
+            try {
+              await close();
+            } catch (error) {
+              this.logger.warn(
+                { err: error, provider: normalizedConfig.provider },
+                "Failed to close draft command listing session",
+              );
+            } finally {
+              unregister();
+            }
           }
-        }
+        },
       });
     });
   }
@@ -1164,25 +1171,23 @@ export class AgentManager {
         );
       }
 
-      return await this.providerIntrospectionQueue.run(normalizedConfig.provider, async () => {
-        if (client.listFeatures) {
-          return await client.listFeatures(normalizedConfig);
-        }
+      if (client.listFeatures) {
+        return await client.listFeatures(normalizedConfig);
+      }
 
-        const session = await client.createSession(normalizedConfig);
+      const session = await client.createSession(normalizedConfig);
+      try {
+        return session.features ?? [];
+      } finally {
         try {
-          return session.features ?? [];
-        } finally {
-          try {
-            await session.close();
-          } catch (error) {
-            this.logger.warn(
-              { err: error, provider: normalizedConfig.provider },
-              "Failed to close draft feature listing session",
-            );
-          }
+          await session.close();
+        } catch (error) {
+          this.logger.warn(
+            { err: error, provider: normalizedConfig.provider },
+            "Failed to close draft feature listing session",
+          );
         }
-      });
+      }
     });
   }
 
@@ -1190,17 +1195,18 @@ export class AgentManager {
     return JSON.stringify(config);
   }
 
-  private async resolveDraftModel(config: AgentSessionConfig): Promise<AgentSessionConfig> {
+  private async resolveDraftModel(
+    config: AgentSessionConfig,
+    context: ProviderRefreshContext,
+  ): Promise<AgentSessionConfig> {
     if (config.model) {
       return config;
     }
     const client = this.requireClient(config.provider);
-    const catalog = await runProviderRefreshWithDeadline({
-      label: config.provider,
-      timeoutMs: DEFAULT_PROVIDER_REFRESH_TIMEOUT_MS,
-      operation: (context) =>
-        client.fetchCatalog({ scope: "workspace", cwd: config.cwd, force: false }, context),
-    });
+    const catalog = await client.fetchCatalog(
+      { scope: "workspace", cwd: config.cwd, force: false },
+      context,
+    );
     const model = (catalog.models.find((entry) => entry.isDefault) ?? catalog.models[0])?.id;
     return model ? { ...config, model } : config;
   }
