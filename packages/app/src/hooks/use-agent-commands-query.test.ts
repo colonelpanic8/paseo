@@ -1,10 +1,21 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { createElement } from "react";
+import { act, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { describe, expect, it, vi } from "vitest";
 import {
   type AgentCommandsClient,
   type DraftCommandConfig,
   fetchAgentCommands,
-  resolveCommandsStaleTime,
+  useAgentCommandsQuery,
 } from "./use-agent-commands-query";
+
+const runtime = vi.hoisted(() => ({ client: { listCommands: vi.fn() } }));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => runtime.client,
+  useHostRuntimeIsConnected: () => true,
+}));
 
 type ListCommands = AgentCommandsClient["listCommands"];
 type ListCommandsResult = Awaited<ReturnType<ListCommands>>;
@@ -97,20 +108,52 @@ describe("draft command failures", () => {
   });
 });
 
-describe("resolveCommandsStaleTime", () => {
-  it("keeps a loaded draft command list indefinitely", () => {
-    expect(
-      resolveCommandsStaleTime({
-        isDraft: true,
-        commands: [{ name: "review", description: "", argumentHint: "" }],
+it("refetches an empty draft result when the slash menu reopens after it goes stale", async () => {
+  vi.useFakeTimers();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+  const commands = [{ name: "review", description: "", argumentHint: "" }];
+  runtime.client.listCommands.mockResolvedValueOnce(commandsPayload([]));
+  runtime.client.listCommands.mockResolvedValue(commandsPayload(commands));
+  const hook = renderHook(
+    ({ enabled }) =>
+      useAgentCommandsQuery({
+        serverId: "server-1",
+        agentId: "",
+        draftConfig: { provider: "codex", cwd: "/repo" },
+        enabled,
       }),
-    ).toBe(Number.POSITIVE_INFINITY);
-  });
+    {
+      initialProps: { enabled: true },
+      wrapper: ({ children }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children),
+    },
+  );
+  try {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(hook.result.current.commands).toEqual([]);
+    expect(hook.result.current.isLoading).toBe(false);
+    hook.rerender({ enabled: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    hook.rerender({ enabled: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(hook.result.current.commands).toEqual(commands);
+    expect(runtime.client.listCommands).toHaveBeenCalledTimes(2);
 
-  it("lets an empty draft command list go stale so it is retried", () => {
-    const staleTime = resolveCommandsStaleTime({ isDraft: true, commands: [] });
-
-    expect(staleTime).toBeLessThan(Number.POSITIVE_INFINITY);
-    expect(staleTime).toBeGreaterThan(0);
-  });
+    hook.rerender({ enabled: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    hook.rerender({ enabled: true });
+    expect(runtime.client.listCommands).toHaveBeenCalledTimes(2);
+  } finally {
+    hook.unmount();
+    queryClient.clear();
+    vi.useRealTimers();
+  }
 });
