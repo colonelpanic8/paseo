@@ -8,6 +8,7 @@ import {
   type ProviderRegistration,
   type ProviderStatus,
 } from "@getpaseo/plugin/server/provider";
+import { withSessionEnvironment } from "./environment.js";
 import { serveArgs } from "./options.js";
 import { Usage } from "./usage.js";
 import { execFile } from "node:child_process";
@@ -132,10 +133,8 @@ function connect(
       sessions.set(input.sessionId, session);
       try {
         await session.open(input);
-        usage.attach(
-          input.sessionId,
-          { ...launch, env: { ...launch.env, ...input.config.env } },
-          () => session.readUsage(),
+        usage.attach(input.sessionId, withSessionEnvironment(launch, input.config.env), () =>
+          session.readUsage(),
         );
       } catch (error) {
         sessions.delete(input.sessionId);
