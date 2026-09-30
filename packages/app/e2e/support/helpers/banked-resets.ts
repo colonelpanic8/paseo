@@ -46,6 +46,7 @@ interface BankedResetScenario {
 
 export async function openBankedResetManagement(page: Page, options: BankedResetScenario = {}) {
   const requests: Array<{ creditId: string; idempotencyKey: string }> = [];
+  let consumeSettled = false;
   let finishConsume = () => {};
   const pendingConsume = new Promise<void>((resolve) => {
     finishConsume = resolve;
@@ -81,31 +82,36 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
     ];
   }
   const fixture = await installUsageReportsFixture(page, {
-    lists: payloads.map((payload) =>
-      payload.providers.map((provider) => ({
-        id: `${provider.providerId}:default`,
-        sourceId: provider.providerId,
-        sourceLabel: provider.displayName,
-        account: {},
-        fetchedAt: payload.fetchedAt,
-        report: {
-          status: provider.status,
-          planLabel: provider.planLabel ?? undefined,
-          windows: provider.windows,
-          bankedResets: provider.bankedResets,
-          error: provider.error ?? undefined,
-        },
-      })),
-    ),
+    lists: [
+      () => {
+        const payload = consumeSettled ? payloads[payloads.length - 1]! : initial;
+        return payload.providers.map((provider) => ({
+          id: `${provider.providerId}:default`,
+          sourceId: provider.providerId,
+          sourceLabel: provider.displayName,
+          account: {},
+          fetchedAt: payload.fetchedAt,
+          report: {
+            status: provider.status,
+            planLabel: provider.planLabel ?? undefined,
+            windows: provider.windows,
+            bankedResets: provider.bankedResets,
+            error: provider.error ?? undefined,
+          },
+        }));
+      },
+    ],
     supportsBankedResets: options.supportsBankedResets,
     consume: async (request) => {
       requests.push(request);
       if (options.failure) {
+        consumeSettled = true;
         if (requests.length === 1)
           return { error: "Codex request timed out. Refresh usage before retrying." };
         return { outcome: "already_redeemed" };
       }
       await pendingConsume;
+      consumeSettled = true;
       return { outcome: "reset" };
     },
   });
