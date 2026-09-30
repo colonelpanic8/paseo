@@ -1,7 +1,11 @@
 import { searchTimeline } from "./agent/chat-search/index.js";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { BrowserAutomationHostCapabilitySchema } from "@getpaseo/protocol/browser-automation/capabilities";
-import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
+import type {
+  SessionEventSubscription,
+  UsageReportEntry,
+  ProviderUsage,
+} from "@getpaseo/protocol/messages";
 import { relative } from "node:path";
 import { isAbsolute } from "node:path";
 import { CreationService } from "./creation/index.js";
@@ -175,6 +179,7 @@ import {
 } from "./session/checkout/git-metadata-generator.js";
 import { ScheduleSession } from "./session/schedule/schedule-session.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
+import { UsageSession } from "./session/usage/usage-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
 import { ProjectConfigSession } from "./session/project-config/project-config-session.js";
@@ -226,7 +231,6 @@ import {
   type GitHubService,
 } from "../services/github-service.js";
 import type { ForgeService } from "../services/forge-service.js";
-import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import type { UsageHistoryService } from "../services/usage-history/service.js";
 import {
   resolveWorkspaceRootAgent,
@@ -507,6 +511,11 @@ export interface SessionOptions {
     subscribeSettings?(listener: (pluginId: string, settingsId: string) => void): () => void;
     catalog(): Array<{ id: string; clientBundle: string }>;
     invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown>;
+    listUsageReports(options?: {
+      forceRefresh?: boolean;
+      reportIds?: string[];
+    }): Promise<UsageReportEntry[]>;
+    listLegacyUsage(): Promise<{ fetchedAt: string; providers: ProviderUsage[] }>;
   };
   orchestrationSkills?: import("./orchestration-skills/index.js").OrchestrationSkills;
   mcpBaseUrl?: string | null;
@@ -515,7 +524,6 @@ export interface SessionOptions {
   tts: Resolvable<TextToSpeechProvider | null>;
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
-  providerUsageService: ProviderUsageService;
   usageHistoryService: UsageHistoryService;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
@@ -780,6 +788,7 @@ export class Session {
   private readonly checkoutSession: CheckoutSession;
   private readonly scheduleSession: ScheduleSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
+  private readonly usageSession: UsageSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
   private readonly agentConfigSession: AgentConfigSession;
   private readonly projectConfigSession: ProjectConfigSession;
@@ -829,7 +838,6 @@ export class Session {
       tts,
       terminalManager,
       providerSnapshotManager,
-      providerUsageService,
       usageHistoryService,
       serviceProxy,
       scriptRuntimeStore,
@@ -987,8 +995,12 @@ export class Session {
         listDraftFeatures: (config) => this.agentManager.listDraftFeatures(config),
       },
       providerSnapshotManager,
-      providerUsageService,
-      usageHistoryService,
+      logger: this.sessionLogger,
+    });
+    this.usageSession = new UsageSession({
+      emit: (msg) => this.emit(msg),
+      runtime: pluginRuntime,
+      historyService: usageHistoryService,
       logger: this.sessionLogger,
     });
     this.agentConfigSession = new AgentConfigSession({
@@ -3000,9 +3012,11 @@ export class Session {
       case "provider_diagnostic_request":
         return this.providerCatalogSession.handleProviderDiagnosticRequest(msg);
       case "provider.usage.list.request":
-        return this.providerCatalogSession.handleProviderUsageListRequest(msg);
+        return this.usageSession.handleLegacyList(msg);
+      case "usage.list_reports.request":
+        return this.usageSession.handleListReports(msg);
       case "provider.usage_history.read.request":
-        return this.providerCatalogSession.handleProviderUsageHistoryReadRequest(msg);
+        return this.usageSession.handleProviderUsageHistoryReadRequest(msg);
       default:
         return undefined;
     }
