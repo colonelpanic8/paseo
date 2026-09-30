@@ -1,0 +1,120 @@
+import type { CodexBankedResetOutcome } from "@getpaseo/protocol/messages";
+import type pino from "pino";
+import type { ProviderUsage, UsageReportEntry } from "@getpaseo/protocol/messages";
+import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
+
+export interface UsageSessionOptions {
+  emit(message: SessionOutboundMessage): void;
+  runtime?: {
+    consumeCodexBankedReset?(input: {
+      reportId?: string;
+      creditId: string;
+      idempotencyKey: string;
+    }): Promise<CodexBankedResetOutcome>;
+    listUsageReports(options: {
+      forceRefresh?: boolean;
+      reportIds?: string[];
+    }): Promise<UsageReportEntry[]>;
+    listLegacyUsage(options?: {
+      forceRefresh?: boolean;
+    }): Promise<{ fetchedAt: string; providers: ProviderUsage[] }>;
+  };
+  logger: pino.Logger;
+}
+
+export class UsageSession {
+  constructor(private readonly options: UsageSessionOptions) {}
+
+  async handleListReports(
+    msg: Extract<SessionInboundMessage, { type: "usage.list_reports.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.options.runtime) throw new Error("Plugin runtime is unavailable");
+      const reports = await this.options.runtime.listUsageReports({
+        forceRefresh: msg.forceRefresh,
+        reportIds: msg.reportIds,
+      });
+      this.options.emit({
+        type: "usage.list_reports.response",
+        payload: { requestId: msg.requestId, reports },
+      });
+    } catch (error) {
+      this.emitError(msg, error, "usage_list_reports_failed");
+    }
+  }
+
+  // COMPAT(providerUsageList): added in v0.9.3, remove after 2027-03-26.
+  async handleLegacyList(
+    msg: Extract<SessionInboundMessage, { type: "provider.usage.list.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.options.runtime) throw new Error("Plugin runtime is unavailable");
+      const usage = await this.options.runtime.listLegacyUsage({ forceRefresh: msg.forceRefresh });
+      this.options.emit({
+        type: "provider.usage.list.response",
+        payload: {
+          requestId: msg.requestId,
+          fetchedAt: usage.fetchedAt,
+          providers: usage.providers,
+        },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.options.logger.error({ err }, "Failed to list provider usage");
+      this.options.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Failed to list provider usage: ${err.message}`,
+          code: "provider_usage_list_failed",
+        },
+      });
+    }
+  }
+
+  async handleCodexBankedResetConsumeRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.codex.consume_banked_reset.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.options.runtime?.consumeCodexBankedReset)
+        throw new Error("Codex reset actions are unavailable");
+      const outcome = await this.options.runtime!.consumeCodexBankedReset({
+        ...(msg.reportId ? { reportId: msg.reportId } : {}),
+        creditId: msg.creditId,
+        idempotencyKey: msg.idempotencyKey,
+      });
+      this.options.emit({
+        type: "provider.codex.consume_banked_reset.response",
+        payload: { requestId: msg.requestId, outcome },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.options.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Could not use banked reset: ${message}`,
+          code: "codex_banked_reset_failed",
+        },
+      });
+    }
+  }
+
+  private emitError(
+    msg: Extract<SessionInboundMessage, { type: "usage.list_reports.request" }>,
+    error: unknown,
+    code: string,
+  ): void {
+    this.options.emit({
+      type: "rpc_error",
+      payload: {
+        requestId: msg.requestId,
+        requestType: msg.type,
+        error: error instanceof Error ? error.message : String(error),
+        code,
+      },
+    });
+  }
+}

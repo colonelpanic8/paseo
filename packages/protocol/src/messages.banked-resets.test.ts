@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   ProviderUsageSchema,
+  UsageReportSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
 } from "./messages.js";
@@ -38,6 +39,13 @@ test("banked reset metadata preserves unknown future statuses and types", () => 
     },
   };
   expect(ProviderUsageSchema.parse(usage)).toEqual(usage);
+  expect(
+    UsageReportSchema.parse({
+      status: usage.status,
+      windows: [],
+      bankedResets: usage.bankedResets,
+    }),
+  ).toEqual({ status: usage.status, windows: [], bankedResets: usage.bankedResets });
 });
 
 test("banked reset RPCs parse and reject empty redemption identifiers", () => {
@@ -48,6 +56,9 @@ test("banked reset RPCs parse and reject empty redemption identifiers", () => {
     idempotencyKey: "attempt-1",
   };
   expect(SessionInboundMessageSchema.parse(request)).toEqual(request);
+  expect(
+    SessionInboundMessageSchema.parse({ ...request, reportId: "codex:provider.codex-work" }),
+  ).toEqual({ ...request, reportId: "codex:provider.codex-work" });
   expect(SessionInboundMessageSchema.safeParse({ ...request, creditId: "" }).success).toBe(false);
   expect(SessionInboundMessageSchema.safeParse({ ...request, idempotencyKey: "" }).success).toBe(
     false,

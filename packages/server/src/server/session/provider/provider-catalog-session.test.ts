@@ -14,7 +14,6 @@ import {
   type ProviderSnapshotTransition,
 } from "../../agent/provider-snapshot-manager.js";
 import type { ProviderSnapshotEntry } from "../../agent/agent-sdk-types.js";
-import { ProviderUsageService } from "../../../services/quota-fetcher/service.js";
 import { expandProviderSnapshot } from "@getpaseo/protocol/provider-snapshot-codec";
 
 type SnapshotChangeHandler = (transition: ProviderSnapshotTransition) => void;
@@ -24,7 +23,6 @@ interface MakeOptions {
   supportsCustomModeIcons?: boolean;
   supportsCompactProviderSnapshots?: boolean;
   snapshot?: Partial<ProviderSnapshotManager>;
-  usage?: { [K in keyof ProviderUsageService]?: unknown };
   host?: Partial<ProviderCatalogSessionHost>;
 }
 
@@ -73,7 +71,6 @@ function makeSubsystem(options: MakeOptions = {}) {
   const subsystem = new ProviderCatalogSession({
     host,
     providerSnapshotManager,
-    providerUsageService: createStub<ProviderUsageService>(options.usage ?? {}),
     logger: pino({ level: "silent" }),
   });
   function pushSnapshotChange(
@@ -299,25 +296,6 @@ describe("ProviderCatalogSession", () => {
     });
   });
 
-  it("surfaces a usage-list failure as an rpc_error envelope", async () => {
-    const { subsystem, emitted } = makeSubsystem({
-      usage: {
-        listUsage: async () => {
-          throw new Error("quota service down");
-        },
-      },
-    });
-
-    await subsystem.handleProviderUsageListRequest({
-      type: "provider.usage.list.request",
-      requestId: "u1",
-    });
-
-    const err = findByType(emitted, "rpc_error");
-    expect(err?.payload.code).toBe("provider_usage_list_failed");
-    expect(err?.payload.requestId).toBe("u1");
-  });
-
   it("surfaces a feature-list failure inline, not as an rpc_error", async () => {
     const { subsystem, emitted } = makeSubsystem({
       host: {
@@ -388,10 +366,6 @@ it("announces shared content without retransmitting models or hashing discovery 
     new ProviderCatalogSession({
       providerSnapshotManager: manager,
       logger: pino({ level: "silent" }),
-      providerUsageService: new ProviderUsageService({
-        logger: pino({ level: "silent" }),
-        fetchers: [],
-      }),
       host: {
         emit(message) {
           emitted.push(message);
@@ -673,51 +647,3 @@ it.each(["full", "embedded", "references"])(
     client.subsystem.dispose();
   },
 );
-
-it("forwards banked reset redemption and correlates the outcome", async () => {
-  const consumeCodexBankedReset = vi.fn(async () => "nothing_to_reset");
-  const { subsystem, emitted } = makeSubsystem({ usage: { consumeCodexBankedReset } });
-  await subsystem.handleCodexBankedResetConsumeRequest({
-    type: "provider.codex.consume_banked_reset.request",
-    requestId: "request-1",
-    creditId: "reset-1",
-    idempotencyKey: "attempt-1",
-  });
-  expect(consumeCodexBankedReset).toHaveBeenCalledWith({
-    creditId: "reset-1",
-    idempotencyKey: "attempt-1",
-  });
-  expect(emitted).toEqual([
-    {
-      type: "provider.codex.consume_banked_reset.response",
-      payload: { requestId: "request-1", outcome: "nothing_to_reset" },
-    },
-  ]);
-});
-
-it("returns a correlated error when banked reset redemption fails", async () => {
-  const { subsystem, emitted } = makeSubsystem({
-    usage: {
-      consumeCodexBankedReset: async () => {
-        throw new Error("Request timed out");
-      },
-    },
-  });
-  await subsystem.handleCodexBankedResetConsumeRequest({
-    type: "provider.codex.consume_banked_reset.request",
-    requestId: "request-1",
-    creditId: "reset-1",
-    idempotencyKey: "attempt-1",
-  });
-  expect(emitted).toEqual([
-    {
-      type: "rpc_error",
-      payload: {
-        requestId: "request-1",
-        requestType: "provider.codex.consume_banked_reset.request",
-        error: "Could not use banked reset: Request timed out",
-        code: "codex_banked_reset_failed",
-      },
-    },
-  ]);
-});

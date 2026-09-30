@@ -1,7 +1,8 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { gotoAppShell, openSettings } from "./app";
-import { installProviderUsageFixture } from "./provider-usage";
+import { installUsageReportsFixture } from "./usage-reports";
+import type { ProviderUsage } from "@getpaseo/protocol/messages";
 import { getServerId } from "./server-id";
 import { openCompactSettings, openSettingsHostSection } from "./settings";
 
@@ -58,7 +59,7 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
       { ...bankedReset, id: "reset-4", supportedByPlan: false },
     ];
   }
-  let payloads: Parameters<typeof installProviderUsageFixture>[1] = options.failure
+  let payloads: Array<{ fetchedAt: string; providers: ProviderUsage[] }> = options.failure
     ? [initial]
     : [initial, codexUsage(true)];
   if (options.failure === "reset-and-usage") {
@@ -79,7 +80,23 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
       },
     ];
   }
-  const fixture = await installProviderUsageFixture(page, payloads, {
+  const fixture = await installUsageReportsFixture(page, {
+    lists: payloads.map((payload) =>
+      payload.providers.map((provider) => ({
+        id: `${provider.providerId}:default`,
+        sourceId: provider.providerId,
+        sourceLabel: provider.displayName,
+        account: {},
+        fetchedAt: payload.fetchedAt,
+        report: {
+          status: provider.status,
+          planLabel: provider.planLabel ?? undefined,
+          windows: provider.windows,
+          bankedResets: provider.bankedResets,
+          error: provider.error ?? undefined,
+        },
+      })),
+    ),
     supportsBankedResets: options.supportsBankedResets,
     consume: async (request) => {
       requests.push(request);
@@ -97,7 +114,7 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
   if (options.narrow) await openCompactSettings(page, buildOpenProjectRoute());
   else await openSettings(page);
   await openSettingsHostSection(page, getServerId(), "usage");
-  const card = page.getByTestId("provider-usage-card");
+  const card = page.getByTestId("usage-report-codex:default");
   const useReset = card.getByRole("button", { name: "Use reset", exact: true });
   return {
     async expectAvailable() {
@@ -123,13 +140,14 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
       finishConsume();
     },
     async expectUsed() {
-      await fixture.waitForRequestCount(2);
+      await fixture.waitForListRequests(2);
       await expect(
         card.getByText("Banked reset used. Codex usage limits have been reset."),
       ).toBeVisible();
       await expect(card.getByText("0 available", { exact: true })).toBeVisible();
-      await expect(card.getByText("Used", { exact: true })).toBeVisible();
-      await expect(card.getByText("0%", { exact: true })).toBeVisible();
+      const resetRow = card.getByText("Referral reward", { exact: true }).locator("../..");
+      await expect(resetRow.getByText("Used", { exact: true })).toBeVisible();
+      await expect(card.getByText(/0%(?: left)?$/, { exact: false })).toBeVisible();
       expect(requests).toHaveLength(1);
     },
     async expectRetryableError() {
