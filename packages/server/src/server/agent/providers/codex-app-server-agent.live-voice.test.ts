@@ -67,7 +67,7 @@ function createSession(
     liveVoiceEnabled,
     codexVersion,
   ) as unknown as CodexLiveVoiceTestSession;
-  session.connected = true;
+  (session as unknown as { connectionState: "connected" }).connectionState = "connected";
   session.currentThreadId = THREAD_ID;
   session.activeForegroundTurnId = null;
   session.client = {

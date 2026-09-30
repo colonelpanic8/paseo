@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { isNative } from "@/constants/platform";
-import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useLiveVoiceHostAvailability } from "@/live-voice/live-voice-availability";
 import { useLiveVoiceBackendModelOptions } from "@/live-voice/live-voice-backend-model-catalog";
 import { useLiveVoiceVoiceOptions } from "@/hooks/use-live-voice-voice-options";

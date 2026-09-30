@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
-import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";
 import { resolveLiveVoiceStatusLabel } from "@/live-voice/live-voice-call-ui";
