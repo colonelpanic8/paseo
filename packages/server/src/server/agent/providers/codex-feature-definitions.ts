@@ -1,44 +1,33 @@
 import type { AgentFeature, AgentFeatureToggle } from "../agent-sdk-types.js";
 
-// Codex Fast is distinct from API Priority processing. Keep model support aligned with
-// https://developers.openai.com/codex/speed and https://developers.openai.com/codex/models.
-const CODEX_FAST_MODE_SUPPORTED_MODELS = new Set([
-  "gpt-6-astra",
-  "gpt-6-sol",
-  "gpt-6-luna",
-  "gpt-5.6",
-  "gpt-5.6-sol",
-  "gpt-5.6-terra",
-  "gpt-5.6-luna",
-  "gpt-5.5",
-  "gpt-5.4",
-]);
-export const CODEX_FAST_SPEED_TIER = "fast";
+import { z } from "zod";
 
-export interface CodexModelServiceTier {
-  id: string;
-  name?: string;
-  description?: string;
+export const CodexServiceTierSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+});
+export type CodexServiceTier = z.infer<typeof CodexServiceTierSchema>;
+
+function buildCodexSpeedFeature(tiers: CodexServiceTier[], value: string): AgentFeature[] {
+  if (tiers.length === 0) return [];
+  return [
+    {
+      type: "select",
+      id: "service_tier",
+      label: "Speed",
+      description: "Choose processing speed. Faster tiers increase usage.",
+      tooltip: "Select speed",
+      icon: "zap",
+      desktopTrigger: "icon",
+      value,
+      options: [
+        { id: "default", label: "Normal", isDefault: true },
+        ...tiers.map((tier) => ({ id: tier.id, label: tier.name })),
+      ],
+    },
+  ];
 }
-
-export interface CodexModelSpeedInfo {
-  additionalSpeedTiers: string[];
-  serviceTiers: CodexModelServiceTier[];
-}
-
-export interface CodexFastModeAvailability {
-  available: boolean;
-  description?: string;
-}
-
-export const CODEX_FAST_MODE_FEATURE: Omit<AgentFeatureToggle, "value"> = {
-  type: "toggle",
-  id: "fast_mode",
-  label: "Fast",
-  description: "Priority inference at increased usage",
-  tooltip: "Toggle fast mode",
-  icon: "zap",
-};
 
 export const CODEX_PLAN_MODE_FEATURE: Omit<AgentFeatureToggle, "value"> = {
   type: "toggle",
@@ -58,64 +47,24 @@ export const CODEX_CONTEXT_NOTES_FEATURE: Omit<AgentFeatureToggle, "value"> = {
   icon: "notebook-pen",
 };
 
-function normalizeCodexModelId(modelId: string | null | undefined): string | null {
-  const normalized = typeof modelId === "string" ? modelId.trim() : "";
-  return normalized.length > 0 ? normalized : null;
-}
-
-export function codexModelSupportsFastMode(modelId: string | null | undefined): boolean {
-  const normalizedModelId = normalizeCodexModelId(modelId);
-  if (!normalizedModelId) {
-    return false;
-  }
-  return CODEX_FAST_MODE_SUPPORTED_MODELS.has(normalizedModelId);
-}
-
-export function resolveCodexFastModeAvailability(
-  modelId: string | null | undefined,
-  speedInfo: CodexModelSpeedInfo | undefined,
-): CodexFastModeAvailability {
-  if (!speedInfo) {
-    return { available: codexModelSupportsFastMode(modelId) };
-  }
-  const available = speedInfo.additionalSpeedTiers.includes(CODEX_FAST_SPEED_TIER);
-  if (!available) {
-    return { available: false };
-  }
-  const description = speedInfo.serviceTiers.find(
-    (tier) => tier.id === "priority" || tier.name === "Fast",
-  )?.description;
-  return description ? { available, description } : { available };
-}
-
 export function buildCodexFeatures(input: {
-  fastMode: CodexFastModeAvailability;
-  fastModeEnabled: boolean;
+  serviceTiers: CodexServiceTier[];
+  serviceTier: string;
   planModeEnabled: boolean;
   contextNotesEnabled: boolean;
   planModeAvailable?: boolean;
 }): AgentFeature[] {
-  const features: AgentFeature[] = [];
-
-  if (input.fastMode.available) {
-    features.push({
-      ...CODEX_FAST_MODE_FEATURE,
-      ...(input.fastMode.description ? { description: input.fastMode.description } : {}),
-      value: input.fastModeEnabled,
-    });
-  }
-
+  const features = buildCodexSpeedFeature(input.serviceTiers, input.serviceTier);
   if (input.planModeAvailable !== false) {
-    features.push({
-      ...CODEX_PLAN_MODE_FEATURE,
-      value: input.planModeEnabled,
-    });
+    features.push({ ...CODEX_PLAN_MODE_FEATURE, value: input.planModeEnabled });
   }
-
-  features.push({
-    ...CODEX_CONTEXT_NOTES_FEATURE,
-    value: input.contextNotesEnabled,
-  });
-
+  features.push({ ...CODEX_CONTEXT_NOTES_FEATURE, value: input.contextNotesEnabled });
   return features;
+}
+
+export function readCodexServiceTier(values: Record<string, unknown> | undefined): string | null {
+  const tier = values?.service_tier;
+  if (typeof tier === "string") return tier;
+  // COMPAT(codexFastPreference): added in v0.10.0, remove after 2027-03-29 once saved Fast preferences have migrated.
+  return values?.fast_mode ? "fast" : null;
 }
