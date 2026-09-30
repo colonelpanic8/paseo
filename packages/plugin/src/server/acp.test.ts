@@ -239,6 +239,58 @@ lines.on("line", (line) => {
 });`;
 
 describe("runAcpProvider", () => {
+  it("spawns the daemon-resolved launch for probes, catalogues, listing, and sessions", async () => {
+    const executable = await fakeAcp(`
+if (process.env.LAUNCH_TOKEN !== "resolved" || process.env.CLAUDECODE || process.env.PASEO_NODE_ENV) process.exit(1);
+const readline = require("node:readline");
+const lines = readline.createInterface({ input: process.stdin });
+const send = (message) => process.stdout.write(JSON.stringify(message) + "\\n");
+lines.on("line", (line) => {
+  const message = JSON.parse(line);
+  let result;
+  if (message.method === "session/new" && process.env.SESSION_TOKEN && process.env.REMOVE_ME) process.exit(1);
+  if (message.method === "initialize") result = { protocolVersion: message.params.protocolVersion, agentCapabilities: { sessionCapabilities: { list: {} } } };
+  else if (message.method === "session/new") result = { sessionId: "native", configOptions: [{ id: "model", name: "Model", category: "model", type: "select", currentValue: "resolved", options: [{ value: "resolved", name: process.env.SESSION_TOKEN || "probe" }] }] };
+  else if (message.method === "session/list") result = { sessions: [] };
+  else return;
+  send({ jsonrpc: "2.0", id: message.id, result });
+});`);
+    const registration = runAcpProvider({
+      id: "launch-acp",
+      label: "Launch ACP",
+      command: ["missing-default-command"],
+    });
+    const connection = await registration.connect({
+      versions: [1],
+      capabilities: ["prompt.message", "session.list"],
+      launch: {
+        command: process.execPath,
+        args: [executable],
+        env: { LAUNCH_TOKEN: "resolved", REMOVE_ME: "inherited" },
+      },
+    });
+    const events: ProviderEvent[] = [];
+    connection.onEvent((event) => events.push(event));
+    try {
+      await connection.send({ type: "catalog", requestId: "catalog" });
+      expect(await waitForEvent(events, (event) => event.type === "catalog")).toMatchObject({
+        catalog: { models: [{ id: "resolved", label: "probe" }] },
+      });
+      await connection.send({ type: "sessions", requestId: "list" });
+      expect(await waitForEvent(events, (event) => event.type === "sessions")).toMatchObject({
+        sessions: [],
+      });
+      const input = openInput();
+      input.config.env = { SESSION_TOKEN: "session", REMOVE_ME: null };
+      await connection.send(input);
+      expect(await waitForEvent(events, (event) => event.type === "session.config")).toMatchObject({
+        config: { models: [{ id: "resolved", label: "session" }] },
+      });
+    } finally {
+      await connection.close();
+    }
+  });
+
   it("rejects connection cleanly when the ACP executable does not exist", async () => {
     const registration = runAcpProvider({
       id: "missing-acp",
