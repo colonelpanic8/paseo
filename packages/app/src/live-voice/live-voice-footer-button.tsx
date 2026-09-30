@@ -26,7 +26,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
 import { useAppVisible } from "@/hooks/use-app-visible";
-import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLiveVoiceAvailability } from "@/live-voice/live-voice-availability";
 import type { LiveVoiceHostAvailability } from "@/live-voice/live-voice-availability-policy";

@@ -61,7 +61,11 @@ import {
   toScheduleSummary,
   waitForAgentWithTimeout,
 } from "../mcp-shared.js";
-import { sendPromptToAgent, setupFinishNotification } from "../agent-prompt.js";
+import {
+  sendPromptToAgent,
+  setupFinishNotification,
+  waitForAgentRunStartWithTimeout,
+} from "../agent-prompt.js";
 import { respondToAgentPermission } from "../permission-response.js";
 import {
   archiveAgentCommand,
@@ -2005,7 +2009,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         return true;
       }
 
-      await sendPromptToAgent({
+      const { disposition } = await sendPromptToAgent({
         agentManager,
         agentStorage,
         agentId,
@@ -2044,9 +2048,11 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
 
       const notifying = armFinishNotification();
 
-      // Return immediately if background=true
       onBackgroundAgentStarted?.({ agentId });
-      // Re-fetch snapshot since the state may have changed
+      // Return once the provider has accepted the turn, so the status reports it running.
+      if (disposition === "turn_started") {
+        await waitForAgentRunStartWithTimeout(agentManager, agentId);
+      }
       const currentSnapshot = agentManager.getAgent(agentId);
 
       const responseData = {
