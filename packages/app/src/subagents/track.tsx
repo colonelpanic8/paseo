@@ -1,9 +1,9 @@
-import { useCallback, useMemo, type ReactElement } from "react";
+import { useCallback, type ReactElement } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Archive, Unlink } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { getProviderIcon } from "@/components/provider-icons";
+import { useProviderIcon } from "@/components/provider-icons";
 import { ComposerTrackActions, ComposerTrackPill, ComposerTrackRow } from "@/composer/tracks";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -58,11 +58,12 @@ interface SubagentRowView {
   ownership: SubagentOwnership;
 }
 
-function buildRowView(
+function useRowView(
   row: SubagentRow,
   serverId: string,
   resolveModelDisplay: AgentModelDisplayResolver,
 ): SubagentRowView {
+  const icon = useProviderIcon(row.provider, serverId);
   const data = buildSubagentRowPresentationData(
     row,
     resolveModelDisplay({ provider: row.provider, source: row }),
@@ -79,7 +80,7 @@ function buildRowView(
       titleState: data.titleState,
       statusBucket: data.statusBucket,
       modified: false,
-      icon: getProviderIcon(row.provider, serverId),
+      icon,
     },
   };
 }
@@ -219,10 +220,7 @@ function SubagentsTrackRow({
 }: SubagentsTrackRowProps): ReactElement {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const { presentation, meta, ownership } = useMemo(
-    () => buildRowView(row, serverId, resolveModelDisplay),
-    [resolveModelDisplay, row, serverId],
-  );
+  const { presentation, meta, ownership } = useRowView(row, serverId, resolveModelDisplay);
   const displayLabel =
     presentation.titleState === "loading" ? t("common.states.loading") : presentation.label;
   const ownershipLabel =

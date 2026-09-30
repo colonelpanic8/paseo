@@ -35,15 +35,11 @@ import {
 } from "@/composer/pill-styles";
 import { getActiveMessageSubmissions } from "@/composer/submission/model";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
-import { getProviderIcon } from "@/components/provider-icons";
+import { useProviderIcon } from "@/components/provider-icons";
 import { useToastHost, type ToastApi, type ToastState } from "@/components/toast-host";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
-import {
-  COMPACT_FORM_FACTOR_WIDTH,
-  MAX_CONTENT_WIDTH,
-  useIsCompactFormFactor,
-} from "@/constants/layout";
+import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
@@ -336,7 +332,7 @@ function useAgentPanelDescriptor(
   const agent = descriptorState.agent;
   const provider = agent?.provider ?? "codex";
   const label = resolveWorkspaceAgentTabLabel(agent?.title);
-  const icon = getProviderIcon(provider, context.serverId);
+  const icon = useProviderIcon(provider, context.serverId);
   const modelSource = pickAgentModelDisplaySource(agent);
   const modelDisplay = useAgentModelDisplay({
     serverId: context.serverId,
@@ -1748,7 +1744,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   timelineSyncCalloutContent: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
+    maxWidth: theme.contentMaxWidth,
   },
   timelineSyncCallout: {
     flexDirection: "row",

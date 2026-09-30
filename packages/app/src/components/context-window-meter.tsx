@@ -1,11 +1,8 @@
-import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ProviderUsageTooltipSection } from "@/provider-usage/tooltip-section";
-import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { formatTokenCount } from "./context-window-meter.utils";
 
 interface ContextWindowMeterProps {
@@ -13,9 +10,6 @@ interface ContextWindowMeterProps {
   usedTokens: number | null;
   totalCostUsd?: number | null;
   showPercentage?: boolean;
-  serverId?: string;
-  /** The Paseo provider key, e.g. "claude", "gemini", "codex" */
-  provider?: string | null;
   /** Model the agent is actually running; omitted when unknown. */
   modelLabel?: string | null;
   /** Thinking level the agent is actually running; omitted when unknown. */
@@ -105,8 +99,6 @@ export function ContextWindowMeter({
   usedTokens,
   totalCostUsd,
   showPercentage = false,
-  serverId,
-  provider,
   modelLabel,
   thinkingLabel,
   pending = false,
@@ -114,23 +106,8 @@ export function ContextWindowMeter({
 }: ContextWindowMeterProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
-  const { view: providerUsageView, refresh: refreshProviderUsage } = useProviderUsage(
-    serverId ?? null,
-    { enabled: isTooltipOpen },
-  );
   const percentage =
     maxTokens !== null && usedTokens !== null ? getUsagePercentage(maxTokens, usedTokens) : null;
-  const handleTooltipOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      setIsTooltipOpen(nextOpen);
-      if (nextOpen) {
-        void refreshProviderUsage().catch(() => {});
-      }
-    },
-    [refreshProviderUsage],
-  );
-
   const geometry = getMeterGeometry(showPercentage, glyphSize);
 
   // No usage yet: reserve the footprint with a track-only ring while a session is
@@ -146,7 +123,6 @@ export function ContextWindowMeter({
           width={geometry.svgSize}
           height={geometry.svgSize}
           viewBox={`0 0 ${geometry.svgSize} ${geometry.svgSize}`}
-          style={styles.svg}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
@@ -173,13 +149,7 @@ export function ContextWindowMeter({
     typeof totalCostUsd === "number" ? formatSessionCost(totalCostUsd) : null;
 
   return (
-    <Tooltip
-      open={isTooltipOpen}
-      onOpenChange={handleTooltipOpenChange}
-      delayDuration={0}
-      enabledOnDesktop
-      enabledOnMobile
-    >
+    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile>
       <TooltipTrigger asChild triggerRefProp="ref">
         <Pressable
           style={containerStyle}
@@ -193,7 +163,6 @@ export function ContextWindowMeter({
             width={svgSize}
             height={svgSize}
             viewBox={`0 0 ${svgSize} ${svgSize}`}
-            style={styles.svg}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
@@ -215,6 +184,8 @@ export function ContextWindowMeter({
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={dashOffset}
+              // SVG strokes start at three o'clock; the ring reads clockwise from twelve.
+              transform={`rotate(-90 ${center} ${center})`}
             />
           </Svg>
           {showPercentage ? (
@@ -222,7 +193,7 @@ export function ContextWindowMeter({
           ) : null}
         </Pressable>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center" offset={8} testID="context-window-meter-tooltip">
         <View style={styles.tooltipContent}>
           <Text style={styles.tooltipTitle}>{t("contextWindow.title")}</Text>
           <Text style={styles.tooltipText}>
@@ -249,7 +220,6 @@ export function ContextWindowMeter({
               {t("contextWindow.thinking", { thinking: thinkingLabel })}
             </Text>
           ) : null}
-          <ProviderUsageTooltipSection view={providerUsageView} activeProviderId={provider} />
         </View>
       </TooltipContent>
     </Tooltip>
@@ -271,9 +241,6 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     gap: theme.spacing[1],
     borderRadius: theme.borderRadius.full,
-  },
-  svg: {
-    transform: [{ rotate: "-90deg" }],
   },
   percentageLabel: {
     color: theme.colors.foregroundMuted,
