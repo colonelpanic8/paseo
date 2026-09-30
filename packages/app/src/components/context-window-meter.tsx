@@ -7,8 +7,6 @@ import { useTranslation } from "react-i18next";
 import type { AgentPromptCacheStatus } from "@getpaseo/protocol/agent-types";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ProviderUsageTooltipSection } from "@/provider-usage/tooltip-section";
-import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { formatTokenCount } from "./context-window-meter.utils";
 import { derivePromptCacheView, type PromptCacheLifetime } from "./prompt-cache-view";
 
@@ -17,9 +15,6 @@ interface ContextWindowMeterProps {
   usedTokens: number | null;
   totalCostUsd?: number | null;
   showPercentage?: boolean;
-  serverId?: string;
-  /** The Paseo provider key, e.g. "claude", "gemini", "codex" */
-  provider?: string | null;
   /** Reserve the meter footprint and show a loading ring while usage is pending. */
   pending?: boolean;
   /** Optional glyph envelope for icon-toolbar alignment. */
@@ -248,8 +243,6 @@ export function ContextWindowMeter({
   usedTokens,
   totalCostUsd,
   showPercentage = false,
-  serverId,
-  provider,
   pending = false,
   glyphSize,
   promptCache,
@@ -258,26 +251,11 @@ export function ContextWindowMeter({
 }: ContextWindowMeterProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   // Ping state lives here, not in the section: the section unmounts every time the
   // tooltip closes, and a failure has to survive until the user tries again.
   const [pingState, setPingState] = useState<PingState>("idle");
-  const { view: providerUsageView, refresh: refreshProviderUsage } = useProviderUsage(
-    serverId ?? null,
-    { enabled: isTooltipOpen },
-  );
   const percentage =
     maxTokens !== null && usedTokens !== null ? getUsagePercentage(maxTokens, usedTokens) : null;
-  const handleTooltipOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      setIsTooltipOpen(nextOpen);
-      if (nextOpen) {
-        void refreshProviderUsage().catch(() => {});
-      }
-    },
-    [refreshProviderUsage],
-  );
-
   const handlePing = useCallback(() => {
     if (!onPingPromptCache) return;
     setPingState("pending");
@@ -302,7 +280,6 @@ export function ContextWindowMeter({
           width={geometry.svgSize}
           height={geometry.svgSize}
           viewBox={`0 0 ${geometry.svgSize} ${geometry.svgSize}`}
-          style={styles.svg}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
@@ -330,8 +307,6 @@ export function ContextWindowMeter({
 
   return (
     <Tooltip
-      open={isTooltipOpen}
-      onOpenChange={handleTooltipOpenChange}
       delayDuration={0}
       enabledOnDesktop
       enabledOnMobile
@@ -350,7 +325,6 @@ export function ContextWindowMeter({
             width={svgSize}
             height={svgSize}
             viewBox={`0 0 ${svgSize} ${svgSize}`}
-            style={styles.svg}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
@@ -372,6 +346,8 @@ export function ContextWindowMeter({
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={dashOffset}
+              // SVG strokes start at three o'clock; the ring reads clockwise from twelve.
+              transform={`rotate(-90 ${center} ${center})`}
             />
           </Svg>
           {showPercentage ? (
@@ -379,7 +355,7 @@ export function ContextWindowMeter({
           ) : null}
         </Pressable>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center" offset={8} testID="context-window-meter-tooltip">
         <View style={styles.tooltipContent}>
           <Text style={styles.tooltipTitle}>{t("contextWindow.title")}</Text>
           <Text style={styles.tooltipText}>
@@ -404,7 +380,6 @@ export function ContextWindowMeter({
               pingDisabled={pingDisabled}
             />
           ) : null}
-          <ProviderUsageTooltipSection view={providerUsageView} activeProviderId={provider} />
         </View>
       </TooltipContent>
     </Tooltip>
@@ -426,9 +401,6 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     gap: theme.spacing[1],
     borderRadius: theme.borderRadius.full,
-  },
-  svg: {
-    transform: [{ rotate: "-90deg" }],
   },
   percentageLabel: {
     color: theme.colors.foregroundMuted,

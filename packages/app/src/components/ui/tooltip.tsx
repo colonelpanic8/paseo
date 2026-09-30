@@ -28,7 +28,7 @@ import { FadeIn, FadeOut } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import { useHoverSafeZone } from "@/hooks/use-hover-safe-zone";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
 
@@ -257,7 +257,8 @@ export function Tooltip({
   });
 
   const isCompact = useIsCompactFormFactor();
-  const enabled = isCompact ? enabledOnMobile : enabledOnDesktop;
+  const opensOnPress = isNative || isCompact;
+  const enabled = opensOnPress ? enabledOnMobile : enabledOnDesktop;
 
   const close = useCallback(() => setIsOpen(false), [setIsOpen]);
   const keepOpen = useCallback(() => {}, []);
@@ -283,12 +284,12 @@ export function Tooltip({
       triggerRef,
       contentRef,
       enabled,
-      openOnPress: isCompact,
+      openOnPress: opensOnPress,
       delayDuration,
       interactive,
       requestClose,
     }),
-    [isOpen, setIsOpen, enabled, isCompact, delayDuration, interactive, requestClose],
+    [isOpen, setIsOpen, enabled, opensOnPress, delayDuration, interactive, requestClose],
   );
 
   return <TooltipContext.Provider value={value}>{children}</TooltipContext.Provider>;
@@ -587,7 +588,7 @@ export function TooltipContent({
       statusBarTranslucent={Platform.OS === "android"}
       onRequestClose={handleDismiss}
     >
-      <Pressable style={styles.overlay} onPress={handleDismiss}>
+      <Pressable testID="tooltip-dismiss" style={styles.overlay} onPress={handleDismiss}>
         {surface}
       </Pressable>
     </Modal>
