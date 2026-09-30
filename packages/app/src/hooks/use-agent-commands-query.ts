@@ -17,7 +17,7 @@ export interface AgentSlashCommand {
 
 export type DraftCommandConfig = AgentCommandsDraftConfig;
 
-/** A draft composer's command source; drafts list nothing until both a project and a provider are chosen. */
+/** What a draft composer can list commands for, before an agent exists. */
 export type DraftCommandTarget =
   | { status: "ready"; config: DraftCommandConfig }
   | { status: "needs-project" }

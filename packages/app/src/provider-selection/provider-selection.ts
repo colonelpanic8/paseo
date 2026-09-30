@@ -301,21 +301,19 @@ export function buildDraftCommandTarget(input: {
     return { status: "needs-provider" };
   }
 
-  return {
-    status: "ready",
-    config: {
-      provider: input.selection.provider,
-      cwd,
-      ...(input.selection.modeOptions.length > 0 && input.selection.modeId !== ""
-        ? { modeId: input.selection.modeId }
-        : {}),
-      ...(input.effectiveModelId ? { model: input.effectiveModelId } : {}),
-      ...(input.effectiveThinkingOptionId
-        ? { thinkingOptionId: input.effectiveThinkingOptionId }
-        : {}),
-      ...(input.featureValues ? { featureValues: input.featureValues } : {}),
-    },
+  const config = {
+    provider: input.selection.provider,
+    cwd,
+    ...(input.selection.modeOptions.length > 0 && input.selection.modeId !== ""
+      ? { modeId: input.selection.modeId }
+      : {}),
+    ...(input.effectiveModelId ? { model: input.effectiveModelId } : {}),
+    ...(input.effectiveThinkingOptionId
+      ? { thinkingOptionId: input.effectiveThinkingOptionId }
+      : {}),
+    ...(input.featureValues ? { featureValues: input.featureValues } : {}),
   };
+  return { status: "ready", config };
 }
 
 export function resolveSubmissionReadiness(input: {

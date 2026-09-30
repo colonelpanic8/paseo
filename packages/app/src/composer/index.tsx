@@ -41,7 +41,7 @@ import {
   Paperclip,
 } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
-import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
+import { FOOTER_HEIGHT } from "@/constants/layout";
 import {
   AgentControls,
   DraftAgentControls,
@@ -274,7 +274,6 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
-      provider: agent?.provider ?? null,
     };
   };
 }
@@ -284,8 +283,6 @@ function renderContextWindowMeter(
   contextWindowUsedTokens: number | null,
   totalCostUsd: number | null,
   showPercentage: boolean,
-  serverId: string,
-  provider: string | null,
   pending: boolean,
   glyphSize: number,
 ): ReactElement | null {
@@ -299,8 +296,6 @@ function renderContextWindowMeter(
       usedTokens={contextWindowUsedTokens}
       totalCostUsd={totalCostUsd}
       showPercentage={showPercentage}
-      serverId={serverId}
-      provider={provider}
       pending={pending}
       glyphSize={glyphSize}
     />
@@ -2085,8 +2080,6 @@ function ComposerContentImpl({
         contextWindowUsedTokens,
         agentState.totalCostUsd,
         false,
-        serverId,
-        agentState.provider,
         contextWindowPending,
         contextWindowMeterGlyphSize,
       ),
@@ -2094,14 +2087,12 @@ function ComposerContentImpl({
       contextWindowMaxTokens,
       contextWindowUsedTokens,
       agentState.totalCostUsd,
-      serverId,
-      agentState.provider,
       contextWindowPending,
       contextWindowMeterGlyphSize,
     ],
   );
   const beforeVoiceContent = useMemo(
-    () => resolveContextWindowPlacement(contextWindowMeter, hasAgent),
+    () => <>{resolveContextWindowPlacement(contextWindowMeter, hasAgent)}</>,
     [contextWindowMeter, hasAgent],
   );
 
@@ -2545,7 +2536,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContent: {
     flexShrink: 1,
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
+    maxWidth: theme.contentMaxWidth,
     gap: theme.spacing[3],
   },
   messageInputContainer: {
