@@ -7,6 +7,7 @@ import {
   useAgentCommandsQuery,
   type AgentSlashCommand,
   type DraftCommandConfig,
+  type DraftCommandTarget,
 } from "./use-agent-commands-query";
 import { orderAutocompleteOptions } from "@/components/ui/autocomplete-utils";
 import { useAutocomplete } from "./use-autocomplete";
@@ -36,7 +37,7 @@ interface UseAgentAutocompleteInput {
   setUserInput: (nextValue: string) => void;
   serverId: string;
   agentId: string;
-  draftConfig?: DraftCommandConfig;
+  draft?: DraftCommandTarget;
   onAutocompleteApplied?: () => void;
   onClientSlashCommand?: (command: ClientSlashCommand) => void;
   canExecuteClientSlashCommand?: boolean;
@@ -122,18 +123,13 @@ type AvailableCommand =
   | { source: "plugin"; command: PluginClientSlashCommand }
   | { source: "provider"; command: AgentSlashCommand };
 
-function normalizeDraftCommandConfig(
-  draftConfig?: DraftCommandConfig,
-): DraftCommandConfig | undefined {
-  if (!draftConfig) {
+function resolveDraftQueryConfig(draft?: DraftCommandTarget): DraftCommandConfig | undefined {
+  if (draft?.status !== "ready") {
     return undefined;
   }
 
+  const draftConfig = draft.config;
   const cwd = draftConfig.cwd.trim();
-  if (!cwd) {
-    return undefined;
-  }
-
   const modeId = draftConfig.modeId?.trim() ?? "";
   const model = draftConfig.model?.trim() ?? "";
   const thinkingOptionId = draftConfig.thinkingOptionId?.trim() ?? "";
@@ -349,6 +345,35 @@ function resolveAutocompleteErrorMessage(args: {
   return undefined;
 }
 
+// A draft's agentId is a draft key the daemon does not know, so a draft lists
+// commands by its config only, and not at all until that config is complete.
+function resolveDraftCommandContext(draft: DraftCommandTarget | undefined) {
+  const queryDraftConfig = resolveDraftQueryConfig(draft);
+  const isDraftContext = draft !== undefined;
+  return {
+    isDraftContext,
+    queryDraftConfig,
+    canListCommands: !isDraftContext || queryDraftConfig !== undefined,
+  };
+}
+
+function resolveAutocompleteEmptyText(args: {
+  mode: AutocompleteMode;
+  draft: DraftCommandTarget | undefined;
+  t: TFunction;
+}): string {
+  if (args.mode === "file") {
+    return args.t("agentAutocomplete.noFiles");
+  }
+  if (args.draft?.status === "needs-project") {
+    return args.t("agentAutocomplete.chooseProjectForCommands");
+  }
+  if (args.draft?.status === "needs-provider") {
+    return args.t("agentAutocomplete.chooseModelForCommands");
+  }
+  return args.t("agentAutocomplete.noCommands");
+}
+
 export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAutocompleteResult {
   const { t } = useTranslation();
   const {
@@ -357,7 +382,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     setUserInput,
     serverId,
     agentId,
-    draftConfig,
+    draft,
     onAutocompleteApplied,
     onClientSlashCommand,
     canExecuteClientSlashCommand,
@@ -398,13 +423,10 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     return () => clearTimeout(timer);
   }, [fileFilterQuery]);
 
-  const normalizedDraftConfig = useMemo(
-    () => normalizeDraftCommandConfig(draftConfig),
-    [draftConfig],
+  const { isDraftContext, queryDraftConfig, canListCommands } = useMemo(
+    () => resolveDraftCommandContext(draft),
+    [draft],
   );
-
-  const isDraftContext = normalizedDraftConfig !== undefined;
-  const queryDraftConfig = normalizedDraftConfig;
   const canLoadCommands = resolveCanLoadCommands({ serverId, agentId, isDraftContext });
 
   const agentCwd = useSessionStore(
@@ -421,17 +443,14 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const isConnected = useHostRuntimeIsConnected(serverId);
 
   const mode = resolveAutocompleteMode({ showFileAutocomplete, showCommandAutocomplete });
-  const {
-    commands,
-    isLoading: isCommandsLoading,
-    isError,
-    error,
-  } = useAgentCommandsQuery({
+  const commandsQuery = useAgentCommandsQuery({
     serverId,
     agentId,
-    enabled: hasTokenCandidate && canLoadCommands,
+    enabled: hasTokenCandidate && canLoadCommands && canListCommands,
     draftConfig: queryDraftConfig,
   });
+  const { commands, isError, error } = commandsQuery;
+  const isCommandsLoading = canListCommands && commandsQuery.isLoading;
 
   const tokenCatalog = useMemo<ComposerTokenCatalog>(() => {
     const commandNames = new Set(CLIENT_SLASH_COMMANDS.map((command) => command.name));
@@ -622,8 +641,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     mode === "file"
       ? t("agentAutocomplete.searchingWorkspace")
       : t("agentAutocomplete.loadingCommands");
-  const emptyText =
-    mode === "file" ? t("agentAutocomplete.noFiles") : t("agentAutocomplete.noCommands");
+  const emptyText = resolveAutocompleteEmptyText({ mode, draft, t });
 
   return {
     isVisible,
