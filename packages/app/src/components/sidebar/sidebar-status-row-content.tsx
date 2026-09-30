@@ -4,7 +4,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Archive } from "lucide-react-native";
 import { DiffStat } from "@/components/diff-stat";
 import { ProjectIconView } from "@/components/project-icon-view";
-import { getProviderIcon } from "@/components/provider-icons";
+import { useProviderIcon } from "@/components/provider-icons";
 import { SyncedLoader } from "@/components/synced-loader";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SidebarWorkspaceShortcutBadge } from "@/components/sidebar/sidebar-workspace-row-content";
@@ -52,14 +52,16 @@ const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 
 function DynamicProviderIcon({
   provider,
+  serverId,
   size,
   color = "",
 }: {
   provider: string;
+  serverId: string;
   size: number;
   color?: string;
 }) {
-  const Icon = getProviderIcon(provider);
+  const Icon = useProviderIcon(provider, serverId);
   return <Icon size={size} color={color} />;
 }
 
@@ -163,6 +165,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
         hostBadge={hostBadge}
         serviceSummary={serviceSummary}
         providers={workspace.providers}
+        serverId={workspace.serverId}
       />
       {showShortcut && shortcutNumber !== null ? (
         <View style={styles.shortcutBadgeOverlay} pointerEvents="none">
@@ -244,6 +247,7 @@ function StatusRowDetailLine({
   hostBadge,
   serviceSummary,
   providers,
+  serverId,
 }: {
   secondaryLabel: string | null;
   diffStat: SidebarWorkspaceEntry["diffStat"];
@@ -251,6 +255,7 @@ function StatusRowDetailLine({
   hostBadge: HostBadgeModel | null;
   serviceSummary: WorkspaceServiceSummary | null;
   providers: readonly string[];
+  serverId: string;
 }) {
   return (
     <View style={styles.detailRow}>
@@ -272,30 +277,37 @@ function StatusRowDetailLine({
           prHint={prHint}
           serviceSummary={serviceSummary}
         />
-        <StatusRowProviderIcons providers={providers} />
+        <StatusRowProviderIcons providers={providers} serverId={serverId} />
       </View>
     </View>
   );
 }
 
 /** One glyph per provider with a live agent, most recently active first. */
-function StatusRowProviderIcons({ providers }: { providers: readonly string[] }) {
+function StatusRowProviderIcons({
+  providers,
+  serverId,
+}: {
+  providers: readonly string[];
+  serverId: string;
+}) {
   if (providers.length === 0) {
     return null;
   }
   return (
     <View style={styles.providerIcons}>
       {providers.slice(0, MAX_PROVIDER_ICONS).map((provider) => (
-        <StatusRowProviderIcon key={provider} provider={provider} />
+        <StatusRowProviderIcon key={provider} provider={provider} serverId={serverId} />
       ))}
     </View>
   );
 }
 
-function StatusRowProviderIcon({ provider }: { provider: string }) {
+function StatusRowProviderIcon({ provider, serverId }: { provider: string; serverId: string }) {
   return (
     <ThemedDynamicProviderIcon
       provider={provider}
+      serverId={serverId}
       size={PROVIDER_ICON_SIZE}
       uniProps={providerIconColorMapping}
     />
