@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { getProviderIcon } from "@/components/provider-icons";
+import { useProviderIcon } from "@/components/provider-icons";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ interface ProviderMarkProps {
 }
 
 function ProviderMark({ provider, size, color = "" }: ProviderMarkProps) {
-  const Icon = getProviderIcon(provider);
+  const Icon = useProviderIcon(provider);
   return <Icon size={size} color={color} />;
 }
 
