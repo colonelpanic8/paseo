@@ -2377,6 +2377,82 @@ describe("HostRuntimeStore", () => {
     expect(useSessionStore.getState().sessions[serverId]).toBeUndefined();
   });
 
+  it("does not reconnect or notify the store when removed during a host update", async () => {
+    useHostRuntimeClock();
+    const serverId = "srv_removed_while_updating";
+    const connection: HostConnection = {
+      id: "direct:lan:6767",
+      type: "directTcp",
+      endpoint: "lan:6767",
+    };
+    const host = makeHost({ serverId, connections: [connection] });
+    const connectStarted = createDeferred<void>();
+    const pendingConnect = createDeferred<void>();
+    const pendingClose = createDeferred<void>();
+    class UpdatingClient extends FakeDaemonClient {
+      override async connect(): Promise<void> {
+        connectStarted.resolve();
+        await pendingConnect.promise;
+        await super.connect();
+      }
+
+      override async close(): Promise<void> {
+        await pendingClose.promise;
+        await super.close();
+      }
+    }
+    const updatedClient = new UpdatingClient();
+    let createdClients = 0;
+    let probeCalls = 0;
+    let mountedHandlers = 0;
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage(),
+      deps: {
+        createClient: () => {
+          createdClients += 1;
+          return updatedClient as unknown as DaemonClient;
+        },
+        connectToDaemon: async ({ host: profile }) => {
+          probeCalls += 1;
+          return {
+            client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+            serverId: profile.serverId,
+            hostname: null,
+          };
+        },
+        getClientId: async () => "cid_test_runtime",
+        mountClientHandlers: () => {
+          mountedHandlers += 1;
+          return () => {};
+        },
+      },
+    });
+    await store.upsertDirectConnection({ serverId, endpoint: connection.endpoint });
+    await waitForHostOnline(store, serverId);
+    const probesBeforeUpdate = probeCalls;
+    const handlersBeforeUpdate = mountedHandlers;
+
+    store.syncHosts([{ ...host, connections: [{ ...connection, endpoint: "new-lan:6767" }] }]);
+    await connectStarted.promise;
+    await store.removeHost(serverId);
+    let notificationsAfterRemoval = 0;
+    const unsubscribe = store.subscribe(serverId, () => {
+      notificationsAfterRemoval += 1;
+    });
+    pendingConnect.resolve();
+    pendingClose.resolve();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(createdClients).toBe(1);
+    expect(probeCalls).toBe(probesBeforeUpdate);
+    expect(mountedHandlers).toBe(handlersBeforeUpdate);
+    expect(notificationsAfterRemoval).toBe(0);
+    expect(store.getHosts()).toEqual([]);
+    expect(store.getSnapshot(serverId)).toBeNull();
+    expect(useSessionStore.getState().sessions[serverId]).toBeUndefined();
+    unsubscribe();
+  });
+
   it("drains snapshot and buffered running transitions exactly once", async () => {
     const host = makeHost({
       serverId: "srv_legacy_transitions",
