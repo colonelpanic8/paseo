@@ -447,7 +447,9 @@ export const ja: TranslationResources = {
       recovery: {
         archivedTitle: "ワークスペースはアーカイブ済みです",
         restoreDescription:
-          "{{workspaceName}} はアーカイブされ、worktree が削除されました。ブランチ {{branch}} を復元して再度開きます。",
+          "{{workspaceName}} を復元してエージェントに戻ります。worktree ではブランチ {{branch}} を使用します。",
+        restoreWithoutBranchDescription:
+          "{{workspaceName}} を復元してエージェントに戻ります。保存されたベース、またはリポジトリのデフォルトブランチから新しいブランチを作成します。",
         unarchiveDescription:
           "{{workspaceName}} はアーカイブされています。再度開くにはアーカイブを解除してください。",
         restoreAction: "復元",
@@ -1162,6 +1164,9 @@ export const ja: TranslationResources = {
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
     },
+    footer: {
+      usage: "使用状況",
+    },
     help: {
       trigger: "ヘルプとサポート",
       sectionHelp: "ヘルプ",
@@ -1542,6 +1547,8 @@ export const ja: TranslationResources = {
     noFiles: "ファイルまたはディレクトリが見つかりません",
     noCommands: "コマンドが見つかりません",
     failedToLoad: "読み込みに失敗しました",
+    chooseProjectForCommands: "コマンドを表示するにはプロジェクトを選択してください",
+    chooseModelForCommands: "コマンドを表示するにはモデルを選択してください",
   },
   loadOlderHistory: {
     failed: "古い履歴を読み込めませんでした",
@@ -1636,6 +1643,17 @@ export const ja: TranslationResources = {
     hostPassword: {
       title: "{{host}} のパスワード",
       label: "ホストのパスワード",
+    },
+    hostConfirmation: {
+      title: "このホストに接続しますか？",
+      description:
+        "このホストはこのアプリ内でコードを実行し、接続中の他のホストにアクセスできるようになります。心当たりがある場合のみ接続してください。",
+      descriptionChanged:
+        "このリンクはこのホストへの接続方法を変更します。ホストはこのアプリ内でコードを実行し、接続中の他のホストにアクセスできるようになります。心当たりがある場合のみ接続してください。",
+      hostLabel: "ホスト",
+      fingerprintLabel: "鍵のフィンガープリント",
+      relayLabel: "リレー",
+      connect: "接続",
     },
     connectionMethods: {
       title: "接続を追加",
@@ -2186,8 +2204,15 @@ export const ja: TranslationResources = {
         description: "プロンプト間を移動するためのアウトラインを表示します",
       },
       sidebar: {
-        title: "サイドバー",
-        description: "サイドバー上部に表示する項目とその順序を選択します",
+        header: {
+          title: "ヘッダー",
+          description: "サイドバー上部に表示する項目とその順序を選択します",
+        },
+        footer: {
+          title: "フッター",
+          description:
+            "サイドバー下部に表示する行とその順序を選択します。プロジェクトを追加とアイコンの行は常に表示されます",
+        },
         moveUp: "上に移動",
         moveDown: "下に移動",
       },
@@ -2211,6 +2236,14 @@ export const ja: TranslationResources = {
         codeSize: "コードサイズ",
         codeSizeHint: "コード、差分、ターミナル出力に使用されます",
         codeSizeAccessibility: "コードフォントサイズ",
+      },
+      layout: {
+        title: "レイアウト",
+        contentWidth: "コンテンツ幅",
+        contentWidthHint: "ワイド画面でのチャットと Markdown ファイルの最大幅",
+        contentWidthAccessibility: "コンテンツ幅 (ピクセル)",
+        reset: "リセット",
+        resetAccessibility: "コンテンツ幅をデフォルトに戻す",
       },
       syntax: {
         title: "構文ハイライト",
