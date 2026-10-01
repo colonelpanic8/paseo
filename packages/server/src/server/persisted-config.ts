@@ -17,6 +17,7 @@ import { AgentEnvironmentEntrySchema } from "@getpaseo/protocol/agent-environmen
 import { IdentityColorNameSchema } from "@getpaseo/protocol/identity-color";
 import { PluginIdSchema, PluginSourceSchema } from "@getpaseo/protocol/plugin-config";
 import { TerminalProfileSchema } from "@getpaseo/protocol/terminal-profile";
+import { DaemonPushConfigSchema } from "@getpaseo/protocol/daemon-push-config";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
@@ -342,6 +343,7 @@ export const PersistedConfigSchema = z
           .optional(),
         autoArchiveAfterMerge: z.boolean().optional(),
         enableTerminalAgentHooks: z.boolean().optional(),
+        push: DaemonPushConfigSchema.optional(),
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
         agentProfiles: z.array(AgentProfileSchema).optional(),
