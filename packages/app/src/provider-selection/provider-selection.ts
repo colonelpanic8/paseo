@@ -367,6 +367,9 @@ export function resolveSubmissionReadiness(input: {
   if (!input.allowsEmptyAutoSubmit && !input.text.trim()) {
     return { ok: false, reason: i18n.t("providerSelection.readiness.initialPromptRequired") };
   }
+  if (!input.hasClient) {
+    return { ok: false, reason: i18n.t("providerSelection.readiness.hostDisconnected") };
+  }
   if (input.providerCount === 0) {
     return { ok: false, reason: i18n.t("providerSelection.readiness.noProviders") };
   }
@@ -382,9 +385,6 @@ export function resolveSubmissionReadiness(input: {
   }
   if (!input.workspaceDirectory) {
     return { ok: false, reason: i18n.t("providerSelection.readiness.workspaceDirectoryNotFound") };
-  }
-  if (!input.hasClient) {
-    return { ok: false, reason: i18n.t("providerSelection.readiness.hostDisconnected") };
   }
   return { ok: true };
 }
