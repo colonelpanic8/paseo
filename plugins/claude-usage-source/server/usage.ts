@@ -336,10 +336,16 @@ interface ClaudeCredentialLookup {
 
 /** Shared credential lookup for usage fetches and account identification. */
 export async function resolveClaudeCredentials(
-  _input: UsageInput,
+  input: UsageInput,
   lookup: ClaudeCredentialLookup = {},
 ): Promise<ClaudeCredentialRecord | null> {
-  const claudeHome = lookup.claudeHome ?? process.env["CLAUDE_HOME"] ?? join(homedir(), ".claude");
+  if ("providerId" in input)
+    return input.configDir ? readCredentialFile(join(input.configDir, ".credentials.json")) : null;
+  const claudeHome =
+    lookup.claudeHome ??
+    process.env["CLAUDE_CONFIG_DIR"] ??
+    process.env["CLAUDE_HOME"] ??
+    join(homedir(), ".claude");
   const fileCredentials = await readCredentialFile(join(claudeHome, ".credentials.json"));
   if (fileCredentials) return fileCredentials;
   if ((lookup.platform ?? process.platform) !== "darwin") return null;
@@ -481,6 +487,7 @@ export async function identify(
   now: () => number = Date.now,
   credentialLookup: ClaudeCredentialLookup = {},
 ) {
+  if ("providerId" in input) return { key: `provider.${input.providerId}`, label: input.label };
   const directory = credentialLookup.accountHome ?? homedir();
   try {
     const config = z

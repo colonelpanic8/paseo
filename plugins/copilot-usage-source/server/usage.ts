@@ -43,13 +43,13 @@ export async function fetchUsage(
   input: UsageInput,
   fetchApi: typeof fetch = fetch,
 ): Promise<UsageReport> {
-  void input;
-
   const token =
-    process.env["COPILOT_TOKEN"] ||
-    process.env["GITHUB_TOKEN"] ||
-    process.env["GITHUB_PAT"] ||
-    (await readGithubCliToken());
+    "providerId" in input
+      ? input.accessToken
+      : process.env["COPILOT_TOKEN"] ||
+        process.env["GITHUB_TOKEN"] ||
+        process.env["GITHUB_PAT"] ||
+        (await readGithubCliToken());
 
   if (!token) return unavailableUsage();
 
@@ -83,7 +83,8 @@ export async function fetchUsage(
   };
 }
 
-export async function identify() {
+export async function identify(input: UsageInput = {}) {
+  if ("providerId" in input) return { key: `provider.${input.providerId}`, label: input.label };
   const token =
     process.env["COPILOT_TOKEN"] ||
     process.env["GITHUB_TOKEN"] ||

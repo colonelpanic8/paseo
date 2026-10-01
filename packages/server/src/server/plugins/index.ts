@@ -1,3 +1,7 @@
+import {
+  ACCOUNT_USAGE_SOURCES,
+  providerAccountUsageInputs,
+} from "./usage-sources/provider-accounts.js";
 import type { PluginLifecycle } from "./lifecycle/index.js";
 import path from "node:path";
 import { stat, rm } from "node:fs/promises";
@@ -160,6 +164,9 @@ export class PluginService {
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    this.configStore.onFieldChange("providers", () =>
+      this.usageSources.invalidateReports((id) => ACCOUNT_USAGE_SOURCES.has(id.split(":")[0]!)),
+    );
     const config = this.configStore.get();
     this.globalStartsBlocked = config.pluginsEnabled !== true;
     await this.builtinPlugins.load(async (plugin) => {
@@ -572,7 +579,12 @@ export class PluginService {
             const result = await this.runtime.discoverUsage(pluginId, source.id);
             if (!Array.isArray(result))
               throw new Error(`Invalid usage discovery from ${source.id}`);
-            return result;
+            return this.builtinPluginIds.has(pluginId) && pluginId === `${source.id}-usage-source`
+              ? [
+                  ...result,
+                  ...providerAccountUsageInputs(source.id, this.configStore.get().providers),
+                ]
+              : result;
           },
           identify: (input) =>
             this.runtime.identifyUsage(pluginId, source.id, input) as Promise<{

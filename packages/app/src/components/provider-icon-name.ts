@@ -11,7 +11,11 @@ export type ProviderIconName =
 
 const BUILTIN_PROVIDER_IDS = new Set(BUILTIN_PROVIDER_ICON_NAMES);
 const KNOWN_PROVIDER_IDS = new Set(KNOWN_PROVIDER_ICON_NAMES);
-export function resolveProviderIconName(provider: string, iconSvg?: string): ProviderIconName {
+export function resolveProviderIconName(
+  provider: string,
+  iconSvg?: string,
+  baseProviderId?: string,
+): ProviderIconName {
   if (BUILTIN_PROVIDER_IDS.has(provider)) {
     return { kind: "builtin", id: provider };
   }
@@ -21,5 +25,7 @@ export function resolveProviderIconName(provider: string, iconSvg?: string): Pro
   if (KNOWN_PROVIDER_IDS.has(provider)) {
     return { kind: "catalog", id: provider };
   }
-  return { kind: "bot" };
+  return baseProviderId && baseProviderId !== provider
+    ? resolveProviderIconName(baseProviderId)
+    : { kind: "bot" };
 }

@@ -33,13 +33,18 @@ const responseSchema = z.object({
 });
 
 export async function readAuth(
-  _input: CodexUsageInput,
+  input: CodexUsageInput,
 ): Promise<{ token: string; accountId?: string; idToken?: string } | null> {
-  const candidates = [
-    ...(process.env["CODEX_HOME"] ? [join(process.env["CODEX_HOME"], "auth.json")] : []),
-    join(homedir(), ".config", "codex", "auth.json"),
-    join(homedir(), ".codex", "auth.json"),
-  ];
+  let candidates: string[];
+  if ("providerId" in input) {
+    candidates = input.codexHome ? [join(input.codexHome, "auth.json")] : [];
+  } else {
+    candidates = [
+      ...(process.env["CODEX_HOME"] ? [join(process.env["CODEX_HOME"], "auth.json")] : []),
+      join(homedir(), ".config", "codex", "auth.json"),
+      join(homedir(), ".codex", "auth.json"),
+    ];
+  }
   for (const path of candidates) {
     try {
       const auth = authSchema.parse(JSON.parse(await readFile(path, "utf8")));
@@ -145,6 +150,7 @@ function claimString(value: unknown): string | null {
 }
 
 export async function identify(input: CodexUsageInput) {
+  if ("providerId" in input) return { key: `provider.${input.providerId}`, label: input.label };
   const auth = await readAuth(input);
   if (!auth) return null;
   const access = jwtClaims(auth.token);

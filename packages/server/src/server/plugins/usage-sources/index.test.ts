@@ -191,3 +191,62 @@ test("legacy listing distinguishes labeled accounts and preserves unlabeled name
     (await registry.listLegacyUsage()).providers.map((provider) => provider.displayName),
   ).toEqual(["claude (work)", "claude (personal)", "claude"]);
 });
+
+test("invalidation replaces credentials and prevents pending results from restoring the cache", async () => {
+  const registry = new UsageSourceRegistry();
+  let token = "old";
+  let finishOld!: (report: unknown) => void;
+  let began!: () => void;
+  const started = new Promise<void>((resolve) => {
+    began = resolve;
+  });
+  registry.register(
+    source({
+      id: "codex",
+      discover: async () => [{ account: "provider.work", token }],
+      fetch: async (input) => {
+        if ((input as { token: string }).token === "old") {
+          began();
+          return new Promise((resolve) => {
+            finishOld = resolve;
+          });
+        }
+        return {
+          status: "available",
+          windows: [{ id: "credential", label: (input as { token: string }).token }],
+        };
+      },
+    }),
+  );
+  const pending = registry.listReports();
+  await started;
+  token = "new";
+  registry.invalidateReports((id) => id.startsWith("codex:"));
+  expect(
+    (await registry.listReports({ reportIds: ["codex:provider.work"] }))[0]?.report.windows[0]
+      ?.label,
+  ).toBe("new");
+  finishOld({ status: "available", windows: [{ id: "credential", label: "old" }] });
+  expect((await pending)[0]?.report.windows[0]?.label).toBe("new");
+  expect((await registry.listReports())[0]?.report.windows[0]?.label).toBe("new");
+});
+
+test("removed accounts disappear and legacy responses preserve configured provider IDs and labels", async () => {
+  const registry = new UsageSourceRegistry();
+  let inputs = [{ account: "provider.codex-work" }];
+  registry.register(
+    source({
+      id: "codex",
+      discover: async () => inputs,
+      identify: async (input) => ({ key: (input as { account: string }).account, label: "Work" }),
+    }),
+  );
+  expect((await registry.listLegacyUsage()).providers[0]).toMatchObject({
+    providerId: "codex-work",
+    baseProviderId: "codex",
+    displayName: "Work",
+  });
+  inputs = [];
+  registry.invalidateReports((id) => id.startsWith("codex:"));
+  expect(await registry.listReports({ reportIds: ["codex:provider.codex-work"] })).toEqual([]);
+});
