@@ -346,7 +346,7 @@ interface StartRuntimeOptions {
   launch?: ProviderLaunch;
   options: RunAcpProviderOptions;
   boundarySessionId: string;
-  env: Readonly<Record<string, string>>;
+  env: Readonly<Record<string, string | null>>;
   emit(event: ProviderEvent): void;
 }
 
@@ -400,8 +400,13 @@ class AcpRuntime {
         args: options.options.command.slice(1),
         env: process.env,
       };
+      const env: NodeJS.ProcessEnv = { ...launch.env };
+      for (const [key, value] of Object.entries(options.env)) {
+        if (value === null) delete env[key];
+        else env[key] = value;
+      }
       child = spawn(launch.command, launch.args, {
-        env: { ...launch.env, ...options.env },
+        env,
         stdio: ["pipe", "pipe", "pipe"],
       });
       spawnFailure = new Promise<never>((_resolve, reject) => child!.once("error", reject));

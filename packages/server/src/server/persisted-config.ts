@@ -13,6 +13,7 @@ import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-co
 import { persistPaseoLayoutSelection, resolvePaseoPaths, type PaseoPaths } from "./paseo-paths.js";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 import { AgentProfileSchema, AgentSkillSelectionSchema } from "@getpaseo/protocol/agent-profile";
+import { AgentEnvironmentEntrySchema } from "@getpaseo/protocol/agent-environment";
 import { PluginIdSchema, PluginSourceSchema } from "@getpaseo/protocol/plugin-config";
 import { TerminalProfileSchema } from "@getpaseo/protocol/terminal-profile";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
@@ -179,6 +180,13 @@ const StructuredGenerationProviderConfigSchema = z
 const AgentMetadataGenerationSchema = z
   .object({
     providers: z.array(StructuredGenerationProviderConfigSchema).optional(),
+  })
+  .strict();
+
+const AgentEnvironmentPersistedSchema = z
+  .object({
+    entries: z.array(AgentEnvironmentEntrySchema).optional(),
+    timeoutMs: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -389,6 +397,9 @@ export const PersistedConfigSchema = z
         catalogRefreshTimeoutMs: z.number().int().positive().max(2_147_483_647).optional(),
         metadataGeneration: AgentMetadataGenerationSchema.optional(),
         skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
+        // `entries` absent means never configured, so the daemon seeds its
+        // defaults. An explicit [] means the user emptied the list.
+        environment: AgentEnvironmentPersistedSchema.optional(),
       })
       .strict()
       .optional(),
