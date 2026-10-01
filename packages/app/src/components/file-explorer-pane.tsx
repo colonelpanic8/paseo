@@ -23,7 +23,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import * as Clipboard from "expo-clipboard";
@@ -86,8 +86,17 @@ const SORT_OPTIONS: { value: SortOption }[] = [
 ];
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedFilePlus = withUnistyles(FilePlus);
+const ThemedFolderPlus = withUnistyles(FolderPlus);
+const ThemedEye = withUnistyles(Eye);
+const ThemedEyeOff = withUnistyles(EyeOff);
+const ThemedRotateCw = withUnistyles(RotateCw);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
+});
+const foregroundExtraMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundExtraMuted,
 });
 
 function DirectoryChevronIcon({ loading, expanded }: { loading: boolean; expanded: boolean }) {
@@ -254,9 +263,6 @@ function TreeRowItem({
   onDeleteEntry,
   testID,
 }: TreeRowItemProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const showNameHover = useCallback(() => setIsHovered(true), []);
-  const hideNameHover = useCallback(() => setIsHovered(false), []);
   const isDirectory = entry.kind === "directory";
   const dragSourceRef = useWorkspaceFileDragSource({
     enabled: !isDirectory,
@@ -285,6 +291,32 @@ function TreeRowItem({
       (Boolean(hovered) || pressed || isSelected) && workspaceTreeRowStyles.active,
     ],
     [depth, isSelected],
+  );
+
+  const renderRowContent = useCallback(
+    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
+      <View ref={dragSourceRef} style={styles.entryInfo}>
+        <View style={styles.entryIcon}>
+          {isDirectory ? (
+            <DirectoryChevronIcon loading={loading} expanded={isExpanded} />
+          ) : (
+            <MaterialFileIcon fileName={entry.name} size={WORKSPACE_TREE_ICON_SIZE} />
+          )}
+        </View>
+        <Text
+          style={[
+            styles.entryName,
+            workspaceTreeRowStyles.name,
+            hovered && workspaceTreeRowStyles.nameHovered,
+          ]}
+          numberOfLines={1}
+          testID={testID ? `${testID}-name` : undefined}
+        >
+          {entry.name}
+        </Text>
+      </View>
+    ),
+    [dragSourceRef, entry.name, isDirectory, isExpanded, loading, testID],
   );
 
   const handleCopy = useCallback(() => {
@@ -346,32 +378,11 @@ function TreeRowItem({
         onLongPress={handleSelect}
         onContextMenu={handleSelect}
         style={pressableStyle}
-        onHoverIn={showNameHover}
-        onHoverOut={hideNameHover}
         accessibilityState={accessibilityState}
         aria-selected={isSelected}
         testID={testID}
       >
-        <View ref={dragSourceRef} style={styles.entryInfo}>
-          <View style={styles.entryIcon}>
-            {isDirectory ? (
-              <DirectoryChevronIcon loading={loading} expanded={isExpanded} />
-            ) : (
-              <MaterialFileIcon fileName={entry.name} size={WORKSPACE_TREE_ICON_SIZE} />
-            )}
-          </View>
-          <Text
-            style={[
-              styles.entryName,
-              workspaceTreeRowStyles.name,
-              isHovered && workspaceTreeRowStyles.nameHovered,
-            ]}
-            numberOfLines={1}
-            testID={testID ? `${testID}-name` : undefined}
-          >
-            {entry.name}
-          </Text>
-        </View>
+        {renderRowContent}
       </ContextMenuTrigger>
       <FileActionsContextMenuContent
         fileKind={entry.kind}
@@ -1152,7 +1163,6 @@ interface FileExplorerPaneContentProps {
 }
 
 function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const {
     error,
@@ -1234,7 +1244,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           <Text style={styles.sortTriggerText} testID="files-sort-label">
             {currentSortLabel}
           </Text>
-          <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+          <ThemedChevronDown size={12} uniProps={foregroundMutedColorMapping} />
         </Pressable>
         <ToolbarControls style={styles.headerActions}>
           {onNewEntryAtRoot ? (
@@ -1246,9 +1256,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
                 testID="files-new-file"
                 onPress={handleNewFileAtRoot}
               >
-                <FilePlus
+                <ThemedFilePlus
                   size={paneContentToolbarIconSize(isCompact)}
-                  color={theme.colors.foregroundExtraMuted}
+                  uniProps={foregroundExtraMutedColorMapping}
                 />
               </ToolbarButton>
               <ToolbarButton
@@ -1258,9 +1268,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
                 testID="files-new-folder"
                 onPress={handleNewFolderAtRoot}
               >
-                <FolderPlus
+                <ThemedFolderPlus
                   size={paneContentToolbarIconSize(isCompact)}
-                  color={theme.colors.foregroundExtraMuted}
+                  uniProps={foregroundExtraMutedColorMapping}
                 />
               </ToolbarButton>
             </>
@@ -1274,14 +1284,14 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
             onPress={handleToggleHiddenFiles}
           >
             {showHiddenFiles ? (
-              <Eye
+              <ThemedEye
                 size={paneContentToolbarIconSize(isCompact)}
-                color={theme.colors.foregroundExtraMuted}
+                uniProps={foregroundExtraMutedColorMapping}
               />
             ) : (
-              <EyeOff
+              <ThemedEyeOff
                 size={paneContentToolbarIconSize(isCompact)}
-                color={theme.colors.foregroundExtraMuted}
+                uniProps={foregroundExtraMutedColorMapping}
               />
             )}
           </ToolbarButton>
@@ -1299,14 +1309,14 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           >
             <View style={styles.refreshIcon}>
               {isRefreshFetching ? (
-                <LoadingSpinner
+                <ThemedLoadingSpinner
                   size={paneContentToolbarIconSize(isCompact)}
-                  color={theme.colors.foregroundExtraMuted}
+                  uniProps={foregroundExtraMutedColorMapping}
                 />
               ) : (
-                <RotateCw
+                <ThemedRotateCw
                   size={paneContentToolbarIconSize(isCompact)}
-                  color={theme.colors.foregroundExtraMuted}
+                  uniProps={foregroundExtraMutedColorMapping}
                 />
               )}
             </View>
