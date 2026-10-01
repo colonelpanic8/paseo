@@ -36,7 +36,9 @@ import {
   type ProjectPlacementPayload,
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
+  type WorkspaceSnoozeStatus,
 } from "./messages.js";
+import { resolveWorkspaceSnooze } from "./workspace-snooze.js";
 import type {
   TerminalManager,
   TerminalWorkspaceContributionChangedEvent,
@@ -60,6 +62,7 @@ import {
   sendPromptToAgent,
   waitForAgentRunStartWithTimeout,
   unarchiveAgentState,
+  isSystemInjectedEnvelope,
 } from "./agent/agent-prompt.js";
 import {
   resolveCreateAgentTitles,
@@ -245,6 +248,10 @@ import {
   type CreatePaseoWorktreeResult,
 } from "./paseo-worktree-service.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
+import {
+  buildWorkspaceConversationSeed,
+  type WorkspaceConversationSource,
+} from "./workspace-title-regenerator.js";
 import {
   buildAgentSessionConfig as buildWorktreeAgentSessionConfig,
   createPaseoWorktreeWorkflow as createWorktreeWorkflow,
@@ -1159,6 +1166,7 @@ export class Session {
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       listAgentPayloads: () => this.listAgentPayloads(),
+      listAgentActivityAt: () => this.listAgentActivityAt(),
       listProviderSubagentActivity: async () => this.agentManager.listProviderSubagentActivity(),
       listTerminalActivityContributions: () => this.listTerminalActivityContributions(),
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
@@ -2310,6 +2318,7 @@ export class Session {
       this.dispatchWorkspaceStateMessage(msg) ??
       this.dispatchWorkspaceLabelMessage(msg) ??
       this.dispatchWorkspaceSetupMessage(msg) ??
+      this.dispatchWorkspaceMetadataMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg)
     );
   }
@@ -2905,10 +2914,27 @@ export class Session {
         return this.handleArchiveWorkspaceRequest(msg);
       case "project.remove.request":
         return this.handleProjectRemoveRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchWorkspaceMetadataMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
       case "workspace.title.set.request":
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
+      case "workspace.title.regenerate.request":
+        return this.handleWorkspaceTitleRegenerateRequest(msg.workspaceId, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      case "workspace.snooze.set.request":
+        return this.handleWorkspaceSnoozeSetRequest(
+          msg.workspaceId,
+          msg.snoozedUntil,
+          msg.requestId,
+        );
+      case "workspace.archived.list.request":
+        return this.handleWorkspaceArchivedListRequest(msg);
       default:
         return undefined;
     }
@@ -3743,6 +3769,101 @@ export class Session {
     }
   }
 
+  private async handleWorkspaceTitleRegenerateRequest(
+    workspaceId: string,
+    requestId: string,
+  ): Promise<void> {
+    this.sessionLogger.info(
+      { workspaceId, requestId },
+      "session: workspace.title.regenerate.request",
+    );
+    const emitResponse = (title: string | null, error: string | null) => {
+      this.emit({
+        type: "workspace.title.regenerate.response",
+        payload: { requestId, workspaceId, accepted: error === null, title, error },
+      });
+    };
+
+    try {
+      const workspace = await this.workspaceRegistry.get(workspaceId);
+      if (!workspace) {
+        emitResponse(null, "Workspace not found");
+        return;
+      }
+      const seed = buildWorkspaceConversationSeed(
+        await this.collectWorkspaceConversationSources(workspaceId),
+      );
+      if (!seed) {
+        emitResponse(null, "Workspace has no agent conversation to title from");
+        return;
+      }
+      const title = await this.workspaceAutoName.generateTitleFromConversation({
+        cwd: workspace.cwd,
+        seed,
+        currentSelection: this.getFocusedAgentSelectionForCwd(workspace.cwd) ?? null,
+      });
+      if (!title) {
+        emitResponse(null, "Title generation failed");
+        return;
+      }
+      const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
+        ...existing,
+        title,
+        updatedAt: new Date().toISOString(),
+      }));
+      if (!updated) {
+        emitResponse(null, "Workspace not found");
+        return;
+      }
+      emitResponse(title, null);
+      await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, workspaceId, requestId },
+        "session: workspace.title.regenerate.request error",
+      );
+      emitResponse(null, getErrorMessageOr(error, "Failed to regenerate workspace title"));
+    }
+  }
+
+  // Live agents contribute their conversation; unloaded ones only their stored title, since
+  // loading them would resume provider sessions just to read history.
+  private async collectWorkspaceConversationSources(
+    workspaceId: string,
+  ): Promise<WorkspaceConversationSource[]> {
+    const liveAgents = this.agentManager
+      .listAgents()
+      .filter((agent) => agent.workspaceId === workspaceId && !agent.internal)
+      .toSorted(
+        (left, right) =>
+          (right.lastMessageAt?.getTime() ?? 0) - (left.lastMessageAt?.getTime() ?? 0),
+      );
+    const liveIds = new Set(liveAgents.map((agent) => agent.id));
+    const storedRecords = await this.agentStorage.listByWorkspace(workspaceId);
+    const storedTitles = new Map(storedRecords.map((record) => [record.id, record.title]));
+    const sources: WorkspaceConversationSource[] = [];
+    for (const agent of liveAgents) {
+      const rows = await this.agentManager.getTimelineRows(agent.id);
+      const userMessages = rows.flatMap((row) =>
+        row.item.type === "user_message" && !isSystemInjectedEnvelope(row.item.text)
+          ? [row.item.text]
+          : [],
+      );
+      sources.push({
+        title: storedTitles.get(agent.id) ?? agent.config.title ?? null,
+        userMessages,
+        lastAssistantMessage: await this.agentManager.getLastAssistantMessage(agent.id),
+      });
+    }
+    for (const record of storedRecords) {
+      if (liveIds.has(record.id) || record.internal || record.archivedAt || !record.title) {
+        continue;
+      }
+      sources.push({ title: record.title, userMessages: [], lastAssistantMessage: null });
+    }
+    return sources;
+  }
+
   private async handleWorkspacePinSetRequest(
     workspaceId: string,
     pinned: boolean,
@@ -3789,6 +3910,61 @@ export class Session {
     }
   }
 
+  private async handleWorkspaceSnoozeSetRequest(
+    workspaceId: string,
+    snoozedUntil: string | null,
+    requestId: string,
+  ): Promise<void> {
+    const logContext = { workspaceId, snoozedUntil, requestId };
+    this.sessionLogger.info(logContext, "session: workspace.snooze.set.request");
+    const emitResponse = (
+      accepted: boolean,
+      snoozeStatus: WorkspaceSnoozeStatus | null,
+      error: string | null,
+    ) => {
+      this.emit({
+        type: "workspace.snooze.set.response",
+        payload: { requestId, workspaceId, accepted, snoozeStatus, error },
+      });
+    };
+
+    try {
+      const now = new Date();
+      const resolved = resolveWorkspaceSnooze({ snoozedUntil, now });
+      if (!resolved.ok) {
+        emitResponse(false, null, resolved.error);
+        return;
+      }
+      const updatedAt = now.toISOString();
+      const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
+        ...existing,
+        snoozeStatus: resolved.snoozeStatus,
+        updatedAt,
+      }));
+      if (!updated) {
+        emitResponse(false, null, "Workspace not found");
+        return;
+      }
+      emitResponse(true, resolved.snoozeStatus, null);
+      await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
+    } catch (error) {
+      this.sessionLogger.error(
+        { ...logContext, err: error },
+        "session: workspace.snooze.set.request error",
+      );
+      this.emit({
+        type: "activity_log",
+        payload: {
+          id: uuidv4(),
+          timestamp: new Date(),
+          type: "error",
+          content: `Failed to snooze workspace: ${getErrorMessage(error)}`,
+        },
+      });
+      emitResponse(false, null, getErrorMessageOr(error, "Failed to snooze workspace"));
+    }
+  }
+
   private async handleWorkspaceRecoveryInspectRequest(
     request: Extract<SessionInboundMessage, { type: "workspace.recovery.inspect.request" }>,
   ): Promise<void> {
@@ -3799,6 +3975,40 @@ export class Session {
         requestId: request.requestId,
         state,
       },
+    });
+  }
+
+  private async handleWorkspaceArchivedListRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.archived.list.request" }>,
+  ): Promise<void> {
+    const [workspaces, projects] = await Promise.all([
+      this.workspaceRegistry.list(),
+      this.projectRegistry.list(),
+    ]);
+    const activeProjects = new Map(
+      projects
+        .filter((project) => !project.archivedAt)
+        .map((project) => [project.projectId, project] as const),
+    );
+    const entries = workspaces
+      .flatMap((workspace) => {
+        if (!workspace.archivedAt) return [];
+        const project = activeProjects.get(workspace.projectId);
+        if (!project) return [];
+        return [
+          {
+            id: workspace.workspaceId,
+            projectDisplayName: resolveProjectDisplayName(project),
+            name: resolveWorkspaceDisplayName(workspace),
+            archivedAt: workspace.archivedAt,
+          },
+        ];
+      })
+      .sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
+      .slice(0, 25);
+    this.emit({
+      type: "workspace.archived.list.response",
+      payload: { requestId: request.requestId, entries },
     });
   }
 
@@ -5208,6 +5418,25 @@ export class Session {
     return agents;
   }
 
+  private async listAgentActivityAt(): Promise<ReadonlyMap<string, string>> {
+    const records = await this.agentStorage.list();
+    const activityAtByAgentId = new Map<string, string>();
+    for (const record of records) {
+      const lastMessageAt = record.lastMessageAt ?? record.lastUserMessageAt;
+      if (lastMessageAt) {
+        activityAtByAgentId.set(record.id, lastMessageAt);
+      }
+    }
+    for (const agent of this.agentManager.listAgents()) {
+      if (agent.lastMessageAt) {
+        activityAtByAgentId.set(agent.id, agent.lastMessageAt.toISOString());
+      } else {
+        activityAtByAgentId.delete(agent.id);
+      }
+    }
+    return activityAtByAgentId;
+  }
+
   private async resolveAgentIdentifier(
     identifier: string,
   ): Promise<{ ok: true; agentId: string } | { ok: false; error: string }> {
@@ -5538,6 +5767,7 @@ export class Session {
       name: resolveWorkspaceDisplayName(workspace),
       title: workspace.title,
       pinnedAt: workspace.pinnedAt,
+      snoozeStatus: workspace.snoozeStatus,
       ...(workspace.labels && workspace.labels.length > 0 ? { labels: workspace.labels } : {}),
       archivingAt: null,
       status: "done",
@@ -5630,6 +5860,7 @@ export class Session {
       }),
       title: result.workspace.title,
       pinnedAt: result.workspace.pinnedAt,
+      snoozeStatus: result.workspace.snoozeStatus,
       ...(result.workspace.labels && result.workspace.labels.length > 0
         ? { labels: result.workspace.labels }
         : {}),
