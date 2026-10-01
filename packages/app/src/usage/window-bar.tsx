@@ -4,7 +4,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { clampPct, formatDisplayPct, formatResetLabel } from "./format";
 import { displayPercent, usageWindowRowLabel, usedPercent } from "./model";
 import type { UsageDisplayAs } from "./preferences";
-import { deriveTone } from "./tone";
+import { resolveWindowBarTone } from "./tone";
 import type { UsageTone, UsageWindow } from "./types";
 
 function fillToneStyle(tone: UsageTone) {
@@ -45,7 +45,7 @@ export function UsageWindowBar({
 }) {
   const usedPct = usedPercent(window);
   const shownPct = displayPercent(window, displayAs);
-  const tone = window.tone ?? deriveTone(usedPct);
+  const tone = resolveWindowBarTone(displayAs, usedPct, window.tone);
 
   const fillWidth = clampPct(shownPct ?? 0);
   const fillStyle = useMemo<StyleProp<ViewStyle>>(
