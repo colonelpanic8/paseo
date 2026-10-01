@@ -84,7 +84,7 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
   const fixture = await installUsageReportsFixture(page, {
     lists: [
       () => {
-        const payload = consumeSettled ? payloads[payloads.length - 1]! : initial;
+        const payload = consumeSettled ? payloads[payloads.length - 1]! : payloads[0]!;
         return payload.providers.map((provider) => ({
           id: `${provider.providerId}:default`,
           sourceId: provider.providerId,
