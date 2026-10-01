@@ -104,7 +104,7 @@ export async function openBankedResetManagement(page: Page, options: BankedReset
     ];
   }
   const fixture = await installUsageReportsFixture(page, {
-    lists: [() => usageEntries(consumeSettled ? payloads[payloads.length - 1]! : initial)],
+    lists: [() => usageEntries(consumeSettled ? payloads[payloads.length - 1]! : payloads[0]!)],
     supportsBankedResets: options.supportsBankedResets,
     consume: async (request) => {
       requests.push(request);
