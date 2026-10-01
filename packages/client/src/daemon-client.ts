@@ -5696,11 +5696,34 @@ export class DaemonClient {
     });
   }
 
-  async listProviderUsage(options?: { requestId?: string }): Promise<ProviderUsageListPayload> {
+  async consumeCodexBankedReset(options: {
+    reportId?: string;
+    creditId: string;
+    idempotencyKey: string;
+    requestId?: string;
+  }) {
+    return this.sendNamespacedCorrelatedSessionRequest<"provider.codex.consume_banked_reset.response">(
+      {
+        requestId: options.requestId,
+        message: {
+          type: "provider.codex.consume_banked_reset.request",
+          ...(options.reportId ? { reportId: options.reportId } : {}),
+          creditId: options.creditId,
+          idempotencyKey: options.idempotencyKey,
+        },
+      },
+    );
+  }
+
+  async listProviderUsage(options?: {
+    requestId?: string;
+    forceRefresh?: boolean;
+  }): Promise<ProviderUsageListPayload> {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
         type: "provider.usage.list.request",
+        ...(options?.forceRefresh ? { forceRefresh: true } : {}),
       },
     });
   }
@@ -5736,6 +5759,7 @@ export class DaemonClient {
               windows: provider.windows,
               balances: provider.balances ?? undefined,
               details: provider.details ?? undefined,
+              bankedResets: provider.bankedResets,
               planLabel: provider.planLabel ?? undefined,
               error: provider.error ?? undefined,
             },

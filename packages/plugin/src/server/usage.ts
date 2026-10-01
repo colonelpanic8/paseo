@@ -1,3 +1,4 @@
+import type { CodexBankedResets } from "@getpaseo/protocol/messages";
 import { createHash } from "node:crypto";
 import type { ZodType } from "zod";
 import type { JsonValue } from "@getpaseo/protocol/agent-types";
@@ -32,6 +33,7 @@ export interface UsageDetail {
 }
 
 export interface UsageReport {
+  bankedResets?: CodexBankedResets;
   status: "available" | "unavailable" | "error";
   planLabel?: string;
   windows: UsageWindow[];

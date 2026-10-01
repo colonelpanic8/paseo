@@ -21,6 +21,12 @@ interface UsageReportsFixtureOptions {
   lists?: Array<UsageListResponse | ((request: UsageListRequest) => UsageListResponse)>;
   /** False simulates a host with no usage reporting capability. */
   usageSupported?: boolean;
+  supportsBankedResets?: boolean;
+  consume?: (request: {
+    reportId?: string;
+    creditId: string;
+    idempotencyKey: string;
+  }) => Promise<{ outcome?: string; error?: string }>;
   /** Released hosts expose provider.usage.list with no source icons. */
   providerUsageListOnly?: boolean;
   /** The host daemon's port; defaults to the E2E daemon. */
@@ -52,6 +58,7 @@ function withUsageSupportFeature(
   message: WebSocketMessage,
   enabled: boolean,
   providerUsageListOnly: boolean,
+  supportsBankedResets: boolean,
 ): string | null {
   const envelope = parseJson(message) as {
     type?: unknown;
@@ -77,6 +84,7 @@ function withUsageSupportFeature(
           ...features,
           usageSources: enabled && !providerUsageListOnly,
           providerUsageList: enabled,
+          codexBankedResets: supportsBankedResets,
         },
       },
     },
@@ -127,6 +135,36 @@ export async function installUsageReportsFixture(
     ws.onMessage((message) => {
       const request = getSessionMessage(message);
       const requestId = request?.requestId;
+      if (
+        request?.type === "provider.codex.consume_banked_reset.request" &&
+        typeof requestId === "string" &&
+        options.consume
+      ) {
+        void options
+          .consume({
+            reportId: typeof request.reportId === "string" ? request.reportId : undefined,
+            creditId: String(request.creditId),
+            idempotencyKey: String(request.idempotencyKey),
+          })
+          .then((result) => {
+            const reply = result.error
+              ? {
+                  type: "rpc_error",
+                  payload: {
+                    requestId,
+                    requestType: request.type,
+                    error: result.error,
+                    code: "codex_banked_reset_failed",
+                  },
+                }
+              : {
+                  type: "provider.codex.consume_banked_reset.response",
+                  payload: { requestId, outcome: result.outcome },
+                };
+            return ws.send(JSON.stringify({ type: "session", message: reply }));
+          });
+        return;
+      }
       if (request?.type === requestType && typeof requestId === "string") {
         const listRequest: UsageListRequest = {
           forceRefresh: request.forceRefresh === true,
@@ -181,7 +219,12 @@ export async function installUsageReportsFixture(
     server.onMessage((message) => {
       const serverInfo =
         typeof message === "string"
-          ? withUsageSupportFeature(message, usageSupported, providerUsageListOnly)
+          ? withUsageSupportFeature(
+              message,
+              usageSupported,
+              providerUsageListOnly,
+              options.supportsBankedResets ?? true,
+            )
           : null;
       ws.send(serverInfo ?? message);
     });

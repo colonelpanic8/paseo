@@ -1,3 +1,4 @@
+import { fetchBankedResets } from "./banked-resets.js";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -23,6 +24,7 @@ const authSchema = z.object({
 const number = z.coerce.number().finite();
 const windowSchema = z.object({ used_percent: number.optional(), reset_at: number.optional() });
 const responseSchema = z.object({
+  rate_limit_reset_credits: z.object({ available_count: z.number().int().nonnegative() }).nullish(),
   plan_type: z.string().optional(),
   email: z.string().optional(),
   rate_limit: z
@@ -107,6 +109,16 @@ export async function fetchUsage(
   const balance = usage.credits?.balance;
   return {
     status: "available",
+    bankedResets: usage.rate_limit_reset_credits
+      ? await fetchBankedResets(
+          {
+            token: auth.token,
+            accountId: auth.accountId,
+            availableCount: usage.rate_limit_reset_credits.available_count,
+          },
+          fetchApi,
+        )
+      : undefined,
     planLabel: usage.plan_type,
     windows,
     balances:

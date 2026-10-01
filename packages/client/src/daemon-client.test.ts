@@ -6673,6 +6673,7 @@ test("maps released-host usage reports and filters report IDs", async () => {
       windows: [],
       balances: [],
       details: [],
+      bankedResets: { availableCount: 2, credits: [], error: null },
       error: "unavailable",
     },
   ];
@@ -6697,6 +6698,7 @@ test("maps released-host usage reports and filters report IDs", async () => {
         windows: providers[0]!.windows,
         balances: undefined,
         details: undefined,
+        bankedResets: undefined,
         error: undefined,
       },
     },
@@ -6716,6 +6718,7 @@ test("maps released-host usage reports and filters report IDs", async () => {
         windows: [],
         balances: [],
         details: [],
+        bankedResets: { availableCount: 2, credits: [], error: null },
         error: "unavailable",
       },
     },
@@ -7286,6 +7289,47 @@ test("reviewed plugin updates gate before requests and preserve exact proposal d
     ]);
   }
 });
+
+test.each([undefined, "codex:provider.codex-work"])(
+  "correlates banked reset redemption for report %s and preserves the idempotency key",
+  async (reportId) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_unit_test",
+      logger: createMockLogger(),
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen();
+    await connected;
+    const result = client.consumeCodexBankedReset({
+      requestId: "reset-request",
+      ...(reportId ? { reportId } : {}),
+      creditId: "reset-1",
+      idempotencyKey: "attempt-1",
+    });
+    expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+      type: "session",
+      message: {
+        type: "provider.codex.consume_banked_reset.request",
+        requestId: "reset-request",
+        ...(reportId ? { reportId } : {}),
+        creditId: "reset-1",
+        idempotencyKey: "attempt-1",
+      },
+    });
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "provider.codex.consume_banked_reset.response",
+        payload: { requestId: "reset-request", outcome: "reset" },
+      }),
+    );
+    await expect(result).resolves.toEqual({ requestId: "reset-request", outcome: "reset" });
+  },
+);
 
 test.each([
   [undefined, false],

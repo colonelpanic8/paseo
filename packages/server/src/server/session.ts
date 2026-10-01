@@ -565,7 +565,14 @@ export interface SessionOptions {
       forceRefresh?: boolean;
       reportIds?: string[];
     }): Promise<UsageReportEntry[]>;
-    listLegacyUsage(): Promise<{ fetchedAt: string; providers: ProviderUsage[] }>;
+    consumeCodexBankedReset?(input: {
+      reportId?: string;
+      creditId: string;
+      idempotencyKey: string;
+    }): Promise<import("@getpaseo/protocol/messages").CodexBankedResetOutcome>;
+    listLegacyUsage(options?: {
+      forceRefresh?: boolean;
+    }): Promise<{ fetchedAt: string; providers: ProviderUsage[] }>;
   };
   orchestrationSkills?: import("./orchestration-skills/index.js").OrchestrationSkills;
   mcpBaseUrl?: string | null;
@@ -3442,6 +3449,8 @@ export class Session {
         return this.providerCatalogSession.handleRefreshProvidersSnapshotRequest(msg);
       case "provider_diagnostic_request":
         return this.providerCatalogSession.handleProviderDiagnosticRequest(msg);
+      case "provider.codex.consume_banked_reset.request":
+        return this.usageSession.handleCodexBankedResetConsumeRequest(msg);
       case "provider.usage.list.request":
         return this.usageSession.handleLegacyList(msg);
       case "usage.list_reports.request":

@@ -250,3 +250,80 @@ test("removed accounts disappear and legacy responses preserve configured provid
   registry.invalidateReports((id) => id.startsWith("codex:"));
   expect(await registry.listReports({ reportIds: ["codex:provider.codex-work"] })).toEqual([]);
 });
+
+test("actions select the named Codex account or the explicit default regardless of discovery order", async () => {
+  const registry = new UsageSourceRegistry();
+  let accounts = [{ account: "work", providerId: "codex-work" }, {}];
+  registry.register(
+    source({
+      id: "codex",
+      discover: async () => accounts,
+      identify: async (input) => ({
+        key: "providerId" in (input as object) ? "provider.codex-work" : "default",
+      }),
+    }),
+  );
+  const called: unknown[] = [];
+  await registry.runReportAction("codex", undefined, async (input) => {
+    called.push(input);
+    return "reset";
+  });
+  await registry.runReportAction("codex", "codex:provider.codex-work", async (input) => {
+    called.push(input);
+    return "reset";
+  });
+  expect(called).toEqual([{}, { account: "work", providerId: "codex-work" }]);
+  accounts = [{}];
+  await expect(
+    registry.runReportAction("codex", "codex:provider.codex-work", async () => {
+      throw new Error("should not run");
+    }),
+  ).rejects.toThrow("no longer available");
+  registry.register(source({ id: "claude", discover: async () => [{ account: "work" }] }));
+  await expect(
+    registry.runReportAction("codex", "claude:work", async () => {
+      throw new Error("should not run");
+    }),
+  ).rejects.toThrow("no longer available");
+});
+
+test("failed actions invalidate both cached and pending usage because a credit may have been spent", async () => {
+  const registry = new UsageSourceRegistry();
+  let usedPct = 100;
+  let finish!: (value: unknown) => void;
+  let began!: () => void;
+  const started = new Promise<void>((resolve) => {
+    began = resolve;
+  });
+  let calls = 0;
+  registry.register(
+    source({
+      id: "codex",
+      discover: async () => [{}],
+      identify: async () => ({ key: "default" }),
+      fetch: async () => {
+        calls++;
+        if (calls === 2) {
+          began();
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        }
+        return { status: "available", windows: [{ id: "weekly", label: "Weekly", usedPct }] };
+      },
+    }),
+  );
+  await registry.listReports();
+  const pending = registry.listReports({ forceRefresh: true });
+  await started;
+  await expect(
+    registry.runReportAction("codex", undefined, async () => {
+      usedPct = 0;
+      throw new Error("Timed out");
+    }),
+  ).rejects.toThrow("Timed out");
+  expect((await registry.listReports())[0]?.report.windows[0]?.usedPct).toBe(0);
+  finish({ status: "available", windows: [{ id: "weekly", label: "Weekly", usedPct: 100 }] });
+  expect((await pending)[0]?.report.windows[0]?.usedPct).toBe(0);
+  expect((await registry.listReports())[0]?.report.windows[0]?.usedPct).toBe(0);
+});

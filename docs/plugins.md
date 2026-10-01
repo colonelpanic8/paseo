@@ -468,6 +468,18 @@ Register a usage source from `index.server.ts` with `server.registerUsageSource(
 
 The daemon calls discovery for `usage.list_reports`; the client gates this RPC on `server_info.features.usageSources`. The old `provider.usage.list` RPC maps discovered reports for older clients. See the [public usage source reference](../public-docs/plugins/reference.md#usage-sources) for the author contract and minimum version.
 
+The Codex built-in source can include `bankedResets` in a report. Its typed
+`codex.consume_banked_reset` RPC receives the report's discovered credential input,
+a selected credit ID, and an idempotency key. The daemon accepts an optional report ID
+on `provider.codex.consume_banked_reset`, rediscovers and verifies the Codex account
+before invocation, and explicitly selects the default profile for older clients.
+Redemption requires `daemon.manage`. Credentials stay in the plugin runtime.
+
+Confirm before spending a credit, reuse the idempotency key on a user retry, and never
+automatically retry the POST. Invalidate cached and pending usage after every attempt:
+a timeout can occur after the reset was applied. Reset-detail transport failures keep
+ordinary quota windows available; each credit retains its plan eligibility.
+
 ## Contribute sidebar items
 
 Sidebar header and footer items are plugin components, not descriptors. The

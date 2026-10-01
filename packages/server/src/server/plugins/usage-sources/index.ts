@@ -49,6 +49,35 @@ export class UsageSourceRegistry {
     }
   }
 
+  async runReportAction<Result>(
+    sourceId: string,
+    reportId: string | undefined,
+    action: (input: unknown) => Promise<Result>,
+  ): Promise<Result> {
+    const generation = this.generation;
+    const discovered = await this.discoverReportIds();
+    if (generation !== this.generation) return this.runReportAction(sourceId, reportId, action);
+    const id =
+      reportId ??
+      discovered.find((candidate) => {
+        const report = this.known.get(candidate);
+        return (
+          report?.source.id === sourceId &&
+          report.input !== null &&
+          typeof report.input === "object" &&
+          Object.keys(report.input).length === 0
+        );
+      });
+    const report = id ? this.known.get(id) : undefined;
+    if (!id || !discovered.includes(id) || report?.source.id !== sourceId)
+      throw new Error("This Codex account is no longer available. Refresh usage before retrying.");
+    try {
+      return await action(report.input);
+    } finally {
+      this.invalidateReports((candidate) => candidate === id);
+    }
+  }
+
   private async identify(source: UsageSource, input: unknown): Promise<string | null> {
     try {
       const account = await source.identify(input);
@@ -117,8 +146,10 @@ export class UsageSourceRegistry {
   }
 
   // COMPAT(providerUsageList): added in v0.1.98, remove after 2027-03-26.
-  async listLegacyUsage(): Promise<{ fetchedAt: string; providers: ProviderUsage[] }> {
-    const reports = await this.listReports();
+  async listLegacyUsage(
+    options: { forceRefresh?: boolean } = {},
+  ): Promise<{ fetchedAt: string; providers: ProviderUsage[] }> {
+    const reports = await this.listReports(options);
     return {
       fetchedAt: reports.length
         ? reports.reduce(
@@ -140,6 +171,7 @@ export class UsageSourceRegistry {
           windows: entry.report.windows,
           balances: entry.report.balances ?? [],
           details: entry.report.details ?? [],
+          bankedResets: entry.report.bankedResets,
           error: entry.report.error ?? null,
         };
         if (custom) provider.baseProviderId = entry.sourceId;

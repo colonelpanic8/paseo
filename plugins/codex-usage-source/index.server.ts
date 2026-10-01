@@ -1,8 +1,11 @@
+import { consumeBankedResetRpc } from "./shared/banked-resets.js";
+import { consumeBankedReset } from "./server/banked-resets.js";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { inputSchema } from "./shared/input.js";
 import { fetchUsage, identify } from "./server/usage.js";
 
 export default function contribute(server: PluginServerContext) {
+  server.handle(consumeBankedResetRpc, (input) => consumeBankedReset(input));
   server.registerUsageSource({
     id: "codex",
     label: "Codex",

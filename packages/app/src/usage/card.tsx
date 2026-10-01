@@ -1,3 +1,4 @@
+import { CodexBankedResetManagement } from "./banked-resets";
 import { RotateCw } from "lucide-react-native";
 import { useCallback, useMemo } from "react";
 import { Text, View, type StyleProp, type TextStyle } from "react-native";
@@ -118,6 +119,15 @@ export function UsageCard({
             </View>
           ))}
         </View>
+      ) : null}
+
+      {entry.sourceId === "codex" && !compact ? (
+        <CodexBankedResetManagement
+          serverId={serverId}
+          reportId={entry.id}
+          resets={usage.bankedResets}
+          onSettled={refresh}
+        />
       ) : null}
 
       {footer || showsFreshnessInline ? (

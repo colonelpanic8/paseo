@@ -2,6 +2,7 @@ import {
   ACCOUNT_USAGE_SOURCES,
   providerAccountUsageInputs,
 } from "./usage-sources/provider-accounts.js";
+import { CodexBankedResetOutcomeSchema } from "@getpaseo/protocol/messages";
 import type { PluginLifecycle } from "./lifecycle/index.js";
 import path from "node:path";
 import { stat, rm } from "node:fs/promises";
@@ -152,8 +153,20 @@ export class PluginService {
     return this.usageSources.listReports(options);
   }
 
-  listLegacyUsage() {
-    return this.usageSources.listLegacyUsage();
+  consumeCodexBankedReset(input: { reportId?: string; creditId: string; idempotencyKey: string }) {
+    return this.usageSources.runReportAction("codex", input.reportId, async (usageInput) =>
+      CodexBankedResetOutcomeSchema.parse(
+        await this.runtime.invoke("codex-usage-source", "codex.consume_banked_reset", {
+          usageInput,
+          creditId: input.creditId,
+          idempotencyKey: input.idempotencyKey,
+        }),
+      ),
+    );
+  }
+
+  listLegacyUsage(options?: { forceRefresh?: boolean }) {
+    return this.usageSources.listLegacyUsage(options);
   }
 
   subscribeProviderRegistrations(listener: () => void): () => void {
