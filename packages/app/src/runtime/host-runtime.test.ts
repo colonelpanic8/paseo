@@ -920,7 +920,7 @@ describe("HostRuntimeController", () => {
       },
     });
 
-    const probeCycle = controller.runProbeCycleNow();
+    const starting = controller.start({ autoProbe: false });
 
     const timeoutAt = Date.now() + 200;
     while (Date.now() < timeoutAt) {
@@ -938,7 +938,7 @@ describe("HostRuntimeController", () => {
     expect(controller.getSnapshot().connectionStatus).toBe("online");
 
     slowPing.resolve(30);
-    await probeCycle;
+    await starting;
   });
 
   it("ranks the live connection by its heartbeat RTT without pinging it again", async () => {
@@ -1707,7 +1707,7 @@ describe("HostRuntimeController", () => {
       },
     });
 
-    const first = controller.runProbeCycleNow();
+    const first = controller.start({ autoProbe: false });
     const second = controller.runProbeCycleNow();
     expect(probeCalls).toBe(1);
 
@@ -1762,6 +1762,105 @@ describe("HostRuntimeController", () => {
     expect(controller.getSnapshot().client).toBe(activeClientBeforeProbes);
     expect(controller.getSnapshot().clientGeneration).toBe(generationBeforeProbes);
     expect(createdClients).toHaveLength(0);
+  });
+
+  it("stays stopped when stopped during its first probe cycle", async () => {
+    useHostRuntimeClock();
+    const host = makeHost({
+      connections: [{ id: "direct:lan:6767", type: "directTcp", endpoint: "lan:6767" }],
+    });
+    const firstProbe = new Deferred<void>();
+    const probeClients: FakeDaemonClient[] = [];
+    const controller = new HostRuntimeController({
+      host,
+      deps: {
+        createClient: () => {
+          throw new Error("a stopped controller must not create clients");
+        },
+        connectToDaemon: async ({ host: hostProfile }) => {
+          const client = makeConnectedProbeClient(10);
+          probeClients.push(client);
+          if (probeClients.length === 1) {
+            await firstProbe.promise;
+          }
+          return {
+            client: client as unknown as DaemonClient,
+            serverId: hostProfile.serverId,
+            hostname: null,
+          };
+        },
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    const starting = controller.start();
+    await controller.stop();
+    firstProbe.resolve();
+    await starting;
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(probeClients).toHaveLength(1);
+    expect(probeClients[0]?.isDisposed()).toBe(true);
+    expect(controller.getSnapshot().connectionStatus).toBe("offline");
+    expect(controller.getSnapshot().activeConnectionId).toBeNull();
+    expect(controller.getSnapshot().client).toBeNull();
+  });
+
+  it("stays stopped when stopped while a host update reconnects", async () => {
+    const oldRelay: HostConnection = {
+      id: "relay:wss:relay.paseo.sh:443",
+      type: "relay",
+      relayEndpoint: "relay.paseo.sh:443",
+      useTls: true,
+      daemonPublicKeyB64: "pk_old",
+    };
+    const newRelay: HostConnection = { ...oldRelay, daemonPublicKeyB64: "pk_new" };
+    const connectStarted = new Deferred<void>();
+    const pendingConnect = new Deferred<void>();
+    let probeCalls = 0;
+    const controller = new HostRuntimeController({
+      host: makeHost({ connections: [oldRelay], preferredConnectionId: oldRelay.id }),
+      deps: {
+        createClient: () => {
+          const client = new FakeDaemonClient();
+          client.connect = async () => {
+            connectStarted.resolve();
+            await pendingConnect.promise;
+            client.setConnectionState({ status: "connected" });
+          };
+          return client as unknown as DaemonClient;
+        },
+        connectToDaemon: async ({ host }) => {
+          probeCalls += 1;
+          return {
+            client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+            serverId: host.serverId,
+            hostname: null,
+          };
+        },
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+    await controller.start({
+      autoProbe: false,
+      initialConnection: {
+        connectionId: oldRelay.id,
+        existingClient: makeConnectedProbeClient(5) as unknown as DaemonClient,
+      },
+    });
+
+    const updating = controller.updateHost(
+      makeHost({ connections: [newRelay], preferredConnectionId: newRelay.id }),
+    );
+    await connectStarted.promise;
+    await controller.stop();
+    pendingConnect.resolve();
+    await updating;
+
+    expect(probeCalls).toBe(0);
+    expect(controller.getSnapshot().connectionStatus).toBe("offline");
+    expect(controller.getSnapshot().client).toBeNull();
   });
 });
 
@@ -2426,6 +2525,131 @@ describe("HostRuntimeStore", () => {
     await onceHostListMatches(store, () => store.getHosts()[0]?.declaredColor === "teal");
     expect(store.getHosts()[0]?.declaredColor).toBe("teal");
     store.syncHosts([]);
+  });
+
+  it("does not reconnect or restore the session of a host removed during its first probe", async () => {
+    useHostRuntimeClock();
+    const serverId = "srv_removed_while_probing";
+    const firstProbe = new Deferred<void>();
+    let probeCalls = 0;
+    let mountedHandlers = 0;
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage(),
+      deps: {
+        createClient: () => {
+          throw new Error("a removed host must not create clients");
+        },
+        connectToDaemon: async ({ host }) => {
+          probeCalls += 1;
+          if (probeCalls === 1) {
+            await firstProbe.promise;
+          }
+          return {
+            client: makeConnectedProbeClient(10) as unknown as DaemonClient,
+            serverId: host.serverId,
+            hostname: null,
+          };
+        },
+        getClientId: async () => "cid_test_runtime",
+        mountClientHandlers: () => {
+          mountedHandlers += 1;
+          return () => {};
+        },
+      },
+    });
+    await store.upsertDirectConnection({ serverId, endpoint: "unreachable.paseo.test:6767" });
+    expect(probeCalls).toBe(1);
+
+    await store.removeHost(serverId);
+    let notificationsAfterRemoval = 0;
+    store.subscribe(serverId, () => {
+      notificationsAfterRemoval += 1;
+    });
+    firstProbe.resolve();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(probeCalls).toBe(1);
+    expect(mountedHandlers).toBe(0);
+    expect(notificationsAfterRemoval).toBe(0);
+    expect(store.getHosts()).toEqual([]);
+    expect(store.getSnapshot(serverId)).toBeNull();
+    expect(useSessionStore.getState().sessions[serverId]).toBeUndefined();
+  });
+
+  it("does not reconnect or notify the store when removed during a host update", async () => {
+    useHostRuntimeClock();
+    const serverId = "srv_removed_while_updating";
+    const connection: HostConnection = {
+      id: "direct:lan:6767",
+      type: "directTcp",
+      endpoint: "lan:6767",
+    };
+    const host = makeHost({ serverId, connections: [connection] });
+    const connectStarted = createDeferred<void>();
+    const pendingConnect = createDeferred<void>();
+    const pendingClose = createDeferred<void>();
+    class UpdatingClient extends FakeDaemonClient {
+      override async connect(): Promise<void> {
+        connectStarted.resolve();
+        await pendingConnect.promise;
+        await super.connect();
+      }
+
+      override async close(): Promise<void> {
+        await pendingClose.promise;
+        await super.close();
+      }
+    }
+    const updatedClient = new UpdatingClient();
+    let createdClients = 0;
+    let probeCalls = 0;
+    let mountedHandlers = 0;
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage(),
+      deps: {
+        createClient: () => {
+          createdClients += 1;
+          return updatedClient as unknown as DaemonClient;
+        },
+        connectToDaemon: async ({ host: profile }) => {
+          probeCalls += 1;
+          return {
+            client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+            serverId: profile.serverId,
+            hostname: null,
+          };
+        },
+        getClientId: async () => "cid_test_runtime",
+        mountClientHandlers: () => {
+          mountedHandlers += 1;
+          return () => {};
+        },
+      },
+    });
+    await store.upsertDirectConnection({ serverId, endpoint: connection.endpoint });
+    await waitForHostOnline(store, serverId);
+    const probesBeforeUpdate = probeCalls;
+    const handlersBeforeUpdate = mountedHandlers;
+
+    store.syncHosts([{ ...host, connections: [{ ...connection, endpoint: "new-lan:6767" }] }]);
+    await connectStarted.promise;
+    await store.removeHost(serverId);
+    let notificationsAfterRemoval = 0;
+    const unsubscribe = store.subscribe(serverId, () => {
+      notificationsAfterRemoval += 1;
+    });
+    pendingConnect.resolve();
+    pendingClose.resolve();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(createdClients).toBe(1);
+    expect(probeCalls).toBe(probesBeforeUpdate);
+    expect(mountedHandlers).toBe(handlersBeforeUpdate);
+    expect(notificationsAfterRemoval).toBe(0);
+    expect(store.getHosts()).toEqual([]);
+    expect(store.getSnapshot(serverId)).toBeNull();
+    expect(useSessionStore.getState().sessions[serverId]).toBeUndefined();
+    unsubscribe();
   });
 
   it("drains snapshot and buffered running transitions exactly once", async () => {
