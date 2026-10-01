@@ -1,10 +1,16 @@
 import type { CodexBankedResetOutcome } from "@getpaseo/protocol/messages";
+import {
+  UsageHistoryInvalidWindowError,
+  validateUsageHistoryWindow,
+  type UsageHistoryService,
+} from "../../../services/usage-history/service.js";
 import type pino from "pino";
 import type { ProviderUsage, UsageReportEntry } from "@getpaseo/protocol/messages";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 
 export interface UsageSessionOptions {
   emit(message: SessionOutboundMessage): void;
+  historyService?: UsageHistoryService;
   runtime?: {
     consumeCodexBankedReset?(input: {
       reportId?: string;
@@ -97,6 +103,48 @@ export class UsageSession {
           requestType: msg.type,
           error: `Could not use banked reset: ${message}`,
           code: "codex_banked_reset_failed",
+        },
+      });
+    }
+  }
+
+  async handleProviderUsageHistoryReadRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.usage_history.read.request" }>,
+  ): Promise<void> {
+    try {
+      validateUsageHistoryWindow(msg);
+    } catch (error) {
+      if (!(error instanceof UsageHistoryInvalidWindowError)) throw error;
+      this.options.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Invalid usage history window: ${error.message}`,
+          code: "provider_usage_history_invalid_window",
+        },
+      });
+      return;
+    }
+
+    try {
+      if (!this.options.historyService) throw new Error("Usage history is unavailable");
+      if (msg.refreshRates) await this.options.historyService!.refreshRates();
+      const summary = await this.options.historyService!.readSummary(msg);
+      this.options.emit({
+        type: "provider.usage_history.read.response",
+        payload: { requestId: msg.requestId, ...summary },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.options.logger.error({ err }, "Failed to read provider usage history");
+      this.options.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Failed to read provider usage history: ${err.message}`,
+          code: "provider_usage_history_read_failed",
         },
       });
     }

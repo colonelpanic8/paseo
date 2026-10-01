@@ -6,7 +6,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
-import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
+import { formatActiveConnectionLabel, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { orderHostsLocalFirst } from "@/types/host-connection";
 import {
   ADD_HOST_OPTION_ID,
@@ -34,21 +34,6 @@ export function HostStatusDotSlot({ serverId }: { serverId: string }): ReactElem
       <HostStatusDot serverId={serverId} />
     </View>
   );
-}
-
-// Standard secure/plain web ports carry no information in the host display, so
-// "relay.paseo.sh:443" reads as "relay.paseo.sh" while "127.0.0.1:6767" is kept.
-function formatConnectionEndpoint(endpoint: string): string {
-  return endpoint.replace(/:(?:443|80)$/, "");
-}
-
-// Socket/pipe transports have no host:port — their endpoint is a filesystem
-// path, so they read as "Local". TCP and relay show the address being used.
-function formatActiveConnectionLabel(connection: ActiveConnection): string {
-  if (connection.type === "directSocket" || connection.type === "directPipe") {
-    return "Local";
-  }
-  return formatConnectionEndpoint(connection.endpoint);
 }
 
 export interface HostPickerOptionProps {
