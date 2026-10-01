@@ -5,6 +5,7 @@ import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
 
 import {
   normalizeWorkspaceDescriptor,
+  toDaemonServerInfo,
   selectAgentTurnPresentation,
   selectAgentTimelineState,
   useSessionStore,
@@ -843,5 +844,20 @@ describe("removeWorkspace", () => {
     expect(after.sessions).toBe(before.sessions);
     expect(after.session).toBe(before.session);
     expect(after.workspaces).toBe(before.workspaces);
+  });
+});
+
+describe("toDaemonServerInfo", () => {
+  it("retains daemon build provenance", () => {
+    const build = { commit: "20a887f4", repoUrl: "https://github.com/getpaseo/paseo" };
+    expect(
+      toDaemonServerInfo({
+        status: "server_info",
+        serverId: "host",
+        hostname: null,
+        version: null,
+        build,
+      }).build,
+    ).toEqual(build);
   });
 });
