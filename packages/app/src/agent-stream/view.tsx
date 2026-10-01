@@ -56,7 +56,7 @@ import {
   useAgentModelDisplay,
   useAgentModelDisplayResolver,
 } from "@/hooks/use-agent-model-display";
-import { useSessionStore } from "@/stores/session-store";
+import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
@@ -113,6 +113,11 @@ import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import { useStreamHistoryWindow } from "./use-stream-history-window";
 import { PluginTimelineItemView, useInstalledTimelineTransform } from "@/plugins/timeline";
+import { dispatchComposerAgentMessage } from "@/composer/actions";
+import { createMessageSubmissionWriter } from "@/composer/submission/writer";
+import { encodeImages } from "@/utils/encode-images";
+import { AssistantQuestionCard } from "./assistant-question-card";
+import { collectUnansweredQuestionItemIds } from "./assistant-question-state";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -756,6 +761,34 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
     );
 
+    const unansweredQuestionItemIds = useMemo(
+      () => collectUnansweredQuestionItemIds(effectiveStreamItems, effectiveStreamHead ?? []),
+      [effectiveStreamHead, effectiveStreamItems],
+    );
+    const isQuestionAnsweredInTimeline = useCallback(
+      (itemId: string) => !unansweredQuestionItemIds.has(itemId),
+      [unansweredQuestionItemIds],
+    );
+
+    // The agent asked without pausing its turn, so the answer steers the live turn instead of
+    // interrupting it.
+    const submitQuestionAnswer = useStableEvent(async (text: string) => {
+      if (!client) {
+        throw new Error(t("workspace.terminal.hostDisconnected"));
+      }
+      const session = useSessionStore.getState().sessions[resolvedServerId];
+      await dispatchComposerAgentMessage({
+        client,
+        agentId,
+        text,
+        attachments: [],
+        encodeImages,
+        submission: createMessageSubmissionWriter(resolvedServerId),
+        activeTurnBehavior: "steer",
+        activeTurnId: selectAgentTurnPresentation(session, agentId).turnId ?? undefined,
+      });
+    });
+
     const renderAssistantMessageItem = useCallback(
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "assistant_message" }>) => {
         return (
@@ -768,23 +801,43 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           >
             <ChatFindExpansion messageId={getStreamItemMessageId(item)}>
               {(renderFullContent) => (
-                <AssistantMessage
-                  renderFullContent={renderFullContent}
-                  occurrenceKey={createAssistantImageOccurrenceKey({ agentId, itemId: item.id })}
-                  message={item.text}
-                  timestamp={item.timestamp.getTime()}
-                  workspaceRoot={workspaceRoot}
-                  serverId={resolvedServerId}
-                  client={client}
-                  spacing={layoutItem.assistantSpacing}
-                  phase={layoutItem.phase}
-                />
+                <>
+                  <AssistantMessage
+                    renderFullContent={renderFullContent}
+                    occurrenceKey={createAssistantImageOccurrenceKey({ agentId, itemId: item.id })}
+                    message={item.text}
+                    timestamp={item.timestamp.getTime()}
+                    workspaceRoot={workspaceRoot}
+                    serverId={resolvedServerId}
+                    client={client}
+                    spacing={layoutItem.assistantSpacing}
+                    phase={layoutItem.phase}
+                  />
+                  {item.questions?.length ? (
+                    <AssistantQuestionCard
+                      questions={item.questions}
+                      answeredInTimeline={isQuestionAnsweredInTimeline(item.id)}
+                      readOnly={readOnly}
+                      onSubmit={submitQuestionAnswer}
+                    />
+                  ) : null}
+                </>
               )}
             </ChatFindExpansion>
           </AssistantFileLinkResolverProvider>
         );
       },
-      [agentId, client, handleInlinePathPress, resolvedServerId, toast, workspaceRoot],
+      [
+        agentId,
+        client,
+        handleInlinePathPress,
+        isQuestionAnsweredInTimeline,
+        readOnly,
+        resolvedServerId,
+        submitQuestionAnswer,
+        toast,
+        workspaceRoot,
+      ],
     );
 
     const renderThoughtItem = useCallback(
