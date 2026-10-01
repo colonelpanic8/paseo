@@ -2645,6 +2645,11 @@ export const en = {
         description: "Show an outline for jumping between prompts",
       },
       sidebar: {
+        title: "Sidebar",
+        alwaysShowHostLabels: {
+          title: "Always show host labels",
+          description: "Show host labels even when every visible workspace is on this device",
+        },
         header: {
           title: "Header",
           description: "Choose which items appear at the top of the sidebar and in what order",
@@ -2814,6 +2819,15 @@ export const en = {
         color: {
           label: "Color",
           accessibilityLabel: "Color, {{value}}",
+          custom: {
+            action: "Custom…",
+            title: "Custom color",
+            submit: "Apply",
+            invalid: "Enter a hex color like #368080.",
+            panelAccessibility: "Saturation and brightness",
+            hueAccessibility: "Hue",
+            hexAccessibility: "Hex color",
+          },
           options: {
             none: "Default",
             violet: "Violet",
