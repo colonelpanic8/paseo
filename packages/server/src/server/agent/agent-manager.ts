@@ -9,6 +9,7 @@ import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@getpaseo/protocol/agent-lifecycle";
+import { FALLBACK_LIVE_VOICE_OPTIONS } from "@getpaseo/protocol/live-voice-voices";
 import {
   getParentAgentIdFromLabels,
   hasOpenAgentTab,
@@ -53,6 +54,7 @@ import {
   type ImportedTimelineEntry,
   type ImportableProviderSession,
   type ListImportableSessionsOptions,
+  type LiveVoiceVoiceCatalog,
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
@@ -80,10 +82,15 @@ import {
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
-import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
+import {
+  PASEO_MCP_SERVER_NAME,
+  stripInternalPaseoMcpServer,
+  stripInternalPaseoMcpServerFromPersistence,
+  withRuntimePaseoMcpServer,
+} from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
-import { isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
+import { isPaseoToolEnabled, isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
 import {
   ProviderSubagentStore,
   type ProviderSubagentDescriptor,
@@ -424,6 +431,12 @@ interface ManagedAgentBase {
   activeTurnStartedAt: Date | null;
   lastUsage?: AgentUsage;
   lastError?: string;
+  lastFailure?: {
+    kind: "authentication_required" | "provider_error";
+    message: string;
+    code?: string;
+    diagnostic?: string;
+  };
   attention: AttentionState;
   foregroundTurnWaiters: Set<ForegroundTurnWaiter>;
   finalizedForegroundTurnIds: Set<string>;
@@ -550,13 +563,14 @@ function attachPersistenceCwd(
   handle: AgentPersistenceHandle | null,
   cwd: string,
 ): AgentPersistenceHandle | null {
-  if (!handle) {
+  const sanitized = stripInternalPaseoMcpServerFromPersistence(handle);
+  if (!sanitized) {
     return null;
   }
   return {
-    ...handle,
+    ...sanitized,
     metadata: {
-      ...handle.metadata,
+      ...sanitized.metadata,
       cwd,
     },
   };
@@ -576,6 +590,25 @@ const AgentIdSchema = z.guid();
 
 function isAgentBusy(status: AgentLifecycleStatus): boolean {
   return BUSY_STATUSES.has(status);
+}
+
+function classifyAgentFailure(
+  event: Extract<AgentStreamEvent, { type: "turn_failed" }>,
+): NonNullable<ManagedAgentBase["lastFailure"]> {
+  const evidence = [event.error, event.code, event.diagnostic]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n")
+    .toLowerCase();
+  const authenticationRequired =
+    /\bauth_required\b|\bauthentication (?:is )?(?:required|failed)\b|\boauth\b|\bunauthori[sz]ed\b|\b(?:log|sign) in\b/.test(
+      evidence,
+    );
+  return {
+    kind: authenticationRequired ? "authentication_required" : "provider_error",
+    message: event.error,
+    ...(event.code ? { code: event.code } : {}),
+    ...(event.diagnostic ? { diagnostic: event.diagnostic } : {}),
+  };
 }
 
 function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
@@ -746,6 +779,7 @@ export class AgentManager {
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
+  private readonly agentClosingListeners = new Set<(agentId: string) => void>();
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -841,8 +875,49 @@ export class AgentManager {
     this.onAgentArchived = callback;
   }
 
+  /**
+   * Fires just before an agent's provider session is torn down (close, archive,
+   * kill). Listeners get to release ephemeral resources attached to the live
+   * session — e.g. a Live Voice call — while the session is still usable.
+   */
+  onAgentClosing(callback: (agentId: string) => void): () => void {
+    this.agentClosingListeners.add(callback);
+    return () => {
+      this.agentClosingListeners.delete(callback);
+    };
+  }
+
+  private notifyAgentClosing(agentId: string): void {
+    for (const listener of Array.from(this.agentClosingListeners)) {
+      try {
+        listener(agentId);
+      } catch (error) {
+        this.logger.warn({ err: error, agentId }, "onAgentClosing listener failed");
+      }
+    }
+  }
+
   setMcpBaseUrl(url: string | null): void {
     this.mcpBaseUrl = url;
+  }
+
+  /**
+   * Whether agent sessions launch with Paseo's own MCP server attached, i.e.
+   * whether an agent can act on Paseo itself. False when MCP is disabled or
+   * `mcpInjectIntoAgents` is off.
+   */
+  hasPaseoMcpInjection(provider?: AgentProvider, requiredTools: readonly string[] = []): boolean {
+    if (this.mcpBaseUrl === null || !this.paseoToolsEnabled) {
+      return false;
+    }
+    if (!provider) {
+      return true;
+    }
+    const policy = this.resolvePaseoToolPolicy(provider);
+    return (
+      isPaseoToolPolicyEnabled(policy) &&
+      requiredTools.every((toolName) => isPaseoToolEnabled(policy, toolName))
+    );
   }
 
   prepareForShutdown(): void {
@@ -1086,6 +1161,14 @@ export class AgentManager {
         error: message,
       };
     }
+  }
+
+  async listLiveVoiceVoices(): Promise<LiveVoiceVoiceCatalog> {
+    const client = this.clients.get("codex");
+    if (!client?.listLiveVoiceVoices) {
+      return { voices: [...FALLBACK_LIVE_VOICE_OPTIONS] };
+    }
+    return await client.listLiveVoiceVoices();
   }
 
   async listDraftCommands(config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
@@ -1515,6 +1598,7 @@ export class AgentManager {
     const preservedHistoryPrimed = existing.historyPrimed;
     const preservedLastUsage = existing.lastUsage;
     const preservedLastError = existing.lastError;
+    const preservedLastFailure = existing.lastFailure;
     const preservedAttention = existing.attention;
     const handle = existing.persistence;
     const provider = handle?.provider ?? existing.provider;
@@ -1586,6 +1670,7 @@ export class AgentManager {
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
         lastError: preservedLastError,
+        lastFailure: preservedLastFailure,
         attention: preservedAttention,
         restoring: true,
       });
@@ -1699,6 +1784,7 @@ export class AgentManager {
       },
       "agent.manager.close.start",
     );
+    this.notifyAgentClosing(agentId);
     await this.drainSessionEvents(agentId);
     // Retain ownership until shutdown succeeds. A failed close may still own a
     // native writer, so publishing a resumable closed snapshot would orphan it.
@@ -1901,6 +1987,7 @@ export class AgentManager {
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
+        lastFailure: record.lastFailure,
         attention,
         internal: record.internal,
         labels: record.labels,
@@ -2498,6 +2585,7 @@ export class AgentManager {
     const agent = existingAgent;
     const isReplacement = agent.pendingReplacement;
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
 
     const pendingRun = this.runs.createPendingRun(agentId);
 
@@ -3442,6 +3530,7 @@ export class AgentManager {
       historyPrimed?: boolean;
       lastUsage?: AgentUsage;
       lastError?: string;
+      lastFailure?: ManagedAgentBase["lastFailure"];
       attention?: AttentionState;
       /**
        * Bringing a known agent back, rather than starting a new one. Its timestamps and
@@ -3625,6 +3714,7 @@ export class AgentManager {
           historyPrimed?: boolean;
           lastUsage?: AgentUsage;
           lastError?: string;
+          lastFailure?: ManagedAgentBase["lastFailure"];
           attention?: AttentionState;
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
@@ -3666,6 +3756,7 @@ export class AgentManager {
       lastUserMessageAt: options?.lastUserMessageAt ?? null,
       lastUsage: options?.lastUsage,
       lastError: options?.lastError,
+      lastFailure: options?.lastFailure,
       attention: resolveInitialAttention(options?.attention),
       internal: config.internal ?? false,
       labels: options?.labels ?? {},
@@ -4458,6 +4549,7 @@ export class AgentManager {
     // data accumulated during streaming isn't lost when the provider omits
     // it from the completion event.
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
     if (
       !isForegroundEvent &&
       !agent.activeForegroundTurnId &&
@@ -4499,6 +4591,7 @@ export class AgentManager {
       agent.lifecycle = "error";
     }
     agent.lastError = event.error;
+    agent.lastFailure = classifyAgentFailure(event);
     await this.appendSystemErrorTimelineMessage(
       agent,
       event.provider,
@@ -4541,6 +4634,7 @@ export class AgentManager {
       agent.lifecycle = "idle";
     }
     agent.lastError = undefined;
+    agent.lastFailure = undefined;
     this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Interrupted");
     if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);
@@ -5103,6 +5197,9 @@ export class AgentManager {
   private validateToolPolicyServers(config: AgentSessionConfig): void {
     if (!config.toolPolicy) return;
     const serverNames = new Set(Object.keys(config.mcpServers ?? {}));
+    if (this.mcpBaseUrl) {
+      serverNames.add(PASEO_MCP_SERVER_NAME);
+    }
     for (const grant of config.toolPolicy.preapproved) {
       if (!serverNames.has(grant.server)) {
         throw new Error(
