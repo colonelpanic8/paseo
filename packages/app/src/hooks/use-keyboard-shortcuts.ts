@@ -5,6 +5,10 @@ import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { getResidentBrowserWebview } from "@/desktop/browser/resident-webviews";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
+import {
+  holdReleaseAction,
+  type KeyboardActionDefinition,
+} from "@/keyboard/keyboard-action-dispatcher";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import {
   type ChordState,
@@ -44,6 +48,8 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
 
+const HOLD_MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
+
 export function useKeyboardShortcuts({
   enabled,
   isMobile,
@@ -75,6 +81,21 @@ export function useKeyboardShortcuts({
     step: 0,
     timeoutId: null,
   });
+  // The press-and-hold chord currently down, if any: the release action to
+  // dispatch and the keys whose key-up ends the hold. Held outside the listener
+  // effect so re-running that effect (rebinding, disabling shortcuts) releases
+  // rather than strands the hold.
+  const heldShortcutRef = useRef<{
+    release: KeyboardActionDefinition;
+    key: string;
+    code: string;
+  } | null>(null);
+  const releaseHeldShortcut = useCallback(() => {
+    const held = heldShortcutRef.current;
+    if (!held) return;
+    heldShortcutRef.current = null;
+    keyboardActionDispatcher.dispatch(held.release);
+  }, [keyboardActionDispatcher]);
   const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);
@@ -222,7 +243,7 @@ export function useKeyboardShortcuts({
     payload: KeyboardShortcutPayload;
     domEvent: KeyboardEvent | null;
     browserFocusRestoreElement?: HTMLElement | null;
-  }): boolean => {
+  }): { handled: boolean; performed: ShortcutAction } => {
     const store = useKeyboardShortcutsStore.getState();
     const shortcutAction = routeKeyboardShortcut(
       { action: input.action, payload: input.payload },
@@ -245,7 +266,7 @@ export function useKeyboardShortcuts({
     if (handled && isWorkspaceFocusModeEnabled && input.action.startsWith("sidebar.")) {
       exitFocusMode();
     }
-    return handled;
+    return { handled, performed: shortcutAction };
   };
 
   const resolveAndPerformShortcut = (input: {
@@ -295,12 +316,27 @@ export function useKeyboardShortcuts({
       return;
     }
 
-    const handled = routeAndPerformShortcut({
+    if (result.match.hold && !input.domEvent) {
+      return;
+    }
+
+    releaseHeldShortcut();
+    const { handled, performed } = routeAndPerformShortcut({
       action: result.match.action,
       payload: result.match.payload,
       domEvent: input.domEvent,
       browserFocusRestoreElement: input.browserFocusRestoreElement,
     });
+    if (handled && result.match.hold && input.domEvent && performed.kind === "dispatch") {
+      const release = holdReleaseAction(performed.action);
+      if (release) {
+        heldShortcutRef.current = {
+          release,
+          key: input.domEvent.key.toLowerCase(),
+          code: input.domEvent.code,
+        };
+      }
+    }
     if (!handled || !input.domEvent) {
       return;
     }
@@ -391,6 +427,13 @@ export function useKeyboardShortcuts({
       setBadgeModifierDown(isShortcutModifierDown(event, badgeModifierKey));
       useKeyboardShortcutsStore.getState().setControlShortcutModifierDown(event.altKey);
     }
+    const held = heldShortcutRef.current;
+    if (
+      held &&
+      (key.toLowerCase() === held.key || event.code === held.code || HOLD_MODIFIER_KEYS.has(key))
+    ) {
+      releaseHeldShortcut();
+    }
   });
 
   const handleBrowserShortcutInput = useStableEvent((payload: unknown) => {
@@ -411,6 +454,9 @@ export function useKeyboardShortcuts({
     if (!shortcutsAvailable) return;
 
     const handleBlurOrHide = () => {
+      // The key-up lands in whatever took focus, so a hold that survived a blur
+      // would never end.
+      releaseHeldShortcut();
       resetModifiers();
     };
 
@@ -423,6 +469,9 @@ export function useKeyboardShortcuts({
       ? getDesktopHost()?.events?.on?.("browser-shortcut-input", handleBrowserShortcutInput)
       : null;
     return () => {
+      // Rebinding, unmounting, or disabling shortcuts must not leave a call
+      // stuck in the inverted state this hold applied.
+      releaseHeldShortcut();
       if (chordStateRef.current.timeoutId !== null) {
         clearTimeout(chordStateRef.current.timeoutId);
         chordStateRef.current = {
@@ -446,6 +495,7 @@ export function useKeyboardShortcuts({
     handleBrowserShortcutInput,
     handleKeyDown,
     handleKeyUp,
+    releaseHeldShortcut,
     resetModifiers,
     shortcutsAvailable,
   ]);
