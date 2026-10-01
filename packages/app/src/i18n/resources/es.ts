@@ -1925,6 +1925,11 @@ export const es: TranslationResources = {
     archiveTooltip: "Subagente de archivo",
     archiveFinishedAction: "Archivar subagentes finalizados",
     archiveFinishedRetry: "Reintentar ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Nativo",
+    },
+    rowAccessibilityLabel: "{{label}}, subagente {{ownership}}",
   },
   panels: {
     draft: {
@@ -2032,6 +2037,8 @@ export const es: TranslationResources = {
     used: "{{percentage}}% utilizado",
     tokens: "Fichas{{used}}/{{max}}",
     sessionCost: "Costo de la sesión{{cost}}",
+    model: "Modelo {{model}}",
+    thinking: "Pensamiento {{thinking}}",
     accessibility: "Ventana de contexto{{percentage}}% utilizada",
   },
   review: {

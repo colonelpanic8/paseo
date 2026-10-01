@@ -1896,6 +1896,11 @@ export const ja: TranslationResources = {
     archiveTooltip: "サブエージェントをアーカイブ",
     archiveFinishedAction: "完了したサブエージェントをアーカイブ",
     archiveFinishedRetry: "再試行 ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "ネイティブ",
+    },
+    rowAccessibilityLabel: "{{label}}、{{ownership}}サブエージェント",
   },
   panels: {
     draft: {
@@ -2004,6 +2009,8 @@ export const ja: TranslationResources = {
     used: "{{percentage}}%使用",
     tokens: "{{used}} / {{max}}トークン",
     sessionCost: "セッションコスト: {{cost}}",
+    model: "モデル: {{model}}",
+    thinking: "思考: {{thinking}}",
     accessibility: "コンテキストウィンドウ{{percentage}}%使用",
   },
   review: {

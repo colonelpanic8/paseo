@@ -1,11 +1,12 @@
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import {
   collectAssistantResponseContentForStreamRenderStrategy,
+  resolveTurnAttributionForStreamRenderStrategy,
   type StreamStrategy,
 } from "./strategy";
 import { resolveAssistantTurnForkBoundary, type AssistantTurnForkBoundary } from "./turn-boundary";
@@ -17,6 +18,7 @@ import {
 } from "@/components/message";
 import type { TurnFooterHost } from "./layout";
 import { AssistantForkMenu } from "@/components/assistant-fork-menu";
+import type { TurnAttribution } from "./turn-attribution";
 import { SyncedLoader } from "@/components/synced-loader";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 
@@ -44,6 +46,8 @@ export type InFlightTurnForkHandler = (target: AssistantForkTarget) => Promise<v
 export const TurnFooter = memo(function TurnFooter({
   isRunning,
   inFlightTurnStartedAt,
+  runningMeta = null,
+  formatTurnMeta,
   host,
   strategy,
   supportsTimelineCursor,
@@ -52,6 +56,10 @@ export const TurnFooter = memo(function TurnFooter({
 }: {
   isRunning: boolean;
   inFlightTurnStartedAt: Date | null;
+  /** "Model · Thinking" for the running turn; omitted when unknown. */
+  runningMeta?: string | null;
+  /** Labels a completed turn's own recorded model; omitted when unknown. */
+  formatTurnMeta?: (attribution: TurnAttribution) => string | null;
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
   supportsTimelineCursor: boolean;
@@ -63,6 +71,7 @@ export const TurnFooter = memo(function TurnFooter({
       <TurnFooterRow>
         <RunningTurnFooter
           inFlightTurnStartedAt={inFlightTurnStartedAt}
+          meta={runningMeta}
           onForkInFlightTurn={onForkInFlightTurn}
         />
       </TurnFooterRow>
@@ -79,6 +88,7 @@ export const TurnFooter = memo(function TurnFooter({
       startIndex={host.startIndex}
       supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
+      formatTurnMeta={formatTurnMeta}
     />
   );
 });
@@ -90,6 +100,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   startIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
+  formatTurnMeta,
 }: {
   strategy: TurnContentStrategy;
   items: StreamItem[];
@@ -97,6 +108,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   startIndex: number;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
+  formatTurnMeta?: (attribution: TurnAttribution) => string | null;
 }) {
   return (
     <TurnFooterRow>
@@ -107,6 +119,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         startIndex={startIndex}
         supportsTimelineCursor={supportsTimelineCursor}
         onForkAssistantTurn={onForkAssistantTurn}
+        formatTurnMeta={formatTurnMeta}
       />
     </TurnFooterRow>
   );
@@ -115,9 +128,11 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
 const WorkingIndicator = memo(function WorkingIndicator({
   inFlightTurnStartedAt = null,
   onForkInFlightTurn,
+  meta = null,
 }: {
   inFlightTurnStartedAt?: Date | null;
   onForkInFlightTurn?: InFlightTurnForkHandler;
+  meta?: string | null;
 }) {
   const active = useRetainedPanelActive();
   return (
@@ -127,13 +142,24 @@ const WorkingIndicator = memo(function WorkingIndicator({
       </View>
       {/* Match the completed-turn footer: actions precede timing metadata. */}
       {onForkInFlightTurn ? <AssistantForkMenu onFork={onForkInFlightTurn} /> : null}
-      {inFlightTurnStartedAt ? (
-        <LiveElapsed
-          startedAt={inFlightTurnStartedAt}
-          active={active}
-          style={stylesheet.workingElapsed}
-          testID="turn-working-elapsed"
-        />
+      {inFlightTurnStartedAt || meta ? (
+        // Elapsed and meta share a tighter inner gap than the loader spacing, so
+        // "1m 4s · Opus 4.5 · High" reads as one run of metadata.
+        <View style={stylesheet.workingDetail}>
+          {inFlightTurnStartedAt ? (
+            <LiveElapsed
+              startedAt={inFlightTurnStartedAt}
+              active={active}
+              style={stylesheet.workingElapsed}
+              testID="turn-working-elapsed"
+            />
+          ) : null}
+          {meta ? (
+            <Text style={stylesheet.workingMeta} numberOfLines={1} testID="turn-working-meta">
+              {inFlightTurnStartedAt ? `· ${meta}` : meta}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -141,15 +167,18 @@ const WorkingIndicator = memo(function WorkingIndicator({
 
 function RunningTurnFooter({
   inFlightTurnStartedAt,
+  meta,
   onForkInFlightTurn,
 }: {
   inFlightTurnStartedAt: Date | null;
+  meta: string | null;
   onForkInFlightTurn?: InFlightTurnForkHandler;
 }) {
   return (
     <View style={stylesheet.turnFooterSlot} testID="turn-working-indicator">
       <WorkingIndicator
         inFlightTurnStartedAt={inFlightTurnStartedAt}
+        meta={meta}
         onForkInFlightTurn={onForkInFlightTurn}
       />
     </View>
@@ -163,6 +192,7 @@ function CompletedTurnFooter({
   startIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
+  formatTurnMeta,
 }: {
   strategy: TurnContentStrategy;
   items: StreamItem[];
@@ -170,7 +200,17 @@ function CompletedTurnFooter({
   startIndex: number;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
+  formatTurnMeta?: (attribution: TurnAttribution) => string | null;
 }) {
+  const meta = useMemo(() => {
+    if (!formatTurnMeta) return null;
+    const attribution = resolveTurnAttributionForStreamRenderStrategy({
+      strategy,
+      items,
+      startIndex,
+    });
+    return attribution ? formatTurnMeta(attribution) : null;
+  }, [formatTurnMeta, items, startIndex, strategy]);
   const getContent = useCallback(
     () =>
       collectAssistantResponseContentForStreamRenderStrategy({
@@ -200,6 +240,7 @@ function CompletedTurnFooter({
         getContent={getContent}
         completedAt={timing?.completedAt}
         durationMs={timing?.durationMs}
+        meta={meta}
         onFork={boundary && onForkAssistantTurn ? handleFork : undefined}
       />
     </View>
@@ -239,6 +280,19 @@ const stylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
     fontVariant: ["tabular-nums"],
+  },
+  workingDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    minWidth: 0,
+    gap: theme.spacing[1.5],
+  },
+  workingMeta: {
+    flexShrink: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: STREAM_METADATA_FONT_SIZE,
   },
   workingLoader: {
     marginLeft: -2,

@@ -153,10 +153,12 @@ function AgentTabTooltipBody({
   serverId,
   agentId,
   title,
+  subtitle,
 }: {
   serverId: string;
   agentId: string;
   title: string;
+  subtitle: string;
 }) {
   const lastActivityAt = useSessionStore((state) => {
     const session = state.sessions[serverId];
@@ -171,6 +173,11 @@ function AgentTabTooltipBody({
       <Text style={styles.agentTooltipTitle} numberOfLines={1} ellipsizeMode="tail">
         {title}
       </Text>
+      {subtitle && subtitle !== title ? (
+        <Text style={styles.tooltipAgentSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      ) : null}
       <View style={styles.tooltipAgentMetadata}>
         <Text style={styles.tooltipAgentId}>{agentId.slice(0, 7)}</Text>
         {activity ? (
@@ -865,6 +872,7 @@ function TabChip({
                 serverId={serverId}
                 agentId={tab.target.agentId}
                 title={tooltipLabel}
+                subtitle={presentation.subtitle}
               />
             ) : (
               <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
@@ -1715,6 +1723,10 @@ const styles = StyleSheet.create((theme) => ({
   agentTooltipTitle: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
+  },
+  tooltipAgentSubtitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   tooltipAgentMetadata: {
     flexDirection: "row",
