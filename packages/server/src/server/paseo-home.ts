@@ -1,18 +1,15 @@
+import { resolvePaseoPaths } from "./paseo-paths.js";
 import os from "node:os";
-import path from "node:path";
 
-function expandHomeDir(input: string): string {
-  if (input.startsWith("~/")) {
-    return path.join(os.homedir(), input.slice(2));
-  }
-  if (input === "~") {
-    return os.homedir();
-  }
-  return input;
-}
-
-export function resolvePaseoHome(env: NodeJS.ProcessEnv = process.env): string {
-  const raw = env.PASEO_HOME ?? "~/.paseo";
-  const resolved = path.resolve(expandHomeDir(raw));
-  return resolved;
+/**
+ * The historical single-root accessor, kept so unclassified call sites keep working. Under the
+ * flat layout this is the same directory it always was; under XDG it is the data root.
+ * Prefer `resolvePaseoPaths` and name the category the file actually belongs to.
+ */
+export function resolvePaseoHome(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  homeDirectory: string = os.homedir(),
+): string {
+  return resolvePaseoPaths(env, platform, homeDirectory).home;
 }
