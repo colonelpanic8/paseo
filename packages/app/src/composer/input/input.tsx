@@ -42,7 +42,7 @@ import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import type { ComposerSigils } from "@/composer/tokens/sigils";
 import { collectComposerTokens, type ComposerTokenCatalog } from "@/composer/tokens/tokens";
 import { ComposerTokenHighlightLayer } from "./token-highlight";
-import { focusWithRetries } from "@/utils/web-focus";
+import { focusWithRetries } from "@/utils/focus-with-retries";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
 import {
@@ -52,11 +52,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { useIosHardwareKeyboardSubmit } from "@/hooks/use-ios-hardware-keyboard-submit";
+import { useHardwareKeyboardSubmit } from "@/hooks/use-hardware-keyboard-submit";
+import type { HardwareKeyboardSubmitEvent } from "@/native/hardware-keyboard-submit.types";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { listNavigationDataSet } from "@/keyboard/list-search-keys";
+import type { ListSearchKeyEvent } from "@/keyboard/list-search-keys";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -107,12 +109,7 @@ export interface ComposerInputSnapshot {
   selection: { start: number; end: number };
 }
 
-export interface ComposerKeyPressEvent {
-  key: string;
-  ctrlKey?: boolean;
-  metaKey?: boolean;
-  altKey?: boolean;
-  shiftKey?: boolean;
+export interface ComposerKeyPressEvent extends ListSearchKeyEvent {
   preventDefault: () => void;
   input: ComposerInputSnapshot;
 }
@@ -1698,9 +1695,22 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         defaultSendBehavior,
         isAgentRunning,
       });
-    useIosHardwareKeyboardSubmit({
+    // Mirrors handleDesktopKeyPressImpl: Enter sends, Cmd/Ctrl+Enter queues
+    // while the agent runs. Shift+Enter never reaches here — native leaves it
+    // to the text input as a newline.
+    const handleHardwareKeyboardSubmit = useCallback(
+      (event: HardwareKeyboardSubmitEvent) => {
+        if (event.alternate && isAgentRunning && onQueue) {
+          handleAlternateSendAction();
+          return;
+        }
+        handleDefaultSendAction();
+      },
+      [handleAlternateSendAction, handleDefaultSendAction, isAgentRunning, onQueue],
+    );
+    useHardwareKeyboardSubmit({
       isEnabled: isInputFocused && !isSendButtonDisabled,
-      onSubmit: handleDefaultSendAction,
+      onSubmit: handleHardwareKeyboardSubmit,
     });
     const submitAccessibilityLabel = resolveSubmitAccessibilityLabel({
       submitButtonAccessibilityLabel,
@@ -1856,6 +1866,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         testID="message-input-root"
         dataSet={listNavigationDataSet(ownsListNavigation)}
         onLayout={handleComposerLayout}
+        dataSet={listNavigationDataSet(ownsListNavigation)}
       >
         <MessageInputAutoFocus
           enabled={autoFocus}

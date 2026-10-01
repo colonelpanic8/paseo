@@ -17,6 +17,7 @@ export interface ListSearchKeyEvent {
   metaKey?: boolean;
   altKey?: boolean;
   shiftKey?: boolean;
+  repeat?: boolean;
 }
 
 /**

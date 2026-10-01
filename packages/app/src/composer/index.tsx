@@ -67,7 +67,7 @@ import type { ImageAttachment, MessagePayload, TextReplacement } from "./types";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { DraftCommandTarget } from "@/hooks/use-agent-commands-query";
 import { encodeImages } from "@/utils/encode-images";
-import { focusWithRetries } from "@/utils/web-focus";
+import { focusWithRetries } from "@/utils/focus-with-retries";
 import {
   cancelComposerAgent,
   dispatchComposerAgentMessage,
@@ -98,6 +98,7 @@ import {
   executePluginClientSlashCommand,
   resolvePluginClientSlashCommand,
 } from "@/plugins/client-slash-commands/model";
+import { useListSearchHandler } from "@/keyboard/list-search-dispatcher";
 import {
   useHostRuntimeAgentDirectoryStatus,
   useHostRuntimeClient,
@@ -125,6 +126,11 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
+import {
+  consumeComposerAutoFocus,
+  useComposerAutoFocusVersion,
+} from "@/keyboard/composer-auto-focus";
+import { useHardwareKeyboardStore } from "@/stores/hardware-keyboard-store";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -612,11 +618,37 @@ function ComposerKeyboardRegistration({
   focusMessageInputForKeyboardAction,
   isMessageInputFocused,
   handlerId,
+  autoFocusKey,
 }: Omit<DispatchComposerKeyboardActionArgs, "action" | "isPaneFocused"> & {
   isMessageInputFocused: boolean;
   handlerId: string;
+  autoFocusKey: string;
 }) {
   const { isActiveComposer } = useComposerKeyboardScope();
+
+  // With a hardware keyboard attached, focus lands in the prompt whenever this
+  // composer becomes the active one — tap navigation, command center, or
+  // keyboard shortcuts alike. Without one, only explicit requests (keyboard
+  // workspace switches, unhandled Cmd/Ctrl+L) focus, so touch navigation never
+  // pops the soft keyboard. rAF lets the navigation transition commit first.
+  const composerAutoFocusVersion = useComposerAutoFocusVersion();
+  const hardwareKeyboardConnected = useHardwareKeyboardStore((s) => s.connected);
+  useEffect(() => {
+    if (!isNative || !isActiveComposer) return;
+    const requested = consumeComposerAutoFocus();
+    if (!requested && !hardwareKeyboardConnected) return;
+    const frame = requestAnimationFrame(() => {
+      focusMessageInputForKeyboardAction();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    autoFocusKey,
+    isActiveComposer,
+    composerAutoFocusVersion,
+    hardwareKeyboardConnected,
+    focusMessageInputForKeyboardAction,
+  ]);
+
   const handleKeyboardAction = useCallback(
     (action: KeyboardActionDefinition): boolean =>
       dispatchComposerKeyboardAction({
@@ -2436,6 +2468,19 @@ function ComposerContentImpl({
   const githubEmptyText = githubSearchResultsQuery.isFetching
     ? t("composer.github.searching")
     : t("composer.github.noResults");
+  useListSearchHandler({
+    active: isNative && autocompleteVisible,
+    priority: 80,
+    handle: (_action, event) =>
+      autocompleteRef.current?.onKeyPress({
+        ...event,
+        preventDefault: () => {},
+        input: messageInputRef.current?.getInputSnapshot() ?? {
+          text: textSource.getSnapshot(),
+          selection: { start: cursor.getState(), end: cursor.getState() },
+        },
+      }) ?? false,
+  });
 
   return (
     <>
@@ -2448,6 +2493,7 @@ function ComposerContentImpl({
         handleCancelAgent={handleCancelAgent}
         focusMessageInputForKeyboardAction={focusMessageInputForKeyboardAction}
         isMessageInputFocused={isMessageInputFocused}
+        autoFocusKey={`${serverId}:${agentId}`}
       />
       <View style={animatedStaticStyles.container}>
         <AttachmentLightbox source={lightboxSource} onClose={handleLightboxClose} />
