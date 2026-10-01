@@ -354,6 +354,23 @@ describe("sidebar workspace render isolation", () => {
     });
   });
 
+  it("loads the directory when the sidebar is the only mounted consumer", async () => {
+    const acquire = vi.spyOn(getHostRuntimeStore(), "acquireDirectoryDemand");
+    const counts: RenderCounts = {
+      frame: 0,
+      headers: {},
+      rows: {},
+      projectSelection: {},
+      rowSelection: {},
+    };
+    try {
+      ({ root, container } = await renderProbe(counts));
+      expect(acquire).toHaveBeenCalledWith(SERVER_ID);
+    } finally {
+      acquire.mockRestore();
+    }
+  });
+
   it("re-renders only the changed workspace row for a status update", async () => {
     const counts: RenderCounts = {
       frame: 0,
