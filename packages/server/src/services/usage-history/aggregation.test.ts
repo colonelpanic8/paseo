@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { UsageAggregator } from "./aggregation.js";
+import {
+  makeDayFormatter,
+  makeDayResolver,
+  UsageAggregator,
+  type UsageDayWindow,
+} from "./aggregation.js";
 import type { RateTable } from "./pricing.js";
 import type { UsageRecord } from "./transcripts.js";
 
@@ -150,5 +155,49 @@ describe("UsageAggregator", () => {
       ["claude", "z-model"],
       ["codex", "gpt-5.6-sol"],
     ]);
+  });
+});
+
+/** Windows that bracket a DST transition, including one whose local midnight does not exist. */
+const DAY_RESOLVER_WINDOWS: readonly UsageDayWindow[] = [
+  { timeZone: "UTC", sinceDay: "2026-08-01", untilDay: "2026-08-03" },
+  { timeZone: "Asia/Kolkata", sinceDay: "2026-08-01", untilDay: "2026-08-03" },
+  { timeZone: "America/Los_Angeles", sinceDay: "2026-03-06", untilDay: "2026-03-10" },
+  { timeZone: "America/Los_Angeles", sinceDay: "2026-10-30", untilDay: "2026-11-03" },
+  { timeZone: "America/Santiago", sinceDay: "2026-09-04", untilDay: "2026-09-08" },
+  { timeZone: "Pacific/Chatham", sinceDay: "2026-09-25", untilDay: "2026-09-29" },
+  { timeZone: "Australia/Lord_Howe", sinceDay: "2026-04-03", untilDay: "2026-04-07" },
+  { timeZone: "Pacific/Kiritimati", sinceDay: "2026-08-01", untilDay: "2026-08-01" },
+];
+
+const MINUTE_MS = 60_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+describe("makeDayResolver", () => {
+  it("places every minute of a window exactly where the formatter does", () => {
+    const mismatches: string[] = [];
+    for (const window of DAY_RESOLVER_WINDOWS) {
+      const resolve = makeDayResolver(window);
+      const toDay = makeDayFormatter(window.timeZone);
+      const from = Date.parse(`${window.sinceDay}T00:00:00Z`) - 2 * DAY_MS;
+      const to = Date.parse(`${window.untilDay}T00:00:00Z`) + 3 * DAY_MS;
+      for (let timestampMs = from; timestampMs <= to; timestampMs += MINUTE_MS) {
+        const day = toDay(timestampMs);
+        const expected = day >= window.sinceDay && day <= window.untilDay ? day : null;
+        if (resolve(timestampMs) !== expected) {
+          mismatches.push(`${window.timeZone} ${new Date(timestampMs).toISOString()}`);
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("reports a timestamp that is not a date as outside the window", () => {
+    const resolve = makeDayResolver({
+      timeZone: "UTC",
+      sinceDay: "2026-08-01",
+      untilDay: "2026-08-31",
+    });
+    expect(resolve(Number.NaN)).toBeNull();
   });
 });
