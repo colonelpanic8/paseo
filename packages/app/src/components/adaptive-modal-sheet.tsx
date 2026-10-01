@@ -531,7 +531,6 @@ export interface AdaptiveModalSheetProps {
   onOverlayKeyDown?: (event: KeyboardEvent) => boolean;
   /** Re-establishes caller-owned contexts inside the native or compact sheet portal. */
   contextBridge?: ContextBridge | null;
-  onOverlayKeyDown?: (event: KeyboardEvent) => boolean;
 }
 
 export function AdaptiveModalSheet({
