@@ -591,7 +591,9 @@ export class PluginService {
             const result = await this.runtime.discoverUsage(pluginId, source.id, scope);
             if (!Array.isArray(result))
               throw new Error(`Invalid usage discovery from ${source.id}`);
-            return scope.kind === "global" && this.builtinPluginIds.has(pluginId) && pluginId === `${source.id}-usage-source`
+            return scope.kind === "global" &&
+              this.builtinPluginIds.has(pluginId) &&
+              pluginId === `${source.id}-usage-source`
               ? [...result, ...providerAccountUsage(source.id, this.configStore.get().providers)]
               : result;
           },
