@@ -12,6 +12,7 @@ import type {
   ProviderToolCallDetail,
 } from "@getpaseo/plugin/server/provider";
 import type { z } from "zod";
+import { withSessionEnvironment } from "./environment.js";
 import { MspConnection, commandId, type Notification } from "./connection.js";
 import { MuseError, actionableError } from "./errors.js";
 import { Timeline, todoItem } from "./timeline.js";
@@ -87,7 +88,7 @@ export class Session {
   constructor(private readonly options: SessionOptions) {
     this.config = options.config;
     this.host = new MspConnection({
-      launch: { ...options.launch, env: { ...options.launch.env, ...options.config.env } },
+      launch: withSessionEnvironment(options.launch, options.config.env),
       cwd: options.config.cwd,
       serveArgs: options.serveArgs,
     });

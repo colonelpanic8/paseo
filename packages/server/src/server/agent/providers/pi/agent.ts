@@ -91,6 +91,7 @@ import {
   type PiToolResult,
   type PiTrackedToolCall,
 } from "./tool-call-mapper.js";
+import type { ProcessEnvRecord } from "../../../paseo-env.js";
 
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
@@ -256,7 +257,7 @@ interface PiResumeConfig {
 interface PiMcpServerConfig {
   command?: string;
   args?: string[];
-  env?: Record<string, string>;
+  env?: ProcessEnvRecord;
   url?: string;
   headers?: Record<string, string>;
 }
@@ -544,7 +545,7 @@ function toPiBuiltinMcpServers(
   return piServers;
 }
 
-function resolvePiAgentDir(env: Record<string, string> | undefined): string {
+function resolvePiAgentDir(env: ProcessEnvRecord | undefined): string {
   const configured = env?.PI_CODING_AGENT_DIR?.trim() || process.env.PI_CODING_AGENT_DIR?.trim();
   if (!configured) {
     return join(homedir(), ".pi", "agent");
@@ -558,7 +559,7 @@ function resolvePiAgentDir(env: Record<string, string> | undefined): string {
   return resolvePath(configured);
 }
 
-function readPiGlobalMcpConfig(env: Record<string, string> | undefined): Record<string, unknown> {
+function readPiGlobalMcpConfig(env: ProcessEnvRecord | undefined): Record<string, unknown> {
   const globalConfigPath = join(resolvePiAgentDir(env), "mcp.json");
   if (!existsSync(globalConfigPath)) {
     return {};
@@ -582,7 +583,7 @@ function readPiGlobalMcpConfig(env: Record<string, string> | undefined): Record<
 function createPiMcpConfigFile(
   servers: Record<string, McpServerConfig>,
   options?: {
-    piGlobalConfigEnv?: Record<string, string>;
+    piGlobalConfigEnv?: ProcessEnvRecord;
   },
 ): PiTempFile {
   const globalConfig = options?.piGlobalConfigEnv
@@ -2713,7 +2714,7 @@ export class PiRpcAgentClient implements AgentClient {
   private async prepareMcpInjection(
     cwd: string,
     servers: Record<string, McpServerConfig> | undefined,
-    env: Record<string, string> | undefined,
+    env: ProcessEnvRecord | undefined,
     runtime: PiRuntime,
   ): Promise<PiMcpInjection | null> {
     if (!servers || Object.keys(servers).length === 0) {
@@ -2734,7 +2735,7 @@ export class PiRpcAgentClient implements AgentClient {
 
   private async detectMcpSupport(
     cwd: string,
-    env: Record<string, string> | undefined,
+    env: ProcessEnvRecord | undefined,
     runtime: PiRuntime,
   ): Promise<PiMcpInjection["kind"] | null> {
     const runtimeSession = await runtime.startSession({ cwd, env }).catch((error) => {
