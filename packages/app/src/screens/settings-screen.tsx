@@ -186,12 +186,17 @@ const COMPOSER_SIGIL_OPTIONS = COMPOSER_SIGIL_CHOICES.map((choice) => ({
 // View model
 // ---------------------------------------------------------------------------
 
+// Native shortcuts are delivered by the hardware-keyboard module, so the
+// section is useful there even though it never applies to mobile web.
+const shortcutsSectionAvailable = (isDesktopApp: boolean) => isDesktopApp || isNative;
+
 interface SidebarSectionItem {
   id: SettingsSectionSlug;
   labelKey: string;
   icon: ComponentType<{ size: number; color: string; strokeWidth?: number }>;
   desktopOnly?: boolean;
   webOnly?: boolean;
+  isAvailable?: (isDesktopApp: boolean) => boolean;
   /** The page body, for pages that need nothing from the settings screen. */
   Content?: ComponentType;
 }
@@ -236,7 +241,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     id: "shortcuts",
     labelKey: "settings.sections.shortcuts",
     icon: Keyboard,
-    desktopOnly: true,
+    isAvailable: shortcutsSectionAvailable,
     Content: KeyboardShortcutsSection,
   },
   {
@@ -250,7 +255,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     id: "notifications",
     labelKey: "settings.sections.notifications",
     icon: Bell,
-    desktopOnly: true,
+    isAvailable: (isDesktopApp) => isDesktopApp,
     Content: DesktopNotificationsSection,
   },
   {
@@ -265,7 +270,11 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
 ];
 
 function isSectionAvailable(item: SidebarSectionItem, isDesktopApp: boolean): boolean {
-  return (!item.desktopOnly || isDesktopApp) && (!item.webOnly || isWeb);
+  return (
+    (!item.desktopOnly || isDesktopApp) &&
+    (!item.webOnly || isWeb) &&
+    (item.isAvailable?.(isDesktopApp) ?? true)
+  );
 }
 
 interface HostSectionItem {

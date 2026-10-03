@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { AppState } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
@@ -32,12 +33,25 @@ import {
   type ShortcutAction,
   type ShortcutCallbackName,
 } from "@/keyboard/route-shortcut";
-import { getShortcutOs } from "@/utils/shortcut-platform";
+import { useShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { isNative } from "@/constants/platform";
 import { keyboardShortcutsAvailable } from "@/keyboard/availability";
+import { requestComposerAutoFocus } from "@/keyboard/composer-auto-focus";
+import { listSearchDispatcher } from "@/keyboard/list-search-dispatcher";
+import { routeNativeListSearchBeforeShortcut } from "@/keyboard/native-list-search-routing";
+import {
+  addHardwareKeyDownListener,
+  addHardwareModifierListener,
+  setHardwareKeyEventsEnabled,
+  setHardwareListNavigationEnabled,
+} from "@/native/hardware-keyboard-events";
+import type {
+  HardwareKeyDownEvent,
+  HardwareModifierEvent,
+} from "@/native/hardware-keyboard-events.types";
 import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
@@ -54,6 +68,7 @@ import {
 } from "@/command-center/provider";
 
 const HOLD_MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
+import { hasFocusedTextInput } from "@/components/ui/text-input";
 
 export function useKeyboardShortcuts({
   enabled,
@@ -80,7 +95,10 @@ export function useKeyboardShortcuts({
   const commandCenterSnapshot = useCommandCenterContributions();
   const runCommandCenterShortcut = useCommandCenterShortcutRunner();
   const isDesktopApp = getIsElectronRuntime();
-  const isMac = getShortcutOs() === "mac";
+  // Native apps have no browser reserving Cmd/Ctrl combos, so they use the
+  // desktop binding variants; see usesDesktopShortcutBindings.
+  const isDesktopBindings = isDesktopApp || isNative;
+  const isMac = useShortcutOs() === "mac";
   const bindings = useMemo(() => {
     const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
       contribution.shortcutId ? [contribution.shortcutId] : [],
@@ -90,10 +108,10 @@ export function useKeyboardShortcuts({
       ...effectiveBindings,
       ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings, {
         isMac,
-        isDesktop: isDesktopApp,
+        isDesktop: isDesktopBindings,
       }),
     ];
-  }, [commandCenterSnapshot.contributions, isDesktopApp, isMac, overrides]);
+  }, [commandCenterSnapshot.contributions, isDesktopBindings, isMac, overrides]);
   const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
@@ -157,7 +175,7 @@ export function useKeyboardShortcuts({
   // rebound the jump shortcut, and no `event.key` ever equals null, so the
   // badges simply never appear.
   const badgeModifierKey = getWorkspaceIndexJumpModifierKey(
-    { isMac, isDesktop: isDesktopApp },
+    { isMac, isDesktop: isDesktopBindings },
     bindings,
   );
   const controlShortcutModifierKey = "Alt";
@@ -171,7 +189,7 @@ export function useKeyboardShortcuts({
 
   const setBadgeModifierDown = (down: boolean) => {
     const state = useKeyboardShortcutsStore.getState();
-    if (isDesktopApp) {
+    if (isDesktopBindings) {
       state.setCmdOrCtrlDown(down);
     } else {
       state.setAltDown(down);
@@ -216,13 +234,20 @@ export function useKeyboardShortcuts({
           workspaceId: action.workspaceId,
         };
         navigateToWorkspace({ serverId: action.serverId, workspaceId: action.workspaceId });
+        // A keyboard-driven native workspace switch should focus the composer so typing can
+        // continue without touching the screen.
+        if (isNative) requestComposerAutoFocus();
         return true;
-      case "navigate-last-workspace":
+      case "navigate-last-workspace": {
         if (navigateToLastWorkspace()) {
+          // A keyboard-driven native workspace switch should focus the composer so typing can
+          // continue without touching the screen.
+          if (isNative) requestComposerAutoFocus();
           return true;
         }
         router.replace(buildOpenProjectRoute());
         return true;
+      }
       case "router-replace":
         router.replace(action.route as Parameters<typeof router.replace>[0]);
         return true;
@@ -285,6 +310,21 @@ export function useKeyboardShortcuts({
     if (handled && isWorkspaceFocusModeEnabled && input.action.startsWith("sidebar.")) {
       exitFocusMode();
     }
+    // If no composer handled focus (for example, a terminal tab is active or a screen is
+    // transitioning), leave a pending request for the next composer to settle and pick up.
+    // Cmd/Ctrl+L should always land in the prompt.
+    if (
+      !handled &&
+      isNative &&
+      input.action === "message-input.action" &&
+      input.payload &&
+      typeof input.payload === "object" &&
+      "kind" in input.payload &&
+      input.payload.kind === "focus"
+    ) {
+      requestComposerAutoFocus();
+      return { handled: true, performed: shortcutAction };
+    }
     return { handled, performed: shortcutAction };
   };
 
@@ -300,7 +340,7 @@ export function useKeyboardShortcuts({
       event: input.event,
       context: {
         isMac,
-        isDesktop: isDesktopApp,
+        isDesktop: isDesktopBindings,
         focusScope: input.focusScope,
         commandCenterOpen: store.commandCenterOpen,
       },
@@ -394,6 +434,10 @@ export function useKeyboardShortcuts({
       return;
     }
 
+    if (resolveListSearchKeyAction(event) !== null && ownsListNavigationKeys(event.target)) {
+      return;
+    }
+
     const store = useKeyboardShortcutsStore.getState();
     if (store.capturingShortcut) {
       return;
@@ -463,6 +507,32 @@ export function useKeyboardShortcuts({
     }
   });
 
+  const handleHardwareKeyDown = useStableEvent((nativeEvent: HardwareKeyDownEvent) => {
+    const store = useKeyboardShortcutsStore.getState();
+    if (store.capturingShortcut) return;
+
+    // Native cannot resolve DOM focus scopes; a focused TextInput is its only text-editing
+    // surface, so it maps to "editable".
+    const focusScope: KeyboardFocusScope = hasFocusedTextInput() ? "editable" : "other";
+    routeNativeListSearchBeforeShortcut({
+      event: nativeEvent,
+      dispatchList: (event) => listSearchDispatcher.dispatch(event),
+      dispatchShortcut: (event) => resolveAndPerformShortcut({ event, focusScope, domEvent: null }),
+    });
+  });
+
+  // Bare modifier presses drive the workspace-number badges, mirroring web keydown/keyup handling.
+  const handleHardwareModifier = useStableEvent((modifierEvent: HardwareModifierEvent) => {
+    if (modifierEvent.key === badgeModifierKey) {
+      setBadgeModifierDown(modifierEvent.down);
+      return;
+    }
+    if (modifierEvent.key === "Shift" && modifierEvent.down) {
+      const state = useKeyboardShortcutsStore.getState();
+      if (state.altDown || state.cmdOrCtrlDown) state.resetModifiers();
+    }
+  });
+
   const handleBrowserShortcutInput = useStableEvent((payload: unknown) => {
     const input = parseBrowserShortcutInput(payload);
     if (!input) {
@@ -478,7 +548,35 @@ export function useKeyboardShortcuts({
 
   useEffect(() => {
     if (!enabled) return;
-    if (!shortcutsAvailable) return;
+    // On native, hardware-keyboard shortcuts flow through the Expo module
+    // instead of DOM listeners; the compact-layout gate doesn't apply because
+    // events only ever arrive from a connected hardware keyboard.
+    if (!isNative && !shortcutsAvailable) return;
+
+    if (isNative) {
+      setHardwareKeyEventsEnabled(true);
+      const subscription = addHardwareKeyDownListener(handleHardwareKeyDown);
+      const modifierSubscription = addHardwareModifierListener(handleHardwareModifier);
+      const unsubscribeListNavigation = listSearchDispatcher.subscribeActive(
+        setHardwareListNavigationEnabled,
+      );
+      const appStateSubscription = AppState.addEventListener("change", (state) => {
+        if (state !== "active") resetModifiers();
+      });
+      return () => {
+        setHardwareKeyEventsEnabled(false);
+        unsubscribeListNavigation();
+        setHardwareListNavigationEnabled(false);
+        subscription.remove();
+        modifierSubscription.remove();
+        appStateSubscription.remove();
+        resetModifiers();
+        if (chordStateRef.current.timeoutId !== null) {
+          clearTimeout(chordStateRef.current.timeoutId);
+          chordStateRef.current = { candidateIndices: [], step: 0, timeoutId: null };
+        }
+      };
+    }
 
     const handleBlurOrHide = () => {
       // The key-up lands in whatever took focus, so a hold that survived a blur
@@ -520,11 +618,14 @@ export function useKeyboardShortcuts({
   }, [
     enabled,
     handleBrowserShortcutInput,
+    handleHardwareKeyDown,
+    handleHardwareModifier,
     handleKeyDown,
     handleKeyUp,
     releaseHeldShortcut,
     resetModifiers,
     runCommandCenterShortcut,
+    isDesktopBindings,
     shortcutsAvailable,
   ]);
 }
