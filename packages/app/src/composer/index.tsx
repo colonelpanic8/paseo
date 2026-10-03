@@ -123,6 +123,7 @@ import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
 import { ComposerStash } from "@/composer/stash";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useHostFeature } from "@/runtime/host-features";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
@@ -131,7 +132,8 @@ import {
   useComposerAutoFocusVersion,
 } from "@/keyboard/composer-auto-focus";
 import { useHardwareKeyboardStore } from "@/stores/hardware-keyboard-store";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { AgentPromptCacheStatus } from "@getpaseo/protocol/agent-types";
+import type { ActiveTurnBehavior, ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -286,6 +288,7 @@ function buildRealtimeVoiceButtonStyle(
 function buildAgentStateSelector(serverId: string, agentId: string) {
   return (state: ReturnType<typeof useSessionStore.getState>) => {
     const agent = state.sessions[serverId]?.agents?.get(agentId) ?? null;
+    const usage = agent?.lastUsage;
     return {
       status: agent?.status ?? null,
       contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
@@ -293,33 +296,41 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       ...pickAgentModelDisplaySource(agent),
       provider: agent?.provider ?? null,
+      promptCache: agent?.promptCache ?? null,
     };
   };
 }
 
-function renderContextWindowMeter(
-  contextWindowMaxTokens: number | null,
-  contextWindowUsedTokens: number | null,
-  totalCostUsd: number | null,
-  showPercentage: boolean,
-  modelDisplay: AgentModelDisplay,
-  pending: boolean,
-  glyphSize: number,
-): ReactElement | null {
-  const hasData = contextWindowMaxTokens !== null && contextWindowUsedTokens !== null;
-  if (!hasData && !pending) {
+interface RenderContextWindowMeterArgs {
+  contextWindowMaxTokens: number | null;
+  contextWindowUsedTokens: number | null;
+  totalCostUsd: number | null;
+  modelDisplay: AgentModelDisplay;
+  pending: boolean;
+  glyphSize: number;
+  promptCache: AgentPromptCacheStatus | null;
+  onPingPromptCache?: () => Promise<void>;
+  pingDisabled: boolean;
+}
+
+function renderContextWindowMeter(args: RenderContextWindowMeterArgs): ReactElement | null {
+  const hasData = args.contextWindowMaxTokens !== null && args.contextWindowUsedTokens !== null;
+  if (!hasData && !args.pending) {
     return null;
   }
   return (
     <ContextWindowMeter
-      maxTokens={contextWindowMaxTokens}
-      usedTokens={contextWindowUsedTokens}
-      totalCostUsd={totalCostUsd}
-      showPercentage={showPercentage}
-      modelLabel={modelDisplay.modelLabel}
-      thinkingLabel={modelDisplay.thinkingLabel}
-      pending={pending}
-      glyphSize={glyphSize}
+      maxTokens={args.contextWindowMaxTokens}
+      usedTokens={args.contextWindowUsedTokens}
+      totalCostUsd={args.totalCostUsd}
+      showPercentage={false}
+      pending={args.pending}
+      glyphSize={args.glyphSize}
+      promptCache={args.promptCache}
+      onPingPromptCache={args.onPingPromptCache}
+      pingDisabled={args.pingDisabled}
+      modelLabel={args.modelDisplay.modelLabel}
+      thinkingLabel={args.modelDisplay.thinkingLabel}
     />
   );
 }
@@ -1041,6 +1052,11 @@ interface ComposerProps {
 }
 
 const EMPTY_ARRAY: readonly QueuedMessage[] = [];
+
+// A ping only exists to put a request on the wire before the provider cache lapses, so
+// it asks the agent for the shortest possible reply.
+const PROMPT_CACHE_PING_MESSAGE = "Keep the context warm. Reply with only: OK";
+const PROMPT_CACHE_PING_ATTACHMENTS: ComposerAttachment[] = [];
 const StableMessageInput = memo(MessageInput);
 
 function resolveContextWindowValues(
@@ -1338,6 +1354,7 @@ function ComposerContentImpl({
   const { t } = useTranslation();
   const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
+  const supportsActiveTurnReject = useHostFeature(serverId, "activeTurnReject");
   const isConnected = useHostRuntimeIsConnected(serverId);
   const agentDirectoryStatus = useHostRuntimeAgentDirectoryStatus(serverId);
   const toast = useToast();
@@ -1547,7 +1564,7 @@ function ComposerContentImpl({
         agentId: string,
         text: string,
         attachments: ComposerAttachment[],
-        activeTurnBehavior: "interrupt" | "steer",
+        activeTurnBehavior: ActiveTurnBehavior,
       ) => Promise<void>)
     | null
   >(null);
@@ -1629,7 +1646,7 @@ function ComposerContentImpl({
       targetAgentId: string,
       text: string,
       sendAttachments: ComposerAttachment[],
-      activeTurnBehavior: "interrupt" | "steer",
+      activeTurnBehavior: ActiveTurnBehavior,
     ) => {
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -1660,6 +1677,23 @@ function ComposerContentImpl({
   useEffect(() => {
     onSubmitMessageRef.current = onSubmitMessage;
   }, [onSubmitMessage]);
+
+  const handlePromptCachePing = useCallback(async () => {
+    if (!sendAgentMessageRef.current) {
+      throw new Error(t("workspace.terminal.hostDisconnected"));
+    }
+    const targetAgentId = agentIdRef.current;
+    const currentSession = useSessionStore.getState().sessions[serverId];
+    if (selectAgentTurnPresentation(currentSession, targetAgentId).isActive) {
+      throw new Error("Agent started running before the prompt cache ping was sent");
+    }
+    await sendAgentMessageRef.current(
+      targetAgentId,
+      PROMPT_CACHE_PING_MESSAGE,
+      PROMPT_CACHE_PING_ATTACHMENTS,
+      "reject",
+    );
+  }, [serverId, t]);
 
   const hasActiveTurn = useSessionStore(
     (state) => selectAgentTurnPresentation(state.sessions[serverId], agentId).isActive,
@@ -2146,15 +2180,17 @@ function ComposerContentImpl({
 
   const contextWindowMeter = useMemo(
     () =>
-      renderContextWindowMeter(
+      renderContextWindowMeter({
         contextWindowMaxTokens,
         contextWindowUsedTokens,
-        agentState.totalCostUsd,
-        false,
-        agentModelDisplay,
-        contextWindowPending,
-        contextWindowMeterGlyphSize,
-      ),
+        modelDisplay: agentModelDisplay,
+        totalCostUsd: agentState.totalCostUsd,
+        pending: contextWindowPending,
+        glyphSize: contextWindowMeterGlyphSize,
+        promptCache: agentState.promptCache,
+        onPingPromptCache: supportsActiveTurnReject ? handlePromptCachePing : undefined,
+        pingDisabled: isAgentRunning,
+      }),
     [
       contextWindowMaxTokens,
       contextWindowUsedTokens,
@@ -2162,6 +2198,10 @@ function ComposerContentImpl({
       agentModelDisplay,
       contextWindowPending,
       contextWindowMeterGlyphSize,
+      agentState.promptCache,
+      handlePromptCachePing,
+      supportsActiveTurnReject,
+      isAgentRunning,
     ],
   );
   const beforeVoiceContent = useMemo(
