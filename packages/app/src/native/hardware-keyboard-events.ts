@@ -12,6 +12,8 @@ const NOOP_SUBSCRIPTION: EventSubscription = {
 
 export function setHardwareKeyEventsEnabled(_enabled: boolean) {}
 
+export function setHardwareListNavigationEnabled(_enabled: boolean) {}
+
 export function getHardwareKeyboardConnected(): boolean {
   return false;
 }
