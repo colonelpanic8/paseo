@@ -143,7 +143,7 @@ export class UsageSourceRegistry {
         if (!known) return [];
         return [
           this.fetchId(id, known, options.forceRefresh).then((entry) => {
-            options.onReport?.(entry);
+            if (generation === this.generation) options.onReport?.(entry);
             return entry;
           }),
         ];
