@@ -193,6 +193,17 @@ function workspaceRemoteUrl(workspace: WorkspaceDescriptor): string | null {
   return workspace.gitRuntime?.remoteUrl ?? workspace.project?.checkout.remoteUrl ?? null;
 }
 
+function workspaceActivityFields(
+  workspaceAgentActivity: ReadonlyMap<string, WorkspaceAgentActivity> | undefined,
+  workspaceId: string,
+): Pick<SidebarWorkspaceEntry, "providers" | "lastUserMessageAt"> {
+  const activity = workspaceAgentActivity?.get(workspaceId);
+  return {
+    providers: activity?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
+    lastUserMessageAt: activity?.lastUserMessageAt ?? null,
+  };
+}
+
 export function createSidebarWorkspaceEntry(input: {
   serverId: string;
   workspace: WorkspaceDescriptor;
@@ -202,7 +213,10 @@ export function createSidebarWorkspaceEntry(input: {
   nowMs?: number;
 }): SidebarWorkspaceEntry {
   const projectViewKey = input.projectViewKey ?? input.workspace.projectId;
-  const agentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
+  const workspaceActivity = workspaceActivityFields(
+    input.workspaceAgentActivity,
+    input.workspace.id,
+  );
   const effectiveStatus = deriveEffectiveWorkspaceStatus({
     ...input,
     nowMs: input.nowMs ?? Date.now(),
@@ -225,11 +239,11 @@ export function createSidebarWorkspaceEntry(input: {
     labels: input.workspace.labels ?? EMPTY_WORKSPACE_LABELS,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
     remoteUrl: workspaceRemoteUrl(input.workspace),
-    providers: agentActivity?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
+    providers: workspaceActivity.providers,
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
     snoozeWakeAt: effectiveStatus.snoozeWakeAt,
-    lastUserMessageAt: agentActivity?.lastUserMessageAt ?? null,
+    lastUserMessageAt: workspaceActivity.lastUserMessageAt,
     activityAt: input.workspace.activityAt,
     readyToReview: effectiveStatus.readyToReview,
     archivingAt: input.workspace.archivingAt,
