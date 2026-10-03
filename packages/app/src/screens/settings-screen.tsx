@@ -111,10 +111,10 @@ import {
   HostSettingsPage,
   HostProvidersPage,
   HostUsagePage,
-  HostUsageHistoryPage,
   HostWorkspacesPage,
   HostTerminalsPage,
 } from "@/screens/settings/host-page";
+import { ProviderUsageHistorySection } from "@/provider-usage-history/section";
 import { PluginSettingsContent } from "@/plugins/settings";
 import { useInstalledPlugins } from "@/plugins/registry";
 import { HostPluginsPage } from "@/screens/settings/plugins-page";
@@ -215,6 +215,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     Content: DesktopPermissionsSection,
   },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
+  { id: "usage-history", labelKey: "settings.sections.usageHistory", icon: ChartColumn },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -238,11 +239,6 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
-  {
-    id: "usage-history",
-    labelKey: "settings.hostSections.usageHistory",
-    icon: ChartColumn,
-  },
   { id: "terminals", labelKey: "settings.hostSections.terminals", icon: SquareTerminal },
   { id: "plugins", labelKey: "settings.hostSections.plugins", icon: Blocks },
 ];
@@ -268,8 +264,6 @@ function renderHostSettingsContent(
       return <HostProvidersPage serverId={view.serverId} />;
     case "usage":
       return <HostUsagePage serverId={view.serverId} />;
-    case "usage-history":
-      return <HostUsageHistoryPage serverId={view.serverId} />;
     case "terminals":
       return <HostTerminalsPage serverId={view.serverId} />;
     case "plugins":
@@ -781,6 +775,7 @@ function SidebarSectionButton({
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       onPress={handlePress}
+      testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
@@ -1382,6 +1377,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               handlePlaybackTest={handlePlaybackTest}
             />
           );
+        case "usage-history":
+          return <ProviderUsageHistorySection />;
         case "about":
           return (
             <AboutSection
