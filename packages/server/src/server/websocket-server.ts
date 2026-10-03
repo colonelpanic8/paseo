@@ -111,12 +111,6 @@ import {
 } from "./lifecycle-reasons.js";
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
 
-function updateIfChanged<T>(previous: { value: T }, next: T, onChange: () => void): void {
-  if (previous.value === next) return;
-  previous.value = next;
-  onChange();
-}
-
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
 import { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
@@ -857,12 +851,15 @@ export class VoiceAssistantWebSocketServer {
       providerSnapshotManager: this.providerSnapshotManager,
       updateProviderRegistry: (state) => this.agentManager.updateProviderRegistry(state),
     });
-    const advertisedHostColor = { value: this.daemonConfigStore.get().appearance?.color };
-    const unsubscribeChange = this.daemonConfigStore.onChange((config) => {
+    const unsubscribeChange = this.daemonConfigStore.onChange((config, details) => {
+      // Live agents move first: the registry already knows the new id, and repointing them
+      // before storage means a persistence flush can't write the old id back.
+      for (const rename of details.renamedProviders) {
+        this.agentManager.renameProviderOnLiveAgents(rename.from, rename.to);
+      }
       this.broadcastDaemonConfigChanged(config);
-      updateIfChanged(advertisedHostColor, config.appearance?.color, () =>
-        this.broadcastCapabilitiesUpdate(),
-      );
+      this.broadcastCapabilitiesUpdate();
+      void this.migrateRenamedProviders(details.renamedProviders, config);
     });
     this.unsubscribeDaemonConfigChange = () => {
       unsubscribeProviderConfig();
