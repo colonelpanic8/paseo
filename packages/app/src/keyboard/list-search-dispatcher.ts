@@ -17,12 +17,31 @@ type RegisteredListSearchHandler = ListSearchHandler & { registeredAt: number };
 export function createListSearchDispatcher() {
   let nextRegistrationOrder = 1;
   const handlers = new Map<string, RegisteredListSearchHandler>();
+  const activeListeners = new Set<(active: boolean) => void>();
+  let lastActive = false;
+
+  function notifyActive() {
+    const active = Array.from(handlers.values()).some((handler) => handler.enabled);
+    if (active === lastActive) return;
+    lastActive = active;
+    for (const listener of activeListeners) listener(active);
+  }
 
   return {
     registerHandler(handler: ListSearchHandler) {
       handlers.set(handler.handlerId, { ...handler, registeredAt: nextRegistrationOrder++ });
+      notifyActive();
       return () => {
         handlers.delete(handler.handlerId);
+        notifyActive();
+      };
+    },
+
+    subscribeActive(listener: (active: boolean) => void) {
+      activeListeners.add(listener);
+      listener(lastActive);
+      return () => {
+        activeListeners.delete(listener);
       };
     },
 
