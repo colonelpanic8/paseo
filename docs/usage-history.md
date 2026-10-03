@@ -1,6 +1,6 @@
 # Usage history
 
-**Usage history** is the per-host settings page that charts token and cost usage per day. It is a different feature from **Usage**, which shows live subscription quota windows from `packages/server/src/services/quota-fetcher/`. The two share no code and no RPC. Do not merge them.
+**Usage history** is the app settings page that charts token and cost usage per day across every connected host. It is a different feature from **Usage**, which shows live subscription quota windows from `packages/server/src/services/quota-fetcher/`. The two share no code and no RPC. Do not merge them.
 
 ## Where the numbers come from
 
@@ -51,6 +51,16 @@ Files are prefiltered by mtime with 36 hours of slack, so a session that last wr
 
 ## App
 
-`packages/app/src/provider-usage-history/` owns the page. The hook returns a discriminated view; the section never reads raw query state. The chart is stacked daily bars, one segment per base kind, zero-filled across the window — configured providers of one kind share a series, so adding an account does not shift the colors.
+`packages/app/src/provider-usage-history/` owns the page. It lives under app settings, not host settings: usage across your machines is not a property of one of them.
 
-`derive.ts` splits the same buckets twice: per kind, which drives the headline, the summary rows, and the chart, and per configured provider, which drives the summary sub-rows and the Provider breakdown. A kind only grows sub-rows once more than one of its configured providers has activity, so the common single-account host looks exactly as it did. A `failed` source puts a muted line in the summary naming that provider, because its tokens are missing from every total on the page; a `missing` home stays silent.
+The hook fans out one query per host from `useHosts()`, keyed per host so the filter reuses what is already cached, and resolves a status for each: `pending`, `ready`, `error`, `offline`, or `unsupported`. Results render as soon as any host is `ready` — the page never waits for the slowest one, and a muted coverage line in the summary card names every host the totals do not cover. That line's height is reserved, so a host resolving late does not shove the chart down.
+
+`merge.ts` folds the payloads into one report and `derive.ts` does the arithmetic, taking one entry per contributing host; a single host is the length-1 case, not a second code path. Configured provider identity is `(serverId, providerId)`, because two hosts each running `codex` are two accounts, not one. Labels and ids carry the host name only once more than one host contributes, so a single-host page reads exactly as it did.
+
+### Counting a shared directory once
+
+Two daemons can read the same physical transcript directory — two hosts on one machine, or a home mounted over the network — and summing them doubles every token in it. Each source is fingerprinted by `(hostId, provider, path, volumeId)`, and the first host in serverId order to report a fingerprint claims it; a later host reporting the same one has that source's buckets dropped and is named in the coverage line. Hostname alone would be wrong in both directions: every Mac in a fleet resolves `/Users/<user>/.claude`, and one machine can run two daemons under different hostnames.
+
+`hostId` and `volumeId` are optional on the wire. A daemon that predates them sends neither, and such a source can never be proven a duplicate, so it is always counted. Two old daemons sharing a home therefore double count — the alternative is dropping real usage on a guess.
+
+`derive.ts` splits the same buckets twice: per kind, which drives the headline, the summary rows, and the chart, and per configured provider, which drives the summary sub-rows and the Provider breakdown. A kind only grows sub-rows once more than one of its configured providers has activity, so the common single-account host looks exactly as it did. The chart is stacked daily bars, one segment per base kind, zero-filled across the window — configured providers of one kind share a series, so adding an account does not shift the colors. A `failed` source puts a muted line in the summary naming that provider, because its tokens are missing from every total on the page; a `missing` home stays silent.
