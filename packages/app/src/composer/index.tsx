@@ -1027,6 +1027,7 @@ function ComposerAutocompleteBinding({
   anchorRef,
   show,
   onVisibilityChange,
+  onNavigableChange,
   ref,
 }: {
   text: ComposerTextSource;
@@ -1039,6 +1040,7 @@ function ComposerAutocompleteBinding({
   anchorRef: React.RefObject<View | null>;
   show: boolean;
   onVisibilityChange: (visible: boolean) => void;
+  onNavigableChange: (navigable: boolean) => void;
   ref: React.Ref<ComposerAutocompleteHandle>;
 }) {
   const userInput = useSyncExternalStore(text.subscribe, text.getSnapshot, text.getSnapshot);
@@ -1051,6 +1053,8 @@ function ComposerAutocompleteBinding({
   });
   const visible = autocomplete.isVisible && show;
   useEffect(() => onVisibilityChange(visible), [onVisibilityChange, visible]);
+  const navigable = visible && autocomplete.options.length > 0;
+  useEffect(() => onNavigableChange(navigable), [onNavigableChange, navigable]);
   const handleKeyPress = autocomplete.onKeyPress;
   useImperativeHandle(ref, () => ({ onKeyPress: (event) => show && handleKeyPress(event) }), [
     show,
@@ -1394,6 +1398,7 @@ function ComposerContentImpl({
   useEffect(() => () => cursorPublication.cancel(), [cursorPublication]);
   const autocompleteRef = useRef<ComposerAutocompleteHandle>(null);
   const [autocompleteVisible, setAutocompleteVisible] = useState(false);
+  const [autocompleteNavigable, setAutocompleteNavigable] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFileAttachment[]>([]);
   const nextPendingFileId = useRef(0);
@@ -2425,7 +2430,7 @@ function ComposerContentImpl({
     ? t("composer.github.searching")
     : t("composer.github.noResults");
   useListSearchHandler({
-    active: isNative && autocompleteVisible,
+    active: isNative && autocompleteNavigable,
     priority: 80,
     handle: (_action, event) =>
       autocompleteRef.current?.onKeyPress({
@@ -2471,6 +2476,7 @@ function ComposerContentImpl({
                 anchorRef={messageInputContainerRef}
                 show={mode.showAutocomplete && !isFullscreen}
                 onVisibilityChange={setAutocompleteVisible}
+                onNavigableChange={setAutocompleteNavigable}
                 ref={autocompleteRef}
                 configuration={autocompleteConfiguration}
               />
