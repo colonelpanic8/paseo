@@ -156,7 +156,7 @@ describe("draft command failures", () => {
     ).rejects.toThrow("has no models available");
   });
 
-  it("keeps a running agent usable when the provider cannot list commands", async () => {
+  it("reports unsupported command listing for a running agent", async () => {
     const client = createClient({
       requestId: "req_commands",
       agentId: "agent-1",
@@ -164,7 +164,9 @@ describe("draft command failures", () => {
       commands: [],
     });
 
-    await expect(fetchAgentCommands({ client, agentId: "agent-1" })).resolves.toEqual([]);
+    await expect(fetchAgentCommands({ client, agentId: "agent-1" })).rejects.toThrow(
+      "Agent does not support listing commands",
+    );
   });
 });
 
