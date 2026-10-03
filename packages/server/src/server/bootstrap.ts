@@ -118,6 +118,7 @@ export async function fanOutReconciledWorkspaceUpdates(input: {
 }
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import type { DeclaredVoiceProfiles } from "./voice-profiles/voice-profile-store.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
 import { createGitHubService } from "../services/github-service.js";
@@ -154,6 +155,8 @@ import { createOrchestrationSkills } from "./orchestration-skills/index.js";
 import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
 import { resolvePaseoToolPolicy } from "./agent/paseo-tool-policy.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
+import { LiveVoiceRouteBroker } from "./live-voice/live-voice-route-broker.js";
+import { LiveVoiceToolExecutor } from "./live-voice/live-voice-tool-executor.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
@@ -444,6 +447,8 @@ export interface PaseoDaemonConfig {
   voiceLlmProvider?: AgentProvider | null;
   voiceLlmProviderExplicit?: boolean;
   voiceLlmModel?: string | null;
+  /** Profiles declared in config.json, read-only and shared by every principal. */
+  liveVoiceProfiles?: DeclaredVoiceProfiles;
   dictationFinalTimeoutMs?: number;
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
@@ -639,6 +644,7 @@ export async function createPaseoDaemon(
     builtinPlugins: resolveBuiltinPluginLoader(dependencies),
     settingsDirectory: path.join(config.paseoHome, "plugin-settings"),
   });
+  const liveVoiceRouteBroker = new LiveVoiceRouteBroker();
 
   const serverId = getOrCreateServerId(config.paseoHome, { logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.paseoHome, logger);
@@ -1478,11 +1484,14 @@ export async function createPaseoDaemon(
     paseoToolPolicy:
       runtime.paseoToolPolicy ??
       (runtime.callerAgentId ? agentManager.getPaseoToolPolicy(runtime.callerAgentId) : undefined),
+    liveVoiceRouteBroker,
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
     enableVoiceTools: runtime.enableVoiceTools,
     voiceOnly: runtime.voiceOnly,
+    onBackgroundAgentStarted: runtime.onBackgroundAgentStarted,
+    defaultAgentWorkToBackground: runtime.defaultAgentWorkToBackground,
     resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
     resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
@@ -1492,6 +1501,9 @@ export async function createPaseoDaemon(
   const setAgentProviderToolsEnabled = (enabled: boolean) => {
     agentProviderRuntime.setPaseoToolCatalog(enabled ? createAgentToolCatalog({}) : null);
   };
+  const liveVoiceToolExecutor = new LiveVoiceToolExecutor({
+    createCatalog: createAgentToolCatalog,
+  });
   agentManager.setPaseoToolCatalogFactory(createAgentToolCatalog);
   agentManager.setPaseoToolsEnabled(config.mcpInjectIntoAgents !== false);
   setAgentProviderToolsEnabled(config.mcpEnabled !== false && config.mcpInjectIntoAgents !== false);
@@ -1728,6 +1740,7 @@ export async function createPaseoDaemon(
                 daemonStatusRpc: dependencies.serverFeatureOverrides?.daemonStatusRpc,
                 relayConfig: dependencies.serverFeatureOverrides?.relayConfig,
                 startPaused: true,
+                liveVoiceProfiles: config.liveVoiceProfiles,
               },
               workspaceAutoName,
               daemonAuth,
@@ -1776,6 +1789,8 @@ export async function createPaseoDaemon(
               },
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
+              liveVoiceRouteBroker,
+              liveVoiceToolExecutor,
               hubRelationships,
               workspaceSetupRuntime,
               pluginRuntime,
