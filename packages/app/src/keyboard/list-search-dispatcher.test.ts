@@ -30,4 +30,30 @@ describe("listSearchDispatcher", () => {
     expect(fallback).toHaveBeenCalledWith("previous", { key: "p", ctrlKey: true });
     expect(dispatcher.dispatch({ key: "x", ctrlKey: true })).toBe(false);
   });
+
+  it("reports whether any enabled list is open", () => {
+    const dispatcher = createListSearchDispatcher();
+    const listener = vi.fn();
+    dispatcher.subscribeActive(listener);
+    const unregisterDisabled = dispatcher.registerHandler({
+      handlerId: "disabled",
+      enabled: false,
+      handle: () => true,
+    });
+    const unregisterFirst = dispatcher.registerHandler({
+      handlerId: "first",
+      enabled: true,
+      handle: () => true,
+    });
+    const unregisterSecond = dispatcher.registerHandler({
+      handlerId: "second",
+      enabled: true,
+      handle: () => true,
+    });
+    unregisterFirst();
+    unregisterSecond();
+    unregisterDisabled();
+
+    expect(listener.mock.calls).toEqual([[false], [true], [false]]);
+  });
 });
