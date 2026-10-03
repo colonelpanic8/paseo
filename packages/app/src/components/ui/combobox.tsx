@@ -923,7 +923,8 @@ function useNativeComboboxListNavigation(input: DesktopKeyHandlerInput & { hasCh
     [input],
   );
   useListSearchHandler({
-    active: isNative && input.isOpen && !input.hasChildren,
+    active:
+      isNative && input.isOpen && !input.hasChildren && input.orderedVisibleOptions.length > 0,
     priority: 50,
     handle,
   });
