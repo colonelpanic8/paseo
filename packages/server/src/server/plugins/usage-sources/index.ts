@@ -24,6 +24,7 @@ interface KnownReport {
 
 /** Owns account identity, ordered logins for each account, and the five-minute fetch cache. */
 export class UsageSourceRegistry {
+  private generation = 0;
   private readonly sources = new Map<string, UsageSource>();
   private readonly known = new Map<string, KnownReport>();
   private readonly cache = new Map<string, { at: number; entry: UsageReportEntry }>();
@@ -42,20 +43,33 @@ export class UsageSourceRegistry {
 
   unregister(id: string): void {
     this.sources.delete(id);
-    for (const key of this.known.keys()) if (key.startsWith(`${id}:`)) this.known.delete(key);
-    for (const key of this.cache.keys()) if (key.startsWith(`${id}:`)) this.cache.delete(key);
+    this.invalidateReports((key) => key.startsWith(`${id}:`));
+  }
+
+  invalidateReports(predicate: (id: string) => boolean): void {
+    this.generation++;
+    for (const map of [this.known, this.cache, this.pending]) {
+      for (const id of map.keys()) if (predicate(id)) map.delete(id);
+    }
   }
 
   async listReports(
     options: { forceRefresh?: boolean; reportIds?: string[] } = {},
   ): Promise<UsageReportEntry[]> {
-    const ids = options.reportIds ?? (await this.discoverReportIds());
-    return Promise.all(
+    const generation = this.generation;
+    const discovered =
+      !options.reportIds || options.reportIds.some((id) => !this.known.has(id))
+        ? await this.discoverReportIds()
+        : undefined;
+    if (generation !== this.generation) return this.listReports(options);
+    const ids = options.reportIds ?? discovered!;
+    const reports = await Promise.all(
       [...new Set(ids)].flatMap((id) => {
         const known = this.known.get(id);
         return known ? [this.fetchId(id, known, options.forceRefresh)] : [];
       }),
     );
+    return generation === this.generation ? reports : this.listReports(options);
   }
 
   private async discoverReportIds(): Promise<string[]> {
@@ -128,6 +142,7 @@ export class UsageSourceRegistry {
       return Promise.resolve(cached.entry);
     const pending = this.pending.get(id);
     if (pending) return pending;
+    const generation = this.generation;
     const request = (async () => {
       const entry: UsageReportEntry = {
         id,
@@ -138,7 +153,7 @@ export class UsageSourceRegistry {
         fetchedAt: new Date(this.now()).toISOString(),
         report: await this.fetchWithFallback(known),
       };
-      this.writeCache(id, entry);
+      if (generation === this.generation) this.writeCache(id, entry);
       return entry;
     })();
     this.pending.set(id, request);

@@ -20,7 +20,10 @@ import { resolveModelBrowserScrolling } from "@/components/model-browser-view";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
 import { resolveModelSheetOpening } from "@/composer/agent-controls/model-sheet-flow";
-import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
+import {
+  resolveProviderIconId,
+  type ProviderSelectorProvider,
+} from "@/provider-selection/provider-selection";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 
@@ -159,7 +162,7 @@ export function CompactModelSheet({
     serverId,
   });
   const previousOpenRef = useRef(isOpen);
-  const ModelIcon = useProviderIcon(selectedProvider, serverId);
+  const ModelIcon = useProviderIcon(resolveProviderIconId(providers, selectedProvider), serverId);
   const hasSelectedProvider = selectedProvider.trim().length > 0;
   const rootHeader = useMemo(
     () => ({
