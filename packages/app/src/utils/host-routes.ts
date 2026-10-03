@@ -502,6 +502,7 @@ export const SETTINGS_SECTION_SLUGS = [
   "notifications",
   "permissions",
   "diagnostics",
+  "usage-history",
   "about",
 ] as const;
 
@@ -520,7 +521,6 @@ export const HOST_SECTION_SLUGS = [
   "workspaces",
   "providers",
   "usage",
-  "usage-history",
   "terminals",
   "plugins",
   "host",
