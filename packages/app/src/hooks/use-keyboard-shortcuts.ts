@@ -40,6 +40,7 @@ import {
   addHardwareKeyDownListener,
   addHardwareModifierListener,
   setHardwareKeyEventsEnabled,
+  setHardwareListNavigationEnabled,
 } from "@/native/hardware-keyboard-events";
 import type {
   HardwareKeyDownEvent,
@@ -463,11 +464,16 @@ export function useKeyboardShortcuts({
       setHardwareKeyEventsEnabled(true);
       const subscription = addHardwareKeyDownListener(handleHardwareKeyDown);
       const modifierSubscription = addHardwareModifierListener(handleHardwareModifier);
+      const unsubscribeListNavigation = listSearchDispatcher.subscribeActive(
+        setHardwareListNavigationEnabled,
+      );
       const appStateSubscription = AppState.addEventListener("change", (state) => {
         if (state !== "active") resetModifiers();
       });
       return () => {
         setHardwareKeyEventsEnabled(false);
+        unsubscribeListNavigation();
+        setHardwareListNavigationEnabled(false);
         subscription.remove();
         modifierSubscription.remove();
         appStateSubscription.remove();
