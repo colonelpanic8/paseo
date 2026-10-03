@@ -121,6 +121,9 @@ describe("getClaudeModels", () => {
 
     expect(getClaudeModels("2.1.283").map((model) => model.id)).not.toContain("claude-sonnet-5-5");
     expect(getClaudeModels("2.1.284").map((model) => model.id)).toContain("claude-sonnet-5-5");
+
+    expect(getClaudeModels("2.1.256").map((model) => model.id)).not.toContain("claude-fable-5-1");
+    expect(getClaudeModels("2.1.257").map((model) => model.id)).toContain("claude-fable-5-1");
   });
 
   it("derives thinking options from model effort capabilities", () => {
