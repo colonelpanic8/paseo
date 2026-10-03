@@ -85,6 +85,10 @@ export class UsageSourceRegistry {
 
   invalidateReports(predicate: (id: string) => boolean): void {
     this.generation++;
+    for (const id of this.defaults.keys()) if (predicate(id)) this.defaults.delete(id);
+    for (const [agentId, mapping] of this.byAgent) {
+      if ([...mapping.reports.keys()].some(predicate)) this.byAgent.delete(agentId);
+    }
     for (const id of this.known.keys()) if (predicate(id)) this.known.delete(id);
     // Fetch results are keyed by `${reportId}:${loginSetHash}`.
     for (const map of [this.cache, this.pending]) {
