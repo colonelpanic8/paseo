@@ -431,14 +431,14 @@ export function ContextWindowMeter({
           showTitle
           refreshable={false}
         />
-          {promptCache ? (
-            <PromptCacheTooltipSection
-              status={promptCache}
-              pingState={pingState}
-              onPing={onPingPromptCache ? handlePing : null}
-              pingDisabled={pingDisabled}
-            />
-          ) : null}
+        {promptCache ? (
+          <PromptCacheTooltipSection
+            status={promptCache}
+            pingState={pingState}
+            onPing={onPingPromptCache ? handlePing : null}
+            pingDisabled={pingDisabled}
+          />
+        ) : null}
       </TooltipContent>
     </Tooltip>
   );
