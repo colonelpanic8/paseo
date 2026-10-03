@@ -95,7 +95,8 @@ export function createAudioEngine(
     const success = await native.initialize();
     if (refs.destroyed) {
       if (nativeModuleUsers.get(native) === 0) native.tearDown();
-      else if (!captureOwners.has(native) && !playbackOwners.has(native)) native.releaseAudioSession();
+      else if (!captureOwners.has(native) && !playbackOwners.has(native))
+        native.releaseAudioSession();
       throw new Error("Audio engine was destroyed");
     }
     if (!success) {
@@ -146,7 +147,21 @@ export function createAudioEngine(
       await ensureInitialized();
       if (signal.aborted || refs.destroyed) throw new Error("Playback stopped");
       playbackOwners.set(native, refs);
-      return playPcm16(bytes, audio.type, signal, native);
+      return playPcm16(
+        bytes,
+        audio.type,
+        signal,
+        {
+          resumePlayback: () => native.resumePlayback(),
+          playPCMData: (pcm) => native.playPCMData(pcm),
+          stopPlayback: () => {
+            if (playbackOwners.get(native) !== refs) return;
+            native.stopPlayback();
+            playbackOwners.delete(native);
+          },
+        },
+        () => (!refs.captureActive && !playback.hasPending() ? 200 : 0),
+      );
     }
     // Capture owns its audio session while active. File playback alone must not
     // initialize the microphone or the native two-way engine.

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAudioSessionLease } from "./audio-session-lease";
 import { playAudioWithLease } from "./leased-playback";
-import type { AudioEngine } from "@/voice/audio-engine-types";
+import type { AudioEngine } from "@/audio/audio-engine-types";
 
 function engine(): AudioEngine {
   return {
