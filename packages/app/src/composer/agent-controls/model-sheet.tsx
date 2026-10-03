@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -22,6 +22,8 @@ const MODEL_ROW_STRIDE = 44;
 const MODEL_VIEWPORT_VISIBLE_ROWS = 4.5;
 const FIXED_MODEL_VIEWPORT_HEIGHT =
   MODEL_LIST_TOP_INSET + MODEL_ROW_STRIDE * MODEL_VIEWPORT_VISIBLE_ROWS;
+
+function noop() {}
 
 interface CompactModelSheetProps {
   providers: ProviderSelectorProvider[];
@@ -111,6 +113,14 @@ export function CompactModelSheet({
       providers.find((entry) => entry.id === selectedProvider) ?? providers[0] ?? null;
     return fixedProvider ? [fixedProvider] : [];
   }, [canSwitchProvider, providers, selectedProvider]);
+  const rootSelectRef = useRef<(provider: string, modelId: string) => void>(noop);
+  const browserSelectRef = useRef<(provider: string, modelId: string) => void>(noop);
+  const handleRootKeyboardSelect = useCallback((provider: string, modelId: string) => {
+    rootSelectRef.current(provider, modelId);
+  }, []);
+  const handleBrowserKeyboardSelect = useCallback((provider: string, modelId: string) => {
+    browserSelectRef.current(provider, modelId);
+  }, []);
   const rootBrowser = useModelBrowser({
     providers: availableProviders,
     selectedProvider,
@@ -118,6 +128,7 @@ export function CompactModelSheet({
     isLoading,
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
+    onSelect: handleRootKeyboardSelect,
     serverId,
   });
   const modelBrowser = useModelBrowser({
@@ -127,6 +138,7 @@ export function CompactModelSheet({
     isLoading,
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
+    onSelect: handleBrowserKeyboardSelect,
     serverId,
   });
   const ModelIcon = useProviderIcon(selectedProvider, serverId);
@@ -205,6 +217,11 @@ export function CompactModelSheet({
     },
     [close, onSelect],
   );
+
+  useEffect(() => {
+    rootSelectRef.current = usesBottomSheet ? handleSearchSelect : handleDesktopSelect;
+    browserSelectRef.current = handleBrowserSelect;
+  }, [handleBrowserSelect, handleDesktopSelect, handleSearchSelect, usesBottomSheet]);
 
   const handleApplyProfile = useCallback(
     (profileId: string) => {
@@ -301,6 +318,7 @@ export function CompactModelSheet({
         sizeContentToCurrentSnapPoint={usesBottomSheet}
         contentStyle={styles.sheetBody}
         testID="agent-controls-model-sheet"
+        onOverlayKeyDown={rootBrowser.handleOverlayKeyDown}
       >
         <View
           style={[
@@ -350,6 +368,7 @@ export function CompactModelSheet({
           presentation="push"
           contentStyle={styles.sheetBody}
           testID="agent-controls-model-browser-sheet"
+          onOverlayKeyDown={modelBrowser.handleOverlayKeyDown}
         >
           <View
             style={[styles.modelViewport, styles.flexibleModelViewport]}
