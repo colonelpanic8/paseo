@@ -288,7 +288,6 @@ function buildRealtimeVoiceButtonStyle(
 function buildAgentStateSelector(serverId: string, agentId: string) {
   return (state: ReturnType<typeof useSessionStore.getState>) => {
     const agent = state.sessions[serverId]?.agents?.get(agentId) ?? null;
-    const usage = agent?.lastUsage;
     return {
       status: agent?.status ?? null,
       contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
