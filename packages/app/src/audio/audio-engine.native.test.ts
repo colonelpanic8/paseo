@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAudioEngine, type NativeAudioModule } from "./audio-engine.native";
 
+vi.mock("expo-audio", () => ({ createAudioPlayer: vi.fn(), setAudioModeAsync: vi.fn() }));
+vi.mock("expo-file-system", () => ({ File: vi.fn(), Paths: { cache: "cache" } }));
+
 function createNativeModule() {
   const state = { initialized: false, recording: false, teardowns: 0, playbackStops: 0 };
   const native: NativeAudioModule = {
