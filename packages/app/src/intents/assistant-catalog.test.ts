@@ -44,10 +44,37 @@ function workspace(overrides: Partial<WorkspaceDescriptor> & Pick<WorkspaceDescr
 }
 
 describe("buildAssistantCatalog", () => {
+  it("lists host-scoped projects even without workspaces, without exposing roots", () => {
+    const project = {
+      projectId: "prj_same",
+      projectDisplayName: "Repository",
+      projectCustomName: "My project",
+      projectRootPath: "/private/repository",
+      projectKind: "git" as const,
+    };
+    const catalog = buildAssistantCatalog({
+      now: new Date(0),
+      hosts: [],
+      projects: [
+        { serverId: "laptop", project },
+        { serverId: "desktop", project: { ...project, projectCustomName: null } },
+      ],
+      workspaces: [],
+      agents: [],
+      serverIdOfWorkspace: () => "laptop",
+    });
+    expect(catalog.projects).toEqual([
+      { id: "prj_same", serverId: "laptop", name: "My project", kind: "git" },
+      { id: "prj_same", serverId: "desktop", name: "Repository", kind: "git" },
+    ]);
+    expect(JSON.stringify(catalog)).not.toContain("/private");
+  });
+
   it("names workspaces and agents without exposing paths and orders them by activity", () => {
     const catalog = buildAssistantCatalog({
       now: new Date("2026-09-14T10:00:00Z"),
       hosts: [{ serverId: "laptop", label: "  Laptop ", status: "online" }],
+      projects: [],
       workspaces: [
         workspace({ id: "ws-old", name: "old-branch" }),
         workspace({
@@ -98,6 +125,28 @@ describe("buildAssistantCatalog", () => {
     expect(catalog.truncated).toBe(false);
   });
 
+  it("bounds project enumeration and flags incomplete catalogs", () => {
+    const catalog = buildAssistantCatalog({
+      now: new Date(0),
+      hosts: [],
+      projects: Array.from({ length: 101 }, (_, index) => ({
+        serverId: "laptop",
+        project: {
+          projectId: `prj_${index}`,
+          projectDisplayName: `Project ${index}`,
+          projectCustomName: null,
+          projectRootPath: `/private/${index}`,
+          projectKind: "git" as const,
+        },
+      })),
+      workspaces: [],
+      agents: [],
+      serverIdOfWorkspace: () => "laptop",
+    });
+    expect(catalog.projects).toHaveLength(100);
+    expect(catalog.truncated).toBe(true);
+  });
+
   it("flags truncation once the bounded lists overflow", () => {
     const agents = Array.from({ length: 201 }, (_, index) =>
       agent({ id: `a-${index}`, lastActivityAt: new Date(index * 1000) }),
@@ -105,6 +154,7 @@ describe("buildAssistantCatalog", () => {
     const catalog = buildAssistantCatalog({
       now: new Date(0),
       hosts: [],
+      projects: [],
       workspaces: [],
       agents,
       serverIdOfWorkspace: () => "laptop",
