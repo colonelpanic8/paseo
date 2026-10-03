@@ -53,6 +53,30 @@ export class UsageSourceRegistry {
     }
   }
 
+  /**
+   * Runs an account action against freshly discovered logins. Without a report ID the source's
+   * first discovered account is used. Usage is invalidated afterwards, even on failure.
+   */
+  async runReportAction<Result>(
+    sourceId: string,
+    reportId: string | undefined,
+    action: (inputs: unknown[]) => Promise<Result>,
+  ): Promise<Result> {
+    const generation = this.generation;
+    const discovered = await this.discoverReportIds();
+    if (generation !== this.generation) return this.runReportAction(sourceId, reportId, action);
+    const id =
+      reportId ?? discovered.find((candidate) => this.known.get(candidate)?.source.id === sourceId);
+    const report = id && discovered.includes(id) ? this.known.get(id) : undefined;
+    if (!id || !report || report.source.id !== sourceId)
+      throw new Error("This account is no longer available. Refresh usage before retrying.");
+    try {
+      return await action(report.inputs);
+    } finally {
+      this.invalidateReports((candidate) => candidate === id);
+    }
+  }
+
   async listReports(
     options: { forceRefresh?: boolean; reportIds?: string[] } = {},
   ): Promise<UsageReportEntry[]> {
@@ -131,6 +155,7 @@ export class UsageSourceRegistry {
         windows: entry.report.status === "available" ? entry.report.windows : [],
         balances: entry.report.status === "available" ? (entry.report.balances ?? []) : [],
         details: entry.report.status === "available" ? (entry.report.details ?? []) : [],
+        bankedResets: entry.report.status === "available" ? entry.report.bankedResets : undefined,
         error: legacyError(entry.report, this.now()),
       })),
     };

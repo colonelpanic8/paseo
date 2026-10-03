@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ZodType } from "zod";
 import type { JsonValue } from "@getpaseo/protocol/agent-types";
+import type { CodexBankedResets } from "@getpaseo/protocol/messages";
 
 export interface UsageWindow {
   id: string;
@@ -50,6 +51,7 @@ export type UsageReport =
       windows: UsageWindow[];
       balances?: UsageBalance[];
       details?: UsageDetail[];
+      bankedResets?: CodexBankedResets;
     }
   | { status: "unavailable"; problem: UsageProblem }
   | { status: "error"; error: string };
