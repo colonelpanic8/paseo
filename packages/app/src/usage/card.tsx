@@ -56,6 +56,10 @@ function reportMessages(entry: UsageReportEntry): string[] {
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
+function showFreshnessInline(isCompact: boolean, refreshable: boolean): boolean {
+  return isNative || isCompact || !refreshable;
+}
+
 export function UsageCard({
   serverId,
   agentId,
@@ -78,7 +82,7 @@ export function UsageCard({
   const isCompact = useIsCompactFormFactor();
   const { refresh, refreshState } = useReportRefresh(serverId, entry.id, agentId);
   // Where there is no hover the freshness is printed on the card; elsewhere the Refresh tooltip.
-  const showsFreshnessInline = isNative || isCompact || !refreshable;
+  const showsFreshnessInline = showFreshnessInline(isCompact, refreshable);
   const usage = entry.report;
   const status = statusText(usage);
   const footer = entry.account.label ?? null;

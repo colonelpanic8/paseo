@@ -142,8 +142,7 @@ export async function installUsageReportsFixture(
   await page.routeWebSocket(route, (ws) => {
     const server = ws.connectToServer();
 
-    ws.onMessage((message) => {
-      const request = getSessionMessage(message);
+    const handleBankedResetRequest = (request: ReturnType<typeof getSessionMessage>) => {
       const requestId = request?.requestId;
       if (
         request?.type === "provider.codex.consume_banked_reset.request" &&
@@ -173,8 +172,15 @@ export async function installUsageReportsFixture(
                 };
             return ws.send(JSON.stringify({ type: "session", message: reply }));
           });
-        return;
+        return true;
       }
+      return false;
+    };
+
+    ws.onMessage((message) => {
+      const request = getSessionMessage(message);
+      const requestId = request?.requestId;
+      if (handleBankedResetRequest(request)) return;
       if (request?.type === requestType && typeof requestId === "string") {
         const listRequest: UsageListRequest = {
           forceRefresh: request.forceRefresh === true,
