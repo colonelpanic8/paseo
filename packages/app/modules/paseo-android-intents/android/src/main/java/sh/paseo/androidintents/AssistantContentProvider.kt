@@ -22,13 +22,13 @@ private const val MESSAGE_TIMEOUT_MS = 17_000L
 private const val UNAVAILABLE_NOTICE =
   "Paseo could not read the conversation in time; ask again in a moment."
 
-private val PROJECT_COLUMNS = listOf("id", "serverId", "name", "kind")
+private val PROJECT_COLUMNS = listOf("id", "serverId", "serverName", "name", "kind")
 private val WORKSPACE_COLUMNS =
-  listOf("id", "serverId", "name", "project", "repository", "branch", "status", "agentCount", "lastActivityAt")
+  listOf("id", "serverId", "serverName", "name", "project", "repository", "branch", "status", "agentCount", "lastActivityAt")
 private val AGENT_COLUMNS =
-  listOf("id", "serverId", "workspaceId", "name", "provider", "status", "lastActivityAt")
+  listOf("id", "serverId", "serverName", "workspaceId", "name", "provider", "status", "lastActivityAt")
 private val MESSAGE_COLUMNS =
-  listOf("id", "serverId", "workspaceId", "agentId", "agentName", "kind", "createdAt", "text")
+  listOf("id", "serverId", "serverName", "workspaceId", "agentId", "agentName", "kind", "createdAt", "text")
 private val INT_COLUMNS = setOf("agentCount")
 
 /**
@@ -185,6 +185,7 @@ class AssistantContentProvider : ContentProvider() {
       mapOf(
         "id" to "notice",
         "serverId" to (serverId ?: ""),
+        "serverName" to "",
         "workspaceId" to workspaceId,
         "agentId" to (agentId ?: ""),
         "agentName" to "",
