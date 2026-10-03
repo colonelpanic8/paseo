@@ -2581,6 +2581,12 @@ export const es: TranslationResources = {
         description: "Muestra un esquema para saltar entre instrucciones",
       },
       sidebar: {
+        title: "Barra lateral",
+        alwaysShowHostLabels: {
+          title: "Mostrar siempre las etiquetas de host",
+          description:
+            "Muestra las etiquetas de host incluso cuando todos los espacios de trabajo visibles están en este dispositivo",
+        },
         header: {
           title: "Encabezado",
           description:
@@ -2754,6 +2760,15 @@ export const es: TranslationResources = {
         color: {
           label: "Color",
           accessibilityLabel: "Color, {{value}}",
+          custom: {
+            action: "Personalizado…",
+            title: "Color personalizado",
+            submit: "Aplicar",
+            invalid: "Introduce un color hexadecimal como #368080.",
+            panelAccessibility: "Saturación y brillo",
+            hueAccessibility: "Tono",
+            hexAccessibility: "Color hexadecimal",
+          },
           options: {
             none: "Predeterminado",
             violet: "Violeta",
