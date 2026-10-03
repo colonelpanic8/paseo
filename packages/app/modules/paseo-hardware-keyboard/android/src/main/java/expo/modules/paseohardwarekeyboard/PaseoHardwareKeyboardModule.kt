@@ -59,6 +59,10 @@ class PaseoHardwareKeyboardModule : Module() {
       PaseoHardwareKeyboardKeyDispatcher.isKeyEventsEnabled = enabled
     }
 
+    Function("setHardwareListNavigationEnabled") { enabled: Boolean ->
+      PaseoHardwareKeyboardKeyDispatcher.isListNavigationEnabled = enabled
+    }
+
     Function("getHardwareKeyboardConnected") {
       isHardwareKeyboardConnected()
     }
@@ -69,6 +73,7 @@ class PaseoHardwareKeyboardModule : Module() {
       }
       PaseoHardwareKeyboardKeyDispatcher.isSubmitEnabled = false
       PaseoHardwareKeyboardKeyDispatcher.isKeyEventsEnabled = false
+      PaseoHardwareKeyboardKeyDispatcher.isListNavigationEnabled = false
       inputManager?.unregisterInputDeviceListener(inputDeviceListener)
       inputManager = null
     }
@@ -110,6 +115,11 @@ object PaseoHardwareKeyboardKeyDispatcher {
   @Volatile internal var module: PaseoHardwareKeyboardModule? = null
   @Volatile internal var isSubmitEnabled = false
   @Volatile internal var isKeyEventsEnabled = false
+  @Volatile internal var isListNavigationEnabled = false
+
+  // Key codes whose ACTION_DOWN went to an open list; their ACTION_UP is
+  // swallowed too so a single-line EditText doesn't advance focus on Enter up.
+  private val consumedListKeyCodes = mutableSetOf<Int>()
 
   @JvmStatic
   fun dispatchKeyEvent(event: KeyEvent): Boolean = dispatch(event, inModal = false)
@@ -117,11 +127,9 @@ object PaseoHardwareKeyboardKeyDispatcher {
   /**
    * Key events inside a React Native Modal. The Modal closes itself on Escape
    * (onRequestClose), and the composer's Enter-to-send must not fire behind
-   * it, so only shortcut keys are forwarded.
+   * it, so only shortcut and list navigation keys are forwarded.
    */
-  internal fun dispatchModalKeyEvent(event: KeyEvent) {
-    dispatch(event, inModal = true)
-  }
+  internal fun dispatchModalKeyEvent(event: KeyEvent): Boolean = dispatch(event, inModal = true)
 
   private fun dispatch(event: KeyEvent, inModal: Boolean): Boolean {
     val module = this.module ?: return false
@@ -143,6 +151,9 @@ object PaseoHardwareKeyboardKeyDispatcher {
       return false
     }
 
+    if (event.action == KeyEvent.ACTION_UP && consumedListKeyCodes.remove(event.keyCode)) {
+      return true
+    }
     if (event.action != KeyEvent.ACTION_DOWN) {
       return false
     }
@@ -151,6 +162,26 @@ object PaseoHardwareKeyboardKeyDispatcher {
     val altKey = event.isAltPressed
     val metaKey = event.isMetaPressed
     val shiftKey = event.isShiftPressed
+
+    // While a picker or autocomplete list is open, plain Enter/Up/Down drive
+    // the list (select highlighted row, move highlight) as on desktop, ahead
+    // of Enter-to-send and the focused input's own handling of those keys.
+    val listCode = listNavigationCode(event.keyCode)
+    val hasModifier = ctrlKey || altKey || metaKey || shiftKey
+    if (isKeyEventsEnabled && isListNavigationEnabled && listCode != null && !hasModifier) {
+      module.emitHardwareKeyDown(
+        mapOf(
+          "code" to listCode,
+          "metaKey" to false,
+          "ctrlKey" to false,
+          "altKey" to false,
+          "shiftKey" to false,
+          "repeat" to (event.repeatCount > 0),
+        )
+      )
+      consumedListKeyCodes.add(event.keyCode)
+      return true
+    }
 
     // Matches desktop: Enter sends, Ctrl/Cmd+Enter takes the alternate send
     // (queue while the agent runs), Shift+Enter falls through as a newline.
@@ -195,6 +226,15 @@ object PaseoHardwareKeyboardKeyDispatcher {
     if (event.deviceId == KeyCharacterMap.VIRTUAL_KEYBOARD) return false
     val device = event.device ?: return false
     return !device.isVirtual
+  }
+
+  private fun listNavigationCode(keyCode: Int): String? {
+    return when (keyCode) {
+      KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> "Enter"
+      KeyEvent.KEYCODE_DPAD_UP -> "ArrowUp"
+      KeyEvent.KEYCODE_DPAD_DOWN -> "ArrowDown"
+      else -> null
+    }
   }
 
   private fun modifierName(keyCode: Int): String? {
@@ -292,7 +332,7 @@ internal object PaseoModalKeyForwarding {
   private class ModalKeyCallback(private val delegate: Window.Callback) :
     Window.Callback by delegate {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-      PaseoHardwareKeyboardKeyDispatcher.dispatchModalKeyEvent(event)
+      if (PaseoHardwareKeyboardKeyDispatcher.dispatchModalKeyEvent(event)) return true
       return delegate.dispatchKeyEvent(event)
     }
 
