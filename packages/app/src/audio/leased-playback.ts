@@ -4,7 +4,7 @@ import {
   type AudioSessionLeaseToken,
 } from "./audio-session-lease";
 import { AudioCaptureBusyError } from "./capture-lifetime";
-import type { AudioEngine, AudioPlaybackSource } from "@/voice/audio-engine-types";
+import type { AudioEngine, AudioPlaybackSource } from "@/audio/audio-engine-types";
 
 const failedCleanup = new WeakMap<
   AudioEngine,
