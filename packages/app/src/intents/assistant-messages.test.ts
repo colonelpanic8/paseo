@@ -15,6 +15,7 @@ import {
 
 const target: AssistantMessageAgent = {
   serverId: "laptop",
+  serverName: "Laptop",
   agentId: "a-1",
   agentName: "Sidebar crash",
   workspaceId: "ws-1",
@@ -260,6 +261,7 @@ describe("runAssistantQuery", () => {
   const hosts = [
     host({
       serverId: "laptop",
+      label: "ryzen-shine",
       workspaceIds: new Set(["ws-1"]),
       agents: [
         agent({ id: "a-1", workspaceId: "ws-1", lastActivityAt: new Date("2026-09-14T10:00:00Z") }),
@@ -284,7 +286,7 @@ describe("runAssistantQuery", () => {
 
   it("answers with a notice row when the fetch fails", async () => {
     const rows = await runAssistantQuery({
-      request,
+      request: { ...request, serverId: "laptop" },
       hosts,
       fetchEntries: async () => {
         throw new Error("offline");
@@ -293,6 +295,7 @@ describe("runAssistantQuery", () => {
 
     expect(rows.map((row) => row.kind)).toEqual(["notice"]);
     expect(rows[0].text).toContain("could not read");
+    expect(rows[0].serverName).toBe("ryzen-shine");
   });
 
   it("marks a workspace transcript incomplete when one agent fetch fails", async () => {
@@ -344,6 +347,7 @@ describe("runAssistantQuery", () => {
 
     expect(rows.map((row) => [row.kind, row.text])).toEqual([["assistant", "working on it"]]);
     expect(rows[0].agentName).toBe("paseo");
+    expect(rows[0].serverName).toBe("ryzen-shine");
   });
 
   it("returns no rows when the workspace has no agents to read", async () => {

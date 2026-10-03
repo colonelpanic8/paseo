@@ -13,6 +13,7 @@ export type AssistantMessageKind = "user" | "assistant" | "tool" | "notice";
 export interface AssistantMessageRow {
   id: string;
   serverId: string;
+  serverName: string;
   workspaceId: string | null;
   agentId: string;
   agentName: string;
@@ -30,6 +31,7 @@ export interface AssistantTimelineEntry {
 
 export interface AssistantMessageAgent {
   serverId: string;
+  serverName: string;
   agentId: string;
   agentName: string;
   workspaceId: string | null;
@@ -82,6 +84,7 @@ function makeRow(
   return {
     id: rowId(entry),
     serverId: agent.serverId,
+    serverName: agent.serverName,
     workspaceId: agent.workspaceId,
     agentId: agent.agentId,
     agentName: agent.agentName,
@@ -143,6 +146,7 @@ export function mergeAssistantMessageRows(
 export function assistantNoticeRow(input: {
   text: string;
   serverId?: string | null;
+  serverName?: string | null;
   workspaceId?: string | null;
   agentId?: string | null;
   agentName?: string | null;
@@ -150,6 +154,7 @@ export function assistantNoticeRow(input: {
   return {
     id: "notice",
     serverId: input.serverId ?? "",
+    serverName: input.serverName ?? "",
     workspaceId: input.workspaceId ?? null,
     agentId: input.agentId ?? "",
     agentName: input.agentName ?? "",

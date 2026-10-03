@@ -16,6 +16,7 @@ export interface AssistantCatalogHost {
 export interface AssistantCatalogProject {
   id: string;
   serverId: string;
+  serverName: string;
   name: string;
   kind: ProjectDescriptor["projectKind"];
 }
@@ -23,6 +24,7 @@ export interface AssistantCatalogProject {
 export interface AssistantCatalogWorkspace {
   id: string;
   serverId: string;
+  serverName: string;
   name: string;
   project: string;
   repository: string | null;
@@ -35,6 +37,7 @@ export interface AssistantCatalogWorkspace {
 export interface AssistantCatalogAgent {
   id: string;
   serverId: string;
+  serverName: string;
   workspaceId: string | null;
   name: string;
   provider: string;
@@ -75,6 +78,15 @@ export function assistantAgentName(agent: Agent): string {
   return clip(agent.title) || clip(agent.cwd.split("/").pop()) || agent.id;
 }
 
+/**
+ * The name a host goes by in Paseo: its configured label, else the daemon's hostname. Empty
+ * when Paseo knows neither, since the host label then falls back to the bare server id.
+ */
+export function assistantHostName(host: { serverId: string; label: string }): string {
+  const name = clip(host.label);
+  return name === host.serverId ? "" : name;
+}
+
 function toArray<T>(value: readonly T[] | ReadonlyMap<string, T>): T[] {
   return Array.isArray(value) ? [...value] : [...(value as ReadonlyMap<string, T>).values()];
 }
@@ -85,6 +97,8 @@ function toArray<T>(value: readonly T[] | ReadonlyMap<string, T>): T[] {
  * the stalest entries; paths, prompts, and transcripts never leave the app.
  */
 export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCatalog {
+  const hostNames = new Map(input.hosts.map((host) => [host.serverId, assistantHostName(host)]));
+  const hostName = (serverId: string) => hostNames.get(serverId) ?? "";
   const agents = toArray(input.agents)
     .filter((agent) => !agent.archivedAt && !agent.parentAgentId)
     .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
@@ -110,6 +124,7 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
       return {
         id: workspace.id,
         serverId,
+        serverName: hostName(serverId),
         name: clip(workspace.title) || clip(workspace.name),
         project: clip(workspace.projectCustomName) || clip(workspace.projectDisplayName),
         repository: (() => {
@@ -129,6 +144,7 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
     .map(({ serverId, project }) => ({
       id: project.projectId,
       serverId,
+      serverName: hostName(serverId),
       name:
         clip(project.projectCustomName) || clip(project.projectDisplayName) || project.projectId,
       kind: project.projectKind,
@@ -156,6 +172,7 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
     agents: agents.slice(0, MAX_AGENTS).map((agent) => ({
       id: agent.id,
       serverId: agent.serverId,
+      serverName: hostName(agent.serverId),
       workspaceId: agent.workspaceId ?? null,
       name: assistantAgentName(agent),
       provider: agent.provider,

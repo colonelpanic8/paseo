@@ -54,7 +54,10 @@ describe("buildAssistantCatalog", () => {
     };
     const catalog = buildAssistantCatalog({
       now: new Date(0),
-      hosts: [],
+      hosts: [
+        { serverId: "laptop", label: "ryzen-shine", status: "online" },
+        { serverId: "desktop", label: "desktop", status: "offline" },
+      ],
       projects: [
         { serverId: "laptop", project },
         { serverId: "desktop", project: { ...project, projectCustomName: null } },
@@ -64,8 +67,14 @@ describe("buildAssistantCatalog", () => {
       serverIdOfWorkspace: () => "laptop",
     });
     expect(catalog.projects).toEqual([
-      { id: "prj_same", serverId: "laptop", name: "My project", kind: "git" },
-      { id: "prj_same", serverId: "desktop", name: "Repository", kind: "git" },
+      {
+        id: "prj_same",
+        serverId: "laptop",
+        serverName: "ryzen-shine",
+        name: "My project",
+        kind: "git",
+      },
+      { id: "prj_same", serverId: "desktop", serverName: "", name: "Repository", kind: "git" },
     ]);
     expect(JSON.stringify(catalog)).not.toContain("/private");
   });
@@ -110,6 +119,7 @@ describe("buildAssistantCatalog", () => {
     expect(catalog.workspaces[0]).toEqual({
       id: "ws-new",
       serverId: "laptop",
+      serverName: "Laptop",
       name: "Sidebar crash",
       project: "paseo",
       repository: "github.com/team/paseo",
@@ -120,6 +130,7 @@ describe("buildAssistantCatalog", () => {
     });
     expect(catalog.agents.map((entry) => entry.id)).toEqual(["a-new", "a-old"]);
     expect(catalog.agents[1].name).toBe("paseo");
+    expect(catalog.agents[1].serverName).toBe("Laptop");
     expect(JSON.stringify(catalog)).not.toContain("/home/me");
     expect(JSON.stringify(catalog)).not.toContain("secret");
     expect(catalog.truncated).toBe(false);
