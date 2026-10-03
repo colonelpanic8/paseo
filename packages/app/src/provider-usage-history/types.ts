@@ -22,10 +22,19 @@ export type ProviderUsageHistoryMetric = "cost" | "tokens";
 export type ProviderUsageHistoryWindowDays = 7 | 30 | 90;
 
 export type ProviderUsageHistoryView =
+  /** The app is not connected to anything yet. */
+  | { kind: "noHosts" }
+  /** Nothing has answered yet, but something still might. */
   | { kind: "loading" }
-  | { kind: "unsupported" }
+  /** No selected host can answer, and none of them failed trying. */
   | {
-      kind: "error";
-      messageKey: "settings.usageHistory.hostUnavailable" | "settings.usageHistory.readFailed";
+      kind: "unavailable";
+      messageKey:
+        | "settings.usageHistory.unsupported"
+        | "settings.usageHistory.hostUnavailable"
+        | "settings.usageHistory.hostsUnavailable";
     }
-  | { kind: "ready"; payload: ProviderUsageHistoryPayload; isRefreshing: boolean };
+  /** Every selected host was asked and every read failed. */
+  | { kind: "error" }
+  /** At least one host answered. Hosts that did not are named in the coverage line. */
+  | { kind: "ready"; isRefreshing: boolean };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { usageHistoryView, type UsageHistoryViewInput } from "./view";
+import type { ProviderUsageHistoryHostInput } from "./merge";
 import type { ProviderUsageHistoryPayload } from "./types";
+import { usageHistoryView } from "./view";
 
 const payload: ProviderUsageHistoryPayload = {
   requestId: "req-1",
@@ -13,44 +14,59 @@ const payload: ProviderUsageHistoryPayload = {
   pricing: { status: "unavailable", source: "litellm", fetchedAt: null, knownModels: 0 },
   scanDurationMs: 0,
 };
-const connected: UsageHistoryViewInput = {
-  isConnected: true,
-  isSupported: true,
-  isError: false,
-  isFetching: false,
-  payload: undefined,
-};
+
+function host(
+  serverId: string,
+  status: ProviderUsageHistoryHostInput["status"],
+): ProviderUsageHistoryHostInput {
+  return {
+    serverId,
+    hostName: serverId,
+    status,
+    ...(status === "ready" ? { payload } : {}),
+  };
+}
 
 describe("usageHistoryView", () => {
-  it("asks for a host connection before showing cached data or capability state", () => {
+  it("asks for a host before anything else", () => {
+    expect(usageHistoryView({ hosts: [], isFetching: false })).toEqual({ kind: "noHosts" });
+  });
+
+  it("renders as soon as one host answers, however the others are doing", () => {
+    for (const other of ["pending", "offline", "unsupported", "error"] as const) {
+      expect(
+        usageHistoryView({ hosts: [host("a", "ready"), host("b", other)], isFetching: false }),
+      ).toEqual({ kind: "ready", isRefreshing: false });
+    }
+  });
+
+  it("keeps the placeholder while a host is still scanning", () => {
     expect(
-      usageHistoryView({ ...connected, isConnected: false, isSupported: false, payload }),
-    ).toEqual({ kind: "error", messageKey: "settings.usageHistory.hostUnavailable" });
+      usageHistoryView({ hosts: [host("a", "pending"), host("b", "offline")], isFetching: true }),
+    ).toEqual({ kind: "loading" });
   });
-  it("asks for an update when the connected host lacks the feature", () => {
-    expect(usageHistoryView({ ...connected, isSupported: false, payload })).toEqual({
-      kind: "unsupported",
-    });
-  });
-  it("distinguishes loading, an empty report, and a refresh with existing data", () => {
-    expect(usageHistoryView(connected)).toEqual({ kind: "loading" });
-    expect(usageHistoryView({ ...connected, payload })).toEqual({
+
+  it("reports a refresh over data that is already on screen", () => {
+    expect(usageHistoryView({ hosts: [host("a", "ready")], isFetching: true })).toEqual({
       kind: "ready",
-      payload,
-      isRefreshing: false,
-    });
-    expect(usageHistoryView({ ...connected, payload, isFetching: true })).toEqual({
-      kind: "ready",
-      payload,
       isRefreshing: true,
     });
   });
-  it("shows localized remediation for both initial and refresh errors", () => {
-    for (const data of [undefined, payload]) {
-      expect(usageHistoryView({ ...connected, payload: data, isError: true })).toEqual({
-        kind: "error",
-        messageKey: "settings.usageHistory.readFailed",
-      });
-    }
+
+  it("names the reason when no host can answer, and generalizes a mixed one", () => {
+    expect(usageHistoryView({ hosts: [host("a", "error")], isFetching: false })).toEqual({
+      kind: "error",
+    });
+    expect(usageHistoryView({ hosts: [host("a", "unsupported")], isFetching: false })).toEqual({
+      kind: "unavailable",
+      messageKey: "settings.usageHistory.unsupported",
+    });
+    expect(usageHistoryView({ hosts: [host("a", "offline")], isFetching: false })).toEqual({
+      kind: "unavailable",
+      messageKey: "settings.usageHistory.hostUnavailable",
+    });
+    expect(
+      usageHistoryView({ hosts: [host("a", "offline"), host("b", "error")], isFetching: false }),
+    ).toEqual({ kind: "unavailable", messageKey: "settings.usageHistory.hostsUnavailable" });
   });
 });
