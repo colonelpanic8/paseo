@@ -8,6 +8,7 @@ import type {
 
 interface PaseoHardwareKeyboardModule {
   setHardwareKeyEventsEnabled(enabled: boolean): void;
+  setHardwareListNavigationEnabled(enabled: boolean): void;
   getHardwareKeyboardConnected(): boolean;
   addListener(
     eventName: "onHardwareKeyDown",
@@ -27,6 +28,10 @@ const module = requireNativeModule<PaseoHardwareKeyboardModule>("PaseoHardwareKe
 
 export function setHardwareKeyEventsEnabled(enabled: boolean) {
   module.setHardwareKeyEventsEnabled(enabled);
+}
+
+export function setHardwareListNavigationEnabled(enabled: boolean) {
+  module.setHardwareListNavigationEnabled(enabled);
 }
 
 export function getHardwareKeyboardConnected(): boolean {

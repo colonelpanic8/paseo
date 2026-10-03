@@ -10,6 +10,7 @@ private let hardwareConnectionEventName = "onHardwareKeyboardConnectionChange"
 private weak var activeModule: PaseoHardwareKeyboardModule?
 private var isHardwareSubmitEnabled = false
 private var isHardwareKeyEventsEnabled = false
+private var isHardwareListNavigationEnabled = false
 
 @objc
 public class PaseoHardwareKeyboardReactDelegateHandler: ExpoReactDelegateHandler {
@@ -63,12 +64,19 @@ public class PaseoHardwareKeyboardModule: Module {
       }
     }
 
+    Function("setHardwareListNavigationEnabled") { (enabled: Bool) in
+      DispatchQueue.main.async {
+        isHardwareListNavigationEnabled = enabled
+      }
+    }
+
     OnDestroy {
       if activeModule === self {
         activeModule = nil
       }
       isHardwareSubmitEnabled = false
       isHardwareKeyEventsEnabled = false
+      isHardwareListNavigationEnabled = false
     }
   }
 
@@ -91,8 +99,11 @@ public class PaseoHardwareKeyboardModule: Module {
 
 private final class PaseoHardwareKeyboardRootViewController: UIViewController {
   override var keyCommands: [UIKeyCommand]? {
+    let listNavigationCommands = isHardwareKeyEventsEnabled && isHardwareListNavigationEnabled
+      ? makeListNavigationCommands()
+      : []
     guard isHardwareSubmitEnabled else {
-      return super.keyCommands
+      return (super.keyCommands ?? []) + listNavigationCommands
     }
 
     // Matches desktop on every idiom: Enter sends, Cmd+Enter takes the
@@ -114,7 +125,43 @@ private final class PaseoHardwareKeyboardRootViewController: UIViewController {
       submit.wantsPriorityOverSystemBehavior = true
       alternateSubmit.wantsPriorityOverSystemBehavior = true
     }
-    return (super.keyCommands ?? []) + [submit, alternateSubmit]
+    // An open list takes plain Enter; Cmd+Enter still reaches the composer.
+    let submitCommands = listNavigationCommands.isEmpty ? [submit, alternateSubmit] : [alternateSubmit]
+    return (super.keyCommands ?? []) + listNavigationCommands + submitCommands
+  }
+
+  // While a picker or autocomplete list is open, plain Enter/Up/Down drive the
+  // list (select highlighted row, move highlight) as on desktop, ahead of the
+  // focused text input's own handling of those keys.
+  private func makeListNavigationCommands() -> [UIKeyCommand] {
+    return ["\r", UIKeyCommand.inputUpArrow, UIKeyCommand.inputDownArrow].map { input in
+      let command = UIKeyCommand(
+        input: input,
+        modifierFlags: [],
+        action: #selector(handleListNavigationKey(_:))
+      )
+      if #available(iOS 15.0, *) {
+        command.wantsPriorityOverSystemBehavior = true
+      }
+      return command
+    }
+  }
+
+  @objc
+  private func handleListNavigationKey(_ sender: UIKeyCommand) {
+    let code: String
+    switch sender.input ?? "" {
+    case UIKeyCommand.inputUpArrow: code = "ArrowUp"
+    case UIKeyCommand.inputDownArrow: code = "ArrowDown"
+    default: code = "Enter"
+    }
+    activeModule?.emitHardwareKeyDown([
+      "code": code,
+      "metaKey": false,
+      "ctrlKey": false,
+      "altKey": false,
+      "shiftKey": false,
+    ])
   }
 
   // Hardware key presses that no descendant responder consumes bubble up here.
