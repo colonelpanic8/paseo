@@ -361,6 +361,15 @@ export function ContextWindowMeter({
     ? t("contextWindow.accessibility", { percentage: context.percentage })
     : t("contextWindow.accessibilityNoData");
 
+  const cacheDetails = promptCache ? (
+    <PromptCacheTooltipSection
+      status={promptCache}
+      pingState={pingState}
+      onPing={onPingPromptCache ? handlePing : null}
+      pingDisabled={pingDisabled}
+    />
+  ) : null;
+
   if (isCompact) {
     return (
       <>
@@ -383,14 +392,7 @@ export function ContextWindowMeter({
             showTitle={false}
             refreshable
           />
-          {promptCache ? (
-            <PromptCacheTooltipSection
-              status={promptCache}
-              pingState={pingState}
-              onPing={onPingPromptCache ? handlePing : null}
-              pingDisabled={pingDisabled}
-            />
-          ) : null}
+          {cacheDetails}
         </ContextWindowSheet>
       </>
     );
@@ -437,14 +439,7 @@ export function ContextWindowMeter({
             showTitle
             refreshable={false}
           />
-          {promptCache ? (
-            <PromptCacheTooltipSection
-              status={promptCache}
-              pingState={pingState}
-              onPing={onPingPromptCache ? handlePing : null}
-              pingDisabled={pingDisabled}
-            />
-          ) : null}
+          {cacheDetails}
         </TooltipContent>
       </Tooltip>
     );
@@ -479,14 +474,7 @@ export function ContextWindowMeter({
           showTitle
           refreshable
         />
-        {promptCache ? (
-          <PromptCacheTooltipSection
-            status={promptCache}
-            pingState={pingState}
-            onPing={onPingPromptCache ? handlePing : null}
-            pingDisabled={pingDisabled}
-          />
-        ) : null}
+        {cacheDetails}
       </HoverCardContent>
     </HoverCard>
   );
