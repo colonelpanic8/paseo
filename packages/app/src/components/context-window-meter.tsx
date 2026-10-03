@@ -271,16 +271,16 @@ export function ContextWindowMeter({
           showTitle
           refreshable={false}
         />
-          {modelLabel ? (
-            <Text style={styles.runtimeDetail} testID="context-window-meter-model">
-              {t("contextWindow.model", { model: modelLabel })}
-            </Text>
-          ) : null}
-          {thinkingLabel ? (
-            <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
-              {t("contextWindow.thinking", { thinking: thinkingLabel })}
-            </Text>
-          ) : null}
+        {modelLabel ? (
+          <Text style={styles.runtimeDetail} testID="context-window-meter-model">
+            {t("contextWindow.model", { model: modelLabel })}
+          </Text>
+        ) : null}
+        {thinkingLabel ? (
+          <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
+            {t("contextWindow.thinking", { thinking: thinkingLabel })}
+          </Text>
+        ) : null}
       </TooltipContent>
     </Tooltip>
   );
