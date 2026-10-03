@@ -230,7 +230,6 @@ export class UsageSourceRegistry {
         windows: entry.report.status === "available" ? entry.report.windows : [],
         balances: entry.report.status === "available" ? (entry.report.balances ?? []) : [],
         details: entry.report.status === "available" ? (entry.report.details ?? []) : [],
-        bankedResets: entry.report.status === "available" ? entry.report.bankedResets : undefined,
         error: legacyError(entry.report, this.now()),
       })),
     };
