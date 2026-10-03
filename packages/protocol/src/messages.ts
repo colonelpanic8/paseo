@@ -33,6 +33,12 @@ export {
   IdentityColorNameSchema,
   type IdentityColorName,
 } from "./identity-color.js";
+import { DaemonPushConfigSchema } from "./daemon-push-config.js";
+export {
+  DaemonPushConfigSchema,
+  type DaemonPushConfig,
+  type DaemonPushNtfyConfig,
+} from "./daemon-push-config.js";
 import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
 import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import { WORKSPACE_LABEL_COLORS } from "./workspace-labels.js";
@@ -233,6 +239,7 @@ export const MutableDaemonConfigSchema = z
     agentEnvironment: MutableAgentEnvironmentConfigSchema.optional(),
     /** How the host presents itself. `color` is an identity color name; unknown values are ignored. */
     appearance: z.object({ color: z.string().optional() }).passthrough().optional(),
+    push: DaemonPushConfigSchema.optional(),
   })
   .passthrough();
 
