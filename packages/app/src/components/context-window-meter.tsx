@@ -248,6 +248,27 @@ function PromptCacheTooltipSection({
   );
 }
 
+function RuntimeDetails({
+  modelLabel,
+  thinkingLabel,
+}: Pick<ContextWindowMeterProps, "modelLabel" | "thinkingLabel">) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {modelLabel ? (
+        <Text style={styles.runtimeDetail} testID="context-window-meter-model">
+          {t("contextWindow.model", { model: modelLabel })}
+        </Text>
+      ) : null}
+      {thinkingLabel ? (
+        <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
+          {t("contextWindow.thinking", { thinking: thinkingLabel })}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
 export function ContextWindowMeter({
   serverId,
   agentId,
@@ -397,16 +418,7 @@ export function ContextWindowMeter({
             showTitle={false}
             refreshable
           />
-          {modelLabel ? (
-            <Text style={styles.runtimeDetail} testID="context-window-meter-model">
-              {t("contextWindow.model", { model: modelLabel })}
-            </Text>
-          ) : null}
-          {thinkingLabel ? (
-            <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
-              {t("contextWindow.thinking", { thinking: thinkingLabel })}
-            </Text>
-          ) : null}
+          <RuntimeDetails modelLabel={modelLabel} thinkingLabel={thinkingLabel} />
           {cacheDetails}
         </ContextWindowSheet>
       </>
@@ -449,16 +461,7 @@ export function ContextWindowMeter({
           showTitle
           refreshable={false}
         />
-        {modelLabel ? (
-          <Text style={styles.runtimeDetail} testID="context-window-meter-model">
-            {t("contextWindow.model", { model: modelLabel })}
-          </Text>
-        ) : null}
-        {thinkingLabel ? (
-          <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
-            {t("contextWindow.thinking", { thinking: thinkingLabel })}
-          </Text>
-        ) : null}
+        <RuntimeDetails modelLabel={modelLabel} thinkingLabel={thinkingLabel} />
         {cacheDetails}
       </TooltipContent>
     </Tooltip>

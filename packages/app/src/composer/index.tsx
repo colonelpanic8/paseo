@@ -2183,7 +2183,7 @@ function ComposerContentImpl({
 
   const contextWindowMeter = useMemo(
     () =>
-      renderContextWindowMeter({
+      renderContextWindowMeter(
         serverId,
         agentId,
         contextWindowMaxTokens,
