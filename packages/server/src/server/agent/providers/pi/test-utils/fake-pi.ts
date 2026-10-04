@@ -16,6 +16,7 @@ import type {
   PiSessionStats,
 } from "../rpc-types.js";
 import { buildPiLaunch } from "../runtime.js";
+import type { ProcessEnvRecord } from "../../../../paseo-env.js";
 
 type FakePiSubagentSubscriptionLevel = "off" | "progress" | "events";
 type FakePiSubagentStatus = "pending" | "running" | "completed" | "failed" | "aborted";
@@ -131,7 +132,7 @@ function readMissingSessionCwd(sessionFile: string | undefined): string | null {
 }
 
 export class FakePiSession implements PiRuntimeSession {
-  readonly environment: Record<string, string>;
+  readonly environment: ProcessEnvRecord;
   readonly prompts: Array<{ message: string; imageCount: number }> = [];
   readonly steerCalls: Array<{ message: string; imageCount: number }> = [];
   steerError: Error | null = null;
