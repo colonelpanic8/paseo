@@ -29,12 +29,8 @@ export interface WorkspaceRenameModalProps {
  * Owns the setWorkspaceTitle mutation and every rename string, so a caller only tracks its own
  * open/closed boolean. Errors surface inline inside AdaptiveRenameModal; the dialog stays open.
  */
-export function WorkspaceRenameModal({
-  visible,
-  workspace,
-  onClose,
-  testID,
-}: WorkspaceRenameModalProps) {
+/** The modal's submit, for callers that collect the new title themselves — the sidebar's inline rename. */
+export function useWorkspaceRenameSubmit(workspace: RenamableWorkspace) {
   const { t } = useTranslation();
 
   const renameMutation = useMutation({
@@ -48,12 +44,22 @@ export function WorkspaceRenameModal({
   });
   const renameAsync = renameMutation.mutateAsync;
 
-  const handleSubmit = useCallback(
+  return useCallback(
     async (value: string) => {
       await renameAsync(value.trim());
     },
     [renameAsync],
   );
+}
+
+export function WorkspaceRenameModal({
+  visible,
+  workspace,
+  onClose,
+  testID,
+}: WorkspaceRenameModalProps) {
+  const { t } = useTranslation();
+  const handleSubmit = useWorkspaceRenameSubmit(workspace);
 
   return (
     <AdaptiveRenameModal
