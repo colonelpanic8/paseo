@@ -12,11 +12,15 @@ import android.os.Binder
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import sh.paseo.androidintents.assistant.CreatedCatalogRows
+import sh.paseo.androidintents.assistant.parseIsoTimestamp
 
 private const val DEFAULT_LIMIT = 25
 private const val MAX_LIMIT = 100
 private const val MESSAGE_DEFAULT_LIMIT = 10
 private const val MESSAGE_MAX_LIMIT = 50
+// Creations older than this are in any catalog published since; skip their journal files.
+private const val CREATED_ROWS_MAX_AGE_MS = 24 * 60 * 60 * 1000L
 // Leaves room for a cold React Native start and a host round trip.
 private const val MESSAGE_TIMEOUT_MS = 17_000L
 private const val UNAVAILABLE_NOTICE =
@@ -115,8 +119,9 @@ class AssistantContentProvider : ContentProvider() {
     require(table == "agents" || workspaceId == null) { "workspaceId only filters agents" }
 
     val catalog = readCatalog()
+    val published = catalog?.optJSONArray(table).toList()
     val rows =
-      catalog?.optJSONArray(table).toList().filter { row ->
+      (createdRows(table, catalog, published) + published).filter { row ->
         (workspaceId == null || row.optString("workspaceId") == workspaceId) &&
           (serverId == null || row.optString("serverId") == serverId) &&
           (query == null || columns.any { column -> row.optString(column).lowercase().contains(query) })
@@ -210,6 +215,20 @@ class AssistantContentProvider : ContentProvider() {
     val limit = raw.toIntOrNull()
     require(limit != null && limit in 1..max) { "limit must be 1..$max" }
     return limit
+  }
+
+  /**
+   * What assistant requests created since the catalog was captured and it
+   * does not list yet, ahead of the published rows because it is newer.
+   */
+  private fun createdRows(table: String, catalog: JSONObject?, published: List<JSONObject>): List<JSONObject> {
+    val context = context ?: return emptyList()
+    val capturedAtMs = catalog?.optString("capturedAt")?.let(::parseIsoTimestamp)
+    val since = maxOf(capturedAtMs ?: 0L, System.currentTimeMillis() - CREATED_ROWS_MAX_AGE_MS)
+    val entries = AssistantJobs.journal(context).creationsSince(since)
+    if (entries.isEmpty()) return emptyList()
+    val listed = published.mapTo(HashSet()) { it.optString("serverId") to it.optString("id") }
+    return CreatedCatalogRows.rows(table, entries, listed, capturedAtMs).map { JSONObject(it) }
   }
 
   private fun readCatalog(): JSONObject? {

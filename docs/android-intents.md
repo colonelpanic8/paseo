@@ -17,7 +17,7 @@ in `packages/app/app.config.js`.
 | Static launcher shortcuts                  | long-press the app icon                               | New workspace, Open project, History. Declared by the config plugin.                      |
 | Dynamic launcher shortcut                  | long-press the app icon                               | "Resume <workspace>" for the last workspace the user opened. Set from the app at runtime. |
 | Assistant catalog provider                 | query `content://sh.paseo.assistant/…`                | Read-only workspace, agent, and message listing for on-device assistants. See below.      |
-| EVA extension service                      | bind `com.colonelpanic.eva.action.EXTENSION`          | Starts agents and sends prompts for EVA, with durable receipts. See below.                |
+| EVA extension service                      | bind `com.colonelpanic.eva.action.EXTENSION`          | Creates workspaces, starts agents, and sends prompts for EVA, with durable receipts.      |
 | Pairing offer                              | any URL with `#offer=`                                | Adds the host. See `OfferLinkListener` in `packages/app/src/app/_layout.tsx`.             |
 
 Shares and selections always go to the New workspace composer. It is the one
@@ -108,8 +108,18 @@ case-insensitive substring match over the row's columns and `limit` is 1 to 100
 or URL query parameters. It is empty when Paseo has no parseable remote.
 `serverName` is the host's name as Paseo shows it: the label you gave it, else
 the daemon's hostname. It is empty when Paseo knows neither, so show `serverId`
-instead. Use `serverId` from a catalog row to scope an agent or message query to the
-host that owns it. Omitting it preserves cross-host lookup for older callers.
+instead. Callers pass `serverId`, never `serverName`, as an argument. Use
+`serverId` from a catalog row to scope an agent or message query to the host
+that owns it. Omitting it preserves cross-host lookup for older callers.
+
+The app republishes the catalog only while its UI runs, so a workspace or agent
+that an [assistant action](#assistant-actions-eva-extension) created headless
+would be missing until Paseo opens. The receipt journal keeps the catalog rows
+the executor built from the daemon's creation snapshot, and `workspaces` and
+`agents` put those rows first until a catalog captured after the creation lists
+them. A newer catalog that still lacks one has seen it archived, so the
+journaled row stops showing. `CreatedCatalogRows` in the native module owns that
+rule.
 
 On every table a SQL selection or sort order is refused rather than ignored.
 The provider serves the exact `com.colonelpanic.eva` package only when Android
@@ -159,11 +169,12 @@ implementation of EVA's installed-app extension protocol v1 (EVA's
 `modules/paseo-android-intents/android/src/main/aidl/` are EVA's ABI: copy them
 verbatim, never edit them here.
 
-| Capability       | Effects | Wait | Arguments                                                                                                                                                                                                                                   |
-| ---------------- | ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create_agent`   | write   | 25 s | `serverId`, `projectId`, `prompt`, `isolation` (`local`/`worktree`) required. Worktree only: `worktreeMode`, `baseRef`, `branch`, `prNumber`, `forge`, `worktreeSlug`. Optional `provider`, `model`, `modeId`, `thinkingOptionId`, `title`. |
-| `send_prompt`    | write   | 25 s | `serverId`, `agentId`, `prompt` required; `activeTurnBehavior` `steer` (default) or `interrupt`.                                                                                                                                            |
-| `request_status` | read    | 10 s | `invocationId` of an earlier call.                                                                                                                                                                                                          |
+| Capability         | Effects | Wait | Arguments                                                                                                                                                                                                                                   |
+| ------------------ | ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_agent`     | write   | 25 s | `serverId`, `projectId`, `prompt`, `isolation` (`local`/`worktree`) required. Worktree only: `worktreeMode`, `baseRef`, `branch`, `prNumber`, `forge`, `worktreeSlug`. Optional `provider`, `model`, `modeId`, `thinkingOptionId`, `title`. |
+| `create_workspace` | write   | 25 s | `create_agent` without `prompt`, `provider`, `model`, `modeId`, or `thinkingOptionId`. Creates the workspace and starts no agent.                                                                                                           |
+| `send_prompt`      | write   | 25 s | `serverId`, `agentId`, `prompt` required; `activeTurnBehavior` `steer` (default) or `interrupt`.                                                                                                                                            |
+| `request_status`   | read    | 10 s | `invocationId` of an earlier call.                                                                                                                                                                                                          |
 
 Schemas are flat and use only `type`, `description`, `enum`, `minLength` and
 `maxLength`; EVA rejects the whole descriptor on any other keyword. Ranges,
@@ -216,18 +227,23 @@ into a status read, so a replay cannot create a second workspace or send a
 second prompt. The daemon reports `outcomeUnknown` if it restarted mid-dispatch;
 that becomes `uncertain` and is never retried.
 
-| State                                                                             | Meaning                                                                                | EVA envelope                       |
-| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------- |
-| `accepted`                                                                        | Journaled. The daemon has not acknowledged it yet                                      | `handed_off`, pollable             |
-| `waiting_for_host`                                                                | Host unreachable. Resumes on the next status call                                      | `handed_off`, pollable             |
-| `submitted`                                                                       | Daemon admitted it. Workspace or agent may exist; prompt not confirmed                 | `handed_off`, pollable             |
-| `completed`                                                                       | Creation reached `prompt_started`, or `send_agent_message` was accepted. Not task done | `completed`                        |
-| `uncertain`                                                                       | May have run. Do not retry; check in Paseo                                             | `unknown`                          |
-| `failed`                                                                          | Definite failure after admission. Partial effects possible                             | `failed`                           |
-| `rejected`, `request_id_conflict`, `unknown_request`                              | Nothing sent: bad arguments, unknown host/project/agent/provider/model/mode, reused ID | `not_executed`/`invalid_arguments` |
-| `expired`                                                                         | Pending 10 minutes and never sent                                                      | `not_executed`/`deadline_exceeded` |
-| `not_started`                                                                     | No React host to run on                                                                | `not_executed`                     |
-| `needs_authorization`, `needs_configuration`, `needs_host_update`, `needs_unlock` | Nothing sent. The user has to act                                                      | `not_executed`/`not_configured`    |
+| State                                                                             | Meaning                                                                                                                        | EVA envelope                       |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| `accepted`                                                                        | Journaled. The daemon has not acknowledged it yet                                                                              | `handed_off`, pollable             |
+| `waiting_for_host`                                                                | Host unreachable. Resumes on the next status call                                                                              | `handed_off`, pollable             |
+| `submitted`                                                                       | Daemon admitted it. Workspace or agent may exist; prompt not confirmed                                                         | `handed_off`, pollable             |
+| `completed`                                                                       | Creation reached `prompt_started` (or `completed` for `create_workspace`), or `send_agent_message` was accepted. Not task done | `completed`                        |
+| `uncertain`                                                                       | May have run. Do not retry; check in Paseo                                                                                     | `unknown`                          |
+| `failed`                                                                          | Definite failure after admission. Partial effects possible                                                                     | `failed`                           |
+| `rejected`, `request_id_conflict`, `unknown_request`                              | Nothing sent: bad arguments, unknown host/project/agent/provider/model/mode, reused ID                                         | `not_executed`/`invalid_arguments` |
+| `expired`                                                                         | Pending 10 minutes and never sent                                                                                              | `not_executed`/`deadline_exceeded` |
+| `not_started`                                                                     | No React host to run on                                                                                                        | `not_executed`                     |
+| `needs_authorization`, `needs_configuration`, `needs_host_update`, `needs_unlock` | Nothing sent. The user has to act                                                                                              | `not_executed`/`not_configured`    |
+
+Every receipt carries `serverId`, and `serverName` once the executor has looked
+the host up, so EVA can say which machine it acted on without a catalog read.
+Creation receipts add `workspaceId`, `workspaceName`, and `branch` as soon as the
+daemon reports the workspace, and `agentId` for `create_agent`.
 
 `ReceiptRules` in `assistant/AssistantReceipts.kt` is the only code that changes
 a state. Terminal states are final, `submitted` never regresses, and once
@@ -307,6 +323,8 @@ latest rows in 1.5 seconds, and a workspace fan-out in 1.4 seconds. A
 production-configured build refused the same caller: the provider threw
 `SecurityException`, and the service replied `unauthorized_caller`.
 Before-first-unlock after a reboot, and a physical phone, are not yet verified.
+`create_workspace`, host names on receipts, and journaled catalog rows came
+later and are covered by unit tests only.
 
 ## Invoking from adb
 

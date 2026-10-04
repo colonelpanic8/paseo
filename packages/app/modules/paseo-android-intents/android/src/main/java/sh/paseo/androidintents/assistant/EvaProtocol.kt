@@ -81,7 +81,7 @@ object EvaProtocol {
   fun describeFailure(status: String, reasonCode: String?, message: String): String =
     envelope(status, reasonCode, message, null, describe = true)
 
-  /** Maps a request's receipt onto EVA's outcome envelope for create_agent/send_prompt. */
+  /** Maps a request's receipt onto EVA's outcome envelope for create_agent, create_workspace, and send_prompt. */
   fun executeReply(receipt: Map<String, Any?>): String {
     val state = receipt["state"] as String
     val (status, reason) = statusFor(state)
@@ -104,14 +104,30 @@ object EvaProtocol {
     }
 
   private fun messageFor(receipt: Map<String, Any?>): String {
-    val operation = if (receipt["operation"] == AssistantOperation.CREATE_AGENT.wire) "The new agent" else "The agent"
+    val creatingWorkspace = receipt["operation"] == AssistantOperation.CREATE_WORKSPACE.wire
+    val host = (receipt["serverName"] as? String)?.let { " on $it" } ?: ""
     val summary =
       when (receipt["state"]) {
-        ReceiptState.COMPLETED -> "$operation received the prompt in Paseo."
+        ReceiptState.COMPLETED ->
+          when (receipt["operation"]) {
+            AssistantOperation.CREATE_WORKSPACE.wire -> "Paseo created the workspace$host."
+            AssistantOperation.CREATE_AGENT.wire -> "The new agent$host received the prompt in Paseo."
+            else -> "The agent$host received the prompt in Paseo."
+          }
         ReceiptState.ACCEPTED -> "Paseo saved the request and is sending it to the host. Check its status shortly."
         ReceiptState.WAITING_FOR_HOST -> "Paseo saved the request and is waiting for the host to come online. Check its status shortly."
-        ReceiptState.SUBMITTED -> "The host accepted the request and is still starting the agent. Check its status shortly."
-        ReceiptState.UNCERTAIN -> "Paseo cannot tell whether the agent received the prompt. Check in Paseo before trying again."
+        ReceiptState.SUBMITTED ->
+          if (creatingWorkspace) {
+            "The host accepted the request and is still creating the workspace. Check its status shortly."
+          } else {
+            "The host accepted the request and is still starting the agent. Check its status shortly."
+          }
+        ReceiptState.UNCERTAIN ->
+          if (creatingWorkspace) {
+            "Paseo cannot tell whether the host created the workspace. Check in Paseo before trying again."
+          } else {
+            "Paseo cannot tell whether the agent received the prompt. Check in Paseo before trying again."
+          }
         ReceiptState.FAILED -> "The host could not finish the request."
         ReceiptState.EXPIRED -> "Paseo never sent the request because the host stayed unreachable."
         ReceiptState.NEEDS_AUTHORIZATION -> "Paseo does not allow EVA to run agents yet. Turn it on in Paseo settings."

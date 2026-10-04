@@ -4,6 +4,7 @@ class InvalidArgumentsException(message: String) : IllegalArgumentException(mess
 
 enum class AssistantOperation(val wire: String) {
   CREATE_AGENT("create_agent"),
+  CREATE_WORKSPACE("create_workspace"),
   SEND_PROMPT("send_prompt");
 
   companion object {
@@ -102,6 +103,35 @@ class Capability(
 
 private val serverId = Field.Text("serverId", "Host ID from the Paseo projects, workspaces, or agents catalog.")
 private val prompt = Field.Text("prompt", "The message to send to the agent.", max = MAX_PROMPT_LENGTH)
+private val projectId = Field.Text("projectId", "Project ID from the Paseo projects catalog, for the same serverId.")
+private val workspaceTitle = Field.Text("title", "Workspace title.", max = 200)
+
+private val workspaceSource =
+  listOf(
+    Field.Choice("isolation", "local runs in the project directory; worktree creates a new git worktree.", listOf("local", "worktree")),
+    Field.Choice(
+      "worktreeMode",
+      "Only with isolation=worktree. branch-off (default) makes a new branch; checkout-branch uses branch; checkout-pr uses prNumber.",
+      listOf("branch-off", "checkout-branch", "checkout-pr"),
+    ),
+    Field.Text("baseRef", "Only with worktreeMode=branch-off: ref to branch from. Defaults to the project's current upstream branch.", max = 300),
+    Field.Text("branch", "Required with worktreeMode=checkout-branch: existing branch to check out.", max = 300),
+    Field.Whole("prNumber", "Required with worktreeMode=checkout-pr: pull request number, 1 or more.", 1, 1_000_000_000),
+    Field.Text("forge", "Only with worktreeMode=checkout-pr: forge ID such as github. Defaults to github.", max = 40),
+    Field.Text(
+      "worktreeSlug",
+      "Only with isolation=worktree: name for the worktree. Lowercase letters, digits and hyphens; starts with a letter or digit.",
+      max = 63,
+      pattern = SLUG,
+    ),
+  )
+
+private const val PENDING_HINT =
+  "accepted, submitted, or waiting_for_host mean Paseo is still working on it: call request_status " +
+    "with this invocation's ID instead of calling it again."
+private const val HOST_HINT =
+  "The receipt names the host as serverName (empty when Paseo knows none; say serverId then) " +
+    "and the new workspace as workspaceId, workspaceName, and branch."
 
 object AssistantCapabilities {
   val createAgent =
@@ -112,41 +142,37 @@ object AssistantCapabilities {
         "Create a workspace in a Paseo project and start a coding agent on it with an initial prompt. " +
           "Use serverId and projectId exactly as listed by the Paseo projects catalog. " +
           "state=completed means the agent received the prompt, not that its task is done. " +
-          "accepted, submitted, or waiting_for_host mean Paseo is still working on it: call request_status " +
-          "with this invocation's ID instead of calling create_agent again.",
+          "$HOST_HINT $PENDING_HINT",
       effects = "write",
       maxWaitMillis = 25_000,
       fields =
-        listOf(
-          serverId,
-          Field.Text("projectId", "Project ID from the Paseo projects catalog, for the same serverId."),
-          prompt,
-          Field.Choice("isolation", "local runs in the project directory; worktree creates a new git worktree.", listOf("local", "worktree")),
-          Field.Choice(
-            "worktreeMode",
-            "Only with isolation=worktree. branch-off (default) makes a new branch; checkout-branch uses branch; checkout-pr uses prNumber.",
-            listOf("branch-off", "checkout-branch", "checkout-pr"),
+        listOf(serverId, projectId, prompt) + workspaceSource +
+          listOf(
+            Field.Text(
+              "provider",
+              "Agent provider ID. Defaults to the provider last chosen in Paseo's New workspace form, else the host's first ready provider.",
+            ),
+            Field.Text("model", "Model ID. Defaults to the provider's saved model, else the provider default."),
+            Field.Text("modeId", "Permission mode ID. Defaults to the provider's default mode; saved modes are never applied unattended."),
+            Field.Text("thinkingOptionId", "Thinking option ID for the model."),
+            workspaceTitle,
           ),
-          Field.Text("baseRef", "Only with worktreeMode=branch-off: ref to branch from. Defaults to the project's current upstream branch.", max = 300),
-          Field.Text("branch", "Required with worktreeMode=checkout-branch: existing branch to check out.", max = 300),
-          Field.Whole("prNumber", "Required with worktreeMode=checkout-pr: pull request number, 1 or more.", 1, 1_000_000_000),
-          Field.Text("forge", "Only with worktreeMode=checkout-pr: forge ID such as github. Defaults to github.", max = 40),
-          Field.Text(
-            "worktreeSlug",
-            "Only with isolation=worktree: name for the worktree. Lowercase letters, digits and hyphens; starts with a letter or digit.",
-            max = 63,
-            pattern = SLUG,
-          ),
-          Field.Text(
-            "provider",
-            "Agent provider ID. Defaults to the provider last chosen in Paseo's New workspace form, else the host's first ready provider.",
-          ),
-          Field.Text("model", "Model ID. Defaults to the provider's saved model, else the provider default."),
-          Field.Text("modeId", "Permission mode ID. Defaults to the provider's default mode; saved modes are never applied unattended."),
-          Field.Text("thinkingOptionId", "Thinking option ID for the model."),
-          Field.Text("title", "Workspace title.", max = 200),
-        ),
       required = listOf("serverId", "projectId", "prompt", "isolation"),
+    )
+
+  val createWorkspace =
+    Capability(
+      name = AssistantOperation.CREATE_WORKSPACE.wire,
+      title = "Create a Paseo workspace",
+      description =
+        "Create a workspace in a Paseo project without starting an agent. " +
+          "Use serverId and projectId exactly as listed by the Paseo projects catalog. " +
+          "state=completed means the workspace exists, and the Paseo workspaces catalog lists it right away. " +
+          "$HOST_HINT $PENDING_HINT",
+      effects = "write",
+      maxWaitMillis = 25_000,
+      fields = listOf(serverId, projectId) + workspaceSource + listOf(workspaceTitle),
+      required = listOf("serverId", "projectId", "isolation"),
     )
 
   val sendPrompt =
@@ -179,20 +205,20 @@ object AssistantCapabilities {
       name = REQUEST_STATUS_CAPABILITY,
       title = "Check a Paseo request",
       description =
-        "Report the current state of an earlier create_agent or send_prompt call by its invocation ID. " +
+        "Report the current state of an earlier create_agent, create_workspace, or send_prompt call by its invocation ID. " +
           "If that request is still pending, Paseo continues it under the same idempotency key; it never starts a second one.",
       effects = "read",
       maxWaitMillis = 10_000,
-      fields = listOf(Field.Text("invocationId", "The invocation ID of the earlier create_agent or send_prompt call.", max = 256)),
+      fields = listOf(Field.Text("invocationId", "The invocation ID of the earlier create_agent, create_workspace, or send_prompt call.", max = 256)),
       required = listOf("invocationId"),
     )
 
-  val all = listOf(createAgent, sendPrompt, requestStatus)
+  val all = listOf(createAgent, createWorkspace, sendPrompt, requestStatus)
 
   fun byName(name: String): Capability? = all.firstOrNull { it.name == name }
 
-  /** Field combinations the flat schema cannot express. */
-  fun checkCreateAgentCombination(arguments: Map<String, Any?>) {
+  /** Field combinations the flat schema cannot express, for create_agent and create_workspace. */
+  fun checkWorkspaceSourceCombination(arguments: Map<String, Any?>) {
     val worktreeFields = listOf("worktreeMode", "baseRef", "branch", "prNumber", "forge", "worktreeSlug")
     if (arguments["isolation"] == "local") {
       val stray = worktreeFields.firstOrNull { arguments.containsKey(it) }
