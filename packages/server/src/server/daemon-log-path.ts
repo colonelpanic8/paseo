@@ -1,4 +1,5 @@
 import path from "node:path";
+import { resolveConfiguredPath } from "../utils/path.js";
 
 export const DEFAULT_DAEMON_LOG_FILENAME = "daemon.log";
 
@@ -16,8 +17,8 @@ export interface DaemonLogPathConfig {
 
 /**
  * Supervisor, worker, and desktop all read and write the same daemon log, so they
- * have to agree on where it lives. Absolute `log.file.path` values are used as-is,
- * relative ones resolve against PASEO_HOME.
+ * have to agree on where it lives. `~` expands to the home directory, absolute
+ * `log.file.path` values are used as-is, relative ones resolve against PASEO_HOME.
  */
 export function resolveDaemonLogPath(paseoHome: string, config?: DaemonLogPathConfig): string {
   const configuredPath = config?.log?.file?.path;
@@ -25,9 +26,5 @@ export function resolveDaemonLogPath(paseoHome: string, config?: DaemonLogPathCo
     return path.join(paseoHome, DEFAULT_DAEMON_LOG_FILENAME);
   }
 
-  if (path.isAbsolute(configuredPath)) {
-    return configuredPath;
-  }
-
-  return path.resolve(paseoHome, configuredPath);
+  return resolveConfiguredPath(paseoHome, configuredPath);
 }
