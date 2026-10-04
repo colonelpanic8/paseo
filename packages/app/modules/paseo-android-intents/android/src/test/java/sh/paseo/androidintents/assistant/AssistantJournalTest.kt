@@ -68,6 +68,21 @@ class AssistantJournalTest {
   }
 
   @Test
+  fun creationsKeepTheirHostAndAccumulateCatalogRows() {
+    val key = admit("eva-8").key
+    journal.update(key, ReceiptUpdate(state = ReceiptState.ACCEPTED, dispatchStarted = true, plan = planA, serverName = "ryzen-shine"))
+    val workspace = mapOf("id" to "ws", "serverId" to "s", "serverName" to "ryzen-shine", "name" to "eva-fix")
+    val agent = mapOf("id" to "ag", "serverId" to "s", "workspaceId" to "ws")
+    journal.update(key, ReceiptUpdate(state = ReceiptState.SUBMITTED, workspaceId = "ws", catalog = mapOf("workspace" to workspace)))
+    journal.update(key, ReceiptUpdate(state = ReceiptState.COMPLETED, agentId = "ag", catalog = mapOf("workspace" to workspace, "agent" to agent)))
+    val reread = AssistantJournal(folder.root) { now }.get(key)!!
+    assertEquals("ryzen-shine", reread.serverName)
+    assertEquals(listOf(workspace, agent), listOf(reread.createdRow("workspace"), reread.createdRow("agent")))
+    assertEquals(listOf(key), journal.creationsSince(0).map { it.key })
+    assertTrue(journal.creationsSince(System.currentTimeMillis() + 60_000).isEmpty())
+  }
+
+  @Test
   fun overdueRequestsCloseAsExpiredOnlyWhenNothingWasSent() {
     val unsent = admit("eva-5").key
     val sent = admit("eva-6").key

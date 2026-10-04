@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DaemonConnectionError } from "@getpaseo/client/internal/daemon-client";
-import type { CreationSnapshot } from "@getpaseo/protocol/messages";
+import type {
+  AgentSnapshotPayload,
+  CreationSnapshot,
+  WorkspaceDescriptorPayload,
+} from "@getpaseo/protocol/messages";
 import {
   runAssistantRequest,
   type AssistantHostClient,
@@ -24,6 +28,34 @@ function snapshot(patch: Partial<CreationSnapshot>): CreationSnapshot {
     ...patch,
   };
 }
+
+const createdWorkspace = {
+  id: "ws-1",
+  projectId: "proj-1",
+  projectDisplayName: "paseo",
+  projectRootPath: "/repo",
+  workspaceDirectory: "/repo/.worktrees/eva-fix",
+  projectKind: "git",
+  workspaceKind: "worktree",
+  name: "eva-fix",
+  status: "idle",
+  statusEnteredAt: "2026-10-04T10:00:00.000Z",
+  archivingAt: null,
+  gitRuntime: { currentBranch: "eva-fix", remoteUrl: "git@github.com:getpaseo/paseo.git" },
+} as unknown as WorkspaceDescriptorPayload;
+
+const createdAgent = {
+  id: "ag-1",
+  provider: "claude",
+  status: "running",
+  createdAt: "2026-10-04T10:00:01.000Z",
+  updatedAt: "2026-10-04T10:00:02.000Z",
+  cwd: "/repo/.worktrees/eva-fix",
+  workspaceId: "ws-1",
+  title: "Fix the flaky test",
+  labels: {},
+  capabilities: {},
+} as unknown as AgentSnapshotPayload;
 
 interface FakeHost {
   client: AssistantHostClient;
@@ -161,7 +193,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(host.calls.indexOf("report:accepted:dispatch")).toBeLessThan(
@@ -183,6 +215,46 @@ describe("runAssistantRequest create_agent", () => {
     expect(journal.last()).toEqual({ state: "completed", workspaceId: "ws-1", agentId: "ag-1" });
   });
 
+  it("journals the created workspace and agent under the host's name", async () => {
+    const host = fakeHost({
+      create: async () => ({
+        creation: snapshot({
+          phase: "prompt_started",
+          workspaceId: "ws-1",
+          agentId: "ag-1",
+          workspace: createdWorkspace,
+          agent: createdAgent,
+        }),
+        error: null,
+      }),
+    });
+    const journal = fakeJournal();
+
+    await runAssistantRequest(
+      createJob({}),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
+    );
+
+    expect(journal.last()?.catalog).toEqual({
+      workspace: expect.objectContaining({
+        id: "ws-1",
+        serverName: "ryzen-shine",
+        agentCount: 1,
+        lastActivityAt: "2026-10-04T10:00:02.000Z",
+      }),
+      agent: {
+        id: "ag-1",
+        serverId: "srv",
+        serverName: "ryzen-shine",
+        workspaceId: "ws-1",
+        name: "Fix the flaky test",
+        provider: "claude",
+        status: "running",
+        lastActivityAt: "2026-10-04T10:00:02.000Z",
+      },
+    });
+  });
+
   it("replays the persisted plan verbatim without re-resolving defaults", async () => {
     const host = fakeHost({});
     const plan: AssistantRequestPlan = {
@@ -196,7 +268,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}, plan),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(host.calls).toEqual(["createWorkspace"]);
@@ -217,7 +289,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(host.createInputs[0].source).toEqual({ kind: "worktree", worktreeSlug: "first-run" });
@@ -239,7 +311,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(journal.last()?.state).toBe("uncertain");
@@ -255,7 +327,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(journal.updates.map((update) => update.state)).toEqual(["accepted"]);
@@ -267,7 +339,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(host.calls).not.toContain("createWorkspace");
@@ -279,7 +351,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({ isolation: "local", provider: undefined }),
-      deps({ kind: "connected", client: host.client }, journal, {
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal, {
         provider: "claude",
         providerPreferences: { claude: { model: "sonnet", mode: "bypassPermissions" } },
       }),
@@ -311,7 +383,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({ ...(preferences === null ? { provider: undefined } : {}), ...args }),
-      deps({ kind: "connected", client: host.client }, journal, {}),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal, {}),
     );
 
     expect(host.calls).not.toContain("createWorkspace");
@@ -324,7 +396,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(host.calls).toContain("createWorkspace");
@@ -337,7 +409,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({ isolation: "local", provider: undefined }),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     const config = (host.createInputs[0].agent as { config: Record<string, unknown> }).config;
@@ -351,7 +423,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({ provider: undefined }),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(host.calls).not.toContain("createWorkspace");
@@ -367,7 +439,7 @@ describe("runAssistantRequest create_agent", () => {
 
     await runAssistantRequest(
       createJob({}),
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(journal.last()).toMatchObject({ state: "needs_host_update" });
@@ -375,12 +447,116 @@ describe("runAssistantRequest create_agent", () => {
 
   it("waits for an offline host and refuses an unpaired one", async () => {
     const offline = fakeJournal();
-    await runAssistantRequest(createJob({}), deps({ kind: "offline" }, offline));
+    await runAssistantRequest(
+      createJob({}),
+      deps({ kind: "offline", serverName: "ryzen-shine" }, offline),
+    );
     expect(offline.last()).toMatchObject({ state: "waiting_for_host" });
 
     const unpaired = fakeJournal();
     await runAssistantRequest(createJob({}), deps({ kind: "unknown_host" }, unpaired));
     expect(unpaired.last()).toMatchObject({ state: "rejected", error: { code: "unknown_host" } });
+  });
+});
+
+describe("runAssistantRequest create_workspace", () => {
+  function workspaceJob(args: Record<string, unknown> = {}): AssistantRequestJob {
+    return {
+      key: KEY,
+      operation: "create_workspace",
+      arguments: {
+        serverId: "srv",
+        projectId: "proj-1",
+        isolation: "worktree",
+        worktreeSlug: "eva-fix",
+        ...args,
+      },
+      plan: null,
+      dispatchStarted: false,
+    };
+  }
+
+  it("creates the workspace without an agent and records its host and catalog row", async () => {
+    const host = fakeHost({
+      create: async (input) => {
+        (input.onEvent as (s: CreationSnapshot) => void)(
+          snapshot({ phase: "workspace_ready", workspaceId: "ws-1", workspace: createdWorkspace }),
+        );
+        return {
+          creation: snapshot({
+            phase: "completed",
+            workspaceId: "ws-1",
+            workspace: createdWorkspace,
+          }),
+          error: null,
+        };
+      },
+    });
+    const journal = fakeJournal();
+
+    await runAssistantRequest(
+      workspaceJob(),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
+    );
+
+    const request = host.createInputs[0];
+    expect(request.agent).toBeUndefined();
+    expect(request.firstAgentContext).toBeUndefined();
+    expect(request.source).toMatchObject({
+      kind: "worktree",
+      projectId: "proj-1",
+      worktreeSlug: "eva-fix",
+      action: "branch-off",
+    });
+    expect(journal.updates[0]).toMatchObject({
+      state: "accepted",
+      dispatchStarted: true,
+      serverName: "ryzen-shine",
+      plan: { kind: "create_workspace" },
+    });
+    expect(journal.last()).toEqual({
+      state: "completed",
+      workspaceId: "ws-1",
+      catalog: {
+        workspace: {
+          id: "ws-1",
+          serverId: "srv",
+          serverName: "ryzen-shine",
+          name: "eva-fix",
+          project: "paseo",
+          repository: "github.com/getpaseo/paseo",
+          branch: "eva-fix",
+          status: "idle",
+          agentCount: 0,
+          lastActivityAt: "2026-10-04T10:00:00.000Z",
+        },
+      },
+    });
+  });
+
+  it("refuses a worktree in a project that is not a git checkout", async () => {
+    const host = fakeHost({});
+    const journal = fakeJournal();
+
+    await runAssistantRequest(
+      workspaceJob({ projectId: "plain" }),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
+    );
+
+    expect(host.calls).not.toContain("createWorkspace");
+    expect(journal.last()).toMatchObject({
+      state: "rejected",
+      error: { code: "worktree_unsupported" },
+    });
+  });
+
+  it("records the host name while it waits for an offline host", async () => {
+    const journal = fakeJournal();
+    await runAssistantRequest(
+      workspaceJob(),
+      deps({ kind: "offline", serverName: "ryzen-shine" }, journal),
+    );
+    expect(journal.last()).toMatchObject({ state: "waiting_for_host", serverName: "ryzen-shine" });
   });
 });
 
@@ -397,7 +573,10 @@ describe("runAssistantRequest send_prompt", () => {
     const host = fakeHost({});
     const journal = fakeJournal({ calls: host.calls });
 
-    await runAssistantRequest(sendJob, deps({ kind: "connected", client: host.client }, journal));
+    await runAssistantRequest(
+      sendJob,
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
+    );
 
     expect(host.calls.indexOf("report:accepted:dispatch")).toBeLessThan(
       host.calls.indexOf("sendAgentMessage"),
@@ -417,6 +596,7 @@ describe("runAssistantRequest send_prompt", () => {
       deps(
         {
           kind: "connected",
+          serverName: "ryzen-shine",
           client: fakeHost({
             send: async () => {
               throw new Error("agent_request_outcome_unknown");
@@ -434,6 +614,7 @@ describe("runAssistantRequest send_prompt", () => {
       deps(
         {
           kind: "connected",
+          serverName: "ryzen-shine",
           client: fakeHost({
             send: async () => {
               throw new Error("Agent is busy");
@@ -452,7 +633,7 @@ describe("runAssistantRequest send_prompt", () => {
 
     await runAssistantRequest(
       { ...sendJob, arguments: { serverId: "srv", agentId: "nope", prompt: "hi" } },
-      deps({ kind: "connected", client: host.client }, journal),
+      deps({ kind: "connected", client: host.client, serverName: "ryzen-shine" }, journal),
     );
 
     expect(host.calls).not.toContain("sendAgentMessage");

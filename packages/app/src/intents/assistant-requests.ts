@@ -9,10 +9,18 @@ import {
 import type { CreationSnapshot } from "@getpaseo/protocol/messages";
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-project-model";
+import { normalizeWorkspaceDescriptor } from "@/stores/session-store";
+import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import {
   defaultBasePickerItem,
   pickerItemToCheckoutRequest,
 } from "@/screens/new-workspace-picker-item";
+import {
+  assistantAgentRow,
+  assistantWorkspaceRow,
+  type AssistantCatalogAgent,
+  type AssistantCatalogWorkspace,
+} from "./assistant-catalog";
 
 // States the native journal stores. See ReceiptState in the native module.
 export type AssistantRequestState =
@@ -26,12 +34,20 @@ export type AssistantRequestState =
   | "needs_configuration"
   | "needs_host_update";
 
+/** Catalog rows for what a creation made, served until the published catalog lists them. */
+export interface AssistantCreatedRows {
+  workspace?: AssistantCatalogWorkspace;
+  agent?: AssistantCatalogAgent;
+}
+
 export interface AssistantRequestUpdate {
   state?: AssistantRequestState;
   dispatchStarted?: boolean;
   plan?: AssistantRequestPlan;
+  serverName?: string;
   workspaceId?: string;
   agentId?: string;
+  catalog?: AssistantCreatedRows;
   error?: { code: string; message: string };
 }
 
@@ -46,10 +62,16 @@ export type AssistantHostClient = Pick<
   | "sendAgentMessage"
 >;
 
+/** serverName is the host's label as the catalog shows it; empty when Paseo knows none. */
 export type AssistantHostConnection =
-  | { kind: "connected"; client: AssistantHostClient }
+  | { kind: "connected"; client: AssistantHostClient; serverName: string }
   | { kind: "unknown_host" }
-  | { kind: "offline" };
+  | { kind: "offline"; serverName: string };
+
+interface AssistantHost {
+  serverId: string;
+  serverName: string;
+}
 
 export interface AssistantRequestDeps {
   connect: (serverId: string) => Promise<AssistantHostConnection>;
@@ -62,10 +84,9 @@ export interface AssistantRequestDeps {
 
 const MAX_ERROR_MESSAGE = 500;
 
-const CreateAgentArgumentsSchema = z.object({
+const CreateWorkspaceArgumentsSchema = z.object({
   serverId: z.string().min(1),
   projectId: z.string().min(1),
-  prompt: z.string().min(1).max(16_000),
   isolation: z.enum(["local", "worktree"]),
   worktreeMode: z.enum(["branch-off", "checkout-branch", "checkout-pr"]).optional(),
   baseRef: z.string().min(1).optional(),
@@ -73,11 +94,16 @@ const CreateAgentArgumentsSchema = z.object({
   prNumber: z.number().int().positive().optional(),
   forge: z.string().min(1).optional(),
   worktreeSlug: z.string().min(1).optional(),
+  title: z.string().min(1).optional(),
+});
+type CreateWorkspaceArguments = z.infer<typeof CreateWorkspaceArgumentsSchema>;
+
+const CreateAgentArgumentsSchema = CreateWorkspaceArgumentsSchema.extend({
+  prompt: z.string().min(1).max(16_000),
   provider: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   modeId: z.string().min(1).optional(),
   thinkingOptionId: z.string().min(1).optional(),
-  title: z.string().min(1).optional(),
 });
 type CreateAgentArguments = z.infer<typeof CreateAgentArgumentsSchema>;
 
@@ -92,6 +118,10 @@ const CreateAgentPlanSchema = z.object({
   kind: z.literal("create_agent"),
   request: z.record(z.string(), z.unknown()),
 });
+const CreateWorkspacePlanSchema = z.object({
+  kind: z.literal("create_workspace"),
+  request: z.record(z.string(), z.unknown()),
+});
 const SendPromptPlanSchema = z.object({
   kind: z.literal("send_prompt"),
   agentId: z.string().min(1),
@@ -99,15 +129,25 @@ const SendPromptPlanSchema = z.object({
   messageId: z.string().min(1),
   activeTurnBehavior: z.enum(["steer", "interrupt"]),
 });
-const PlanSchema = z.discriminatedUnion("kind", [CreateAgentPlanSchema, SendPromptPlanSchema]);
+const PlanSchema = z.discriminatedUnion("kind", [
+  CreateAgentPlanSchema,
+  CreateWorkspacePlanSchema,
+  SendPromptPlanSchema,
+]);
 export type AssistantRequestPlan = z.infer<typeof PlanSchema>;
+
+const ARGUMENT_SCHEMAS = {
+  create_agent: CreateAgentArgumentsSchema,
+  create_workspace: CreateWorkspaceArgumentsSchema,
+  send_prompt: SendPromptArgumentsSchema,
+} as const;
 
 const PENDING_STATES = new Set(["accepted", "waiting_for_host", "submitted"]);
 const StoredRequestSchema = z.object({ state: z.string(), plan: PlanSchema });
 
 const JobSchema = z.object({
   key: z.string().min(1),
-  operation: z.enum(["create_agent", "send_prompt"]),
+  operation: z.enum(["create_agent", "create_workspace", "send_prompt"]),
   arguments: z.string(),
   plan: z.string(),
   dispatchStarted: z.enum(["true", "false"]),
@@ -115,7 +155,7 @@ const JobSchema = z.object({
 
 export interface AssistantRequestJob {
   key: string;
-  operation: "create_agent" | "send_prompt";
+  operation: "create_agent" | "create_workspace" | "send_prompt";
   arguments: unknown;
   plan: AssistantRequestPlan | null;
   dispatchStarted: boolean;
@@ -181,15 +221,61 @@ function requireFeatures(client: AssistantHostClient, features: string[]): void 
 async function connected(
   deps: AssistantRequestDeps,
   serverId: string,
-): Promise<AssistantHostClient> {
+): Promise<{ client: AssistantHostClient; host: AssistantHost }> {
   const connection = await deps.connect(serverId);
   if (connection.kind === "unknown_host") {
     throw stop("rejected", "unknown_host", "Paseo is not paired with that host.");
   }
   if (connection.kind === "offline") {
-    throw stop("waiting_for_host", "host_offline", "The host is offline.");
+    throw new Outcome({
+      state: "waiting_for_host",
+      serverName: connection.serverName,
+      error: { code: "host_offline", message: "The host is offline." },
+    });
   }
-  return connection.client;
+  return { client: connection.client, host: { serverId, serverName: connection.serverName } };
+}
+
+async function findProject(args: CreateWorkspaceArguments, client: AssistantHostClient) {
+  const projects = await client.listProjects();
+  const project = projects.projects.find((candidate) => candidate.projectId === args.projectId);
+  if (!project) {
+    throw stop("rejected", "unknown_project", "That project is not on this host.");
+  }
+  if (args.isolation === "worktree" && !canCreateWorktreeForProjectKind(project.projectKind)) {
+    throw stop(
+      "rejected",
+      "worktree_unsupported",
+      "Worktrees need a git project; use isolation=local.",
+    );
+  }
+  return project;
+}
+
+function requireCreationFeatures(client: AssistantHostClient, args: CreateWorkspaceArguments) {
+  requireFeatures(client, [
+    "creationLifecycle",
+    "workspaceRequestReceipts",
+    ...(args.isolation === "local" ? ["workspaceMultiplicity"] : []),
+  ]);
+}
+
+async function workspaceSource(
+  args: CreateWorkspaceArguments,
+  client: AssistantHostClient,
+  project: { projectId: string; projectRootPath: string },
+): Promise<CreateWorkspaceRequestOptions["source"]> {
+  const cwd = project.projectRootPath;
+  if (args.isolation === "local") {
+    return { kind: "directory", path: cwd, projectId: project.projectId };
+  }
+  return {
+    kind: "worktree",
+    cwd,
+    projectId: project.projectId,
+    worktreeSlug: args.worktreeSlug ?? createNameId(),
+    ...(await worktreeCheckout(args, client, cwd)),
+  };
 }
 
 /**
@@ -204,39 +290,11 @@ export async function planCreateAgent(input: {
   preferences: FormPreferences;
 }): Promise<AssistantRequestPlan> {
   const { args, client } = input;
-  requireFeatures(client, [
-    "creationLifecycle",
-    "workspaceRequestReceipts",
-    ...(args.isolation === "local" ? ["workspaceMultiplicity"] : []),
-  ]);
-
-  const projects = await client.listProjects();
-  const project = projects.projects.find((candidate) => candidate.projectId === args.projectId);
-  if (!project) {
-    throw stop("rejected", "unknown_project", "That project is not on this host.");
-  }
-  if (args.isolation === "worktree" && !canCreateWorktreeForProjectKind(project.projectKind)) {
-    throw stop(
-      "rejected",
-      "worktree_unsupported",
-      "Worktrees need a git project; use isolation=local.",
-    );
-  }
-
+  requireCreationFeatures(client, args);
+  const project = await findProject(args, client);
   const cwd = project.projectRootPath;
   const launch = await resolveLaunch(args, client, input.preferences, cwd);
-  let source: CreateWorkspaceRequestOptions["source"];
-  if (args.isolation === "local") {
-    source = { kind: "directory", path: cwd, projectId: project.projectId };
-  } else {
-    source = {
-      kind: "worktree",
-      cwd,
-      projectId: project.projectId,
-      worktreeSlug: args.worktreeSlug ?? createNameId(),
-      ...(await worktreeCheckout(args, client, cwd)),
-    };
-  }
+  const source = await workspaceSource(args, client, project);
 
   const idempotencyKey = assistantIdempotencyKey(input.key);
   const request: Omit<CreateWorkspaceRequestOptions, "onEvent"> = {
@@ -251,6 +309,23 @@ export async function planCreateAgent(input: {
     firstAgentContext: { prompt: args.prompt.trim(), attachments: [] },
   };
   return { kind: "create_agent", request };
+}
+
+/** A workspace with no agent: same source resolution as create_agent, nothing to launch. */
+export async function planCreateWorkspace(input: {
+  key: string;
+  args: CreateWorkspaceArguments;
+  client: AssistantHostClient;
+}): Promise<AssistantRequestPlan> {
+  const { args, client } = input;
+  requireCreationFeatures(client, args);
+  const project = await findProject(args, client);
+  const request: Omit<CreateWorkspaceRequestOptions, "onEvent"> = {
+    idempotencyKey: assistantIdempotencyKey(input.key),
+    source: await workspaceSource(args, client, project),
+    ...(args.title ? { title: args.title } : {}),
+  };
+  return { kind: "create_workspace", request };
 }
 
 const PROVIDER_LOADING_ATTEMPTS = 20;
@@ -324,7 +399,7 @@ async function resolveLaunch(
 }
 
 async function worktreeCheckout(
-  args: CreateAgentArguments,
+  args: CreateWorkspaceArguments,
   client: AssistantHostClient,
   cwd: string,
 ) {
@@ -380,29 +455,60 @@ async function planSendPrompt(input: {
   };
 }
 
+/** The catalog rows for what the snapshot says exists, named for the host that owns them. */
+export function createdCatalogRows(
+  snapshot: CreationSnapshot,
+  host: AssistantHost,
+): AssistantCreatedRows | undefined {
+  const agent = snapshot.agent ? normalizeAgentSnapshot(snapshot.agent, host.serverId) : null;
+  const rows: AssistantCreatedRows = {
+    ...(snapshot.workspace
+      ? {
+          workspace: assistantWorkspaceRow({
+            workspace: normalizeWorkspaceDescriptor(snapshot.workspace),
+            serverId: host.serverId,
+            serverName: host.serverName,
+            agentCount: agent ? 1 : 0,
+            lastAgentActivityMs: agent?.lastActivityAt.getTime() ?? null,
+          }),
+        }
+      : {}),
+    ...(agent ? { agent: assistantAgentRow(agent, host.serverName) } : {}),
+  };
+  return rows.workspace || rows.agent ? rows : undefined;
+}
+
 /** What a daemon creation snapshot proves. A prompt that started is delivered. */
-export function updateFromCreationSnapshot(snapshot: CreationSnapshot): AssistantRequestUpdate {
-  const ids = {
+export function updateFromCreationSnapshot(
+  snapshot: CreationSnapshot,
+  host?: AssistantHost,
+): AssistantRequestUpdate {
+  const catalog = host ? createdCatalogRows(snapshot, host) : undefined;
+  const created = {
     ...(snapshot.workspaceId ? { workspaceId: snapshot.workspaceId } : {}),
     ...(snapshot.agentId ? { agentId: snapshot.agentId } : {}),
+    ...(catalog ? { catalog } : {}),
   };
   switch (snapshot.phase) {
     case "prompt_started":
     case "completed":
-      return { state: "completed", ...ids };
+      return { state: "completed", ...created };
     case "failed":
       return {
         state: snapshot.outcomeUnknown ? "uncertain" : "failed",
-        ...ids,
+        ...created,
         error: {
           code:
             snapshot.errorCode ??
             `${snapshot.failedStage ?? "creation"}_${snapshot.outcomeUnknown ? "outcome_unknown" : "failed"}`,
-          message: clip(snapshot.error ?? "The host could not create the agent."),
+          message: clip(
+            snapshot.error ??
+              `The host could not create the ${snapshot.failedStage === "workspace" ? "workspace" : "agent"}.`,
+          ),
         },
       };
     default:
-      return { state: "submitted", ...ids };
+      return { state: "submitted", ...created };
   }
 }
 
@@ -447,8 +553,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | typ
 const TIMED_OUT = Symbol("timed out");
 
 async function dispatchCreate(
-  plan: Extract<AssistantRequestPlan, { kind: "create_agent" }>,
+  plan: Extract<AssistantRequestPlan, { kind: "create_agent" | "create_workspace" }>,
   client: AssistantHostClient,
+  host: AssistantHost,
   deps: AssistantRequestDeps,
   report: (update: AssistantRequestUpdate) => Promise<unknown>,
 ): Promise<void> {
@@ -457,14 +564,14 @@ async function dispatchCreate(
     client.createWorkspace({
       ...request,
       onEvent: (snapshot) => {
-        report(updateFromCreationSnapshot(snapshot)).catch(() => undefined);
+        report(updateFromCreationSnapshot(snapshot, host)).catch(() => undefined);
       },
     }),
     deps.dispatchTimeoutMs,
   );
   if (result === TIMED_OUT) return;
   if (result.creation) {
-    await report(updateFromCreationSnapshot(result.creation));
+    await report(updateFromCreationSnapshot(result.creation, host));
   } else if (result.error) {
     await report({
       state: "failed",
@@ -517,34 +624,48 @@ export async function runAssistantRequest(
 
   try {
     let plan = job.plan;
-    let client: AssistantHostClient | null = null;
+    let connection: Awaited<ReturnType<typeof connected>>;
     if (!plan || !job.dispatchStarted) {
-      const args =
-        job.operation === "create_agent"
-          ? CreateAgentArgumentsSchema.safeParse(job.arguments)
-          : SendPromptArgumentsSchema.safeParse(job.arguments);
+      const args = ARGUMENT_SCHEMAS[job.operation].safeParse(job.arguments);
       if (!args.success) {
         throw stop("rejected", "invalid_arguments", "Paseo could not read the saved request.");
       }
-      client = await connected(deps, args.data.serverId);
+      connection = await connected(deps, args.data.serverId);
+      const { client } = connection;
       if (!plan) {
-        plan =
-          job.operation === "create_agent"
-            ? await planCreateAgent({
-                key: job.key,
-                args: args.data as CreateAgentArguments,
-                client,
-                preferences: await deps.loadFormPreferences(),
-              })
-            : await planSendPrompt({
-                key: job.key,
-                args: args.data as z.infer<typeof SendPromptArgumentsSchema>,
-                client,
-              });
+        switch (job.operation) {
+          case "create_agent":
+            plan = await planCreateAgent({
+              key: job.key,
+              args: args.data as CreateAgentArguments,
+              client,
+              preferences: await deps.loadFormPreferences(),
+            });
+            break;
+          case "create_workspace":
+            plan = await planCreateWorkspace({
+              key: job.key,
+              args: args.data as CreateWorkspaceArguments,
+              client,
+            });
+            break;
+          case "send_prompt":
+            plan = await planSendPrompt({
+              key: job.key,
+              args: args.data as z.infer<typeof SendPromptArgumentsSchema>,
+              client,
+            });
+            break;
+        }
       }
       // Another run may have committed first; dispatch whatever the journal holds.
       const stored = StoredRequestSchema.safeParse(
-        await report({ plan, dispatchStarted: true, state: "accepted" }),
+        await report({
+          plan,
+          dispatchStarted: true,
+          state: "accepted",
+          serverName: connection.host.serverName,
+        }),
       );
       if (!stored.success) {
         throw new Error("The journal did not store the request plan");
@@ -556,13 +677,13 @@ export async function runAssistantRequest(
       if (typeof serverId !== "string") {
         throw stop("uncertain", "invalid_saved_request", "Paseo could not read the saved request.");
       }
-      client = await connected(deps, serverId);
+      connection = await connected(deps, serverId);
     }
 
-    if (plan.kind === "create_agent") {
-      await dispatchCreate(plan, client, deps, report);
+    if (plan.kind === "send_prompt") {
+      await dispatchSend(plan, connection.client, deps, report);
     } else {
-      await dispatchSend(plan, client, deps, report);
+      await dispatchCreate(plan, connection.client, connection.host, deps, report);
     }
   } catch (error) {
     const settled = error instanceof Outcome ? error.update : settledByError(error);

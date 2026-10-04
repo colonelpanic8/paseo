@@ -6,6 +6,7 @@ import java.security.MessageDigest
 
 private const val MAX_ENTRIES = 200
 private const val RETENTION_MS = 7 * 24 * 60 * 60 * 1000L
+private const val MTIME_SLACK_MS = 2_000L
 
 class UnreadableRecordException(cause: Throwable) : IOException(cause)
 
@@ -64,8 +65,10 @@ class AssistantJournal(private val directory: File, private val clock: () -> Lon
           dispatchStarted = false,
           plan = null,
           serverId = arguments["serverId"] as String,
+          serverName = null,
           workspaceId = null,
           agentId = null,
+          catalog = null,
           errorCode = null,
           errorMessage = null,
         )
@@ -77,6 +80,18 @@ class AssistantJournal(private val directory: File, private val clock: () -> Lon
   fun find(callerUid: Int, invocationId: String): AssistantRequestEntry? = get(keyFor(callerUid, invocationId))
 
   fun get(key: String): AssistantRequestEntry? = synchronized(lock) { readOrNullLocked(key) }
+
+  /**
+   * Entries that recorded created catalog rows, from files modified since
+   * about [sinceMs]. File times can be coarse, so callers still filter by
+   * updatedAtMs.
+   */
+  fun creationsSince(sinceMs: Long): List<AssistantRequestEntry> =
+    synchronized(lock) {
+      val cutoff = sinceMs - MTIME_SLACK_MS
+      val files = directory.listFiles { file -> file.name.endsWith(".json") && file.lastModified() >= cutoff } ?: return emptyList()
+      files.mapNotNull { file -> readOrNullLocked(file.name.removeSuffix(".json"))?.takeIf { it.catalog != null } }
+    }
 
   fun update(key: String, update: ReceiptUpdate): AssistantRequestEntry? = mutate(key) { ReceiptRules.apply(it, update, clock()) }
 
