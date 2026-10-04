@@ -14,6 +14,7 @@ function makeHost(): HostProfile {
     password: "tcp-password",
     label: "Secret host",
     appearance: defaultHostAppearance(),
+    declaredColor: null,
     lifecycle: {},
     preferredConnectionId: "direct:secret.example.test:6767",
     createdAt: "2026-06-25T00:00:00.000Z",
