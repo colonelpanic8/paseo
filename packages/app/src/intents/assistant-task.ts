@@ -7,6 +7,12 @@ import { fetchAgentTimelineOnce } from "@/timeline/fetch-agent-timeline-once";
 import { assistantHostName } from "./assistant-catalog";
 import { assistantNoticeRow } from "./assistant-messages";
 import {
+  assistantModelNoticeRow,
+  parseAssistantModelsRequest,
+  runAssistantModelsQuery,
+  type AssistantModelsRequest,
+} from "./assistant-models";
+import {
   parseAssistantQueryRequest,
   runAssistantQuery,
   type AssistantQueryFetch,
@@ -34,6 +40,7 @@ const REQUEST_DISPATCH_TIMEOUT_MS = 60_000;
 
 const TaskDataSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("messages"), requestId: z.string().min(1), params: z.string() }),
+  z.object({ kind: z.literal("models"), requestId: z.string().min(1), params: z.string() }),
   z.object({ kind: z.literal("request"), key: z.string().min(1) }).passthrough(),
 ]);
 
@@ -159,6 +166,24 @@ async function answerQuery(request: AssistantQueryRequest): Promise<void> {
   androidIntents.resolveAssistantQuery(request.requestId, JSON.stringify({ rows }));
 }
 
+async function answerModels(request: AssistantModelsRequest): Promise<void> {
+  let rows;
+  try {
+    rows = await runAssistantModelsQuery({
+      request,
+      connect: (serverId) => connectAssistantHost(serverId, QUERY_CONNECT_TIMEOUT_MS),
+    });
+  } catch {
+    rows = [
+      assistantModelNoticeRow({
+        serverId: request.serverId,
+        note: "Paseo could not read that host's models; try again in a moment.",
+      }),
+    ];
+  }
+  androidIntents.resolveAssistantQuery(request.requestId, JSON.stringify({ rows }));
+}
+
 async function runRequest(raw: unknown): Promise<void> {
   const job = parseAssistantRequestJob(raw);
   if (!job) return;
@@ -189,6 +214,14 @@ export async function runAssistantTask(data: unknown): Promise<void> {
   try {
     params = JSON.parse(task.data.params);
   } catch {
+    return;
+  }
+  if (task.data.kind === "models") {
+    const models = parseAssistantModelsRequest({
+      ...(params as object),
+      requestId: task.data.requestId,
+    });
+    if (models) await answerModels(models);
     return;
   }
   const request = parseAssistantQueryRequest({

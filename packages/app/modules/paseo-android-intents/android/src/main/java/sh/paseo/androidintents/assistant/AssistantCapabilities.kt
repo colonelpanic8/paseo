@@ -150,11 +150,11 @@ object AssistantCapabilities {
           listOf(
             Field.Text(
               "provider",
-              "Agent provider ID. Defaults to the provider last chosen in Paseo's New workspace form, else the host's first ready provider.",
+              "Agent provider ID from the Paseo models catalog for this serverId. Defaults to the provider last chosen in Paseo's New workspace form, else the host's first ready provider.",
             ),
-            Field.Text("model", "Model ID. Defaults to the provider's saved model, else the provider default."),
-            Field.Text("modeId", "Permission mode ID. Defaults to the provider's default mode; saved modes are never applied unattended."),
-            Field.Text("thinkingOptionId", "Thinking option ID for the model."),
+            Field.Text("model", "Model ID from the Paseo models catalog for this provider. Defaults to the provider's saved model, else the provider default."),
+            Field.Text("modeId", "Permission mode ID from the model row's modes. Defaults to the provider's default mode; saved modes are never applied unattended."),
+            Field.Text("thinkingOptionId", "Thinking option ID from the model row's thinkingOptions."),
             workspaceTitle,
           ),
       required = listOf("serverId", "projectId", "prompt", "isolation"),
