@@ -1,7 +1,8 @@
-import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
+import type { Agent, ProjectDescriptor, WorkspaceDescriptor } from "@/stores/session-store";
 import { parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
 
 export const ASSISTANT_CATALOG_VERSION = 1;
+const MAX_PROJECTS = 100;
 const MAX_WORKSPACES = 100;
 const MAX_AGENTS = 200;
 const MAX_LABEL_LENGTH = 120;
@@ -12,9 +13,18 @@ export interface AssistantCatalogHost {
   status: string;
 }
 
+export interface AssistantCatalogProject {
+  id: string;
+  serverId: string;
+  serverName: string;
+  name: string;
+  kind: ProjectDescriptor["projectKind"];
+}
+
 export interface AssistantCatalogWorkspace {
   id: string;
   serverId: string;
+  serverName: string;
   name: string;
   project: string;
   repository: string | null;
@@ -27,6 +37,7 @@ export interface AssistantCatalogWorkspace {
 export interface AssistantCatalogAgent {
   id: string;
   serverId: string;
+  serverName: string;
   workspaceId: string | null;
   name: string;
   provider: string;
@@ -38,14 +49,21 @@ export interface AssistantCatalog {
   version: typeof ASSISTANT_CATALOG_VERSION;
   capturedAt: string;
   hosts: AssistantCatalogHost[];
+  projects: AssistantCatalogProject[];
   workspaces: AssistantCatalogWorkspace[];
   agents: AssistantCatalogAgent[];
   truncated: boolean;
 }
 
+export interface AssistantCatalogProjectInput {
+  serverId: string;
+  project: ProjectDescriptor;
+}
+
 export interface AssistantCatalogInput {
   now: Date;
   hosts: readonly AssistantCatalogHost[];
+  projects: readonly AssistantCatalogProjectInput[];
   workspaces: readonly WorkspaceDescriptor[] | ReadonlyMap<string, WorkspaceDescriptor>;
   agents: readonly Agent[] | ReadonlyMap<string, Agent>;
   serverIdOfWorkspace: (workspace: WorkspaceDescriptor) => string;
@@ -56,8 +74,17 @@ function clip(value: string | null | undefined): string {
 }
 
 /** The agent label the assistant reads out: its title, else its directory. */
-export function assistantAgentName(agent: Agent): string {
+export function assistantAgentName(agent: Pick<Agent, "id" | "title" | "cwd">): string {
   return clip(agent.title) || clip(agent.cwd.split("/").pop()) || agent.id;
+}
+
+/**
+ * The name a host goes by in Paseo: its configured label, else the daemon's hostname. Empty
+ * when Paseo knows neither, since the host label then falls back to the bare server id.
+ */
+export function assistantHostName(host: { serverId: string; label: string }): string {
+  const name = clip(host.label);
+  return name === host.serverId ? "" : name;
 }
 
 function toArray<T>(value: readonly T[] | ReadonlyMap<string, T>): T[] {
@@ -70,6 +97,8 @@ function toArray<T>(value: readonly T[] | ReadonlyMap<string, T>): T[] {
  * the stalest entries; paths, prompts, and transcripts never leave the app.
  */
 export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCatalog {
+  const hostNames = new Map(input.hosts.map((host) => [host.serverId, assistantHostName(host)]));
+  const hostName = (serverId: string) => hostNames.get(serverId) ?? "";
   const agents = toArray(input.agents)
     .filter((agent) => !agent.archivedAt && !agent.parentAgentId)
     .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
@@ -90,27 +119,35 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
     .map((workspace) => {
       const serverId = input.serverIdOfWorkspace(workspace);
       const key = `${serverId}:${workspace.id}`;
-      const lastActivity =
-        lastAgentActivityByWorkspace.get(key) ?? workspace.statusEnteredAt?.getTime() ?? null;
-      return {
-        id: workspace.id,
+      return assistantWorkspaceRow({
+        workspace,
         serverId,
-        name: clip(workspace.title) || clip(workspace.name),
-        project: clip(workspace.projectCustomName) || clip(workspace.projectDisplayName),
-        repository: (() => {
-          const remote = workspace.project?.checkout.remoteUrl ?? workspace.gitRuntime?.remoteUrl;
-          const location = remote ? parseGitRemoteLocation(remote) : null;
-          return location ? clip(`${location.host}/${location.path}`) : null;
-        })(),
-        branch: clip(workspace.gitRuntime?.currentBranch) || null,
-        status: workspace.status,
+        serverName: hostName(serverId),
         agentCount: agentCountByWorkspace.get(key) ?? 0,
-        lastActivityAt: lastActivity === null ? null : new Date(lastActivity).toISOString(),
-      };
+        lastAgentActivityMs: lastAgentActivityByWorkspace.get(key) ?? null,
+      });
     })
     .sort((a, b) => (b.lastActivityAt ?? "").localeCompare(a.lastActivityAt ?? ""));
 
-  const truncated = workspaces.length > MAX_WORKSPACES || agents.length > MAX_AGENTS;
+  const projects = input.projects
+    .map(({ serverId, project }) => ({
+      id: project.projectId,
+      serverId,
+      serverName: hostName(serverId),
+      name:
+        clip(project.projectCustomName) || clip(project.projectDisplayName) || project.projectId,
+      kind: project.projectKind,
+    }))
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name) ||
+        a.serverId.localeCompare(b.serverId) ||
+        a.id.localeCompare(b.id),
+    );
+  const truncated =
+    projects.length > MAX_PROJECTS ||
+    workspaces.length > MAX_WORKSPACES ||
+    agents.length > MAX_AGENTS;
   return {
     version: ASSISTANT_CATALOG_VERSION,
     capturedAt: input.now.toISOString(),
@@ -119,16 +156,57 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
       label: clip(host.label) || host.serverId,
       status: host.status,
     })),
+    projects: projects.slice(0, MAX_PROJECTS),
     workspaces: workspaces.slice(0, MAX_WORKSPACES),
-    agents: agents.slice(0, MAX_AGENTS).map((agent) => ({
-      id: agent.id,
-      serverId: agent.serverId,
-      workspaceId: agent.workspaceId ?? null,
-      name: assistantAgentName(agent),
-      provider: agent.provider,
-      status: agent.status,
-      lastActivityAt: agent.lastActivityAt.toISOString(),
-    })),
+    agents: agents
+      .slice(0, MAX_AGENTS)
+      .map((agent) => assistantAgentRow(agent, hostName(agent.serverId))),
     truncated,
+  };
+}
+
+/** One `workspaces` row. Shared with the rows a just-created workspace is journaled with. */
+export function assistantWorkspaceRow(input: {
+  workspace: WorkspaceDescriptor;
+  serverId: string;
+  serverName: string;
+  agentCount: number;
+  lastAgentActivityMs: number | null;
+}): AssistantCatalogWorkspace {
+  const { workspace } = input;
+  const lastActivity = input.lastAgentActivityMs ?? workspace.statusEnteredAt?.getTime() ?? null;
+  const remote = workspace.project?.checkout.remoteUrl ?? workspace.gitRuntime?.remoteUrl;
+  const location = remote ? parseGitRemoteLocation(remote) : null;
+  return {
+    id: workspace.id,
+    serverId: input.serverId,
+    serverName: input.serverName,
+    name: clip(workspace.title) || clip(workspace.name),
+    project: clip(workspace.projectCustomName) || clip(workspace.projectDisplayName),
+    repository: location ? clip(`${location.host}/${location.path}`) : null,
+    branch: clip(workspace.gitRuntime?.currentBranch) || null,
+    status: workspace.status,
+    agentCount: input.agentCount,
+    lastActivityAt: lastActivity === null ? null : new Date(lastActivity).toISOString(),
+  };
+}
+
+/** One `agents` row. Shared with the rows a just-created agent is journaled with. */
+export function assistantAgentRow(
+  agent: Pick<
+    Agent,
+    "id" | "serverId" | "workspaceId" | "title" | "cwd" | "provider" | "status" | "lastActivityAt"
+  >,
+  serverName: string,
+): AssistantCatalogAgent {
+  return {
+    id: agent.id,
+    serverId: agent.serverId,
+    serverName,
+    workspaceId: agent.workspaceId ?? null,
+    name: assistantAgentName(agent),
+    provider: agent.provider,
+    status: agent.status,
+    lastActivityAt: agent.lastActivityAt.toISOString(),
   };
 }
