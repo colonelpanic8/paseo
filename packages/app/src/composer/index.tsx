@@ -22,7 +22,6 @@ import {
   useImperativeHandle,
   memo,
   type ReactElement,
-  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -304,13 +303,6 @@ function renderContextWindowMeter(
       glyphSize={glyphSize}
     />
   );
-}
-
-function resolveContextWindowPlacement(
-  meter: ReactElement | null,
-  reserveSlot: boolean,
-): ReactNode {
-  return reserveSlot ? <View style={styles.contextWindowMeterSlot}>{meter}</View> : null;
 }
 
 interface RenderLeftContentArgs {
@@ -2100,7 +2092,8 @@ function ComposerContentImpl({
     ],
   );
   const beforeVoiceContent = useMemo(
-    () => <>{resolveContextWindowPlacement(contextWindowMeter, hasAgent)}</>,
+    () =>
+      hasAgent ? <View style={styles.contextWindowMeterSlot}>{contextWindowMeter}</View> : null,
     [contextWindowMeter, hasAgent],
   );
 
