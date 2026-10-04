@@ -91,6 +91,10 @@ import {
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { ShortcutHint } from "@/components/ui/shortcut-hint";
+import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
+import { useShowControlShortcutBadges } from "@/hooks/use-show-shortcut-badges";
+import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 
 interface AgentControlOption {
   id: string;
@@ -98,8 +102,44 @@ interface AgentControlOption {
 }
 
 type AgentControlSelector = "provider" | "mode" | "model" | "thinking" | `feature-${string}`;
+const COMPOSER_CONTROL_KEYBOARD_ACTIONS = [
+  "message-input.model.pick",
+  "message-input.thinking.pick",
+  "message-input.fast-mode.toggle",
+  "message-input.plan-mode.toggle",
+] as const;
+const FAST_MODE_FEATURE_ID = "fast_mode";
+const PLAN_MODE_FEATURE_ID = "plan_mode";
+
+function includesFeature(features: AgentFeature[] | undefined, featureId: string): boolean {
+  return Boolean(features?.some((feature) => feature.id === featureId));
+}
 
 const EMPTY_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
+
+function getFeatureShortcutActionId(
+  featureId: string,
+): "toggle-fast-mode" | "toggle-plan-mode" | undefined {
+  if (featureId === FAST_MODE_FEATURE_ID) return "toggle-fast-mode";
+  if (featureId === PLAN_MODE_FEATURE_ID) return "toggle-plan-mode";
+  return undefined;
+}
+
+function getFeatureShortcutHintPlacement(
+  featureId: string,
+  separateAdjacentHints: boolean,
+): "shift-left" | "shift-right" | undefined {
+  if (!separateAdjacentHints) return undefined;
+  if (featureId === FAST_MODE_FEATURE_ID) return "shift-left";
+  if (featureId === PLAN_MODE_FEATURE_ID) return "shift-right";
+  return undefined;
+}
+
+function getToggleFeatureIdForAction(actionId: string): string | null {
+  if (actionId === "message-input.fast-mode.toggle") return FAST_MODE_FEATURE_ID;
+  if (actionId === "message-input.plan-mode.toggle") return PLAN_MODE_FEATURE_ID;
+  return null;
+}
 
 interface ControlledAgentControlsProps {
   provider: string;
@@ -505,6 +545,8 @@ function ControlledAgentControls({
 }: ControlledAgentControlsProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
+  const showControlShortcutBadges = useShowControlShortcutBadges();
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompact = isCompactLayout ?? isCompactFormFactor;
   const { fontScale } = useWindowDimensions();
@@ -514,6 +556,7 @@ function ControlledAgentControls({
   const [density, setDensity] = useState<ComposerControlDensity>(initialDensity);
   const densityRef = useRef<ComposerControlDensity>(initialDensity);
   const availableWidthRef = useRef(0);
+  const keyboardHandlerIdRef = useRef(`composer-controls:${Math.random().toString(36).slice(2)}`);
 
   const providerAnchorRef = useRef<View>(null);
   const _modelAnchorRef = useRef<View>(null);
@@ -727,13 +770,61 @@ function ControlledAgentControls({
     [onSelectModel, onSelectProvider, onSelectProviderAndModel, provider],
   );
 
+  const handleKeyboardAction = useCallback(
+    (action: KeyboardActionDefinition): boolean => {
+      if (disabled || !isActiveComposer) return false;
+      if (action.id === "message-input.model.pick") {
+        if (!canSelectModel) return false;
+        setOpenSelector("model");
+        return true;
+      }
+      if (action.id === "message-input.thinking.pick") {
+        if (!canSelectThinking) return false;
+        if (isCompact) {
+          handleOpenSheet("thinking");
+        } else {
+          setOpenSelector("thinking");
+        }
+        return true;
+      }
+      const toggleFeatureId = getToggleFeatureIdForAction(action.id);
+      if (!toggleFeatureId) return false;
+      const toggleFeature = features?.find((feature) => feature.id === toggleFeatureId);
+      if (toggleFeature?.type !== "toggle" || !onSetFeature) return false;
+      onSetFeature(toggleFeature.id, !toggleFeature.value);
+      onDropdownClose?.();
+      return true;
+    },
+    [
+      canSelectModel,
+      canSelectThinking,
+      disabled,
+      features,
+      handleOpenSheet,
+      isActiveComposer,
+      isCompact,
+      onDropdownClose,
+      onSetFeature,
+    ],
+  );
+  useKeyboardActionHandler({
+    handlerId: keyboardHandlerIdRef.current,
+    actions: COMPOSER_CONTROL_KEYBOARD_ACTIONS,
+    enabled: isActiveComposer && !disabled,
+    priority: 200,
+    handle: handleKeyboardAction,
+  });
+
   if (!hasAnyControl) {
     return null;
   }
 
   return (
     <ComposerControlLayoutProvider value={layoutContextValue}>
-      <View style={styles.container} onLayout={handleLayout}>
+      <View
+        style={[styles.container, showControlShortcutBadges && styles.controlShortcutHintsVisible]}
+        onLayout={handleLayout}
+      >
         {!isCompact ? (
           <DesktopAgentControlsContent
             provider={provider}
@@ -893,6 +984,7 @@ const DESKTOP_SEARCH_THRESHOLD = 6;
 function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const {
     provider,
     providerOptions,
@@ -953,6 +1045,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     [t],
   );
   const handleOpenFeatures = useCallback(() => handleOpenSheet("features"), [handleOpenSheet]);
+  const hasFastMode = includesFeature(features, FAST_MODE_FEATURE_ID);
+  const hasPlanMode = includesFeature(features, PLAN_MODE_FEATURE_ID);
   return (
     <>
       {providerOptions && providerOptions.length > 0 ? (
@@ -983,7 +1077,16 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
       ) : null}
 
       {canSelectModel ? (
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+        // The model combobox renders inside this trigger, so a tooltip left
+        // open when the menu opens can outlive it: React routes the pointer's
+        // enter/leave through the React tree, and the menu unmounts before the
+        // pointer ever crosses back out of the trigger. Opening the menu closes
+        // the tooltip — the same thing pressing the trigger already does.
+        <Tooltip
+          delayDuration={0}
+          enabledOnDesktop={openSelector !== "model"}
+          enabledOnMobile={false}
+        >
           <TooltipTrigger asChild triggerRefProp="ref">
             <View style={styles.modelControl}>
               <CombinedModelSelector
@@ -1006,7 +1109,10 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 desktopPlacement="top-start"
                 desktopMinWidth={360}
                 toolbar={modelToolbar}
+                open={openSelector === "model"}
+                onOpenChange={handleOpenChange("model")}
               />
+              <ShortcutHint actionId="select-model" enabled={isActiveComposer && !modelDisabled} />
             </View>
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
@@ -1034,6 +1140,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                   value: displayThinking,
                 })}
                 testID="agent-thinking-selector"
+                shortcutActionId="select-thinking"
+                showShortcutHint={isActiveComposer}
               />
             </TooltipTrigger>
             <TooltipContent side="top" align="center" offset={8}>
@@ -1099,6 +1207,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             handleOpenChange={handleOpenChange}
             onSetFeature={onSetFeature}
             onActionComplete={onDropdownClose}
+            separateAdjacentHints={hasFastMode && hasPlanMode}
           />
         ))
       )}
@@ -1150,6 +1259,7 @@ interface SheetAgentControlsContentProps {
 
 function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const {
     provider,
     selectedModelId,
@@ -1220,6 +1330,8 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
               value: displayThinking,
             })}
             testID="agent-controls-thinking"
+            shortcutActionId="select-thinking"
+            showShortcutHint={isActiveComposer}
           />
           <Combobox
             options={comboboxThinkingOptions}
@@ -1272,6 +1384,9 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       serverId={modelSelectorServerId}
       glyphSize={glyphSize}
       canSwitchProvider={canSwitchProvider}
+      open={openSelector === "model"}
+      onOpenChange={handleOpenChange("model")}
+      showShortcutHint={isActiveComposer}
     >
       {sheetControls}
     </CompactModelSheet>
@@ -1285,6 +1400,7 @@ function DesktopFeatureItem({
   handleOpenChange,
   onSetFeature,
   onActionComplete,
+  separateAdjacentHints,
 }: {
   feature: AgentFeature;
   disabled: boolean;
@@ -1292,8 +1408,10 @@ function DesktopFeatureItem({
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   onSetFeature?: (featureId: string, value: unknown) => void;
   onActionComplete?: () => void;
+  separateAdjacentHints: boolean;
 }) {
   const { theme } = useUnistyles();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
 
@@ -1347,6 +1465,12 @@ function DesktopFeatureItem({
             onPress={handleTogglePress}
             accessibilityLabel={getFeatureTooltip(feature)}
             testID={`agent-feature-${feature.id}`}
+            shortcutActionId={getFeatureShortcutActionId(feature.id)}
+            shortcutHintPlacement={getFeatureShortcutHintPlacement(
+              feature.id,
+              separateAdjacentHints,
+            )}
+            showShortcutHint={isActiveComposer}
           />
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>
@@ -1416,6 +1540,7 @@ function SheetFeatureItem({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const { isActiveComposer } = useComposerKeyboardScope();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
 
@@ -1466,6 +1591,8 @@ function SheetFeatureItem({
           onPress={handleSelectPress}
           accessibilityLabel={getFeatureTooltip(feature)}
           testID={`agent-feature-${feature.id}`}
+          shortcutActionId={getFeatureShortcutActionId(feature.id)}
+          showShortcutHint={isActiveComposer}
         />
         <Combobox
           options={comboboxOptions}
@@ -1971,6 +2098,10 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
     backgroundColor: "transparent",
     borderRadius: theme.borderRadius.full,
+    overflow: "visible",
+  },
+  controlShortcutHintsVisible: {
+    overflow: "visible",
   },
   modeBadgeHovered: {
     backgroundColor: theme.colors.surface2,
