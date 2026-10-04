@@ -72,6 +72,7 @@ export function createPlaybackQueue<Source>(
       }
     },
     isPlaying: () => active !== null,
+    hasPending: () => pending.length > 0,
     destroy() {
       destroyed = true;
       this.clearQueue();
