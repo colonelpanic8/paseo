@@ -3,6 +3,7 @@ import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "re
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { ComposerDock } from "@/composer/dock";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
@@ -323,6 +324,7 @@ export function WorkspaceDraftAgentTab({
   onOpenImportSheet,
 }: WorkspaceDraftAgentTabProps) {
   const { t } = useTranslation();
+  const screenBottomInset = useScreenBottomInset();
   const client = useHostRuntimeClient(serverId);
   const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
     workspaceDirectory: w.workspaceDirectory,
@@ -605,6 +607,10 @@ export function WorkspaceDraftAgentTab({
     focusInputRef.current = focus;
   }, []);
 
+  const inputAreaWrapperStyle = useMemo(
+    () => [animatedStaticStyles.inputAreaWrapper, { paddingBottom: screenBottomInset }],
+    [screenBottomInset],
+  );
   const handleDropdownCloseFocus = useCallback(() => {
     focusInputRef.current?.();
   }, []);
@@ -650,7 +656,7 @@ export function WorkspaceDraftAgentTab({
     <FileDropZone style={styles.container}>
       <ComposerDock>
         {dockContent}
-        <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
+        <View style={inputAreaWrapperStyle} onLayout={onInputAreaLayout}>
           {importPillPress ? (
             <View style={styles.importPillRow}>
               <View style={styles.importPillContent}>
