@@ -11,6 +11,7 @@ import {
 } from "./pid-lock.js";
 import { daemonLaunchEnvironment } from "./config-environment.js";
 import { readPersistedConfig } from "./persisted-config.js";
+import { resolvePaseoPaths, type PaseoPaths } from "./paseo-paths.js";
 import treeKill from "tree-kill";
 const killTree = (pid: number, signal: string): Promise<void> =>
   new Promise((resolve, reject) =>
@@ -48,9 +49,9 @@ export async function readDaemonInstance(home: string): Promise<PidLockInfo | nu
   return lock && isPidLockOwnerRunning(lock) ? lock : null;
 }
 
-export function daemonLogPath(home: string): string {
+export function daemonLogPath(home: string, paths: PaseoPaths = resolvePaseoPaths()): string {
   try {
-    return path.resolve(home, readPersistedConfig(home).log?.file?.path ?? "daemon.log");
+    return path.resolve(home, readPersistedConfig(home, {}, paths).log?.file?.path ?? "daemon.log");
   } catch {
     return path.join(home, "daemon.log");
   }
@@ -62,6 +63,7 @@ export async function waitForDaemonReady(
     timeoutMs?: number;
     instance?: PidLockInfo;
     signal?: AbortSignal;
+    paths?: PaseoPaths;
   } = {},
 ): Promise<PidLockInfo & { listen: string }> {
   const deadline = Date.now() + (options.timeoutMs ?? 600_000);
@@ -71,7 +73,7 @@ export async function waitForDaemonReady(
     if (!instance)
       throw new DaemonInstanceError(
         "DAEMON_NOT_RUNNING",
-        `Daemon is not running for ${home}. Start with: paseo daemon start --home ${JSON.stringify(home)}`,
+        `Daemon is not running for ${home}. Start with: ${localDaemonCommand("start", home, options.paths)}`,
       );
     if (options.instance && !isSamePidLock(instance, options.instance)) {
       throw new DaemonInstanceError(
@@ -80,15 +82,20 @@ export async function waitForDaemonReady(
       );
     }
     if (instance.listen) return { ...instance, listen: instance.listen };
-    if (Date.now() >= deadline) throw notReady(home, instance);
+    if (Date.now() >= deadline) throw notReady(home, instance, options.paths);
     await delay(100, undefined, { signal: options.signal });
   }
 }
 
-function notReady(home: string, instance: PidLockInfo): DaemonInstanceError {
+function localDaemonCommand(action: "start" | "status" | "stop", home: string, paths?: PaseoPaths) {
+  const selector = paths?.layout === "xdg" ? "" : ` --home ${JSON.stringify(home)}`;
+  return `paseo daemon ${action}${selector}`;
+}
+
+function notReady(home: string, instance: PidLockInfo, paths?: PaseoPaths): DaemonInstanceError {
   return new DaemonInstanceError(
     "DAEMON_NOT_READY",
-    `Daemon PID ${instance.pid} remains running but is not ready for ${home}.\nLogs: ${daemonLogPath(home)}\nStatus: paseo daemon status --home ${JSON.stringify(home)}\nStop: paseo daemon stop --home ${JSON.stringify(home)}`,
+    `Daemon PID ${instance.pid} remains running but is not ready for ${home}.\nLogs: ${daemonLogPath(home, paths)}\nStatus: ${localDaemonCommand("status", home, paths)}\nStop: ${localDaemonCommand("stop", home, paths)}`,
   );
 }
 
@@ -205,6 +212,7 @@ export async function stopDaemonInstance(
 
 export async function startDaemonInstance(input: {
   home: string;
+  paths?: PaseoPaths;
   command: string;
   args: string[];
   env: NodeJS.ProcessEnv;
@@ -263,7 +271,7 @@ export async function startDaemonInstance(input: {
         onAcquired(instance);
       }
       if (exit) {
-        const logPath = daemonLogPath(input.home);
+        const logPath = daemonLogPath(input.home, input.paths);
         const log = await readFile(logPath, "utf8").catch(() => "");
         throw new DaemonInstanceError(
           "DAEMON_START_FAILED",
@@ -280,10 +288,10 @@ export async function startDaemonInstance(input: {
         };
       }
       if (Date.now() >= deadline) {
-        if (acquired) throw notReady(input.home, acquired);
+        if (acquired) throw notReady(input.home, acquired, input.paths);
         throw new DaemonInstanceError(
           "DAEMON_NOT_READY",
-          `Supervisor PID ${child.pid} remains running but has not published its lock for ${input.home}. Logs: ${daemonLogPath(input.home)}. Check paseo daemon status --home ${JSON.stringify(input.home)}. Stop with paseo daemon stop --home ${JSON.stringify(input.home)} once its lock is published, or signal this PID.`,
+          `Supervisor PID ${child.pid} remains running but has not published its lock for ${input.home}. Logs: ${daemonLogPath(input.home, input.paths)}. Check paseo daemon status --home ${JSON.stringify(input.home)}. Stop with paseo daemon stop --home ${JSON.stringify(input.home)} once its lock is published, or signal this PID.`,
         );
       }
       await delay(100, undefined, { signal });
