@@ -3755,6 +3755,7 @@ function WorkspaceScreenContent({
         onCloseTab={handleCloseTabById}
         onCreateNewTab={handleCreateNewTab}
         onCopyResumeCommand={handleCopyResumeCommand}
+        onCopyConversation={handleCopyConversation}
         onCopyAgentId={handleCopyAgentId}
         onCopyTerminalId={handleCopyTerminalId}
         onCopyFilePath={handleCopyFilePath}
@@ -3796,6 +3797,7 @@ function WorkspaceScreenContent({
     handleCloseTabById,
     handleCreateNewTab,
     handleCopyResumeCommand,
+    handleCopyConversation,
     handleCopyAgentId,
     handleCopyTerminalId,
     handleCopyFilePath,
