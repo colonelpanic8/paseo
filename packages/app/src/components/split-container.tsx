@@ -720,6 +720,7 @@ export function SplitContainer({
                   hoveredCloseTabKey={hoveredCloseTabKey}
                   setHoveredCloseTabKey={setHoveredCloseTabKey}
                   onCopyResumeCommand={onCopyResumeCommand}
+                  onCopyConversation={onCopyConversation}
                   onCopyAgentId={onCopyAgentId}
                   onCopyTerminalId={onCopyTerminalId}
                   onCopyFilePath={onCopyFilePath}
