@@ -52,13 +52,20 @@ data class AssistantRequestEntry(
   /** The exact daemon request, fixed once so every replay carries the same fingerprint. */
   val plan: Map<String, Any?>?,
   val serverId: String,
+  /** The host's label when the executor last connected; empty when Paseo knows none. */
+  val serverName: String?,
   val workspaceId: String?,
   val agentId: String?,
+  /** Catalog rows ("workspace", "agent") for what a creation made, in the provider's column shape. */
+  val catalog: Map<String, Any?>?,
   val errorCode: String?,
   val errorMessage: String?,
 ) {
   val isPending: Boolean
     get() = state in ReceiptState.PENDING
+
+  @Suppress("UNCHECKED_CAST")
+  fun createdRow(table: String): Map<String, Any?>? = catalog?.get(table) as? Map<String, Any?>
 
   fun receipt(): Map<String, Any?> =
     linkedMapOf<String, Any?>(
@@ -68,7 +75,11 @@ data class AssistantRequestEntry(
       "state" to state,
       "serverId" to serverId,
     ).apply {
+      if (!serverName.isNullOrEmpty()) put("serverName", serverName)
       if (workspaceId != null) put("workspaceId", workspaceId)
+      val workspace = createdRow("workspace")
+      (workspace?.get("name") as? String)?.takeIf { it.isNotEmpty() }?.let { put("workspaceName", it) }
+      (workspace?.get("branch") as? String)?.takeIf { it.isNotEmpty() }?.let { put("branch", it) }
       if (agentId != null) put("agentId", agentId)
       if (errorCode != null || errorMessage != null) {
         put("error", linkedMapOf("code" to (errorCode ?: "error"), "message" to (errorMessage ?: "")))
@@ -93,8 +104,10 @@ data class AssistantRequestEntry(
       "dispatchStarted" to dispatchStarted,
       "plan" to plan,
       "serverId" to serverId,
+      "serverName" to serverName,
       "workspaceId" to workspaceId,
       "agentId" to agentId,
+      "catalog" to catalog,
       "errorCode" to errorCode,
       "errorMessage" to errorMessage,
     )
@@ -116,8 +129,10 @@ data class AssistantRequestEntry(
         dispatchStarted = json["dispatchStarted"] as Boolean,
         plan = json["plan"] as Map<String, Any?>?,
         serverId = json["serverId"] as String,
+        serverName = json["serverName"] as String?,
         workspaceId = json["workspaceId"] as String?,
         agentId = json["agentId"] as String?,
+        catalog = json["catalog"] as Map<String, Any?>?,
         errorCode = json["errorCode"] as String?,
         errorMessage = json["errorMessage"] as String?,
       )
@@ -125,18 +140,27 @@ data class AssistantRequestEntry(
 }
 
 // java.time needs API 26; the app still supports older devices.
-fun isoTimestamp(ms: Long): String =
-  SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-    .apply { timeZone = TimeZone.getTimeZone("UTC") }
-    .format(Date(ms))
+private fun isoFormat() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+
+fun isoTimestamp(ms: Long): String = isoFormat().format(Date(ms))
+
+/** Reads the form [isoTimestamp] and JavaScript's toISOString write. */
+fun parseIsoTimestamp(text: String): Long? =
+  try {
+    isoFormat().parse(text)?.time
+  } catch (_: java.text.ParseException) {
+    null
+  }
 
 /** A progress report from the executor. Absent fields leave the entry unchanged. */
 data class ReceiptUpdate(
   val state: String? = null,
   val dispatchStarted: Boolean = false,
   val plan: Map<String, Any?>? = null,
+  val serverName: String? = null,
   val workspaceId: String? = null,
   val agentId: String? = null,
+  val catalog: Map<String, Any?>? = null,
   val errorCode: String? = null,
   val errorMessage: String? = null,
 ) {
@@ -148,8 +172,10 @@ data class ReceiptUpdate(
         state = json["state"] as String?,
         dispatchStarted = json["dispatchStarted"] as Boolean? ?: false,
         plan = json["plan"] as Map<String, Any?>?,
+        serverName = json["serverName"] as String?,
         workspaceId = json["workspaceId"] as String?,
         agentId = json["agentId"] as String?,
+        catalog = json["catalog"] as Map<String, Any?>?,
         errorCode = error?.get("code") as String?,
         errorMessage = error?.get("message") as String?,
       )
@@ -185,8 +211,11 @@ object ReceiptRules {
       state = state,
       dispatchStarted = dispatchStarted,
       plan = plan,
+      serverName = update.serverName ?: entry.serverName,
       workspaceId = entry.workspaceId ?: update.workspaceId,
       agentId = entry.agentId ?: update.agentId,
+      // Later creation snapshots describe more (the agent arrives after the workspace).
+      catalog = if (update.catalog == null) entry.catalog else (entry.catalog ?: emptyMap()) + update.catalog,
       errorCode = errorCode,
       errorMessage = errorMessage,
       updatedAtMs = nowMs,

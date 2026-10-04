@@ -37,8 +37,54 @@ class EvaProtocolTest {
       worktree + ("worktreeMode" to "checkout-branch"),
       worktree + ("worktreeMode" to "checkout-pr"),
     ).forEach { args ->
-      assertThrows(IllegalArgumentException::class.java) { AssistantCapabilities.checkCreateAgentCombination(args) }
+      assertThrows(IllegalArgumentException::class.java) { AssistantCapabilities.checkWorkspaceSourceCombination(args) }
     }
+  }
+
+  @Test
+  fun createWorkspaceTakesTheWorkspaceFieldsButNoAgentLaunch() {
+    val create = AssistantCapabilities.createWorkspace
+    val workspace = base - "prompt" + ("isolation" to "worktree") + ("worktreeSlug" to "eva-fix")
+    assertEquals(workspace, create.validate(workspace))
+    listOf(workspace + ("prompt" to "hi"), workspace + ("provider" to "claude"), workspace - "projectId").forEach { args ->
+      assertThrows(IllegalArgumentException::class.java) { create.validate(args) }
+    }
+    assertThrows(IllegalArgumentException::class.java) {
+      AssistantCapabilities.checkWorkspaceSourceCombination(workspace + ("isolation" to "local"))
+    }
+  }
+
+  @Test
+  fun receiptsNameTheHostAndTheCreatedWorkspace() {
+    val entry =
+      AssistantRequestEntry(
+        key = "k",
+        callerUid = 1,
+        invocationId = "i",
+        operation = AssistantOperation.CREATE_WORKSPACE,
+        fingerprint = "f",
+        arguments = emptyMap(),
+        createdAtMs = 0,
+        updatedAtMs = 0,
+        revision = 1,
+        state = ReceiptState.COMPLETED,
+        dispatchStarted = true,
+        plan = emptyMap(),
+        serverId = "srv",
+        serverName = "ryzen-shine",
+        workspaceId = "ws-1",
+        agentId = null,
+        catalog = mapOf("workspace" to mapOf("id" to "ws-1", "name" to "eva-fix", "branch" to "eva-fix")),
+        errorCode = null,
+        errorMessage = null,
+      )
+    val receipt = entry.receipt()
+    assertEquals(listOf("ryzen-shine", "ws-1", "eva-fix", "eva-fix"), listOf("serverName", "workspaceId", "workspaceName", "branch").map(receipt::get))
+    @Suppress("UNCHECKED_CAST")
+    val text = (StrictJson.parseObject(EvaProtocol.executeReply(receipt))["content"] as List<Map<String, Any?>>)[0]["text"]
+    assertEquals("Paseo created the workspace on ryzen-shine.", text)
+    val unnamed = entry.copy(serverName = "", catalog = null).receipt()
+    assertFalse(unnamed.containsKey("serverName") || unnamed.containsKey("workspaceName"))
   }
 
   @Test

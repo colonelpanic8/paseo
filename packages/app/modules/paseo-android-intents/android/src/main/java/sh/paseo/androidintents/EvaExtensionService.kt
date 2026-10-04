@@ -156,7 +156,9 @@ class EvaExtensionService : Service() {
       try {
         if (StrictJson.utf8Size(argumentsJson) > MAX_ARGUMENT_BYTES) throw InvalidArgumentsException("Arguments are too large")
         capability.validate(StrictJson.parseObject(argumentsJson)).also {
-          if (capability === AssistantCapabilities.createAgent) AssistantCapabilities.checkCreateAgentCombination(it)
+          if (capability === AssistantCapabilities.createAgent || capability === AssistantCapabilities.createWorkspace) {
+            AssistantCapabilities.checkWorkspaceSourceCombination(it)
+          }
         }
       } catch (error: IllegalArgumentException) {
         val message = if (error is StrictJsonException) "Arguments are not valid JSON." else error.message ?: "Invalid arguments."

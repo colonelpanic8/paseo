@@ -74,7 +74,7 @@ function clip(value: string | null | undefined): string {
 }
 
 /** The agent label the assistant reads out: its title, else its directory. */
-export function assistantAgentName(agent: Agent): string {
+export function assistantAgentName(agent: Pick<Agent, "id" | "title" | "cwd">): string {
   return clip(agent.title) || clip(agent.cwd.split("/").pop()) || agent.id;
 }
 
@@ -119,24 +119,13 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
     .map((workspace) => {
       const serverId = input.serverIdOfWorkspace(workspace);
       const key = `${serverId}:${workspace.id}`;
-      const lastActivity =
-        lastAgentActivityByWorkspace.get(key) ?? workspace.statusEnteredAt?.getTime() ?? null;
-      return {
-        id: workspace.id,
+      return assistantWorkspaceRow({
+        workspace,
         serverId,
         serverName: hostName(serverId),
-        name: clip(workspace.title) || clip(workspace.name),
-        project: clip(workspace.projectCustomName) || clip(workspace.projectDisplayName),
-        repository: (() => {
-          const remote = workspace.project?.checkout.remoteUrl ?? workspace.gitRuntime?.remoteUrl;
-          const location = remote ? parseGitRemoteLocation(remote) : null;
-          return location ? clip(`${location.host}/${location.path}`) : null;
-        })(),
-        branch: clip(workspace.gitRuntime?.currentBranch) || null,
-        status: workspace.status,
         agentCount: agentCountByWorkspace.get(key) ?? 0,
-        lastActivityAt: lastActivity === null ? null : new Date(lastActivity).toISOString(),
-      };
+        lastAgentActivityMs: lastAgentActivityByWorkspace.get(key) ?? null,
+      });
     })
     .sort((a, b) => (b.lastActivityAt ?? "").localeCompare(a.lastActivityAt ?? ""));
 
@@ -169,16 +158,55 @@ export function buildAssistantCatalog(input: AssistantCatalogInput): AssistantCa
     })),
     projects: projects.slice(0, MAX_PROJECTS),
     workspaces: workspaces.slice(0, MAX_WORKSPACES),
-    agents: agents.slice(0, MAX_AGENTS).map((agent) => ({
-      id: agent.id,
-      serverId: agent.serverId,
-      serverName: hostName(agent.serverId),
-      workspaceId: agent.workspaceId ?? null,
-      name: assistantAgentName(agent),
-      provider: agent.provider,
-      status: agent.status,
-      lastActivityAt: agent.lastActivityAt.toISOString(),
-    })),
+    agents: agents
+      .slice(0, MAX_AGENTS)
+      .map((agent) => assistantAgentRow(agent, hostName(agent.serverId))),
     truncated,
+  };
+}
+
+/** One `workspaces` row. Shared with the rows a just-created workspace is journaled with. */
+export function assistantWorkspaceRow(input: {
+  workspace: WorkspaceDescriptor;
+  serverId: string;
+  serverName: string;
+  agentCount: number;
+  lastAgentActivityMs: number | null;
+}): AssistantCatalogWorkspace {
+  const { workspace } = input;
+  const lastActivity = input.lastAgentActivityMs ?? workspace.statusEnteredAt?.getTime() ?? null;
+  const remote = workspace.project?.checkout.remoteUrl ?? workspace.gitRuntime?.remoteUrl;
+  const location = remote ? parseGitRemoteLocation(remote) : null;
+  return {
+    id: workspace.id,
+    serverId: input.serverId,
+    serverName: input.serverName,
+    name: clip(workspace.title) || clip(workspace.name),
+    project: clip(workspace.projectCustomName) || clip(workspace.projectDisplayName),
+    repository: location ? clip(`${location.host}/${location.path}`) : null,
+    branch: clip(workspace.gitRuntime?.currentBranch) || null,
+    status: workspace.status,
+    agentCount: input.agentCount,
+    lastActivityAt: lastActivity === null ? null : new Date(lastActivity).toISOString(),
+  };
+}
+
+/** One `agents` row. Shared with the rows a just-created agent is journaled with. */
+export function assistantAgentRow(
+  agent: Pick<
+    Agent,
+    "id" | "serverId" | "workspaceId" | "title" | "cwd" | "provider" | "status" | "lastActivityAt"
+  >,
+  serverName: string,
+): AssistantCatalogAgent {
+  return {
+    id: agent.id,
+    serverId: agent.serverId,
+    serverName,
+    workspaceId: agent.workspaceId ?? null,
+    name: assistantAgentName(agent),
+    provider: agent.provider,
+    status: agent.status,
+    lastActivityAt: agent.lastActivityAt.toISOString(),
   };
 }

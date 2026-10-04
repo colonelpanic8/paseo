@@ -4,6 +4,7 @@ import { androidIntents } from "@/native/android-intents";
 import { getHostRuntimeStore, isHostRuntimeConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { fetchAgentTimelineOnce } from "@/timeline/fetch-agent-timeline-once";
+import { assistantHostName } from "./assistant-catalog";
 import { assistantNoticeRow } from "./assistant-messages";
 import {
   parseAssistantQueryRequest,
@@ -47,15 +48,17 @@ export async function connectAssistantHost(
 ): Promise<AssistantHostConnection> {
   const store = getHostRuntimeStore();
   await store.boot();
-  if (!store.getHosts().some((host) => host.serverId === serverId)) {
+  const host = store.getHosts().find((candidate) => candidate.serverId === serverId);
+  if (!host) {
     return { kind: "unknown_host" };
   }
+  const serverName = assistantHostName(host);
   const current = () => {
     const client = store.getClient(serverId);
     return client && isHostRuntimeConnected(store.getSnapshot(serverId)) ? client : null;
   };
   const ready = current();
-  if (ready) return { kind: "connected", client: ready };
+  if (ready) return { kind: "connected", client: ready, serverName };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let unsubscribe = () => {};
@@ -72,7 +75,7 @@ export async function connectAssistantHost(
     unsubscribe();
   }
   const client = current();
-  return client ? { kind: "connected", client } : { kind: "offline" };
+  return client ? { kind: "connected", client, serverName } : { kind: "offline", serverName };
 }
 
 function collectHosts(): AssistantQueryHost[] {
