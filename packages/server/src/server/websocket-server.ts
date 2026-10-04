@@ -105,6 +105,7 @@ import {
   type WebSocketRuntimeCounters,
   type WebSocketRuntimeDiagnosticSnapshot,
 } from "./websocket/runtime-metrics.js";
+import { UsageHistoryService } from "../services/usage-history/service.js";
 import { getProcessMemoryDiagnostics, getProcessUptimeSeconds } from "./process-diagnostics.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
@@ -635,6 +636,7 @@ export class VoiceAssistantWebSocketServer {
   private eventLoopDelayMonitor: ReturnType<typeof monitorEventLoopDelay> | null = null;
   private unsubscribeSpeechReadiness: (() => void) | null = null;
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
+  private readonly usageHistoryService: UsageHistoryService;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly liveVoiceRouteBroker: LiveVoiceRouteBroker;
@@ -796,6 +798,12 @@ export class VoiceAssistantWebSocketServer {
         this.publishSpeechReadiness(snapshot);
       }) ?? null;
     this.subscribeDaemonConfigChanges();
+
+    this.usageHistoryService = new UsageHistoryService({
+      paseoHome,
+      logger: this.logger,
+      readProviderOverrides: () => this.daemonConfigStore.get().providers,
+    });
 
     const pushLogger = this.logger.child({ module: "push" });
     this.pushNotifications = createPushNotifications({
@@ -1617,6 +1625,7 @@ export class VoiceAssistantWebSocketServer {
       tts: () => this.speech?.resolveTts() ?? null,
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
+      usageHistoryService: this.usageHistoryService,
       hubExecutionAgents: options.hubExecutionAgents,
       hubRelationships: options.hubRelationships,
       serviceProxy: this.serviceProxy ?? undefined,
@@ -2014,6 +2023,8 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
         codexBankedResets: typeof this.pluginRuntime?.consumeCodexBankedReset === "function",
+        // COMPAT(providerUsageHistory): added in v0.7.3, remove gate after 2027-03-07 once daemon floor >= v0.7.3.
+        providerUsageHistory: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: true,
         // COMPAT(agentThinkingUpdate): added in v0.2.4, remove gate after 2027-01-28.
