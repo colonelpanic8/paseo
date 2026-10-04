@@ -2155,6 +2155,14 @@ export const es: TranslationResources = {
           queue: "Cola",
         },
       },
+      commandTrigger: {
+        label: "Activador de comandos",
+        description: "Abre la lista completa de comandos al inicio de un mensaje.",
+      },
+      skillTrigger: {
+        label: "Activador de habilidades",
+        description: "Abre la lista de habilidades en cualquier parte de un mensaje.",
+      },
       serviceUrls: {
         options: {
           ask: "Preguntar",
