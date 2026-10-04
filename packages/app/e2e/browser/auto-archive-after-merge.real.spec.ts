@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { expect, test, type Page } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
@@ -61,7 +62,7 @@ async function createMergedPullRequestScenario(): Promise<MergedPullRequestScena
   try {
     const repo = await createTempGithubRepo({
       category: "auto-archive-latch",
-      prs: [{ title: "Auto-archive latch", state: "merged" }],
+      prs: [{ title: "Auto-archive latch", state: "open" }],
     });
     cleanups.push(() => repo.cleanup());
     const checkout = await cloneGithubRepoDefaultBranchOnly(repo);
@@ -80,7 +81,7 @@ async function createMergedPullRequestScenario(): Promise<MergedPullRequestScena
 
     const pullRequest = repo.prs[0];
     if (!pullRequest) {
-      throw new Error("Expected the merged pull request fixture");
+      throw new Error("Expected the pull request fixture");
     }
     const created = await workspaceClient.createPaseoWorktree({
       cwd: checkout.path,
@@ -93,7 +94,7 @@ async function createMergedPullRequestScenario(): Promise<MergedPullRequestScena
       worktreeSlug: `auto-archive-latch-${Date.now()}`,
     });
     if (!created.workspace || created.error) {
-      throw new Error(created.error ?? "Failed to create merged pull request workspace");
+      throw new Error(created.error ?? "Failed to create pull request workspace");
     }
 
     const workspace = created.workspace;
@@ -119,6 +120,24 @@ async function createMergedPullRequestScenario(): Promise<MergedPullRequestScena
       workspaceId: workspace.id,
       autoArchive: async () => {
         await workspaceClient.patchDaemonConfig({ autoArchiveAfterMerge: true });
+        const openRefresh = await workspaceClient.checkoutRefresh(workspace.workspaceDirectory);
+        expect(openRefresh.success).toBe(true);
+        await expect
+          .poll(async () => {
+            const descriptor = (await workspaceClient.fetchWorkspaces()).entries.find(
+              (entry) => entry.id === workspace.id,
+            );
+            return descriptor?.githubRuntime?.pullRequest?.state?.toLowerCase();
+          })
+          .toBe("open");
+        execFileSync(
+          "gh",
+          ["pr", "merge", String(pullRequest.number), "--repo", repo.fullName, "--merge"],
+          {
+            stdio: "pipe",
+            timeout: 30_000,
+          },
+        );
         await workspaceClient.checkoutRefresh(workspace.workspaceDirectory);
         await expect
           .poll(() => agentClient.fetchAgent({ agentId: agent.id }), { timeout: 30_000 })
