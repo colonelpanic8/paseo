@@ -108,25 +108,16 @@ export function isStoredAgentProviderAvailable(
 }
 
 /**
- * When the record last changed, from either of the two timestamps it carries. They diverge
- * because renaming, labelling, restoring from archive, marking unread, and clearing attention
- * all move `updatedAt` on an unloaded agent without touching `lastActivityAt`. Reading one
- * field alone hands consumers a time older than one they have already seen, and
- * `acceptAgentDirectoryUpdate` drops every state update that goes backwards.
+ * Preserve the newest stored activity or state-change timestamp when a record
+ * is hydrated after restart.
  */
 export function resolveStoredAgentUpdatedAt(record: StoredAgentRecord): string {
   const timestamps = [record.updatedAt, record.lastActivityAt]
     .filter((value): value is string => typeof value === "string" && value.length > 0)
-    .map((value) => ({
-      raw: value,
-      parsed: Date.parse(value),
-    }))
+    .map((value) => ({ raw: value, parsed: Date.parse(value) }))
     .filter((value) => !Number.isNaN(value.parsed));
 
-  if (timestamps.length === 0) {
-    return record.updatedAt;
-  }
-
+  if (timestamps.length === 0) return record.updatedAt;
   timestamps.sort((a, b) => b.parsed - a.parsed);
   return timestamps[0].raw;
 }
@@ -134,14 +125,17 @@ export function resolveStoredAgentUpdatedAt(record: StoredAgentRecord): string {
 export function extractTimestamps(record: StoredAgentRecord): {
   createdAt: Date;
   updatedAt: Date;
+  lastMessageAt: Date | null;
   lastUserMessageAt: Date | null;
   labels?: Record<string, string>;
   workspaceId?: string;
   owner?: StoredAgentRecord["owner"];
 } {
+  const lastMessageAt = record.lastMessageAt ?? record.lastUserMessageAt;
   return {
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(resolveStoredAgentUpdatedAt(record)),
+    lastMessageAt: lastMessageAt ? new Date(lastMessageAt) : null,
     lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
     labels: record.labels,
     workspaceId: record.workspaceId,
@@ -149,11 +143,7 @@ export function extractTimestamps(record: StoredAgentRecord): {
   };
 }
 
-/**
- * Unread state survives a resume. Attention is set by the agent finishing or failing and
- * cleared by the user reading the chat (`workspace.clear_attention`); reloading the runtime
- * is neither, so a resumed agent that drops it silently marks the chat read.
- */
+/** Unread state survives resume until the user explicitly reads the chat. */
 export function extractAttention(record: StoredAgentRecord): AttentionState {
   if (!record.requiresAttention || !record.attentionReason || !record.attentionTimestamp) {
     return { requiresAttention: false };

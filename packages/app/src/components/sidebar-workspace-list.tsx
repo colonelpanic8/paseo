@@ -40,7 +40,7 @@ import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
   useSidebarWorkspacePinController,
@@ -57,11 +57,16 @@ import {
 } from "@/utils/host-routes";
 import {
   shouldShowSidebarHostLabels,
-  useSidebarProjectStatusBucket,
+  resolveSidebarServerIds,
+  useSidebarProjectStatus,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
+import {
+  useArchivedWorkspaces,
+  type ArchivedWorkspaceEntry,
+} from "@/hooks/use-archived-workspaces";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import {
   hasActiveSidebarLabelFilter,
@@ -124,7 +129,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
-import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
+import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
 import type { PrHint } from "@/git/use-pr-status-query";
 import {
   buildSidebarProjectRowModel,
@@ -243,6 +248,7 @@ interface ProjectHeaderRowProps {
   displayName: string;
   iconDataUri: string | null;
   statusBucket: SidebarStateBucket | null;
+  readyToReview?: boolean;
   selected?: boolean;
   chevron: "expand" | "collapse" | null;
   onPress: () => void;
@@ -284,7 +290,6 @@ interface WorkspaceRowInnerProps {
   onCopyPath?: () => void;
   onRename?: () => void;
   onMarkAsRead?: () => void;
-  onMarkAsUnread?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
@@ -613,7 +618,6 @@ function WorkspaceRowRightGroup({
   archiveShortcutKeys,
   onArchive,
   onMarkAsRead,
-  onMarkAsUnread,
   onCopyBranchName,
   onCopyPath,
   onRename,
@@ -633,7 +637,6 @@ function WorkspaceRowRightGroup({
   archiveShortcutKeys?: ShortcutKey[][] | null;
   onArchive?: () => void;
   onMarkAsRead?: () => void;
-  onMarkAsUnread?: () => void;
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
@@ -685,7 +688,6 @@ function WorkspaceRowRightGroup({
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
                 onMarkAsRead={onMarkAsRead}
-                onMarkAsUnread={onMarkAsUnread}
                 onArchive={onArchive}
                 archiveLabel={archiveLabel}
                 archiveStatus={archiveStatus}
@@ -852,6 +854,7 @@ function ProjectHeaderRow({
   displayName,
   iconDataUri,
   statusBucket,
+  readyToReview = false,
   selected = false,
   chevron,
   onPress,
@@ -946,7 +949,8 @@ function ProjectHeaderRow({
         <ProjectLeadingVisual
           displayName={displayName}
           iconDataUri={iconDataUri}
-          statusBucket={statusBucket}
+          statusBucket={statusBucket === "attention" ? "done" : statusBucket}
+          readyToReview={readyToReview}
           projectViewKey={project.viewKey}
           backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
           chevron={chevron}
@@ -1069,8 +1073,6 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
-  onMarkAsRead,
-  onMarkAsUnread,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -1141,8 +1143,6 @@ function WorkspaceRowInner({
               onCopyPath={onCopyPath}
               onCopyBranchName={onCopyBranchName}
               onRename={onRename}
-              onMarkAsRead={onMarkAsRead}
-              onMarkAsUnread={onMarkAsUnread}
               onArchive={onArchive}
               archiveLabel={archiveLabel}
               archiveStatus={archiveStatus}
@@ -1193,8 +1193,6 @@ function WorkspaceRowInner({
                   onCopyBranchName={onCopyBranchName}
                   onCopyPath={onCopyPath}
                   onRename={onRename}
-                  onMarkAsRead={onMarkAsRead}
-                  onMarkAsUnread={onMarkAsUnread}
                   isPinned={isPinned}
                   onTogglePin={onTogglePin}
                 />
@@ -1260,6 +1258,7 @@ function WorkspaceRowWithMenu({
     workspaceId: workspace.workspaceId,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
+    projectName: workspace.projectName,
     ...toWorktreeArchiveRisk(workspace),
     onArchiveStarted: redirectAfterArchive,
     onSetHiding: setIsHidingWorkspace,
@@ -1296,21 +1295,15 @@ function WorkspaceRowWithMenu({
   const onTogglePin = canPin ? handleTogglePin : undefined;
 
   const archiveShortcutKeys = useShortcutKeys("archive-workspace");
-  const { hasClearableAttention, canMarkUnread, clearAttention, markUnread } =
-    useWorkspaceReadState({
-      serverId: workspace.serverId,
-      workspaceId: workspace.workspaceId,
-    });
+  const { hasClearableAttention, clearAttention } = useClearWorkspaceAttention({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+  });
   const handleMarkAsRead = useCallback(() => {
     void clearAttention().catch((error) => {
       toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
     });
   }, [clearAttention, toast]);
-  const handleMarkAsUnread = useCallback(() => {
-    void markUnread().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as unread");
-    });
-  }, [markUnread, toast]);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
@@ -1348,7 +1341,6 @@ function WorkspaceRowWithMenu({
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
-        onMarkAsUnread={canMarkUnread ? handleMarkAsUnread : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
         onTogglePin={onTogglePin}
@@ -1609,7 +1601,7 @@ function ProjectBlock({
 
   // Collapsed rows hide their workspace rows, so the project row carries the most urgent
   // status among them; expanded rows leave the signal to the child rows themselves.
-  const aggregateStatusBucket = useSidebarProjectStatusBucket({
+  const aggregateStatus = useSidebarProjectStatus({
     workspaces: project.workspaces,
     enabled: collapsed,
   });
@@ -1797,7 +1789,8 @@ function ProjectBlock({
         project={project}
         displayName={displayName}
         iconDataUri={iconDataUri}
-        statusBucket={aggregateStatusBucket}
+        statusBucket={aggregateStatus?.statusBucket ?? null}
+        readyToReview={aggregateStatus?.readyToReview ?? false}
         selected={false}
         chevron={rowModel.chevron}
         onPress={handleToggleCollapsed}
@@ -1914,6 +1907,16 @@ export function SidebarWorkspaceList({
     enabled: rowItems.host && shouldShowSidebarHostLabels(projects),
   });
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const hostFilters = useSidebarViewStore((state) => state.hostFilters);
+  const hostRegistryLoaded = useHostRegistryLoaded();
+  const archivedServerIds = useMemo(
+    () =>
+      groupMode === "status"
+        ? resolveSidebarServerIds({ allServerIds: serverIds, hostFilters, hostRegistryLoaded })
+        : [],
+    [groupMode, hostFilters, hostRegistryLoaded, serverIds],
+  );
+  const archivedWorkspaces = useArchivedWorkspaces({ serverIds: archivedServerIds });
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
   const onToggleWorkspacePin = useSidebarWorkspacePinController();
@@ -1966,6 +1969,7 @@ export function SidebarWorkspaceList({
     groupMode !== "project" ? (
       <SidebarGroupedModeList
         workspaceGroups={workspaceGroups}
+        archivedWorkspaces={archivedWorkspaces}
         pinnedGroups={pinnedGroups}
         workspaceEntriesByKey={workspaceEntriesByKey}
         projectIconByProjectViewKey={projectIconByProjectViewKey}
@@ -2018,6 +2022,7 @@ export function SidebarWorkspaceList({
  */
 function SidebarGroupedModeList({
   workspaceGroups,
+  archivedWorkspaces,
   pinnedGroups,
   workspaceEntriesByKey,
   projectIconByProjectViewKey,
@@ -2033,6 +2038,7 @@ function SidebarGroupedModeList({
   dragGestureHostActive,
 }: {
   workspaceGroups: SidebarWorkspaceGroup[];
+  archivedWorkspaces: ArchivedWorkspaceEntry[];
   pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -2059,7 +2065,12 @@ function SidebarGroupedModeList({
 
   return (
     <SidebarStatusWorkspaceList
-      groups={workspaceGroups}
+      groups={workspaceGroups.map((group) => ({
+        bucket: group.leading.bucket,
+        label: group.label,
+        rows: group.rows,
+      }))}
+      archivedWorkspaces={archivedWorkspaces}
       pinnedWorkspaces={pinnedWorkspaces}
       projectIconByProjectViewKey={projectIconByProjectViewKey}
       shortcutIndexByWorkspaceKey={_projectShortcutIndex}
