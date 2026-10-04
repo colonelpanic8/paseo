@@ -14,13 +14,17 @@ export function startCommand(): Command {
 export async function runStart(options: CommandOptions, _command: Command) {
   if (options.daemonTarget.kind !== "instance") throw new Error("Start requires a local home");
   const home = options.daemonTarget.home;
-  const result = await launchLocalDaemon({ home, timeoutMs: parseTimeoutMs(options.timeout) });
+  const result = await launchLocalDaemon({
+    home,
+    paths: options.daemonTarget.paths,
+    timeoutMs: parseTimeoutMs(options.timeout),
+  });
   const data = {
     action: result.spawned ? "started" : "already_running",
     home,
     pid: result.instance.pid,
     listen: result.instance.listen,
-    logPath: daemonLogPath(home),
+    logPath: daemonLogPath(home, options.daemonTarget.paths),
   };
   return {
     type: "single" as const,
@@ -42,6 +46,7 @@ export function daemonRunCommand(): Command {
         if (options.daemonTarget.kind !== "instance") throw new Error("Run requires a local home");
         const result = await launchLocalDaemon({
           home: options.daemonTarget.home,
+          paths: options.daemonTarget.paths,
           foreground: true,
         });
         process.exitCode = result.exitCode ?? 0;
