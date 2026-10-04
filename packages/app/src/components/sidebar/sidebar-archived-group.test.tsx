@@ -1,13 +1,21 @@
 /**
  * @vitest-environment jsdom
  */
-import React from "react";
+import React, { act } from "react";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
+import {
+  archivedWorkspacesQueryKey,
+  mergeArchivedWorkspaces,
+  useRestoringArchivedWorkspaceKeys,
+  type ArchivedWorkspaceEntry,
+} from "@/hooks/use-archived-workspaces";
 
-const { theme } = vi.hoisted(() => ({
+const { theme, restoreWorkspace, toastError } = vi.hoisted(() => ({
+  restoreWorkspace: vi.fn<(workspaceId: string) => Promise<void>>(),
+  toastError: vi.fn(),
   theme: {
     spacing: { 1: 4, 2: 8, 3: 12 },
     iconSize: { md: 18 },
@@ -89,13 +97,6 @@ vi.mock("lucide-react-native", () => {
   };
 });
 
-vi.mock("@tanstack/react-query", () => ({
-  useMutation: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
-}));
-
 vi.mock("@/constants/platform", () => ({
   isNative: false,
   isWeb: true,
@@ -106,11 +107,11 @@ vi.mock("@/constants/layout", () => ({
 }));
 
 vi.mock("@/contexts/toast-context", () => ({
-  useToast: () => ({ error: vi.fn() }),
+  useToast: () => ({ error: toastError }),
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
-  getHostRuntimeStore: () => ({ getClient: () => null }),
+  getHostRuntimeStore: () => ({ getClient: () => ({ restoreWorkspace }) }),
 }));
 
 vi.mock("@/stores/sidebar-collapsed-sections-store", () => ({
@@ -160,11 +161,47 @@ function archivedEntry(index: number): ArchivedWorkspaceEntry {
   };
 }
 
+function createDeferred() {
+  let resolve!: () => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function ArchivedQueryHarness({
+  fetchEntries,
+}: {
+  fetchEntries: () => Promise<ArchivedWorkspaceEntry[]>;
+}) {
+  const query = useQuery({ queryKey: archivedWorkspacesQueryKey("server"), queryFn: fetchEntries });
+  const restoring = useRestoringArchivedWorkspaceKeys();
+  const entries = mergeArchivedWorkspaces([{ isOnline: true, entries: query.data }], restoring);
+  return <SidebarArchivedGroup entries={entries} hostBadgeByServerId={new Map()} />;
+}
+
 describe("SidebarArchivedGroup", () => {
   let root: Root | null = null;
   let container: HTMLElement | null = null;
 
+  let queryClient: QueryClient;
+  function render(element: React.ReactNode) {
+    root?.render(<QueryClientProvider client={queryClient}>{element}</QueryClientProvider>);
+  }
+  function unarchiveButton(entry: ArchivedWorkspaceEntry) {
+    return container?.querySelector<HTMLElement>(
+      `[data-testid="sidebar-archived-unarchive-${entry.workspaceKey}"]`,
+    );
+  }
+
   beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    restoreWorkspace.mockReset();
+    toastError.mockReset();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -177,12 +214,13 @@ describe("SidebarArchivedGroup", () => {
     root = null;
     container?.remove();
     container = null;
+    queryClient.clear();
   });
 
   it("renders five recent rows before Show more expands the tail", () => {
     const entries = Array.from({ length: 7 }, (_, index) => archivedEntry(index + 1));
     flushSync(() => {
-      root?.render(
+      render(
         <SidebarArchivedGroup
           entries={entries}
           hostBadgeByServerId={
@@ -216,7 +254,7 @@ describe("SidebarArchivedGroup", () => {
 
   it("renders nothing when there are no archived workspaces", () => {
     flushSync(() => {
-      root?.render(<SidebarArchivedGroup entries={[]} hostBadgeByServerId={new Map()} />);
+      render(<SidebarArchivedGroup entries={[]} hostBadgeByServerId={new Map()} />);
     });
 
     expect(container?.textContent).toBe("");
@@ -225,7 +263,7 @@ describe("SidebarArchivedGroup", () => {
   it("shows a pending indicator instead of unarchive while the workspace is moving", () => {
     const pending = { ...archivedEntry(1), phase: "archiving" as const };
     flushSync(() => {
-      root?.render(
+      render(
         <SidebarArchivedGroup
           entries={[pending]}
           hostBadgeByServerId={
@@ -249,4 +287,59 @@ describe("SidebarArchivedGroup", () => {
       ),
     ).toBeNull();
   });
+
+  it("keeps an unmounted restore hidden when a concurrent restore refetches the host list", async () => {
+    const first = archivedEntry(1);
+    const second = archivedEntry(2);
+    const firstRestore = createDeferred();
+    const secondRestore = createDeferred();
+    restoreWorkspace.mockImplementation((id) =>
+      id === first.workspaceId ? firstRestore.promise : secondRestore.promise,
+    );
+    let archived = [first, second];
+    const fetchEntries = vi.fn(async () => archived);
+    queryClient.setQueryData(archivedWorkspacesQueryKey("server"), archived);
+    await act(async () => render(<ArchivedQueryHarness fetchEntries={fetchEntries} />));
+
+    await act(async () => unarchiveButton(first)?.click());
+    await vi.waitFor(() => expect(unarchiveButton(first)).toBeNull());
+    await act(async () => unarchiveButton(second)?.click());
+    await vi.waitFor(() => expect(unarchiveButton(second)).toBeNull());
+
+    archived = [first];
+    await act(async () => secondRestore.resolve());
+    await vi.waitFor(() => expect(queryClient.isMutating()).toBe(1));
+    expect(queryClient.getQueryData(archivedWorkspacesQueryKey("server"))).toEqual([first]);
+    expect(unarchiveButton(first)).toBeNull();
+    expect(restoreWorkspace).toHaveBeenCalledTimes(2);
+
+    archived = [];
+    await act(async () => firstRestore.resolve());
+    await vi.waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(unarchiveButton(first)).toBeNull();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    "reconciles an unmounted failed restore with the host (restored remotely: %s)",
+    async (restoredRemotely) => {
+      const entry = archivedEntry(1);
+      const restore = createDeferred();
+      restoreWorkspace.mockReturnValue(restore.promise);
+      let archived = [entry];
+      const fetchEntries = vi.fn(async () => archived);
+      queryClient.setQueryData(archivedWorkspacesQueryKey("server"), archived);
+      await act(async () => render(<ArchivedQueryHarness fetchEntries={fetchEntries} />));
+      await act(async () => unarchiveButton(entry)?.click());
+      await vi.waitFor(() => expect(unarchiveButton(entry)).toBeNull());
+
+      archived = restoredRemotely ? [] : [entry];
+      await act(async () => restore.reject(new Error("Restore response lost")));
+      await vi.waitFor(() => expect(queryClient.isMutating()).toBe(0));
+      expect(toastError).toHaveBeenCalledWith("Restore response lost");
+      expect(queryClient.getQueryData(archivedWorkspacesQueryKey("server"))).toEqual(archived);
+      await vi.waitFor(() => expect(Boolean(unarchiveButton(entry))).toBe(!restoredRemotely));
+      expect(restoreWorkspace).toHaveBeenCalledTimes(1);
+    },
+  );
 });
