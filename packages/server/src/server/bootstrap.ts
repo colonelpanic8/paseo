@@ -184,6 +184,7 @@ import type {
   AgentProfile,
   AgentSkillSelection,
   FirstAgentContext,
+  IdentityColorName,
   PluginSource,
   TerminalProfile,
 } from "@getpaseo/protocol/messages";
@@ -425,6 +426,7 @@ export interface PaseoDaemonConfig {
   agentPurposeSummariesEnabled?: boolean;
   enableTerminalAgentHooks?: boolean;
   appendSystemPrompt?: string;
+  hostColor?: IdentityColorName;
   terminalProfiles?: TerminalProfile[];
   agentProfiles?: AgentProfile[];
   skillSelection?: AgentSkillSelection;
@@ -568,6 +570,12 @@ function createInitialAgentEnvironment(
   };
 }
 
+function resolveInitialHostAppearance(
+  config: PaseoDaemonConfig,
+): Pick<MutableDaemonConfig, "appearance"> {
+  return config.hostColor !== undefined ? { appearance: { color: config.hostColor } } : {};
+}
+
 export function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
   const providers = config.providerOverrides ?? {};
 
@@ -597,6 +605,7 @@ export function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): Mut
     plugins: config.plugins ?? {},
     skills: { selection: config.skillSelection },
     agentEnvironment: createInitialAgentEnvironment(config),
+    ...resolveInitialHostAppearance(config),
   };
 
   if (config.terminalProfiles !== undefined) {
