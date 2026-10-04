@@ -14,7 +14,7 @@ import type {
   PiSessionStats,
 } from "../rpc-types.js";
 import { buildPiLaunch } from "../runtime.js";
-import type { ProcessEnvRecord } from "../../../../paseo-env.js";
+import { createExternalProcessEnv } from "../../../../paseo-env.js";
 
 type FakePiSubagentSubscriptionLevel = "off" | "progress" | "events";
 type FakePiSubagentStatus = "pending" | "running" | "completed" | "failed" | "aborted";
@@ -94,7 +94,7 @@ export class FakePi implements PiRuntime {
 }
 
 export class FakePiSession implements PiRuntimeSession {
-  readonly environment: ProcessEnvRecord;
+  readonly environment: Record<string, string>;
   readonly prompts: Array<{ message: string; imageCount: number }> = [];
   readonly steerCalls: Array<{ message: string; imageCount: number }> = [];
   steerError: Error | null = null;
@@ -147,7 +147,7 @@ export class FakePiSession implements PiRuntimeSession {
     null;
 
   constructor(launch: PiRuntimeLaunch) {
-    this.environment = launch.env ?? {};
+    this.environment = createExternalProcessEnv({}, launch.env ?? {});
     this.state = {
       model: null,
       thinkingLevel: "medium",
