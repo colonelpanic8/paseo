@@ -75,7 +75,8 @@ export class OmpCliRuntime implements OmpRuntime {
       runtimeSettings: this.options.runtimeSettings,
       session: input,
     });
-    launch.env = createExternalProcessEnv(globalThis.process.env, launch.env ?? {});
+    const environment = createExternalProcessEnv(globalThis.process.env, launch.env ?? {});
+    launch.env = environment;
     const [command, ...args] = launch.argv;
     const processLaunch: JsonlRpcLaunch = {
       command,
@@ -100,7 +101,7 @@ export class OmpCliRuntime implements OmpRuntime {
         requestTimeoutMs: this.options.requestTimeoutMs,
       });
       input.signal?.throwIfAborted();
-      return new OmpCliRuntimeSession(process, this.commandsRpcName, launch.env);
+      return new OmpCliRuntimeSession(process, this.commandsRpcName, environment);
     } catch (error) {
       const startupError = error instanceof Error ? error : new Error(String(error));
       await process.close(startupError);
