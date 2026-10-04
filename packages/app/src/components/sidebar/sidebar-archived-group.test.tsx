@@ -227,7 +227,7 @@ describe("SidebarArchivedGroup", () => {
             new Map([
               [
                 "server",
-                { serverId: "server", label: "Local", color: "none" as const, showLabel: true },
+                { serverId: "server", label: "Local", color: "blue" as const, showLabel: true },
               ],
             ])
           }
@@ -270,7 +270,7 @@ describe("SidebarArchivedGroup", () => {
             new Map([
               [
                 "server",
-                { serverId: "server", label: "Local", color: "none" as const, showLabel: true },
+                { serverId: "server", label: "Local", color: "blue" as const, showLabel: true },
               ],
             ])
           }
