@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
@@ -677,6 +686,18 @@ function ModelBrowserPressable({
 }
 
 type ModelBrowserRowTone = "default" | "elevated" | "drillDown";
+
+function useScrollHighlightIntoView(highlighted: boolean | undefined) {
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    if (!isWeb || !highlighted) return;
+    const node = ref.current as unknown as {
+      scrollIntoView?: (options?: ScrollIntoViewOptions) => void;
+    } | null;
+    node?.scrollIntoView?.({ block: "nearest" });
+  }, [highlighted]);
+  return ref;
+}
 
 function ModelBrowserRow({
   label,
@@ -2001,7 +2022,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   sectionHeadingText: {
     flex: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
@@ -2072,7 +2093,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   browserRowDescription: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
@@ -2093,7 +2114,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   drillDownCount: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   rowStateInline: {
@@ -2132,7 +2153,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   tooltipText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
   },
   virtualizedModelList: {
