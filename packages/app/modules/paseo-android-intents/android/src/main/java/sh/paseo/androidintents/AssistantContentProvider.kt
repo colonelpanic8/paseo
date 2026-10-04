@@ -33,7 +33,13 @@ private val AGENT_COLUMNS =
   listOf("id", "serverId", "serverName", "workspaceId", "name", "provider", "status", "lastActivityAt")
 private val MESSAGE_COLUMNS =
   listOf("id", "serverId", "serverName", "workspaceId", "agentId", "agentName", "kind", "createdAt", "text")
-private val INT_COLUMNS = setOf("agentCount")
+private val MODEL_COLUMNS =
+  listOf(
+    "serverId", "serverName", "provider", "providerLabel", "status", "model", "modelLabel", "isDefault",
+    "thinkingOptions", "defaultThinkingOption", "modes", "defaultMode", "note",
+  )
+private val INT_COLUMNS = setOf("agentCount", "isDefault")
+private const val MODEL_UNAVAILABLE_NOTICE = "Paseo could not read that host's models in time; ask again in a moment."
 
 /**
  * Read-only view of what the app knows, for on-device assistants that can
@@ -41,7 +47,8 @@ private val INT_COLUMNS = setOf("agentCount")
  * `content://<authority>/workspaces?q=&limit=` and `/agents?workspaceId=&q=&limit=`
  * are served from the file [AssistantCatalogStore] holds, so they answer
  * without starting React Native. `/messages?agentId=&workspaceId=&limit=` needs
- * live transcripts and goes through [AssistantQueryBridge], which starts the
+ * live transcripts, and `/models?serverId=&projectId=&provider=&q=&limit=` a live
+ * provider snapshot; both go through [AssistantQueryBridge], which starts the
  * JavaScript runtime headless when the app is not running. The
  * authority is declared by the app's config plugin so a debug build can install
  * beside a release build. Only query parameters filter: a SQL selection is
@@ -63,6 +70,7 @@ class AssistantContentProvider : ContentProvider() {
       "workspaces" -> "vnd.android.cursor.dir/vnd.$authority.workspace"
       "agents" -> "vnd.android.cursor.dir/vnd.$authority.agent"
       "messages" -> "vnd.android.cursor.dir/vnd.$authority.message"
+      "models" -> "vnd.android.cursor.dir/vnd.$authority.model"
       else -> null
     }
 
@@ -95,6 +103,7 @@ class AssistantContentProvider : ContentProvider() {
       "workspaces" -> queryCatalog("workspaces", WORKSPACE_COLUMNS, uri, projection)
       "agents" -> queryCatalog("agents", AGENT_COLUMNS, uri, projection)
       "messages" -> queryMessages(uri, projection)
+      "models" -> queryModels(uri, projection)
       else -> throw IllegalArgumentException("Unknown table ${uri.path}")
     }
   }
@@ -159,6 +168,7 @@ class AssistantContentProvider : ContentProvider() {
     val answer =
       AssistantQueryBridge.request(
         appContext,
+        "messages",
         mapOf("agentId" to agentId, "workspaceId" to scopedWorkspaceId, "serverId" to serverId, "limit" to limit),
         MESSAGE_TIMEOUT_MS,
       )
@@ -168,6 +178,36 @@ class AssistantContentProvider : ContentProvider() {
     val cursor = MatrixCursor(requested.toTypedArray(), minOf(rows.size, limit))
     for (row in rows.take(limit)) {
       cursor.addRow(requested.map { column -> if (row.isNull(column)) null else row.optString(column) })
+    }
+    return cursor
+  }
+
+  /** The host's live provider snapshot, one row per model; failures are a single notice row. */
+  private fun queryModels(uri: Uri, projection: Array<String>?): Cursor {
+    val requested = requestedColumns(projection, MODEL_COLUMNS)
+    val serverId = requireNotNull(uri.getQueryParameter("serverId")?.trim()?.ifEmpty { null }) { "Pass serverId" }
+    val limit = parseLimit(uri.getQueryParameter("limit"), DEFAULT_LIMIT, MAX_LIMIT)
+    val params =
+      mapOf(
+        "serverId" to serverId,
+        "projectId" to uri.getQueryParameter("projectId")?.trim()?.ifEmpty { null },
+        "provider" to uri.getQueryParameter("provider")?.trim()?.ifEmpty { null },
+        "q" to uri.getQueryParameter("q")?.trim()?.ifEmpty { null },
+        "limit" to limit,
+      )
+    val rows =
+      context?.let { AssistantQueryBridge.request(it, "models", params, MESSAGE_TIMEOUT_MS) }?.let(::parseMessageRows)
+        ?: listOf(JSONObject(mapOf("serverId" to serverId, "status" to "notice", "note" to MODEL_UNAVAILABLE_NOTICE)))
+    val cursor = MatrixCursor(requested.toTypedArray(), minOf(rows.size, limit))
+    for (row in rows.take(limit)) {
+      cursor.addRow(
+        requested.map { column ->
+          when (column) {
+            in INT_COLUMNS -> row.optInt(column)
+            else -> row.optString(column)
+          }
+        },
+      )
     }
     return cursor
   }

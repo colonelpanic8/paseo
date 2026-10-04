@@ -16,7 +16,7 @@ in `packages/app/app.config.js`.
 | `paseo://` links                           | `VIEW` with the `paseo` scheme                        | Routes below. Also used by launcher shortcuts.                                            |
 | Static launcher shortcuts                  | long-press the app icon                               | New workspace, Open project, History. Declared by the config plugin.                      |
 | Dynamic launcher shortcut                  | long-press the app icon                               | "Resume <workspace>" for the last workspace the user opened. Set from the app at runtime. |
-| Assistant catalog provider                 | query `content://sh.paseo.assistant/…`                | Read-only workspace, agent, and message listing for on-device assistants. See below.      |
+| Assistant catalog provider                 | query `content://sh.paseo.assistant/…`                | Read-only workspace, agent, message, and model listing for on-device assistants.          |
 | EVA extension service                      | bind `com.colonelpanic.eva.action.EXTENSION`          | Creates workspaces, starts agents, and sends prompts for EVA, with durable receipts.      |
 | Pairing offer                              | any URL with `#offer=`                                | Adds the host. See `OfferLinkListener` in `packages/app/src/app/_layout.tsx`.             |
 
@@ -85,7 +85,7 @@ form.
 ## Assistant catalog provider
 
 Links let another app act, but not look. The app exports a read-only content
-provider (`AssistantContentProvider` in the native module) with four tables:
+provider (`AssistantContentProvider` in the native module) with five tables:
 
 | URI                                                                            | Columns                                                                                                             |
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
@@ -93,6 +93,7 @@ provider (`AssistantContentProvider` in the native module) with four tables:
 | `content://sh.paseo.assistant/workspaces?q=&limit=`                            | `id`, `serverId`, `serverName`, `name`, `project`, `repository`, `branch`, `status`, `agentCount`, `lastActivityAt` |
 | `content://sh.paseo.assistant/agents?workspaceId=&serverId=&q=&limit=`         | `id`, `serverId`, `serverName`, `workspaceId`, `name`, `provider`, `status`, `lastActivityAt`                       |
 | `content://sh.paseo.assistant/messages?agentId=&workspaceId=&serverId=&limit=` | `id`, `serverId`, `serverName`, `workspaceId`, `agentId`, `agentName`, `kind`, `createdAt`, `text`                  |
+| `content://sh.paseo.assistant/models?serverId=&projectId=&provider=&q=&limit=` | See [Models](#models)                                                                                               |
 
 `projects`, `workspaces`, and `agents` come from a catalog the app publishes whenever hosts,
 workspaces, or agents change: ids, names, status, and activity, most recent
@@ -153,6 +154,25 @@ includes a notice before the available messages so the assistant does not
 present an incomplete transcript as complete. Only a request the provider
 cannot parse throws. A workspace whose agents have said nothing yet returns no
 rows.
+
+### Models
+
+`models` answers which `provider`, `model`, `modeId`, and `thinkingOptionId`
+values `create_agent` accepts on one host, so it is live like `messages` and
+goes through the same bridge and 20-second budget. `serverId` is required. Pass
+`projectId` to read the snapshot for that project's directory, which is what
+`create_agent` checks against. `provider` filters exactly, `q` is one
+case-insensitive fragment of the provider or model id or label, and `limit` is
+1 to 100 (default 25).
+
+Each row is one selectable model with columns `serverId`, `serverName`,
+`provider`, `providerLabel`, `status`, `model`, `modelLabel`, `isDefault` (0 or
+1), `thinkingOptions`, `defaultThinkingOption`, `modes`, `defaultMode`, and
+`note`. The option and mode lists are comma-separated ids, flattened onto every
+row so EVA's 16 KiB read budget holds a useful page without a join. Disabled
+providers and models the host marks unselectable are left out. A provider that
+is not ready, or lists no models, is one row with an empty `model` and the
+reason in `note`. A host that cannot answer is one row with `status=notice`.
 
 The authority is `sh.paseo.assistant` for release builds and
 `<package>.assistant` for the debug variant, declared by
