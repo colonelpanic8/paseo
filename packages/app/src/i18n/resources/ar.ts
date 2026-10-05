@@ -2528,6 +2528,11 @@ export const ar: TranslationResources = {
         description: "عرض مخطط للتنقل بين المطالبات",
       },
       sidebar: {
+        title: "الشريط الجانبي",
+        alwaysShowHostLabels: {
+          title: "إظهار تسميات المضيف دائمًا",
+          description: "اعرض تسميات المضيف حتى عندما تكون كل مساحات العمل المرئية على هذا الجهاز",
+        },
         header: {
           title: "الرأس",
           description: "اختر العناصر التي تظهر أعلى الشريط الجانبي وترتيبها",
@@ -2698,6 +2703,15 @@ export const ar: TranslationResources = {
         color: {
           label: "اللون",
           accessibilityLabel: "اللون، {{value}}",
+          custom: {
+            action: "مخصص…",
+            title: "لون مخصص",
+            submit: "تطبيق",
+            invalid: "أدخل لونًا سداسيًا مثل #368080.",
+            panelAccessibility: "التشبع والسطوع",
+            hueAccessibility: "تدرج اللون",
+            hexAccessibility: "اللون السداسي العشري",
+          },
           options: {
             none: "افتراضي",
             violet: "بنفسجي",
