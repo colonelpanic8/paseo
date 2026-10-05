@@ -47,6 +47,8 @@ import {
   DraftAgentControls,
   type DraftAgentControlsProps,
 } from "@/composer/agent-controls";
+import { pickAgentModelDisplaySource } from "@/composer/agent-controls/utils";
+import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
 import { ContextWindowMeter } from "@/components/context-window-meter";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
@@ -281,7 +283,8 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
       contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
-      model: agent?.model ?? null,
+      ...pickAgentModelDisplaySource(agent),
+      provider: agent?.provider ?? null,
     };
   };
 }
@@ -1277,6 +1280,15 @@ function ComposerContentImpl({
   const { settings: appSettings } = useAppSettings();
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
+  const agentModelDisplay = useAgentModelDisplay({
+    serverId,
+    cwd,
+    provider: agentState.provider,
+    model: agentState.model,
+    runtimeModelId: agentState.runtimeModelId,
+    thinkingOptionId: agentState.thinkingOptionId,
+    effectiveThinkingOptionId: agentState.effectiveThinkingOptionId,
+  });
 
   const queuedMessagesRaw = useSessionStore((state) =>
     state.sessions[serverId]?.queuedMessages?.get(agentId),
@@ -2060,6 +2072,8 @@ function ComposerContentImpl({
             maxTokens={agentState.contextWindowMaxTokens}
             usedTokens={agentState.contextWindowUsedTokens}
             totalCostUsd={agentState.totalCostUsd}
+            modelLabel={agentModelDisplay.modelLabel}
+            thinkingLabel={agentModelDisplay.thinkingLabel}
             glyphSize={contextWindowMeterGlyphSize}
           />
         </View>
@@ -2071,6 +2085,7 @@ function ComposerContentImpl({
       agentState.contextWindowMaxTokens,
       agentState.contextWindowUsedTokens,
       agentState.totalCostUsd,
+      agentModelDisplay,
       contextWindowMeterGlyphSize,
     ],
   );
