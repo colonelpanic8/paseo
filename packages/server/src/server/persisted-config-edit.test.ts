@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,6 +8,7 @@ import {
   getPersistedConfigValue,
   readPersistedConfig,
 } from "./persisted-config.js";
+import { resolvePaseoPaths } from "./paseo-paths.js";
 
 test("configuration edits validate before writing and preserve unrelated settings", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "paseo-config-edit-"));
@@ -24,6 +25,12 @@ test("configuration edits validate before writing and preserve unrelated setting
       expect(() => editPersistedConfig(home, field, { value: "value" })).toThrow();
       expect(existsSync(home)).toBe(false);
     }
+    expect(() => editPersistedConfig(home, "features.webUi.enabled", { value: "true" })).toThrow();
+    expect(existsSync(home)).toBe(false);
+    expect(() =>
+      editPersistedConfig(home, "daemon", { value: { auth: { password: "plaintext" } } }),
+    ).toThrow(/set-password/);
+    expect(existsSync(home)).toBe(false);
     editPersistedConfig(home, "daemon.listen", { value: "127.0.0.1:12345" });
     editPersistedConfig(home, "features.webUi.enabled", { value: true });
     const before = await readFile(path.join(home, "config.json"), "utf8");
@@ -39,6 +46,54 @@ test("configuration edits validate before writing and preserve unrelated setting
     await writeFile(path.join(home, "config.json"), "invalid json");
     expect(() => editPersistedConfig(home, "daemon.listen", { value: "12345" })).toThrow();
     expect(await readFile(path.join(home, "config.json"), "utf8")).toBe("invalid json");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("configuration edits preserve unrelated values in a writable imported layer", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "paseo-layered-config-edit-"));
+  const home = path.join(root, "home");
+  const rootConfig = path.join(home, "config.json");
+  const machineConfig = path.join(home, "machine.json");
+  try {
+    await mkdir(home);
+    await writeFile(
+      rootConfig,
+      JSON.stringify({ imports: ["machine.json"], writeTo: "machine.json" }),
+    );
+    await writeFile(
+      machineConfig,
+      JSON.stringify({ version: 1, features: { webUi: { enabled: true } } }),
+    );
+
+    editPersistedConfig(home, "daemon.listen", { value: "127.0.0.1:23456" });
+
+    const machine = JSON.parse(await readFile(machineConfig, "utf8"));
+    expect(machine.features.webUi.enabled).toBe(true);
+    expect(machine.daemon.listen).toBe("127.0.0.1:23456");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("configuration edits distinguish implicit XDG paths from an explicit identical home", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "paseo-xdg-config-edit-"));
+  const paths = resolvePaseoPaths(
+    {
+      XDG_CONFIG_HOME: path.join(root, "config"),
+      XDG_DATA_HOME: path.join(root, "data"),
+    },
+    "linux",
+    path.join(root, "user"),
+  );
+  const flatPaths = resolvePaseoPaths({ PASEO_HOME: paths.home });
+  try {
+    editPersistedConfig(paths.home, "daemon.listen", { value: "127.0.0.1:1111" }, paths);
+    editPersistedConfig(paths.home, "daemon.listen", { value: "127.0.0.1:2222" }, flatPaths);
+
+    expect(readPersistedConfig(paths.home, {}, paths).daemon?.listen).toBe("127.0.0.1:1111");
+    expect(readPersistedConfig(paths.home, {}, flatPaths).daemon?.listen).toBe("127.0.0.1:2222");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
