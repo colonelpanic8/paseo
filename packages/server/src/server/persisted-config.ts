@@ -15,6 +15,7 @@ import { persistPaseoLayoutSelection, resolvePaseoPaths, type PaseoPaths } from 
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 import { AgentProfileSchema, AgentSkillSelectionSchema } from "@getpaseo/protocol/agent-profile";
 import { AgentEnvironmentEntrySchema } from "@getpaseo/protocol/agent-environment";
+import { IdentityColorNameSchema } from "@getpaseo/protocol/identity-color";
 import { PluginIdSchema, PluginSourceSchema } from "@getpaseo/protocol/plugin-config";
 import { TerminalProfileSchema } from "@getpaseo/protocol/terminal-profile";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
@@ -345,6 +346,12 @@ export const PersistedConfigSchema = z
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
         agentProfiles: z.array(AgentProfileSchema).optional(),
+        appearance: z
+          .object({
+            color: IdentityColorNameSchema.optional(),
+          })
+          .strict()
+          .optional(),
         cors: z
           .object({
             allowedOrigins: z.array(z.string()).optional(),
