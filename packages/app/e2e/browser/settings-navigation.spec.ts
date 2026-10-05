@@ -1,4 +1,4 @@
-import { test, expect } from "../support/fixtures";
+import { test, metroTest, expect, type Page } from "../support/fixtures";
 import {
   buildHostWorkspaceRoute,
   buildOpenProjectRoute,
@@ -39,15 +39,15 @@ import {
   selectSettingsHost,
   expectSettingsHostPickerLabel,
   openSettingsHostSection,
+  openSettingsWithSeededHost,
   removeCurrentHostFromSettings,
+  scrollSettingsSidebarToBottom,
+  expectSettingsSidebarScrollTop,
 } from "../support/helpers/settings";
 import { getServerId } from "../support/helpers/server-id";
 import { expectAppRoute } from "../support/helpers/route-assertions";
 
-async function openWorkspace(
-  page: import("@playwright/test").Page,
-  workspace: { workspaceId: string },
-) {
+async function openWorkspace(page: Page, workspace: { workspaceId: string }) {
   await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.workspaceId));
   await expect(page.getByTestId("menu-button")).toBeVisible();
 }
@@ -141,6 +141,23 @@ test.describe("Settings sidebar navigation", () => {
 
     await page.keyboard.press("Escape");
     await expect(page).not.toHaveURL(/\/settings(\/|$)/);
+  });
+});
+
+metroTest.describe("Settings sidebar scroll persistence", () => {
+  metroTest.use({ viewport: { width: 900, height: 420 } });
+
+  metroTest("keeps the scroll position across settings route boundaries", async ({ page }) => {
+    const serverId = "srv_settings_scroll";
+    await openSettingsWithSeededHost(page, {
+      serverId,
+      label: "Settings scroll host",
+      endpoint: "127.0.0.1:1",
+    });
+
+    const scrollTop = await scrollSettingsSidebarToBottom(page);
+    await openSettingsHostSection(page, serverId, "usage");
+    await expectSettingsSidebarScrollTop(page, scrollTop);
   });
 });
 
