@@ -404,6 +404,7 @@ function IconTooltipContent({
 }
 
 function SidebarFooter({
+  active,
   theme,
   handleOpenProject,
   handleSettings,
@@ -412,6 +413,7 @@ function SidebarFooter({
   handleOpenHostSettings,
   onBeforeNavigate,
 }: {
+  active: boolean;
   theme: SidebarTheme;
   handleOpenProject: () => void;
   handleSettings: () => void;
@@ -450,7 +452,7 @@ function SidebarFooter({
             onAddHost={handleAddHost}
             onOpenHostSettings={handleOpenHostSettings}
           />
-          <LiveVoiceFooterButton />
+          <LiveVoiceFooterButton active={active} />
           <View style={styles.footerSpacer} />
           <SidebarHelpMenu />
           <FooterIconButton
@@ -618,6 +620,7 @@ function MobileSidebar({
         )}
 
         <SidebarFooter
+          active={active}
           theme={theme}
           handleOpenProject={handleOpenProject}
           handleSettings={handleSettings}
@@ -799,6 +802,7 @@ function DesktopSidebar({
         <SidebarLiveVoiceSlot active={active} />
 
         <SidebarFooter
+          active={active}
           theme={theme}
           handleOpenProject={handleOpenProject}
           handleSettings={handleSettings}
