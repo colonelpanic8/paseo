@@ -3,7 +3,13 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Keyboard, Pressable, Text, View } from "react-native";
-import type { DimensionValue, StyleProp, ViewStyle } from "react-native";
+import type {
+  DimensionValue,
+  NativeSyntheticEvent,
+  StyleProp,
+  TextInputKeyPressEventData,
+  ViewStyle,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
@@ -29,6 +35,7 @@ import {
   getCompactSheetSafeAreaPadding,
 } from "@/components/adaptive-modal-sheet-layout";
 import { ScrollView } from "@/components/ui/scroll-view";
+import { listNavigationDataSet } from "@/keyboard/list-search-keys";
 import { isWeb } from "@/constants/platform";
 import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -46,6 +53,15 @@ export const SHEET_HORIZONTAL_PADDING_SCALE = 6;
 // glyph should line up with the X must reach the same rail.
 export const SHEET_HEADER_CLOSE_PADDING_SCALE = 2;
 
+export type SheetSearchKeyPressEvent = NativeSyntheticEvent<
+  TextInputKeyPressEventData & {
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+  }
+>;
+
 export interface SheetHeaderSearch {
   onChange: (value: string) => void;
   onFocus?: () => void;
@@ -54,6 +70,9 @@ export interface SheetHeaderSearch {
   placeholder?: string;
   autoFocus?: boolean;
   testID?: string;
+  onKeyPress?: (event: SheetSearchKeyPressEvent) => void;
+  onSubmit?: () => void;
+  ownsListNavigation?: boolean;
 }
 
 export interface SheetHeaderBack {
@@ -369,7 +388,10 @@ export function SheetHeaderView({
         ) : null}
       </View>
       {search ? (
-        <View style={styles.searchRow}>
+        <View
+          style={styles.searchRow}
+          dataSet={listNavigationDataSet(Boolean(search.ownsListNavigation))}
+        >
           <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
@@ -377,6 +399,8 @@ export function SheetHeaderView({
             placeholder={search.placeholder ?? t("common.actions.search")}
             resetKey={search.resetKey}
             onChangeText={handleSearchChange}
+            onKeyPress={search.onKeyPress}
+            onSubmitEditing={search.onSubmit}
             onFocus={search.onFocus}
             onBlur={search.onBlur}
             autoCapitalize="none"
@@ -428,7 +452,10 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
         </View>
       ) : null}
       {header.search ? (
-        <View style={styles.inlineSearchRow}>
+        <View
+          style={styles.inlineSearchRow}
+          dataSet={listNavigationDataSet(Boolean(header.search.ownsListNavigation))}
+        >
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
@@ -436,6 +463,8 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
             placeholder={header.search.placeholder ?? t("common.actions.search")}
             resetKey={header.search.resetKey}
             onChangeText={header.search.onChange}
+            onKeyPress={header.search.onKeyPress}
+            onSubmitEditing={header.search.onSubmit}
             onFocus={header.search.onFocus}
             onBlur={header.search.onBlur}
             autoCapitalize="none"
@@ -475,6 +504,7 @@ export interface AdaptiveModalSheetProps {
   sizeContentToCurrentSnapPoint?: boolean;
   /** Re-establishes caller-owned contexts inside the native or compact sheet portal. */
   contextBridge?: ContextBridge | null;
+  onOverlayKeyDown?: (event: KeyboardEvent) => boolean;
 }
 
 export function AdaptiveModalSheet({
@@ -495,6 +525,7 @@ export function AdaptiveModalSheet({
   bodyStyle,
   sizeContentToCurrentSnapPoint = true,
   contextBridge = null,
+  onOverlayKeyDown,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -573,13 +604,14 @@ export function AdaptiveModalSheet({
 
   const handleWebOverlayKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      if (onOverlayKeyDown?.(event)) return true;
       if (event.key !== "Escape") return false;
       event.preventDefault();
       event.stopPropagation();
       onClose();
       return true;
     },
-    [onClose],
+    [onClose, onOverlayKeyDown],
   );
   const setWebOverlayScope = useWebOverlayRegistration({
     active: isWeb && !isMobile && visible,
