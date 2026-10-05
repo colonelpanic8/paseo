@@ -626,6 +626,7 @@ interface LoadConfigOptions extends Omit<
   paths?: PaseoPaths;
 }
 
+// oxlint-disable-next-line complexity
 export function resolveConfigFromPersisted(
   paseoHome: string,
   persisted: PersistedConfig,
