@@ -1,9 +1,11 @@
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
 
 export function WorkspaceShortcutTargetsSubscriber({ enabled }: { enabled: boolean }) {
+  const { t } = useTranslation();
   const { shortcutModel, workspaceEntriesByKey, projectNamesByViewKey } = useSidebarModel();
   const setSidebarShortcutWorkspaceTargets = useKeyboardShortcutsStore(
     (state) => state.setSidebarShortcutWorkspaceTargets,
@@ -15,6 +17,7 @@ export function WorkspaceShortcutTargetsSubscriber({ enabled }: { enabled: boole
     const statusGroups = buildStatusGroups(
       Array.from(workspaceEntriesByKey.values()),
       projectNamesByViewKey,
+      t,
     );
     return statusGroups
       .filter((group) => group.bucket === "needs_input" || group.bucket === "attention")
@@ -24,7 +27,7 @@ export function WorkspaceShortcutTargetsSubscriber({ enabled }: { enabled: boole
           workspaceId: workspace.workspaceId,
         })),
       );
-  }, [projectNamesByViewKey, workspaceEntriesByKey]);
+  }, [projectNamesByViewKey, t, workspaceEntriesByKey]);
 
   useEffect(() => {
     if (!enabled) {
