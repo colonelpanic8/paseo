@@ -306,6 +306,8 @@ export class CreationService {
       this.notify(observer, record.snapshot);
   }
   private write(identity: string, record: Record): Promise<void> {
+    // Keep the in-memory snapshot identical to what a receipt read will return.
+    record.snapshot = CreationSnapshotSchema.parse(JSON.parse(JSON.stringify(record.snapshot)));
     // Serialize now: the runner mutates the record after queueing this write.
     const contents = JSON.stringify(record, null, 2);
     return this.accessReceipt(identity, () =>
