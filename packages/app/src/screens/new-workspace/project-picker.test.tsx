@@ -2,7 +2,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { HostProjectListItem } from "@/projects/host-projects";
+import { hostProjectFromRoute, type HostProjectListItem } from "@/projects/host-projects";
 import { useNewWorkspaceProjectPicker } from "./project-picker";
 
 function project(input: {
@@ -28,6 +28,39 @@ function project(input: {
 }
 
 describe("useNewWorkspaceProjectPicker", () => {
+  it("waits for the requested project id instead of selecting the remembered project", () => {
+    const requested = hostProjectFromRoute({ serverId: "host", projectId: "requested" })!;
+    const other = project({
+      viewKey: "other",
+      projectKey: null,
+      projectId: "other",
+      projectName: "Other",
+    });
+    const hydrated = project({
+      viewKey: "requested",
+      projectKey: null,
+      projectId: "requested",
+      projectName: "Requested",
+    });
+    const { result, rerender } = renderHook(
+      ({ projects }) =>
+        useNewWorkspaceProjectPicker({
+          selectedServerId: "host",
+          projects,
+          routeProject: requested,
+          routeProjectContextViewKey: requested.viewKey,
+          lastActiveProject: other,
+          allowAllProjects: true,
+        }),
+      { initialProps: { projects: [other] } },
+    );
+    expect(result.current.selectedProject).toEqual(requested);
+    expect(result.current.selectedSourceDirectory).toBeNull();
+    rerender({ projects: [other, hydrated] });
+    expect(result.current.selectedProject).toEqual(hydrated);
+    expect(result.current.selectedSourceDirectory).toBe("/work/requested");
+  });
+
   it("preserves a manual choice when the routed project hydrates", () => {
     const routePlacement = project({
       viewKey: '["host","route-local"]',
