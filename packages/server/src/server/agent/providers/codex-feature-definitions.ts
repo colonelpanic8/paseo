@@ -38,16 +38,27 @@ export const CODEX_PLAN_MODE_FEATURE: Omit<AgentFeatureToggle, "value"> = {
   icon: "list-todo",
 };
 
+export const CODEX_CONTEXT_NOTES_FEATURE: Omit<AgentFeatureToggle, "value"> = {
+  type: "toggle",
+  id: "context_notes",
+  label: "Notes",
+  description: "Keep notes across context windows (experimental)",
+  tooltip: "Toggle context notes",
+  icon: "notebook-pen",
+};
+
 export function buildCodexFeatures(input: {
   serviceTiers: CodexServiceTier[];
   serviceTier: string;
   planModeEnabled: boolean;
+  contextNotesEnabled: boolean;
   planModeAvailable?: boolean;
 }): AgentFeature[] {
   const features = buildCodexSpeedFeature(input.serviceTiers, input.serviceTier);
   if (input.planModeAvailable !== false) {
     features.push({ ...CODEX_PLAN_MODE_FEATURE, value: input.planModeEnabled });
   }
+  features.push({ ...CODEX_CONTEXT_NOTES_FEATURE, value: input.contextNotesEnabled });
   return features;
 }
 
