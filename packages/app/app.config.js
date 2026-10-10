@@ -6,6 +6,7 @@ const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
 const withAndroidScroll = require("./modules/paseo-scroll/app.plugin");
+const withPaseoHardwareKeyboard = require("./plugins/with-paseo-hardware-keyboard");
 const { getNativeReleaseVersion } = require("./native-release-version");
 const appVariant = process.env.APP_VARIANT ?? "production";
 const appVersion = process.env.PASEO_APP_VERSION?.trim() || pkg.version;
@@ -224,6 +225,7 @@ export default {
           },
         },
       ],
+      withPaseoHardwareKeyboard,
       ...buildProfile.fdroidPlugins,
       ...(isProfileBuild ? [withAndroidProfileable] : []),
     ],
