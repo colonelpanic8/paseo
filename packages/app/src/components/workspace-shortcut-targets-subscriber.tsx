@@ -19,14 +19,14 @@ export function WorkspaceShortcutTargetsSubscriber({ enabled }: { enabled: boole
       projectNamesByViewKey,
       t,
     );
-    return statusGroups
-      .filter((group) => group.bucket === "needs_input" || group.bucket === "attention")
-      .flatMap((group) =>
-        group.rows.map((workspace) => ({
+    return statusGroups.flatMap((group) =>
+      group.rows
+        .filter((workspace) => group.bucket === "needs_input" || workspace.readyToReview)
+        .map((workspace) => ({
           serverId: workspace.serverId,
           workspaceId: workspace.workspaceId,
         })),
-      );
+    );
   }, [projectNamesByViewKey, t, workspaceEntriesByKey]);
 
   useEffect(() => {
