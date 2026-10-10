@@ -58,6 +58,14 @@ function claudeLine(id: number, outputTokens: number, model = "claude-fable-5"):
   })}\n`;
 }
 
+/**
+ * One assistant message written as one record per content block. Subagent transcripts report a
+ * streaming-partial `output_tokens` on the early blocks and the real count on the last.
+ */
+function claudeMessageBlocks(id: number, outputTokensPerBlock: readonly number[]): string {
+  return outputTokensPerBlock.map((outputTokens) => claudeLine(id, outputTokens)).join("");
+}
+
 function makeService(
   options: Partial<UsageHistoryServiceOptions> & { overrides?: Record<string, unknown> } = {},
 ) {
@@ -70,7 +78,23 @@ function makeService(
     fetch: options.fetch ?? (async () => Response.json(RATES_DOCUMENT)),
     now: options.now,
     hostId: options.hostId ?? "test-host",
+    scanCachePersistDelayMs: options.scanCachePersistDelayMs,
   });
+}
+
+async function readDiskCache() {
+  return decodeScanCache(
+    JSON.parse(await fs.readFile(path.join(paseoHome, "usage-history", "scan-cache.json"), "utf8")),
+  );
+}
+
+async function scanCacheFileExists(): Promise<boolean> {
+  try {
+    await fs.stat(path.join(paseoHome, "usage-history", "scan-cache.json"));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Codex needs a turn context before a token event, and its session id comes from the meta line. */
@@ -127,6 +151,32 @@ describe("UsageHistoryService", () => {
 
     await fs.appendFile(transcript, claudeLine(2, 7));
     expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(12);
+  });
+
+  it("counts a subagent message by its last block, not its streaming-partial first block", async () => {
+    const subagentTranscript = path.join(path.dirname(transcript), "agent-a1b2c3.jsonl");
+    await fs.writeFile(
+      subagentTranscript,
+      claudeMessageBlocks(1, [1, 1, 1, 336]) + claudeMessageBlocks(2, [17, 325]),
+    );
+    expect(totalOutputTokens(await makeService().readSummary(WINDOW))).toBe(336 + 325);
+  });
+
+  it("counts a main-session message with identical repeated usage once", async () => {
+    await fs.writeFile(transcript, claudeMessageBlocks(1, [40, 40, 40]));
+    expect(totalOutputTokens(await makeService().readSummary(WINDOW))).toBe(40);
+  });
+
+  it("promotes a cached partial count when the real one lands after a resume", async () => {
+    const subagentTranscript = path.join(path.dirname(transcript), "agent-a1b2c3.jsonl");
+    await fs.writeFile(subagentTranscript, claudeMessageBlocks(1, [3, 3]));
+    const service = makeService();
+    expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(3);
+
+    await fs.appendFile(subagentTranscript, claudeMessageBlocks(1, [385]));
+    expect(totalOutputTokens(await service.readSummary(WINDOW))).toBe(385);
+    await service.flushScanCache();
+    expect(totalOutputTokens(await makeService().readSummary(WINDOW))).toBe(385);
   });
 
   it("shares one scan between concurrent identical requests", async () => {
@@ -191,11 +241,8 @@ describe("UsageHistoryService", () => {
     await first;
     const summaries = await Promise.all(pending);
     expect(configReads).toBe(8);
-    const diskCache = decodeScanCache(
-      JSON.parse(
-        await fs.readFile(path.join(paseoHome, "usage-history", "scan-cache.json"), "utf8"),
-      ),
-    );
+    await service.flushScanCache();
+    const diskCache = await readDiskCache();
     expect(diskCache.get(transcript)?.records).toHaveLength(2);
     expect(summaries.every((summary) => totalOutputTokens(summary) === 12)).toBe(true);
     expect(totalOutputTokens(await makeService().readSummary(WINDOW))).toBe(12);
@@ -264,9 +311,43 @@ describe("UsageHistoryService", () => {
     expect(refreshed.status).toBe("fresh");
   });
 
+  it("writes the scan cache once after a burst of scans, off the scan's own path", async () => {
+    await fs.writeFile(transcript, claudeLine(1, 5));
+    const service = makeService({ scanCachePersistDelayMs: 30 });
+    await service.readSummary(WINDOW);
+    await fs.appendFile(transcript, claudeLine(2, 7));
+    await service.readSummary({ ...WINDOW, untilDay: "2026-08-03" });
+    expect(await scanCacheFileExists()).toBe(false);
+
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect((await readDiskCache()).get(transcript)?.records).toHaveLength(2);
+  });
+
+  it("stops retrying the rate fetch for five minutes after it fails with no snapshot", async () => {
+    await fs.writeFile(transcript, claudeLine(1, 5));
+    let nowMs = Date.parse("2026-08-02T00:00:00Z");
+    let fetches = 0;
+    const service = makeService({
+      now: () => nowMs,
+      fetch: async () => {
+        fetches += 1;
+        throw new Error("offline");
+      },
+    });
+    expect((await service.readSummary(WINDOW)).pricing.status).toBe("unavailable");
+    await service.readSummary({ ...WINDOW, untilDay: "2026-08-03" });
+    expect(fetches).toBe(1);
+
+    nowMs += 5 * 60 * 1000;
+    await service.readSummary({ ...WINDOW, untilDay: "2026-08-04" });
+    expect(fetches).toBe(2);
+  });
+
   it("loads the durable scan cache in a new service instance", async () => {
     await fs.writeFile(transcript, claudeLine(1, 5));
-    await makeService().readSummary(WINDOW);
+    const service = makeService();
+    await service.readSummary(WINDOW);
+    await service.flushScanCache();
     const cachePath = path.join(paseoHome, "usage-history", "scan-cache.json");
     expect((await fs.stat(cachePath)).size).toBeGreaterThan(0);
 
