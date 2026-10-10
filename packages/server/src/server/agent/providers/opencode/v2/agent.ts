@@ -41,6 +41,7 @@ import type { OpenCodeBridge } from "../bridge.js";
 import { resolveOpenCodeHomeDir } from "../paths.js";
 import { V2Runtime, type V2Connection } from "./runtime.js";
 import { modelRef, modesFromV2, modelsFromV2 } from "./mapping.js";
+import { definedProcessEnv } from "../../../../paseo-env.js";
 
 interface V2AgentOptions {
   logger: Logger;
@@ -105,7 +106,9 @@ export class OpenCodeV2AgentClient implements AgentClient {
     options?: AgentCreateSessionOptions,
   ): Promise<AgentSession> {
     const connection = await this.runtime.acquire(
-      requiresDedicatedV2Server(config, launch) ? { env: launch?.env, dedicated: true } : {},
+      requiresDedicatedV2Server(config, launch)
+        ? { env: definedProcessEnv(launch?.env), dedicated: true }
+        : {},
     );
     try {
       const info = await connection.client.session.create({
@@ -138,7 +141,9 @@ export class OpenCodeV2AgentClient implements AgentClient {
     const connection =
       this.connections.get(handle.nativeHandle ?? handle.sessionId)?.retain() ??
       (await this.runtime.acquire(
-        requiresDedicatedV2Server(config, launch) ? { env: launch?.env, dedicated: true } : {},
+        requiresDedicatedV2Server(config, launch)
+          ? { env: definedProcessEnv(launch?.env), dedicated: true }
+          : {},
       ));
     try {
       const info = await connection.client.session.get({
@@ -160,12 +165,14 @@ export class OpenCodeV2AgentClient implements AgentClient {
   ) {
     const acquire = () =>
       this.runtime.acquire(
-        requiresDedicatedV2Server(config, launch) ? { env: launch?.env, dedicated: true } : {},
+        requiresDedicatedV2Server(config, launch)
+          ? { env: definedProcessEnv(launch?.env), dedicated: true }
+          : {},
       );
     let ownedConnection = connection;
     const unbind = this.options.bridge?.bindSession({
       sessionId: info.id,
-      env: launch?.env ?? {},
+      env: definedProcessEnv(launch?.env) ?? {},
       tools: launch?.paseoTools,
     });
     const bound = new Map<string, () => void>();
@@ -174,7 +181,7 @@ export class OpenCodeV2AgentClient implements AgentClient {
       if (bound.has(childId)) return;
       const childUnbind = this.options.bridge?.bindSession({
         sessionId: childId,
-        env: launch?.env ?? {},
+        env: definedProcessEnv(launch?.env) ?? {},
         tools: launch?.paseoTools,
       });
       if (childUnbind) bound.set(childId, childUnbind);

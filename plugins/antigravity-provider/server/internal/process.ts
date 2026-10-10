@@ -50,9 +50,14 @@ function driverArgs(options: DriverOptions): string[] {
 }
 
 export function startDriver(options: DriverOptions): Driver {
+  const env: NodeJS.ProcessEnv = { ...options.launch.env };
+  for (const [key, value] of Object.entries(options.config.env)) {
+    if (value === null) delete env[key];
+    else env[key] = value;
+  }
   const child = spawnProcess(options.launch.command, driverArgs(options), {
     cwd: options.config.cwd,
-    env: { ...options.launch.env, ...options.config.env },
+    env,
     detached: process.platform !== "win32",
     stdio: "pipe",
   });
