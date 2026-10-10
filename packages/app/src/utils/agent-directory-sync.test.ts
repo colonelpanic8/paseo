@@ -263,6 +263,7 @@ describe("replaceFetchedAgentDirectory", () => {
             name: "repo",
             status: "done",
             statusEnteredAt: null,
+            activityAt: null,
             archivingAt: null,
             diffStat: null,
             scripts: [],

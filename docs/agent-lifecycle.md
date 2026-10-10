@@ -132,6 +132,34 @@ including legacy records whose native archive failed. The retained history sessi
 the read results. Interactive resume remains responsible for repairing a provider session archived
 outside Paseo while its Paseo agent is active.
 
+### The recently-archived tail
+
+Status mode renders a greyed-out **Recently archived** group after every real status group, newest
+archive first, so a mis-archive is one click from being undone. It is an undo affordance, not an
+archive browser.
+
+The rows come from `workspace.archived.list.request` (capability
+`server_info.features.archivedWorkspacesList`), **not** from the workspace directory. This split is
+deliberate and load-bearing: every consumer of the session store's workspace map — project mode, the
+workspace switcher, status counts — treats a present descriptor as live. Archived workspaces must
+never enter that map, so they live only in the `archivedWorkspaces` query
+(`packages/app/src/hooks/use-archived-workspaces.ts`) and only status mode reads it. If you ever need
+archived workspaces somewhere else, add another reader of that query; do not widen the directory.
+
+`archived` is not a status bucket. It is deliberately excluded from `STATUS_BUCKET_ORDER` and from the
+1–9 keyboard shortcut index — archived workspaces have no live status and nothing to navigate to. The
+only action on a row is unarchive, which goes through the existing
+`workspace.recovery.restore.request`, so the daemon (not the client) still decides between plain
+unarchive and recreating a Paseo-owned worktree.
+
+The daemon caps its response and drops workspaces whose owning project is archived; unarchiving one
+would surface a workspace under a project the user cannot see.
+
+While status mode is mounted, its archived query listens to the existing `workspace_update`
+broadcast. A live-directory removal can mean a new archive, and an upsert for a row already in the
+archived cache means that row was restored elsewhere, so either transition refreshes the tail across
+clients without polling.
+
 Provider session connection owns every process it spawns until the session is registered with
 `AgentManager`. If initialization, persisted-session resume, or initial history hydration fails,
 `connect()` must dispose that process before rethrowing; the manager cannot clean up a session it never
@@ -170,6 +198,12 @@ neither, so resuming carries the stored attention and the stored last-activity t
 untouched. Forging either makes a background resume look like the user read a workspace and like the
 agent worked in it just now, which rewrites the sidebar timestamp permanently — persisted
 `updatedAt` is what workspace `statusEnteredAt` is re-derived from on the next daemon start.
+
+### Ready to review
+
+The daemon sets finished attention when an agent goes from running to idle. The sidebar treats that flag as an annotation rather than a workspace state: the workspace stays in its normal status group and carries a pulsing blue badge until you act on it. A workspace can be Working and ready to review at the same time. Collapsed project rows carry the badge when any hidden workspace is ready.
+
+Opening the agent clears the flag once the thread is actively visible. Sending a prompt also clears it automatically. **Mark as read** clears it explicitly from the workspace header menu or the sidebar row menu without opening the thread.
 
 ## The subagents track
 

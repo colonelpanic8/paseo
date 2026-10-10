@@ -204,6 +204,25 @@ index 6ce3b8f..8fe28bc 100644
      }
      this.markAsOutOfBounds(adaptedEvent.pointerId);
      this.trackedPointers.delete(adaptedEvent.pointerId);
+diff --git a/node_modules/react-native-gesture-handler/src/components/ReanimatedSwipeable/ReanimatedSwipeable.tsx b/node_modules/react-native-gesture-handler/src/components/ReanimatedSwipeable/ReanimatedSwipeable.tsx
+index 53cce68..0ad49cb 100644
+--- a/node_modules/react-native-gesture-handler/src/components/ReanimatedSwipeable/ReanimatedSwipeable.tsx
++++ b/node_modules/react-native-gesture-handler/src/components/ReanimatedSwipeable/ReanimatedSwipeable.tsx
+@@ -468,6 +468,14 @@ const Swipeable = (props: SwipeableProps) => {
+   const tapGesture = useMemo(() => {
+     const tap = Gesture.Tap()
+       .shouldCancelWhenOutside(true)
++      .onTouchesDown((_event, stateManager) => {
++        // A closed row has nothing to close. Activating anyway cancels the JS
++        // responder of any pressable in the row, and a mouse tap activates on
++        // ACTION_BUTTON_RELEASE, before the ACTION_UP that would release it.
++        if (rowState.value === 0) {
++          stateManager.fail();
++        }
++      })
+       .onStart(() => {
+         if (rowState.value !== 0) {
+           close();
 diff --git a/node_modules/react-native-gesture-handler/src/web/tools/PointerEventManager.ts b/node_modules/react-native-gesture-handler/src/web/tools/PointerEventManager.ts
 index 18d3627..769b0fe 100644
 --- a/node_modules/react-native-gesture-handler/src/web/tools/PointerEventManager.ts
