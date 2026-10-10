@@ -28,6 +28,10 @@ async function fixture() {
     ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("PASEO_"))),
     HOME: root,
     USERPROFILE: root,
+    XDG_CONFIG_HOME: path.join(root, ".config"),
+    XDG_DATA_HOME: path.join(root, ".local", "share"),
+    XDG_STATE_HOME: path.join(root, ".local", "state"),
+    XDG_CACHE_HOME: path.join(root, ".cache"),
   };
   const homes = [path.join(root, "a"), path.join(root, "b")];
   const owned = new Map<string, { pid: number; startedAt: string }>();
@@ -136,7 +140,11 @@ test("managed two-home restart retains its supervisor and never routes ordinary 
     const beforeA = await f.liveStatus(a);
     const beforeB = await f.liveStatus(b, poisoned);
     if (process.platform !== "win32") {
-      for (const home of [a, b]) expect((await stat(home)).mode & 0o777).toBe(0o700);
+      const defaultHome =
+        process.platform === "linux"
+          ? path.join(f.root, ".local", "share", "paseo")
+          : path.join(f.root, ".paseo");
+      for (const home of [a, b, defaultHome]) expect((await stat(home)).mode & 0o777).toBe(0o700);
       expect(existsSync(path.join(f.root, ".paseo"))).toBe(false);
     }
 
