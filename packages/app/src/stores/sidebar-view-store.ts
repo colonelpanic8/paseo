@@ -35,7 +35,8 @@ export function hasActiveSidebarLabelFilter(filter: SidebarLabelFilter): boolean
 }
 
 /**
- * Include/exclude toggle over an allowlist, shared by the host and project filters.
+ * Include/exclude toggle over a list of keys, shared by the host and project filters and the
+ * status view's hidden hosts.
  *
  * Both filters answer the same question — "is this one of the things I pinned the sidebar to" —
  * so they share the operation. The label filter does not: its keys go through
@@ -63,6 +64,12 @@ interface SidebarViewStoreState {
   projectFilters: string[];
   labelFilter: SidebarLabelFilter;
   toggleBackground: () => void;
+  /**
+   * Hosts left out of status grouping. A denylist rather than an allowlist, so a newly added host
+   * shows up without anyone opting it in. Stale ids are inert and kept: a host that drops out of
+   * the registry and comes back should come back hidden.
+   */
+  statusHiddenHosts: string[];
   setGroupMode: (mode: SidebarGroupMode) => void;
   toggleHostFilter: (serverId: string) => void;
   clearHostFilters: () => void;
@@ -72,6 +79,7 @@ interface SidebarViewStoreState {
   clearLabelFilter: () => void;
   reconcileLabelFilter: (labels: readonly string[]) => void;
   reconcileHostFilters: (serverIds: readonly string[]) => void;
+  toggleStatusHiddenHost: (serverId: string) => void;
 }
 
 interface SidebarViewPersistedState {
@@ -80,6 +88,7 @@ interface SidebarViewPersistedState {
   hostFilters: string[];
   projectFilters: string[];
   labelFilter: SidebarLabelFilter;
+  statusHiddenHosts: string[];
 }
 
 const PersistedSidebarGroupModeSchema = z.enum(["project", "status", "label"]);
@@ -94,6 +103,7 @@ const SidebarViewPersistedStateSchema = z.strictObject({
   projectFilters: z.array(z.string()).optional(),
   groupModeByServerId: z.record(z.string(), PersistedSidebarGroupModeSchema).optional(),
   labelFilter: SidebarLabelFilterSchema.optional(),
+  statusHiddenHosts: z.array(z.string()).optional(),
 });
 
 type SidebarViewStorageState = z.infer<typeof SidebarViewPersistedStateSchema>;
@@ -131,6 +141,7 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
+      statusHiddenHosts: [],
     };
   }
   const state = result.data;
@@ -143,6 +154,7 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
+      statusHiddenHosts: [],
     };
   }
 
@@ -154,6 +166,7 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
     labelFilter: state.labelFilter
       ? normalizeSidebarLabelFilter(state.labelFilter)
       : emptyLabelFilter(),
+    statusHiddenHosts: state.statusHiddenHosts ?? [],
   };
 }
 
@@ -191,6 +204,7 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
       toggleBackground: () => set((state) => ({ showBackground: !state.showBackground })),
+      statusHiddenHosts: [],
       setGroupMode: (mode) => set({ groupMode: mode }),
       toggleHostFilter: (serverId) =>
         set((state) => ({ hostFilters: toggleFilterEntry(state.hostFilters, serverId) })),
@@ -228,6 +242,10 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
           }
           return { hostFilters: next };
         }),
+      toggleStatusHiddenHost: (serverId) =>
+        set((state) => ({
+          statusHiddenHosts: toggleFilterEntry(state.statusHiddenHosts, serverId),
+        })),
     }),
     {
       name: SIDEBAR_VIEW_STORAGE_KEY,
@@ -242,6 +260,7 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
         hostFilters: state.hostFilters,
         projectFilters: state.projectFilters,
         labelFilter: state.labelFilter,
+        statusHiddenHosts: state.statusHiddenHosts,
       }),
       migrate: migrateSidebarViewState,
     },

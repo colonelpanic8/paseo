@@ -1224,6 +1224,9 @@ export const es: TranslationResources = {
         label: "Host",
         all: "Todos los hosts",
       },
+      statusHosts: {
+        label: "Hosts en vista de estado",
+      },
       projectFilter: {
         label: "Proyecto",
         all: "Todos los proyectos",
