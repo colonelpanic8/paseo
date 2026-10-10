@@ -47,7 +47,7 @@ import {
   shouldShowCustomComboboxOption,
 } from "./combobox-options";
 import type { ComboboxOptionModel } from "./combobox-options";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
@@ -59,6 +59,12 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { FloatingSurface } from "@/components/ui/floating";
+import { useListSearchHandler } from "@/keyboard/list-search-dispatcher";
+import {
+  LIST_SEARCH_DATASET,
+  resolveListSearchKeyAction,
+  type ListSearchKeyAction,
+} from "@/keyboard/list-search-keys";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import {
   getOverlayRoot,
@@ -132,6 +138,7 @@ export interface ComboboxProps {
   /** When true, selecting an option does not close the picker (multi-select mode). */
   keepOpenOnSelect?: boolean;
   anchorRef: React.RefObject<View | null>;
+  onOverlayKeyDown?: (event: KeyboardEvent) => boolean;
   children?: ReactNode;
 }
 
@@ -862,8 +869,18 @@ function buildFloatingMiddleware(input: FloatingMiddlewareInput) {
   ];
 }
 
-function isDesktopKey(key: string): key is DesktopKey {
-  return key === "ArrowDown" || key === "ArrowUp" || key === "Enter" || key === "Escape";
+function resolveDesktopKey(event: KeyboardEvent): DesktopKey | null {
+  if (event.key === "Escape") return "Escape";
+  switch (resolveListSearchKeyAction(event)) {
+    case "next":
+      return "ArrowDown";
+    case "previous":
+      return "ArrowUp";
+    case "submit":
+      return "Enter";
+    default:
+      return null;
+  }
 }
 
 function dispatchDesktopKey(
@@ -891,6 +908,28 @@ function dispatchDesktopKey(
     return true;
   }
   return false;
+}
+
+function useNativeComboboxListNavigation(input: DesktopKeyHandlerInput & { hasChildren: boolean }) {
+  const handle = useCallback(
+    (action: ListSearchKeyAction) => {
+      if (!input.isOpen || input.hasChildren || input.orderedVisibleOptions.length === 0) {
+        return false;
+      }
+      if (action === "submit") {
+        handleDesktopEnterKey(input);
+        return true;
+      }
+      handleDesktopArrowKey(input, action === "next" ? "ArrowDown" : "ArrowUp");
+      return true;
+    },
+    [input],
+  );
+  useListSearchHandler({
+    active: isNative && input.isOpen && !input.hasChildren,
+    priority: 50,
+    handle,
+  });
 }
 
 function resolveInitialActiveIndex(
@@ -1032,6 +1071,7 @@ interface DesktopBodyProps {
   isOpen: boolean;
   handleClose: () => void;
   handleDesktopKey: (key: DesktopKey, event?: KeyboardEvent) => boolean;
+  onOverlayKeyDown: ((event: KeyboardEvent) => boolean) | undefined;
   refs: ReturnType<typeof useFloating>["refs"];
   shouldUseDesktopFade: boolean;
   desktopFrameStyle: StyleProp<ViewStyle>;
@@ -1158,12 +1198,15 @@ function DesktopComboboxOptionsBody(props: {
 
 function DesktopComboboxBody(props: DesktopBodyProps): ReactElement {
   const handleDesktopKey = props.handleDesktopKey;
+  const onOverlayKeyDown = props.onOverlayKeyDown;
   const handleWebOverlayKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (!isDesktopKey(event.key)) return false;
-      return handleDesktopKey(event.key, event);
+      if (onOverlayKeyDown?.(event)) return true;
+      const key = resolveDesktopKey(event);
+      if (!key) return false;
+      return handleDesktopKey(key, event);
     },
-    [handleDesktopKey],
+    [handleDesktopKey, onOverlayKeyDown],
   );
   const setWebOverlayScope = useWebOverlayRegistration({
     active: isWeb && props.isOpen,
@@ -1192,6 +1235,7 @@ function DesktopComboboxBody(props: DesktopBodyProps): ReactElement {
         <Pressable style={styles.desktopBackdrop} onPress={props.handleClose} />
         <FloatingSurface
           testID="combobox-desktop-container"
+          dataSet={LIST_SEARCH_DATASET}
           entering={props.shouldUseDesktopFade ? FadeIn.duration(100) : undefined}
           exiting={props.shouldUseDesktopFade ? FadeOut.duration(100) : undefined}
           style={styles.desktopContainer}
@@ -1289,6 +1333,7 @@ export function Combobox({
   footer,
   keepOpenOnSelect = false,
   anchorRef,
+  onOverlayKeyDown,
   children,
 }: ComboboxProps): ReactElement | null {
   const { t } = useTranslation();
@@ -1519,6 +1564,16 @@ export function Combobox({
     },
     [activeIndex, handleClose, handleSelect, isMobile, isOpen, orderedVisibleOptions],
   );
+  useNativeComboboxListNavigation({
+    isOpen,
+    isMobile,
+    orderedVisibleOptions,
+    activeIndex,
+    setActiveIndex,
+    handleSelect,
+    handleClose,
+    hasChildren: Boolean(children),
+  });
 
   useDismissKeyboardOnOpen(isOpen, isMobile);
 
@@ -1602,6 +1657,7 @@ export function Combobox({
       isOpen={isOpen}
       handleClose={handleClose}
       handleDesktopKey={handleDesktopKey}
+      onOverlayKeyDown={onOverlayKeyDown}
       refs={refs}
       shouldUseDesktopFade={shouldUseDesktopFade}
       desktopFrameStyle={desktopFrameStyle}
