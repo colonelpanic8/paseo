@@ -38,6 +38,7 @@ describe("sidebar view store", () => {
       hostFilters: [],
       projectFilters: [],
       labelFilter: { labels: [] },
+      statusHiddenHosts: [],
     });
   });
 
@@ -92,6 +93,7 @@ describe("sidebar view store", () => {
       hostFilters: [],
       projectFilters: [],
       labelFilter: { labels: [] },
+      statusHiddenHosts: [],
     });
   });
 
@@ -108,6 +110,7 @@ describe("sidebar view store", () => {
       hostFilters: ["host-a"],
       projectFilters: [],
       labelFilter: { labels: [] },
+      statusHiddenHosts: [],
     });
   });
 
@@ -124,6 +127,7 @@ describe("sidebar view store", () => {
       hostFilters: ["host-a", "host-b"],
       projectFilters: [],
       labelFilter: { labels: [] },
+      statusHiddenHosts: [],
     });
   });
 
@@ -140,6 +144,7 @@ describe("sidebar view store", () => {
       groupMode: "status",
       hostFilters: ["host-a"],
       labelFilter: { labels: [] },
+      statusHiddenHosts: [],
     });
   });
 
@@ -236,7 +241,15 @@ describe("sidebar view store", () => {
       hostFilters: ["host-a"],
       projectFilters: ["project-a", "project-b"],
       labelFilter: { labels: [] },
+      statusHiddenHosts: [],
     });
+  });
+
+  it("carries hidden status hosts through the version migration", () => {
+    expect(
+      migrateSidebarViewState({ groupMode: "status", statusHiddenHosts: ["host-b"] })
+        .statusHiddenHosts,
+    ).toEqual(["host-b"]);
   });
 
   it("never keeps project filters from state the schema rejects", () => {
@@ -247,6 +260,7 @@ describe("sidebar view store", () => {
       hostFilters: [],
       projectFilters: [],
       labelFilter: { labels: [] },
+      statusHiddenHosts: [],
     });
   });
 
