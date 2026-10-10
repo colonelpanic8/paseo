@@ -43,6 +43,8 @@ export interface SidebarProjectionInput {
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
+  /** Pinned rows are exempt: pinning is an explicit ask to see a workspace in every mode. */
+  statusHiddenHosts: readonly string[];
   pinnedCollapsed: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
@@ -100,9 +102,15 @@ function buildWorkspaceGroups(
   switch (input.groupMode) {
     case "project":
       return [];
-    case "status":
+    case "status": {
+      const hidden = new Set(input.statusHiddenHosts);
+      const workspaces =
+        hidden.size > 0
+          ? unpinnedWorkspaces.filter((workspace) => !hidden.has(workspace.serverId))
+          : unpinnedWorkspaces;
       return statusWorkspaceGroups(
-        buildStatusGroups(unpinnedWorkspaces, input.projectNamesByViewKey, input.t),
+        buildStatusGroups(workspaces, input.projectNamesByViewKey, input.t),
       );
+    }
   }
 }

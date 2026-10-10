@@ -182,6 +182,13 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
   );
 
   const showHostFilter = hosts.length > 1;
+  const hasHiddenStatusHost = hosts.some((host) =>
+    preferences.statusHiddenHosts.includes(host.serverId),
+  );
+  // A mode-specific choice, so it only appears in the mode it applies to. Hiding the only host
+  // empties the view, which is why a lone host still gets the row once it is hidden.
+  const showStatusHosts =
+    preferences.grouping === "status" && (hosts.length > 1 || hasHiddenStatusHost);
   // One project is the whole sidebar, so filtering to it is a no-op with a menu row attached.
   const showProjectFilter = allProjects.length > 1;
   // Nothing to filter by means no row at all. The active-filter half is not redundant: the merged
@@ -240,6 +247,13 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
       },
     ];
 
+    if (showStatusHosts) {
+      definitions.push({
+        id: "statusHosts",
+        title: t("sidebar.display.statusHosts.label"),
+        content: <StatusHostsPage preferences={preferences} hosts={hosts} />,
+      });
+    }
     if (showHostFilter) {
       definitions.push({
         id: "hostFilter",
@@ -274,6 +288,7 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
     t,
     preferences,
     hosts,
+    showStatusHosts,
     showHostFilter,
     showProjectFilter,
     allProjects,
@@ -308,6 +323,15 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
           >
             {t("sidebar.display.grouping.label")}
           </MenuSubTrigger>
+          {showStatusHosts ? (
+            <MenuSubTrigger
+              id="statusHosts"
+              indicator={hasHiddenStatusHost}
+              testID="sidebar-display-status-hosts"
+            >
+              {t("sidebar.display.statusHosts.label")}
+            </MenuSubTrigger>
+          ) : null}
           <MenuSubTrigger
             id="titleSource"
             value={t(TITLE_SOURCE_LABEL_KEYS[preferences.titleSource])}
@@ -712,6 +736,31 @@ function HostFilterPage({
           label={host.label?.trim() || host.serverId}
           selected={preferences.hostFilters.includes(host.serverId)}
           onToggle={preferences.toggleHostFilter}
+          testIDPrefix="sidebar-host-filter"
+        />
+      ))}
+    </>
+  );
+}
+
+/** Checked means shown, so a host added later appears without being opted in. */
+function StatusHostsPage({
+  preferences,
+  hosts,
+}: {
+  preferences: Preferences;
+  hosts: ReturnType<typeof useHosts>;
+}): ReactElement {
+  return (
+    <>
+      {hosts.map((host) => (
+        <HostFilterItem
+          key={host.serverId}
+          serverId={host.serverId}
+          label={host.label?.trim() || host.serverId}
+          selected={!preferences.statusHiddenHosts.includes(host.serverId)}
+          onToggle={preferences.toggleStatusHiddenHost}
+          testIDPrefix="sidebar-status-hosts"
         />
       ))}
     </>
@@ -724,20 +773,22 @@ function HostFilterItem({
   label,
   selected,
   onToggle,
+  testIDPrefix,
 }: {
   serverId: string;
   label: string;
   selected: boolean;
   onToggle: (serverId: string) => void;
+  testIDPrefix: string;
 }): ReactElement {
   const handleSelect = useCallback(() => onToggle(serverId), [onToggle, serverId]);
   const leading = useMemo(
     () => (
-      <View testID={`sidebar-host-filter-status-${serverId}`}>
+      <View testID={`${testIDPrefix}-status-${serverId}`}>
         <HostStatusDot serverId={serverId} />
       </View>
     ),
-    [serverId],
+    [serverId, testIDPrefix],
   );
 
   return (
@@ -746,7 +797,7 @@ function HostFilterItem({
       closeOnSelect={false}
       leading={leading}
       onSelect={handleSelect}
-      testID={`sidebar-host-filter-${serverId}`}
+      testID={`${testIDPrefix}-${serverId}`}
     >
       {label}
     </MenuItem>
