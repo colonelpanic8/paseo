@@ -293,6 +293,27 @@ function PromptCacheTooltipSection({
   );
 }
 
+function RuntimeDetails({
+  modelLabel,
+  thinkingLabel,
+}: Pick<ContextWindowMeterProps, "modelLabel" | "thinkingLabel">) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {modelLabel ? (
+        <Text style={styles.runtimeDetail} testID="context-window-meter-model">
+          {t("contextWindow.model", { model: modelLabel })}
+        </Text>
+      ) : null}
+      {thinkingLabel ? (
+        <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
+          {t("contextWindow.thinking", { thinking: thinkingLabel })}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
 export function ContextWindowMeter({
   serverId,
   agentId,
@@ -366,20 +387,7 @@ export function ContextWindowMeter({
   const accessibilityLabel = context
     ? t("contextWindow.accessibility", { percentage: context.percentage })
     : t("contextWindow.accessibilityNoData");
-  const runtimeDetails = (
-    <>
-      {modelLabel ? (
-        <Text style={styles.runtimeDetail} testID="context-window-meter-model">
-          {t("contextWindow.model", { model: modelLabel })}
-        </Text>
-      ) : null}
-      {thinkingLabel ? (
-        <Text style={styles.runtimeDetail} testID="context-window-meter-thinking">
-          {t("contextWindow.thinking", { thinking: thinkingLabel })}
-        </Text>
-      ) : null}
-    </>
-  );
+  const runtimeDetails = <RuntimeDetails modelLabel={modelLabel} thinkingLabel={thinkingLabel} />;
 
   const cacheDetails = promptCache ? (
     <PromptCacheTooltipSection
