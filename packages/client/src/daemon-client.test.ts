@@ -856,6 +856,27 @@ test("passes password as HTTP bearer header and WebSocket subprotocol", async ()
   });
 });
 
+test("encodes passwords that are invalid WebSocket subprotocol tokens", async () => {
+  const mock = createMockTransport();
+  const transportFactory = vi.fn(() => mock.transport);
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    password: "base64+/=",
+    reconnect: { enabled: false },
+    transportFactory,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  expect(transportFactory).toHaveBeenCalledWith({
+    url: "ws://test",
+    headers: {},
+    protocols: ["paseo.bearer64.YmFzZTY0Ky89"],
+  });
+});
+
 test("keeps relay upgrade credentials out of the socket request", async () => {
   const mock = createMockTransport();
   const requests: Array<{ url: string; headers?: Record<string, string>; protocols?: string[] }> =
@@ -938,6 +959,7 @@ test("sends a password containing spaces in hello without an invalid WebSocket s
   expect(transportFactory).toHaveBeenCalledWith({
     url: "ws://test",
     headers: {},
+    protocols: ["paseo.bearer64.dHdvIHdvcmRz"],
   });
   expect(JSON.parse(assertStr(mock.sent[0]))).toMatchObject({
     type: "hello",
