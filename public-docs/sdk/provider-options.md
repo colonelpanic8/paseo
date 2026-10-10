@@ -91,7 +91,11 @@ await client.close();
 | `sandbox_mode`            | `read-only`, `workspace-write`, `danger-full-access`                              |
 | `sandbox_workspace_write` | `writable_roots`, `network_access`, `exclude_slash_tmp`, `exclude_tmpdir_env_var` |
 | `web_search`              | `disabled`, `cached`, `indexed`, `live`                                           |
-| `features`                | `multi_agent_v2`, `network_proxy` (boolean or a proxy/domain policy object)       |
+| `project_doc_max_bytes`   | non-negative integer                                                              |
+| `tools`                   | `experimental_request_user_input`, `update_plan` (each `{ enabled: boolean }`)    |
+| `features`                | toggles (below); `network_proxy` (boolean or a proxy/domain policy object)        |
+
+`features` also accepts boolean toggles for apps, browser/computer tools, code mode, goals, hooks, images, memories, multi-agent, plugins, permission requests, shell, skills, token budget, tool suggestions, and workspace dependencies.
 
 `approval_policy: "never"` only removes the prompts. What the agent is allowed to touch is `sandbox_mode`. Setting `never` without a sandbox mode gives an unattended agent full access.
 
