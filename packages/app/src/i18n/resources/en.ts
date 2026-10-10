@@ -1218,6 +1218,9 @@ export const en = {
         label: "Host",
         all: "All hosts",
       },
+      statusHosts: {
+        label: "Hosts in status view",
+      },
       projectFilter: {
         label: "Project",
         all: "All projects",

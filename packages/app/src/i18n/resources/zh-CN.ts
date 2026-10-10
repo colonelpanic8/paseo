@@ -1202,6 +1202,9 @@ export const zhCN: TranslationResources = {
         label: "主机",
         all: "所有主机",
       },
+      statusHosts: {
+        label: "状态视图中的主机",
+      },
       projectFilter: {
         label: "项目",
         all: "所有项目",

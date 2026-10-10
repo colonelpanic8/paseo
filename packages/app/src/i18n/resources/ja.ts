@@ -1223,6 +1223,9 @@ export const ja: TranslationResources = {
         label: "ホスト",
         all: "すべてのホスト",
       },
+      statusHosts: {
+        label: "ステータス表示のホスト",
+      },
       projectFilter: {
         label: "プロジェクト",
         all: "すべてのプロジェクト",

@@ -1218,6 +1218,9 @@ export const ko: TranslationResources = {
         label: "호스트",
         all: "모든 호스트",
       },
+      statusHosts: {
+        label: "상태 보기의 호스트",
+      },
       projectFilter: {
         label: "프로젝트",
         all: "모든 프로젝트",

@@ -1227,6 +1227,9 @@ export const ru: TranslationResources = {
         label: "Хост",
         all: "Все хосты",
       },
+      statusHosts: {
+        label: "Хосты в режиме статуса",
+      },
       projectFilter: {
         label: "Проект",
         all: "Все проекты",

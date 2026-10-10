@@ -1210,6 +1210,9 @@ export const ar: TranslationResources = {
         label: "المضيف",
         all: "كل المضيفين",
       },
+      statusHosts: {
+        label: "المضيفون في عرض الحالة",
+      },
       projectFilter: {
         label: "المشروع",
         all: "كل المشاريع",
