@@ -2417,6 +2417,10 @@ export const fr: TranslationResources = {
         queueMessage: "Mettre le message en file d’attente",
         muteUnmuteVoiceMode: "Couper/réactiver le micro en mode vocal",
         switchProject: "Changer de projet",
+        toggleWorkspaceIsolation: "Basculer l'isolation de l'espace de travail",
+        selectHost: "Sélectionner l'hôte",
+        toggleFastMode: "Activer/désactiver le mode rapide",
+        togglePlanMode: "Activer/désactiver le mode planification",
       },
       helpNotes: {
         showKeyboardShortcuts:
