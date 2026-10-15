@@ -1243,6 +1243,9 @@ export const ptBR: TranslationResources = {
         label: "Host",
         all: "Todos os hosts",
       },
+      statusHosts: {
+        label: "Hosts na visão de status",
+      },
       projectFilter: {
         label: "Projeto",
         all: "Todos os projetos",
