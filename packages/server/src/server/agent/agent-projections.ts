@@ -213,6 +213,15 @@ function buildStoredPersistenceHandle(
   return toPublicPersistenceHandle(toAgentPersistenceHandle(validProviders, record.persistence));
 }
 
+function storedFailureFields(
+  record: StoredAgentRecord,
+): Pick<AgentSnapshotPayload, "lastError" | "lastFailure"> {
+  return {
+    ...(typeof record.lastError === "string" ? { lastError: record.lastError } : {}),
+    ...(record.lastFailure ? { lastFailure: { ...record.lastFailure } } : {}),
+  };
+}
+
 /** The wire carries `internal` and `background` only when set. */
 function visibilityFlags(agent: {
   internal?: boolean;
@@ -278,8 +287,7 @@ export function buildStoredAgentPayload(
     archivedAt: record.archivedAt ?? null,
     ...visibilityFlags(record),
     labels: normalizeLabels(record.labels),
-    ...(typeof record.lastError === "string" ? { lastError: record.lastError } : {}),
-    ...(record.lastFailure ? { lastFailure: { ...record.lastFailure } } : {}),
+    ...storedFailureFields(record),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }

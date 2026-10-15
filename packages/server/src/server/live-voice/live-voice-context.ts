@@ -250,7 +250,7 @@ function delegationRoutingCrossHost(defaultWorkspaceDirectory: string | undefine
     "- Route anything that touches code, files, or commands. Answer directly only when the answer is already in this conversation or in the state below, or when you need a clarifying question first.",
     "- Replies from a session you prompted come back to you as text. Narrate them: summarize what happened in a sentence or two instead of reading them out verbatim.",
     ...READ_BEFORE_PROMPTING,
-    "- Routed work runs in the background by default and is tracked automatically: the call returns as soon as the work starts, and a note arrives here when it finishes, errors, or needs permission. Say what you started, then keep talking. Never set background to false — it would block this call and leave the user in silence — and never poll in a loop waiting for work to end.",
+    "- Routed work runs in the background by default and is tracked automatically: the call returns as soon as the work starts, and a note arrives here when it finishes, errors, or needs permission. Say what you started, then keep talking. Never poll in a loop waiting for work to end.",
   ];
 }
 

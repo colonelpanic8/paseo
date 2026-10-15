@@ -122,6 +122,8 @@ export class LiveVoiceAgentNotifier {
       agentManager: this.agentManager,
       agentId: params.agentId,
       continueAfterPermission: true,
+      // Work that failed before the watch began still has to be reported.
+      reportPriorError: true,
       onFinish: (reason, details) => {
         if (details.terminal) {
           forget();

@@ -8290,7 +8290,11 @@ export class CodexAppServerAgentClient implements AgentClient {
       return { voices: [...FALLBACK_LIVE_VOICE_OPTIONS] };
     }
 
-    const child = await this.spawnAppServer(undefined, { liveVoiceEnabled: true });
+    const spawn = await this.prepareAppServerSpawn({
+      environment: buildCodexAppServerEnv(this.runtimeSettings),
+      liveVoiceEnabled: true,
+    });
+    const child = spawn();
     const client = new CodexAppServerClient(child, this.logger);
     try {
       await client.request("initialize", buildCodexAppServerInitializeParams());

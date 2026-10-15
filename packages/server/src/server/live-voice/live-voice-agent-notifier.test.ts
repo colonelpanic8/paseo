@@ -47,12 +47,23 @@ function createFakeAgents(initialLifecycle: Lifecycle = "running") {
       authenticationRequired = true;
     },
     transition(next: Lifecycle) {
+      const previous = lifecycle;
       lifecycle = next;
       for (const subscriber of Array.from(subscribers)) {
         subscriber({
           type: "agent_state",
           agent: { id: "agent-1", lifecycle: next, pendingPermissions },
         } as never);
+      }
+      // The manager publishes idle before the turn's terminal stream event.
+      if (previous === "running" && next === "idle") {
+        for (const subscriber of Array.from(subscribers)) {
+          subscriber({
+            type: "agent_stream",
+            agentId: "agent-1",
+            event: { type: "turn_completed", turnId: "turn-1" },
+          } as never);
+        }
       }
     },
     requestPermission() {
