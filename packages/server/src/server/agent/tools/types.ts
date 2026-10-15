@@ -15,6 +15,14 @@ export interface PaseoToolResult {
 export interface PaseoToolConfig {
   title?: string;
   description?: string;
+  /**
+   * The tool observes state without changing it — MCP's `readOnlyHint`, kept on
+   * the definition so read-ness is declared where the tool is written. The Live
+   * Voice all-hosts fan-out allowlist must stay equal to the set of tools tagged
+   * here; a test enforces that, so tagging a new read tool is the deliberate
+   * "this may fan out" decision.
+   */
+  readOnly?: boolean;
   inputSchema?: z.ZodRawShape | z.ZodType;
   outputSchema?: z.ZodRawShape;
 }
@@ -40,6 +48,13 @@ export interface PaseoToolRuntimeContext {
   paseoToolPolicy?: ProviderPaseoToolsPolicy;
   enableVoiceTools?: boolean;
   voiceOnly?: boolean;
+  /**
+   * Called when a tool leaves an agent working in the background, so a caller
+   * that has no agent identity of its own (a routed Live Voice call) can still
+   * learn how that work ends. Tools own the knowledge of which of them start
+   * work; nothing outside has to guess from tool names or results.
+   */
+  onBackgroundAgentStarted?: (params: { agentId: string }) => void;
 }
 
 export type PaseoToolCatalogFactory = (
