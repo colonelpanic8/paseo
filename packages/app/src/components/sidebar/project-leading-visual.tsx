@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, CircleAlert } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { getStatusBucketLabel } from "@/hooks/sidebar-status-view-model";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { densityIconBox, densityIconProps } from "@/styles/density";
+import type { Theme } from "@/styles/theme";
 import type { SidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-model";
 import {
   getProjectStatusBadgeContent,

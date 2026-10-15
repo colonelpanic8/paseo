@@ -25,7 +25,7 @@ import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
 import { StyleSheet } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { density, densityIconBox, densityIconProps } from "@/styles/density";
 import { withUnistyles } from "react-native-unistyles";
 import {
   ChevronDown,
@@ -74,7 +74,7 @@ import {
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { SidebarStatusRowSnoozeAction } from "@/components/sidebar/sidebar-status-row-snooze-action";
 import { useWorkspaceSnoozeMenu } from "@/workspace-snooze/use-workspace-snooze-menu";
-import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
+import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { SidebarFilterEmptyState } from "@/components/sidebar/empty-states";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -111,13 +111,15 @@ const needsInputGroupIconProps = densityIconProps("sm", (theme) => ({
 }));
 const failedGroupIconProps = densityIconProps("sm", (theme) => ({
   color: getStatusDotColor({ theme, bucket: "failed" }) ?? undefined,
-});
-const runningColorMapping = (theme: Theme) => ({
+}));
+const runningGroupIconProps = densityIconProps("sm", (theme) => ({
   color: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
-});
+}));
 // Snoozed is not a status-dot bucket -- it is a sidebar state, not an agent one -- so it
 // takes the palette directly rather than going through the producer.
-const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
+const snoozedGroupIconProps = densityIconProps("sm", (theme) => ({
+  color: theme.colors.palette.blue[500],
+}));
 const STATUS_ROW_ENTERING = sidebarRowEnter;
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
@@ -166,6 +168,7 @@ export function SidebarStatusWorkspaceList({
   listHeaderComponent,
   dragGestureHostActive,
 }: StatusWorkspaceListProps) {
+  const { t } = useTranslation();
   // One clock invalidates every visible status row together. Rows receive the
   // minute explicitly so memoization cannot retain a stale relative label.
   const activityNow = useMinuteNow();
@@ -253,7 +256,12 @@ export function SidebarStatusWorkspaceList({
       <LayoutAnimationConfig skipEntering>
         {pinnedWorkspaces.length > 0 ? (
           <View style={styles.pinnedSection} testID="sidebar-pinned-section">
-            <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
+            <SidebarSectionHeader
+              title={t("sidebar.pinned.title")}
+              collapsed={pinnedCollapsed}
+              onToggle={togglePinnedCollapsed}
+              testID="sidebar-pinned-section-header"
+            />
             {pinnedCollapsed ? null : (
               <>
                 <DraggableList
@@ -533,13 +541,13 @@ function StatusGroupIcon({ bucket }: { bucket: StatusGroup["bucket"] }) {
     case "needs_input":
       return <ThemedCircleAlert uniProps={needsInputGroupIconProps} />;
     case "failed":
-      return <ThemedCircleX size={14} uniProps={failedColorMapping} />;
+      return <ThemedCircleX uniProps={failedGroupIconProps} />;
     case "running":
       return <ThemedCircleDot uniProps={runningGroupIconProps} />;
     case "done":
-      return <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />;
+      return <ThemedCircleCheck uniProps={mutedGroupIconProps} />;
     case "snoozed":
-      return <ThemedMoon size={14} uniProps={blueColorMapping} />;
+      return <ThemedMoon uniProps={snoozedGroupIconProps} />;
   }
 }
 

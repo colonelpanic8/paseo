@@ -206,6 +206,7 @@ const WorkspaceAutomationSummarySchema = z.object({
   // against the clock, so it flips back to false on its own at the wake time.
   snoozed: z.boolean(),
   snoozeStatus: WorkspaceSnoozeStatusSummarySchema.nullable(),
+  background: z.boolean().optional(),
 });
 
 function toWorkspaceAutomationSummary(workspace: PersistedWorkspaceRecord, now: Date = new Date()) {
@@ -218,6 +219,7 @@ function toWorkspaceAutomationSummary(workspace: PersistedWorkspaceRecord, now: 
     title: workspace.title,
     snoozed: isWorkspaceSnoozed(workspace.snoozeStatus, now),
     snoozeStatus: workspace.snoozeStatus,
+    background: workspace.background,
   };
 }
 
@@ -1377,7 +1379,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       title: "List workspaces",
       description:
         "List active workspaces, including snoozed ones. Each entry carries snoozed (true while the snooze is still in effect) and snoozeStatus ({ snoozedAt, snoozedUntil }).",
-      inputSchema: {},
+      inputSchema: { includeBackground: z.boolean().optional().default(false) },
       outputSchema: { workspaces: z.array(WorkspaceAutomationSummarySchema) },
     },
     async ({ includeBackground = false }) => {
@@ -1386,7 +1388,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       }
       const now = new Date();
       const workspaces = (await options.workspaceRegistry.list())
-        .filter((workspace) => !workspace.archivedAt)
+        .filter(
+          (workspace) => !workspace.archivedAt && (includeBackground || !workspace.background),
+        )
         .map((workspace) => toWorkspaceAutomationSummary(workspace, now));
       return {
         content: [],

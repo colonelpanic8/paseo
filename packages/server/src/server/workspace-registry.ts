@@ -110,6 +110,8 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
+  // Public discovery visibility. Contents retain their ordinary lifecycle.
+  background: z.boolean().optional().default(false),
 });
 
 export type PersistedProjectRecord = z.infer<typeof PersistedProjectRecordSchema>;
@@ -693,6 +695,7 @@ export function createPersistedWorkspaceRecord(input: {
   labels?: string[];
   untrustedSource?: UntrustedWorkspaceSource;
   snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
+  background?: boolean;
 }): PersistedWorkspaceRecord {
   const { background, ...rest } = input;
   return PersistedWorkspaceRecordSchema.parse({

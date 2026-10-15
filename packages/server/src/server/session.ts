@@ -64,8 +64,8 @@ import {
   sendPromptToAgent,
   waitForAgentRunStartWithTimeout,
   unarchiveAgentState,
-  isSystemInjectedEnvelope,
 } from "./agent/agent-prompt.js";
+import { isSystemInjectedEnvelope } from "./agent/agent-messages/index.js";
 import {
   resolveCreateAgentTitles,
   resolveFirstAgentPromptTitle,
@@ -1190,7 +1190,7 @@ export class Session {
       logger: this.sessionLogger,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
-      listAgentPayloads: () => this.listAgentPayloads(),
+      listAgentPayloads: () => this.listAgentPayloads({ includeBackground: true }),
       listAgentActivityAt: () => this.listAgentActivityAt(),
       listProviderSubagentActivity: async () => this.agentManager.listProviderSubagentActivity(),
       listTerminalActivityContributions: () => this.listTerminalActivityContributions(),

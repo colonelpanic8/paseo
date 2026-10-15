@@ -251,12 +251,7 @@ export class WorkspaceDirectory {
         .filter((project) => !project.archivedAt)
         .map((project) => [project.projectId, project] as const),
     );
-    const archivedProjectIds = new Set(
-      persistedProjects.filter((project) => project.archivedAt).map((project) => project.projectId),
-    );
-    const activeRecords = persistedWorkspaces.filter(
-      (workspace) => !workspace.archivedAt && !archivedProjectIds.has(workspace.projectId),
-    );
+    const activeRecords = activeWorkspaceRecords(persistedWorkspaces, persistedProjects);
     const descriptorsByWorkspaceId = new Map<string, WorkspaceDescriptorPayload>();
     const workspaceIds = options.workspaceIds ? new Set(options.workspaceIds) : null;
     const activeWorkspaceIds = new Set(activeRecords.map((workspace) => workspace.workspaceId));
@@ -653,6 +648,8 @@ export class WorkspaceDirectory {
     }));
   }
 
+  // Every active workspace, background ones included. Callers that answer a
+  // listing go through matchesFilter so background workspaces stay opt-in.
   async listDescriptors(): Promise<WorkspaceDescriptorPayload[]> {
     return Array.from(
       (

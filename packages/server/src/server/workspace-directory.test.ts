@@ -92,6 +92,7 @@ class WorkspaceStatus {
         workspaceDirectory: workspace.cwd,
         projectKind: "git",
         workspaceKind: workspace.kind,
+        background: workspace.background,
         name: workspace.displayName,
         archivingAt: null,
         status: "done",

@@ -4118,6 +4118,9 @@ export const WorkspaceDescriptorPayloadSchema = z
     // Set while the user has snoozed this workspace; the client derives the
     // "Snoozed" sidebar state from it. Old daemons omit the field.
     snoozeStatus: WorkspaceSnoozeStatusSchema.nullable().optional(),
+    // Retained for wire parsing of older daemon descriptors.
+    internal: z.boolean().optional(),
+    background: z.boolean().optional(),
     archivingAt: z.string().nullable().optional().default(null),
     status: WorkspaceStateBucketSchema,
     // Best-effort workspace status entry timestamp. Old daemons omit the
