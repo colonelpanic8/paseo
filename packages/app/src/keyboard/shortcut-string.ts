@@ -93,6 +93,19 @@ for (const [humanKey, mapping] of Object.entries(KEY_MAP)) {
   }
 }
 
+/**
+ * Synthesize a DOM-style `event.key` from a physical key code, for event
+ * sources (native hardware keyboards) that only report codes. Assumes a
+ * US-physical layout, which is also what the registry's combos are written in.
+ */
+export function shortcutKeyFromCode(code: string, shift: boolean): string | undefined {
+  const humanKey = CODE_TO_KEY[code];
+  if (!humanKey) return undefined;
+  const mapping = KEY_MAP[humanKey];
+  if (shift && mapping.shiftedKey !== undefined) return mapping.shiftedKey;
+  return mapping.key;
+}
+
 export function parseShortcutString(s: string): KeyCombo {
   const parts = s.split("+");
   if (parts.length === 0 || parts.some((p) => p === "")) {
@@ -244,7 +257,21 @@ export function chordStringToShortcutKeys(s: string): ShortcutKey[][] {
   return s.split(" ").map(comboStringToShortcutKeys);
 }
 
-export function heldModifiersFromEvent(event: KeyboardEvent): string | null {
+/**
+ * Structural subset of KeyboardEvent used for combo capture, so native
+ * hardware key events (which carry the same fields) can share the logic.
+ */
+export interface ComboKeyEventLike {
+  code: string;
+  /** Native hardware key events report only the code; capture then falls back to it. */
+  key?: string;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+}
+
+export function heldModifiersFromEvent(event: ComboKeyEventLike): string | null {
   const parts: string[] = [];
   if (event.ctrlKey) parts.push("Ctrl");
   if (event.altKey) parts.push("Alt");
@@ -262,7 +289,7 @@ export function isModifierKeyCode(code: string): boolean {
   return MODIFIER_CODES.has(code);
 }
 
-export function keyboardEventToComboString(event: KeyboardEvent): string | null {
+export function keyboardEventToComboString(event: ComboKeyEventLike): string | null {
   if (isModifierKeyCode(event.code)) {
     return null;
   }
@@ -276,13 +303,16 @@ export function keyboardEventToComboString(event: KeyboardEvent): string | null 
 
   // Capture the same logical character that dispatch matches. Keep the code
   // fallback for named keys and Option combinations whose key is rewritten.
-  const eventKey = event.key.toLowerCase();
-  const logicalKey = Object.entries(KEY_MAP).find(
-    ([, mapping]) =>
-      mapping.key?.length === 1 &&
-      (mapping.key.toLowerCase() === eventKey ||
-        (event.shiftKey && mapping.shiftedKey === event.key)),
-  )?.[0];
+  const { key } = event;
+  const logicalKey =
+    key === undefined
+      ? undefined
+      : Object.entries(KEY_MAP).find(
+          ([, mapping]) =>
+            mapping.key?.length === 1 &&
+            (mapping.key.toLowerCase() === key.toLowerCase() ||
+              (event.shiftKey && mapping.shiftedKey === key)),
+        )?.[0];
   const humanKey = logicalKey ?? CODE_TO_KEY[event.code];
   if (humanKey) {
     parts.push(humanKey);
