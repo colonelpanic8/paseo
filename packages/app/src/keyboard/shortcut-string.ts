@@ -255,6 +255,8 @@ export function chordStringToShortcutKeys(s: string): ShortcutKey[][] {
  */
 export interface ComboKeyEventLike {
   code: string;
+  /** Native hardware key events report only the code; capture then falls back to it. */
+  key?: string;
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
@@ -293,13 +295,16 @@ export function keyboardEventToComboString(event: ComboKeyEventLike): string | n
 
   // Capture the same logical character that dispatch matches. Keep the code
   // fallback for named keys and Option combinations whose key is rewritten.
-  const eventKey = event.key.toLowerCase();
-  const logicalKey = Object.entries(KEY_MAP).find(
-    ([, mapping]) =>
-      mapping.key?.length === 1 &&
-      (mapping.key.toLowerCase() === eventKey ||
-        (event.shiftKey && mapping.shiftedKey === event.key)),
-  )?.[0];
+  const { key } = event;
+  const logicalKey =
+    key === undefined
+      ? undefined
+      : Object.entries(KEY_MAP).find(
+          ([, mapping]) =>
+            mapping.key?.length === 1 &&
+            (mapping.key.toLowerCase() === key.toLowerCase() ||
+              (event.shiftKey && mapping.shiftedKey === key)),
+        )?.[0];
   const humanKey = logicalKey ?? CODE_TO_KEY[event.code];
   if (humanKey) {
     parts.push(humanKey);
