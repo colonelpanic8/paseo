@@ -588,8 +588,12 @@ test("concurrent session APIs share one reconnect after an idle provider exit", 
   ];
   let spawnCount = 0;
   let releaseReconnect: (() => void) | undefined;
+  let markReconnectSpawned: (() => void) | undefined;
   const reconnectGate = new Promise<void>((resolve) => {
     releaseReconnect = resolve;
+  });
+  const reconnectSpawned = new Promise<void>((resolve) => {
+    markReconnectSpawned = resolve;
   });
   const session = new CodexAppServerAgentSession(
     { provider: "codex", cwd: workdir, modeId: "auto", model: "gpt-5.4" },
@@ -602,6 +606,7 @@ test("concurrent session APIs share one reconnect after an idle provider exit", 
       }
       spawnCount += 1;
       if (spawnCount > 1) {
+        markReconnectSpawned?.();
         await reconnectGate;
       }
       return appServer.child;
@@ -614,12 +619,13 @@ test("concurrent session APIs share one reconnect after an idle provider exit", 
 
     const runtimeInfo = session.getRuntimeInfo();
     const turnStart = session.startTurn("continue after reconnect");
-    const reconnectSpawnCount = spawnCount - 1;
+    await reconnectSpawned;
+    expect(spawnCount).toBe(2);
     releaseReconnect?.();
 
     await expect(runtimeInfo).resolves.toMatchObject({ provider: "codex" });
     await expect(turnStart).resolves.toMatchObject({ turnId: expect.any(String) });
-    expect(reconnectSpawnCount).toBe(1);
+    expect(spawnCount).toBe(2);
   } finally {
     releaseReconnect?.();
     await session.close();
