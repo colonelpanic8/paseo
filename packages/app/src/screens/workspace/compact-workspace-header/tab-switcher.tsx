@@ -131,6 +131,7 @@ interface MobileWorkspaceTabSwitcherProps {
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
+  onCopyConversation: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
@@ -152,6 +153,7 @@ function MobileWorkspaceTabOption({
   active,
   onPress,
   onCopyResumeCommand,
+  onCopyConversation,
   onCopyAgentId,
   onCopyTerminalId,
   onCopyFilePath,
@@ -171,6 +173,7 @@ function MobileWorkspaceTabOption({
   active: boolean;
   onPress: () => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
+  onCopyConversation: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
@@ -184,6 +187,7 @@ function MobileWorkspaceTabOption({
   const { t } = useTranslation();
   const tabMenuLabels = useMemo<WorkspaceTabMenuLabels>(
     () => ({
+      copyConversation: t("workspace.tabs.menu.copyConversation"),
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
       copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
@@ -208,6 +212,7 @@ function MobileWorkspaceTabOption({
     tabCount,
     menuTestIDBase,
     onCopyResumeCommand,
+    onCopyConversation,
     onCopyAgentId,
     onCopyTerminalId,
     onCopyFilePath,
@@ -280,6 +285,7 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
   onCreateDraftTab,
   onCreateTerminal,
   onCopyResumeCommand,
+  onCopyConversation,
   onCopyAgentId,
   onCopyTerminalId,
   onCopyFilePath,
@@ -402,6 +408,7 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
           active={active}
           onPress={onPress}
           onCopyResumeCommand={onCopyResumeCommand}
+          onCopyConversation={onCopyConversation}
           onCopyAgentId={onCopyAgentId}
           onCopyTerminalId={onCopyTerminalId}
           onCopyFilePath={onCopyFilePath}
@@ -421,6 +428,7 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
       normalizedServerId,
       normalizedWorkspaceId,
       onCopyResumeCommand,
+      onCopyConversation,
       onCopyAgentId,
       onCopyTerminalId,
       onCopyFilePath,
