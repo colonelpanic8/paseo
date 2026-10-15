@@ -25,6 +25,13 @@ export function hasActiveMessageSubmission(
   );
 }
 
+/** Alias carried by the selectors topic; folded in when that topic lands upstream. */
+export function hasActiveMessageSubmissions(
+  submissions: readonly MessageSubmissionRecord[] | null | undefined,
+): boolean {
+  return hasActiveMessageSubmission(submissions);
+}
+
 export function getSendingClientMessageIds(
   submissions: readonly MessageSubmissionRecord[] | null | undefined,
 ): string[] {
