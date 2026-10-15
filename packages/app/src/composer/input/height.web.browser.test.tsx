@@ -14,6 +14,7 @@ interface Mounted {
   latest: () => ComposerHeightResult;
   textRef: { current: string };
   setValue: (value: string) => void;
+  setPresentation: (presentationKey: boolean) => void;
 }
 
 const mounted: Mounted[] = [];
@@ -45,14 +46,18 @@ const TEXTAREA_STYLE: React.CSSProperties = {
   overflow: "hidden",
 };
 
+const ALTERNATE_PRESENTATION_STYLE: React.CSSProperties = { lineHeight: "48px" };
+
 function Probe({
   textRef,
   sink,
   textareaRef,
+  presentationKey,
 }: {
   textRef: { current: string };
   sink: ResultSink;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  presentationKey: boolean;
 }) {
   // The composer holds live text in a ref and reports every edit through onTextChange, so the
   // hook reads the text through a stable getter rather than a prop.
@@ -62,11 +67,16 @@ function Probe({
     textareaRef,
     minHeight: MIN_HEIGHT,
     maxHeight: MAX_HEIGHT,
+    presentationKey,
   });
   sink.record(result);
   const style = React.useMemo(
-    () => ({ ...TEXTAREA_STYLE, height: measuredHeight(result) }),
-    [result],
+    () => ({
+      ...TEXTAREA_STYLE,
+      ...(presentationKey ? ALTERNATE_PRESENTATION_STYLE : null),
+      height: measuredHeight(result),
+    }),
+    [presentationKey, result],
   );
   return <textarea ref={textareaRef} value={textRef.current} readOnly style={style} />;
 }
@@ -76,8 +86,16 @@ function renderProbe(
   textRef: { current: string },
   sink: ResultSink,
   textareaRef: React.RefObject<HTMLTextAreaElement | null>,
+  presentationKey = false,
 ): void {
-  root.render(<Probe textRef={textRef} sink={sink} textareaRef={textareaRef} />);
+  root.render(
+    <Probe
+      textRef={textRef}
+      sink={sink}
+      textareaRef={textareaRef}
+      presentationKey={presentationKey}
+    />,
+  );
 }
 
 function mountProbe(): Mounted {
@@ -87,6 +105,7 @@ function mountProbe(): Mounted {
   const textareaRef = React.createRef<HTMLTextAreaElement | null>();
   const sink = createResultSink();
   const textRef = { current: "" };
+  let presentationKey = false;
   act(() => renderProbe(root, textRef, sink, textareaRef));
   const textarea = container.querySelector("textarea");
   if (!textarea) throw new Error("Probe did not render a textarea");
@@ -101,7 +120,12 @@ function mountProbe(): Mounted {
         const result = sink.latest();
         if (result.mode === "measured") result.onTextChange(textRef.current, value);
         textRef.current = value;
-        renderProbe(root, textRef, sink, textareaRef);
+        renderProbe(root, textRef, sink, textareaRef, presentationKey);
+      }),
+    setPresentation: (nextKey) =>
+      act(() => {
+        presentationKey = nextKey;
+        renderProbe(root, textRef, sink, textareaRef, presentationKey);
       }),
   };
   mounted.push(entry);
@@ -177,6 +201,15 @@ describe("useComposerHeight on web", () => {
     } finally {
       window.getComputedStyle = originalGetComputedStyle;
     }
+  });
+
+  it("re-measures with the new typography when the presentation changes", () => {
+    const probe = mountProbe();
+    probe.setValue("one\ntwo\nthree");
+    const inlineHeight = measuredHeight(probe.latest());
+
+    probe.setPresentation(true);
+    expect(measuredHeight(probe.latest())).toBeGreaterThan(inlineHeight);
   });
 
   it("re-measures after the textarea changes width", async () => {
