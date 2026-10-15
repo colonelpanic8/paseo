@@ -57,7 +57,8 @@ export class PiCliRuntime implements PiRuntime {
       runtimeSettings: this.options.runtimeSettings,
       session: input,
     });
-    launch.env = createExternalProcessEnv(globalThis.process.env, launch.env ?? {});
+    const environment = createExternalProcessEnv(globalThis.process.env, launch.env ?? {});
+    launch.env = environment;
     const [command, ...args] = launch.argv;
     const processLaunch: JsonlRpcLaunch = {
       command,
@@ -78,7 +79,7 @@ export class PiCliRuntime implements PiRuntime {
       await process.close(input.signal.reason);
       input.signal.throwIfAborted();
     }
-    return new PiCliRuntimeSession(process, this.commandsRpcName, launch.env);
+    return new PiCliRuntimeSession(process, this.commandsRpcName, environment);
   }
 }
 
