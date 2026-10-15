@@ -1,5 +1,6 @@
 import {
   IDENTITY_COLOR_NAMES,
+  deriveIdentityColorName,
   identityColor,
   type IdentityColorName,
 } from "@/styles/identity-colors";
@@ -70,6 +71,28 @@ export function normalizeStoredHostAppearance(value: unknown): HostAppearance {
   return result.success ? result.data : defaultHostAppearance();
 }
 
+/**
+ * The color a host has before any device chooses: what the host declares for itself, else one
+ * derived from the server id. Both are the same on every device, so hosts line up across
+ * clients without anyone configuring anything.
+ */
+export function resolveHostDefaultColor(input: {
+  serverId: string;
+  declaredColor: IdentityColorName | null;
+}): IdentityColorName {
+  return input.declaredColor ?? deriveIdentityColorName(input.serverId);
+}
+
+export function resolveHostColor(input: {
+  serverId: string;
+  appearance: HostAppearance;
+  declaredColor: IdentityColorName | null;
+}): Exclude<HostColor, "none"> {
+  return input.appearance.color === "none"
+    ? resolveHostDefaultColor(input)
+    : input.appearance.color;
+}
+
 export function resolveHostBadgeDisplay(input: {
   appearance: HostAppearance;
   isLocalHost: boolean;
@@ -91,11 +114,14 @@ export function resolveHostBadgeDisplay(input: {
 export interface HostBadgeModel {
   serverId: string;
   label: string;
-  color: HostColor;
+  color: Exclude<HostColor, "none">;
   showLabel: boolean;
 }
 
-export type HostAppearanceSource = Pick<HostProfile, "serverId" | "label" | "appearance">;
+export type HostAppearanceSource = Pick<
+  HostProfile,
+  "serverId" | "label" | "appearance" | "declaredColor"
+>;
 
 /**
  * The sidebar's whole host-badge decision, resolved once per host list. Rows look their
@@ -126,7 +152,7 @@ export function selectHostBadges(input: {
     badges.set(host.serverId, {
       serverId: host.serverId,
       label: host.label.trim() || host.serverId,
-      color: host.appearance.color,
+      color: resolveHostColor(host),
       showLabel: display === "name",
     });
   }
