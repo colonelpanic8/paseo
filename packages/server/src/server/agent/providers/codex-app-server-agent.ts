@@ -3709,6 +3709,10 @@ function toCodexTextInput(text: string): Extract<CodexAppServerUserInput, { type
   };
 }
 
+function restoredAsyncQuestions(handle: { metadata?: Record<string, unknown> } | null) {
+  return new CodexAsyncQuestions(handle?.metadata?.asyncQuestions);
+}
+
 export function buildCodexAppServerEnv(
   runtimeSettings?: ProviderRuntimeSettings,
   launchEnv?: ProcessEnvRecord,
@@ -3988,7 +3992,7 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
       validateProviderOptions("codex", CodexProviderOptionsSchema, config.providerOptions) ?? {};
     this.config = config;
     this.harnessEnvironment = deps.environment ?? buildCodexAppServerEnv();
-    this.asyncQuestions = new CodexAsyncQuestions(resumeHandle?.metadata?.asyncQuestions);
+    this.asyncQuestions = restoredAsyncQuestions(resumeHandle);
     this.codexHome = deps.codexHome ?? resolveCodexHomeDir(process.env);
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
     this.serviceTier = readCodexServiceTier(this.config.featureValues);
@@ -6842,14 +6846,14 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
         return;
       }
       const isFirstDeltaForItem = prev.length === 0;
-      const timelineItem: AgentTimelineItem = {
-        type: "assistant_message",
+      const timelineItem: AgentTimelineItem = assistantMessageWithQuestions({
         messageId: parsed.itemId,
         text:
           isFirstDeltaForItem && this.pendingAssistantMessageBoundary
             ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
             : parsed.delta,
-      };
+        questions,
+      });
       this.stampActiveTurnAttribution(timelineItem);
       this.emitEvent({
         type: "timeline",
