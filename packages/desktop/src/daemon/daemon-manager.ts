@@ -11,7 +11,10 @@ import {
   readLocalCredentialForTarget,
   type DaemonInstance,
 } from "@getpaseo/server/daemon-control";
-import { DEFAULT_DAEMON_LOG_FILENAME, resolveDaemonLogPath } from "@getpaseo/server/daemon-log-path";
+import {
+  DEFAULT_DAEMON_LOG_FILENAME,
+  resolveDaemonLogPath,
+} from "@getpaseo/server/daemon-log-path";
 import { loadPersistedConfig } from "@getpaseo/server/configuration";
 import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server/paths";
 import {

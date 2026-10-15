@@ -295,7 +295,7 @@ export function useKeyboardShortcuts({
         pathname,
         isMobile,
         sidebarShortcutTargets: store.sidebarShortcutWorkspaceTargets,
-          readyWaitingWorkspaceTargets: store.readyWaitingWorkspaceTargets,
+        readyWaitingWorkspaceTargets: store.readyWaitingWorkspaceTargets,
         navigationActiveWorkspace:
           keyboardWorkspaceSelectionRef.current ?? activeWorkspaceSelection,
         commandCenterOpen: store.commandCenterOpen,
@@ -328,6 +328,7 @@ export function useKeyboardShortcuts({
     return { handled, performed: shortcutAction };
   };
 
+  // oxlint-disable-next-line complexity
   const resolveAndPerformShortcut = (input: {
     event: KeyboardShortcutInput;
     focusScope: KeyboardFocusScope;
@@ -419,6 +420,7 @@ export function useKeyboardShortcuts({
   // The window listeners must outlive ordinary re-renders: removing them resets
   // any in-progress chord. Stable events let them read the latest render instead
   // of being re-registered whenever a route, callback, or selection changes.
+  // oxlint-disable-next-line complexity
   const handleKeyDown = useStableEvent((event: KeyboardEvent) => {
     if (!shouldHandle()) {
       return;
