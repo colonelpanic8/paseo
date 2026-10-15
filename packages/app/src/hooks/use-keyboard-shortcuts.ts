@@ -14,6 +14,7 @@ import {
   type ChordState,
   type KeyboardShortcutInput,
   resolveKeyboardShortcut,
+  buildCommandShortcutBindings,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
   isShortcutModifierDown,
@@ -47,6 +48,10 @@ import {
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
+import {
+  useCommandCenterContributions,
+  useCommandCenterShortcutRunner,
+} from "@/command-center/provider";
 
 const HOLD_MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 
@@ -72,10 +77,24 @@ export function useKeyboardShortcuts({
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
-  const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
-  const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
+  const commandCenterSnapshot = useCommandCenterContributions();
+  const runCommandCenterShortcut = useCommandCenterShortcutRunner();
   const isDesktopApp = getIsElectronRuntime();
   const isMac = getShortcutOs() === "mac";
+  const bindings = useMemo(() => {
+    const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
+      contribution.shortcutId ? [contribution.shortcutId] : [],
+    );
+    const effectiveBindings = buildEffectiveBindings(overrides);
+    return [
+      ...effectiveBindings,
+      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings, {
+        isMac,
+        isDesktop: isDesktopApp,
+      }),
+    ];
+  }, [commandCenterSnapshot.contributions, isDesktopApp, isMac, overrides]);
+  const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
     step: 0,
@@ -321,6 +340,14 @@ export function useKeyboardShortcuts({
     }
 
     releaseHeldShortcut();
+    if (result.match.commandShortcutId) {
+      const handled = runCommandCenterShortcut(result.match.commandShortcutId);
+      if (handled && input.domEvent) {
+        if (result.match.preventDefault) input.domEvent.preventDefault();
+        if (result.match.stopPropagation) input.domEvent.stopPropagation();
+      }
+      return;
+    }
     const { handled, performed } = routeAndPerformShortcut({
       action: result.match.action,
       payload: result.match.payload,
@@ -497,6 +524,7 @@ export function useKeyboardShortcuts({
     handleKeyUp,
     releaseHeldShortcut,
     resetModifiers,
+    runCommandCenterShortcut,
     shortcutsAvailable,
   ]);
 }
