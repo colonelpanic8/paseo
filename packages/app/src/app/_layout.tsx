@@ -121,6 +121,7 @@ import {
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
+import { flushWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { useSessionStore } from "@/stores/session-store";
 import { WorkspaceLayoutModePublisher } from "@/workspace-tabs/layout-mode-publisher";
@@ -1023,6 +1024,7 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") {
         void flushDraftPersistStorage();
+        void flushWorkspaceLayoutStore();
       }
     });
     return () => subscription.remove();
