@@ -248,6 +248,7 @@ export function createAudioEngine(
             autoGainControl: true,
           },
         });
+        refs.stream = stream;
         const source = context.createMediaStreamSource(stream);
         const processor = context.createScriptProcessor(4096, 1, 1);
         const gain = context.createGain();
