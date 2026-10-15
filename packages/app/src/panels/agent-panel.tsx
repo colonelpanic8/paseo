@@ -58,6 +58,7 @@ import {
   type AgentScreenReadySyncState,
 } from "@/hooks/use-agent-screen-state-machine";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
 import { TimelineSyncStatus } from "@/timeline/sync-status";
@@ -1595,6 +1596,7 @@ function ActiveAgentComposer({
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
 }) {
+  const screenBottomInset = useScreenBottomInset();
   const isCompactFormFactor = useIsCompactFormFactor();
   const { onLayout: onInputAreaLayout, isBelow: isCompactComposerLayout } = useContainerWidthBelow(
     COMPACT_FORM_FACTOR_WIDTH,
@@ -1669,8 +1671,12 @@ function ActiveAgentComposer({
     ],
   );
 
+  const inputAreaStyle = useMemo(
+    () => [animatedStaticStyles.inputAreaWrapper, { paddingBottom: screenBottomInset }],
+    [screenBottomInset],
+  );
   return (
-    <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
+    <View style={inputAreaStyle} onLayout={onInputAreaLayout}>
       <Composer
         agentId={agentId}
         serverId={serverId}
