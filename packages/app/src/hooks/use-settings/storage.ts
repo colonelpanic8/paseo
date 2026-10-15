@@ -399,11 +399,14 @@ export async function saveAppSettings(input: {
 export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<AppSettings> {
   try {
     const read = await readAppSettings(deps);
-    if (read.needsWrite) {
-      await writeAppSettings(deps.storage, read.stored, read.settings);
-    }
     const { needsWrite: _needsWrite, ...stored } = read.stored;
-    return await migrateAppSettings(read.settings, deps.storage, stored, { native: isNative });
+    const migrated = await migrateAppSettings(read.settings, deps.storage, stored, {
+      native: isNative,
+    });
+    if (read.needsWrite) {
+      await writeAppSettings(deps.storage, read.stored, migrated);
+    }
+    return migrated;
   } catch (error) {
     console.error("[AppSettings] Failed to load settings:", error);
     throw error;
