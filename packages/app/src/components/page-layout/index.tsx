@@ -14,6 +14,7 @@ interface PageLayoutProps {
   titleTestID?: string;
   /** Controls for the whole page: right of the title on desktop, in the back header on compact. */
   actions?: ReactNode;
+  wide?: boolean;
   children: ReactNode;
 }
 
@@ -29,6 +30,7 @@ export function PageLayout({
   titleTestID,
   actions,
   children,
+  wide = false,
 }: PageLayoutProps) {
   const isCompact = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
@@ -43,7 +45,7 @@ export function PageLayout({
         <MenuHeader borderless />
       )}
       <ScrollView style={styles.scroll} contentContainerStyle={scrollContentStyle} testID={testID}>
-        <View style={styles.content}>
+        <View style={[styles.content, wide && styles.wideContent]}>
           {showTitle ? (
             <View style={styles.titleRow} testID={titleTestID}>
               <Text style={styles.title} testID="page-title">
@@ -74,6 +76,7 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 720,
     alignSelf: "center",
   },
+  wideContent: { maxWidth: "100%" },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",

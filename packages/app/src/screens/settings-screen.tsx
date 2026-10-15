@@ -31,6 +31,7 @@ import {
   Network,
   Bot,
   Boxes,
+  ChartColumn,
   Gauge,
   Keyboard,
   Stethoscope,
@@ -156,6 +157,7 @@ import {
   HostWorkspacesPage,
   HostTerminalsPage,
 } from "@/screens/settings/host-page";
+import { ProviderUsageHistorySection } from "@/provider-usage-history/section";
 import { PluginSettingsContent } from "@/plugins/settings";
 import { useInstalledPlugins } from "@/plugins/registry";
 import { HostPluginsPage } from "@/screens/settings/plugins-page";
@@ -268,6 +270,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     Content: DesktopPermissionsSection,
   },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
+  { id: "usage-history", labelKey: "settings.sections.usageHistory", icon: ChartColumn },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -1572,6 +1575,7 @@ function SidebarSectionButton({
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       onPress={handlePress}
+      testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
@@ -2235,6 +2239,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               handlePlaybackTest={handlePlaybackTest}
             />
           );
+        case "usage-history":
+          return <ProviderUsageHistorySection />;
         case "about":
           return (
             <AboutSection
@@ -2313,7 +2319,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   if (isCompactLayout) {
     return (
       <View style={styles.container}>
-        <PageLayout title={detailTitle} onBack={handleBackFromDetail}>
+        <PageLayout
+          wide={view.kind === "section" && view.section === "usage-history"}
+          title={detailTitle}
+          onBack={handleBackFromDetail}
+        >
           {content}
         </PageLayout>
         {addHostModals}
@@ -2341,7 +2351,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
         </WindowChromeRegion>
         <WindowChromeRegion corners="top-right">
           <View style={desktopStyles.contentPane} testID="settings-detail-pane">
-            <PageLayout title={detailTitle} titleTestID="settings-detail-header-title">
+            <PageLayout
+              wide={view.kind === "section" && view.section === "usage-history"}
+              title={detailTitle}
+              titleTestID="settings-detail-header-title"
+            >
               {content}
             </PageLayout>
           </View>
