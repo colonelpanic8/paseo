@@ -58,6 +58,8 @@ import {
   type ListImportableSessionsOptions,
   type LiveVoiceVoiceCatalog,
 } from "./agent-sdk-types.js";
+import type { AgentPromptCacheStatus } from "@getpaseo/protocol/agent-types";
+import { applyPromptCacheSample } from "./prompt-cache-status.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import { toStoredAgentRecord } from "./agent-projections.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
@@ -474,6 +476,7 @@ interface ManagedAgentBase {
    */
   summaryTurnsSinceUpdate?: number;
   lastUsage?: AgentUsage;
+  promptCache?: AgentPromptCacheStatus;
   lastError?: string;
   lastFailure?: {
     kind: "authentication_required" | "provider_error";
@@ -1781,6 +1784,7 @@ export class AgentManager {
     const rehydrateFromDisk = options?.rehydrateFromDisk ?? false;
     const preservedHistoryPrimed = existing.historyPrimed;
     const preservedLastUsage = existing.lastUsage;
+    const preservedPromptCache = existing.promptCache;
     const preservedLastError = existing.lastError;
     const preservedLastFailure = existing.lastFailure;
     const preservedAttention = existing.attention;
@@ -1853,6 +1857,7 @@ export class AgentManager {
         lastUserMessageAt: existing.lastUserMessageAt,
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
+        promptCache: preservedPromptCache,
         lastError: preservedLastError,
         lastFailure: preservedLastFailure,
         attention: preservedAttention,
@@ -2242,6 +2247,7 @@ export class AgentManager {
         summaryCursor: record.summaryCursor,
         summaryTurnsSinceUpdate: record.summaryTurnsSinceUpdate,
         lastUsage: undefined,
+        promptCache: undefined,
         lastError: record.lastError ?? undefined,
         lastFailure: record.lastFailure,
         attention,
@@ -3906,6 +3912,7 @@ export class AgentManager {
       persistence?: AgentPersistenceHandle;
       historyPrimed?: boolean;
       lastUsage?: AgentUsage;
+      promptCache?: AgentPromptCacheStatus;
       lastError?: string;
       lastFailure?: ManagedAgentBase["lastFailure"];
       attention?: AttentionState;
@@ -4101,6 +4108,7 @@ export class AgentManager {
           labels?: Record<string, string>;
           historyPrimed?: boolean;
           lastUsage?: AgentUsage;
+          promptCache?: AgentPromptCacheStatus;
           lastError?: string;
           lastFailure?: ManagedAgentBase["lastFailure"];
           attention?: AttentionState;
@@ -4159,6 +4167,7 @@ export class AgentManager {
       summaryCursor,
       summaryTurnsSinceUpdate,
       lastUsage: options?.lastUsage,
+      promptCache: options?.promptCache,
       lastError: options?.lastError,
       lastFailure: options?.lastFailure,
       attention: resolveInitialAttention(options?.attention),
@@ -4804,6 +4813,13 @@ export class AgentManager {
         return undefined;
       case "usage_updated":
         agent.lastUsage = event.usage;
+        if (event.promptCache) {
+          agent.promptCache = applyPromptCacheSample(
+            agent.promptCache,
+            event.promptCache,
+            new Date(),
+          );
+        }
         this.emitState(agent);
         return undefined;
       case "mode_changed":
@@ -4966,6 +4982,9 @@ export class AgentManager {
     if (terminalDisposition === "stale") return;
     if (event.usage) {
       agent.lastUsage = { ...agent.lastUsage, ...event.usage };
+    }
+    if (event.promptCache) {
+      agent.promptCache = applyPromptCacheSample(agent.promptCache, event.promptCache, new Date());
     }
     // If no usage on turn_completed, keep lastUsage as-is so context window
     // data accumulated during streaming isn't lost when the provider omits
