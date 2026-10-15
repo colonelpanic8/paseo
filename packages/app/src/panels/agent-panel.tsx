@@ -32,6 +32,7 @@ import {
   useComposerFullscreen,
   type ComposerEditingSession,
 } from "@/composer/editing-session";
+import { pickAgentModelDisplaySource } from "@/composer/agent-controls/utils";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import {
   resolveComposerTrackControlClearance,
@@ -46,6 +47,7 @@ import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachme
 import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
+import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
 import {
   type AgentScreenAgent,
@@ -64,6 +66,7 @@ import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useHasPluginComposerPills } from "@/plugins";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
+import { buildAgentPanelSubtitle } from "@/panels/agent-panel-subtitle";
 import {
   type HostRuntimeConnectionStatus,
   useHostRuntimeClient,
@@ -117,6 +120,7 @@ interface ChatAgentStateShape {
   currentModeId?: Agent["currentModeId"];
   model?: Agent["model"];
   thinkingOptionId?: Agent["thinkingOptionId"];
+  effectiveThinkingOptionId?: Agent["effectiveThinkingOptionId"];
   runtimeInfo?: Agent["runtimeInfo"];
   features?: Agent["features"];
   lastError?: Agent["lastError"] | null;
@@ -179,6 +183,7 @@ function selectChatAgentState(
     currentModeId: agent.currentModeId,
     model: agent.model,
     thinkingOptionId: agent.thinkingOptionId,
+    effectiveThinkingOptionId: agent.effectiveThinkingOptionId,
     runtimeInfo: agent.runtimeInfo,
     features: agent.features,
     lastError: agent.lastError ?? null,
@@ -207,6 +212,7 @@ function buildChatAgentFromState(
     currentModeId: state.currentModeId,
     model: state.model,
     thinkingOptionId: state.thinkingOptionId,
+    effectiveThinkingOptionId: state.effectiveThinkingOptionId,
     runtimeInfo: state.runtimeInfo,
     features: state.features,
     lastError: state.lastError ?? null,
@@ -260,17 +266,6 @@ function renderChatAgentNonReadyView(args: {
     );
   }
   return null;
-}
-
-function formatProviderLabel(provider: Agent["provider"]): string {
-  if (!provider) {
-    return "Agent";
-  }
-  return provider
-    .split(/[-_\s]+/)
-    .filter((part) => part.length > 0)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function resolveWorkspaceAgentTabLabel(title: string | null | undefined): string | null {
@@ -370,27 +365,31 @@ function useAgentPanelDescriptor(
   const descriptorState = useSessionStore(
     useShallow((state) => selectAgentPanelDescriptorState(state, context.serverId, target.agentId)),
   );
-  const provider = descriptorState.provider;
-  const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
-  const purposePresentation = buildAgentPurposePresentation({
-    label,
-    summary: descriptorState.summary,
-    providerLabel: formatProviderLabel(provider),
-  });
+  const agent = descriptorState.agent;
+  const provider = agent?.provider ?? "codex";
+  const label = resolveWorkspaceAgentTabLabel(agent?.title);
   const icon = useProviderIcon(provider, context.serverId);
+  const modelSource = pickAgentModelDisplaySource(agent);
+  const modelDisplay = useAgentModelDisplay({
+    serverId: context.serverId,
+    cwd: agent?.cwd ?? null,
+    provider,
+    ...modelSource,
+  });
+  const subtitle = buildAgentPanelSubtitle(provider, modelDisplay);
 
   return {
     label: label ?? "",
-    subtitle: purposePresentation.subtitle,
-    tooltip: purposePresentation.tooltip,
+    subtitle,
+    tooltip: label ?? subtitle,
     titleState: label ? "ready" : "loading",
     icon,
-    statusBucket: descriptorState.status
+    statusBucket: agent?.status
       ? deriveSidebarStateBucket({
-          status: descriptorState.isTurnActive ? "running" : descriptorState.status,
-          pendingPermissionCount: descriptorState.pendingPermissionCount,
-          requiresAttention: descriptorState.requiresAttention,
-          attentionReason: descriptorState.attentionReason,
+          status: descriptorState.isTurnActive ? "running" : agent.status,
+          pendingPermissionCount: agent.pendingPermissions.length,
+          requiresAttention: agent.requiresAttention ?? false,
+          attentionReason: agent.attentionReason ?? null,
         })
       : null,
   };
@@ -727,6 +726,7 @@ function AgentPanelBody({
           currentModeId: agentState.currentModeId,
           model: agentState.model,
           thinkingOptionId: agentState.thinkingOptionId,
+          effectiveThinkingOptionId: agentState.effectiveThinkingOptionId,
           runtimeInfo: agentState.runtimeInfo,
           features: agentState.features,
           lastError: agentState.lastError ?? null,

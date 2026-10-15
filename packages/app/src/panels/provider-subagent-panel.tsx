@@ -14,6 +14,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { usePaneContext } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
 import { useSubagentsForParent } from "@/subagents/select";
 import { SubagentsTrack } from "@/subagents/track";
@@ -22,6 +23,7 @@ import {
   providerSubagentLifecycleStatus,
   refreshProviderSubagents,
   observeProviderSubagentTimeline,
+  type ProviderSubagentTimelineState,
   useProviderSubagentStore,
 } from "@/subagents/provider-store";
 import { useTranslation } from "react-i18next";
@@ -45,10 +47,12 @@ function resolveChildTrackClearance(childCount: number, isCompact: boolean) {
 
 function ProviderSubagentChildTrack({
   serverId,
+  cwd,
   rows,
   onOpenProviderSubagent,
 }: {
   serverId: string;
+  cwd: string | null;
   rows: ReturnType<typeof useSubagentsForParent>;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
 }) {
@@ -58,6 +62,7 @@ function ProviderSubagentChildTrack({
       <SubagentsTrack
         serverId={serverId}
         rows={rows}
+        cwd={cwd}
         onOpenSubagent={NOOP_SUBAGENT}
         onOpenProviderSubagent={onOpenProviderSubagent}
         onArchiveSubagent={NOOP_SUBAGENT}
@@ -72,6 +77,32 @@ function formatProviderLabel(provider: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+interface OlderTimelineRequest {
+  client: DaemonClient | null;
+  supported: boolean;
+  isLoadingOlder: boolean;
+  timeline: ProviderSubagentTimelineState | null;
+}
+
+function canLoadOlderProviderSubagentTimeline(
+  request: OlderTimelineRequest,
+): request is OlderTimelineRequest & {
+  client: DaemonClient;
+  timeline: ProviderSubagentTimelineState & { epoch: string; hasOlder: true };
+} {
+  return Boolean(
+    request.client &&
+    request.supported &&
+    !request.isLoadingOlder &&
+    request.timeline?.hasOlder &&
+    request.timeline.epoch,
+  );
+}
+
+function isUnsupportedProviderSubagentPanel(serverInfo: unknown, supported: boolean): boolean {
+  return serverInfo !== null && serverInfo !== undefined && !supported;
 }
 
 function useProviderSubagentDescriptor(
@@ -169,16 +200,17 @@ function ProviderSubagentPanel() {
   }, [client, supported, serverId, target.parentAgentId, target.subagentId]);
 
   const loadOlder = useCallback((): boolean => {
-    if (!client || !supported || isLoadingOlder || !timeline?.hasOlder || !timeline.epoch) {
+    const request = { client, supported, isLoadingOlder, timeline };
+    if (!canLoadOlderProviderSubagentTimeline(request)) {
       return false;
     }
-    const firstSeq = timeline.cursor?.startSeq ?? null;
+    const firstSeq = request.timeline.cursor?.startSeq ?? null;
     if (firstSeq === null) return false;
     setIsLoadingOlder(true);
-    void client
+    void request.client
       .fetchProviderSubagentTimeline(target.parentAgentId, target.subagentId, {
         direction: "before",
-        cursor: { epoch: timeline.epoch, seq: firstSeq },
+        cursor: { epoch: request.timeline.epoch, seq: firstSeq },
         limit: TIMELINE_FETCH_PAGE_SIZE,
       })
       .then((payload) => {
@@ -233,7 +265,7 @@ function ProviderSubagentPanel() {
     [descriptor?.status],
   );
 
-  if (serverInfo && !supported) {
+  if (isUnsupportedProviderSubagentPanel(serverInfo, supported)) {
     return (
       <View style={styles.unsupported} testID="provider-subagent-panel-unsupported">
         <Text style={styles.unsupportedText}>{t("message.actions.forkUnavailable")}</Text>
@@ -271,6 +303,7 @@ function ProviderSubagentPanel() {
       />
       <ProviderSubagentChildTrack
         serverId={serverId}
+        cwd={streamContext.cwd || null}
         rows={childRows}
         onOpenProviderSubagent={openProviderChild}
       />
