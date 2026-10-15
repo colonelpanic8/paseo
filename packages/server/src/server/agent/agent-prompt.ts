@@ -481,6 +481,8 @@ export interface WatchAgentFinishParams {
   continueAfterPermission?: boolean;
   /** A replacement must observe its new start, not the displaced running snapshot. */
   waitForTurnStart?: boolean;
+  /** Report an agent that is already errored when the watch begins. */
+  reportPriorError?: boolean;
   onFinish: (reason: AgentFinishReason, details: AgentFinishDetails) => void;
 }
 
@@ -602,6 +604,8 @@ export function watchAgentFinish(params: WatchAgentFinishParams): () => void {
   } else if (snapshot.lifecycle === "running" && !waitForTurnStart) {
     hasSeenTurn = true;
     hasSeenRunning = true;
+  } else if (snapshot.lifecycle === "error" && params.reportPriorError) {
+    fire("errored", { terminal: true });
   }
 
   return stop;

@@ -202,6 +202,15 @@ function buildStoredPersistenceHandle(
   return toPublicPersistenceHandle(toAgentPersistenceHandle(validProviders, record.persistence));
 }
 
+function storedFailureFields(
+  record: StoredAgentRecord,
+): Pick<AgentSnapshotPayload, "lastError" | "lastFailure"> {
+  return {
+    ...(typeof record.lastError === "string" ? { lastError: record.lastError } : {}),
+    ...(record.lastFailure ? { lastFailure: { ...record.lastFailure } } : {}),
+  };
+}
+
 export function buildStoredAgentPayload(
   record: StoredAgentRecord,
   validProviders: Iterable<AgentProvider>,
@@ -256,8 +265,7 @@ export function buildStoredAgentPayload(
     archivedAt: record.archivedAt ?? null,
     ...(record.internal ? { internal: true } : {}),
     labels: normalizeLabels(record.labels),
-    ...(typeof record.lastError === "string" ? { lastError: record.lastError } : {}),
-    ...(record.lastFailure ? { lastFailure: { ...record.lastFailure } } : {}),
+    ...storedFailureFields(record),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }

@@ -282,7 +282,6 @@ function OpenVoiceProfilesSheet({
       onClose={onClose}
       header={header}
       footer={footer}
-      sizeContentToCurrentSnapPoint
       testID="voice-profiles-sheet"
     >
       {view.kind === "form" ? (
