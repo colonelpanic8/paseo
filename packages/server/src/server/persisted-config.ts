@@ -401,6 +401,8 @@ export interface ConfigStack {
   rootPath: string;
   layers: ConfigLayer[];
   writeTargetPath: string;
+  /** The write target as referenced, so saving a symlinked file keeps the link. */
+  writeFilePath: string;
   effective: PersistedConfig;
 }
 
@@ -813,7 +815,9 @@ function* readConfigStack(paseoHome: string, logger?: LoggerLike): ConfigIo<Conf
   const effective = validateEffectiveConfig(mergeLayers(loaded.layers), "merged config");
 
   const writeTo = loaded.layer.structural.writeTo;
-  const requestedWriteTarget = writeTo ? resolveConfigReference(rootPath, writeTo) : rootPath;
+  const requestedWriteTarget = writeTo
+    ? resolveConfigReference(rootPath, writeTo)
+    : requestedRootPath;
   const resolvedWriteTarget = (yield* configFileExists(requestedWriteTarget))
     ? yield* resolveConfigRealpath(requestedWriteTarget)
     : requestedWriteTarget;
@@ -829,6 +833,7 @@ function* readConfigStack(paseoHome: string, logger?: LoggerLike): ConfigIo<Conf
     rootPath,
     layers: loaded.layers,
     writeTargetPath: writeTarget.path,
+    writeFilePath: requestedWriteTarget,
     effective,
   };
 }
@@ -968,7 +973,7 @@ function* writeConfigStack(
     throw new Error(`[Config] Cannot save config:\n  - ${issues.join("\n  - ")}`);
   }
 
-  yield* writeConfigFile(stack.writeTargetPath, candidateConfig, getLogger(logger));
+  yield* writeConfigFile(stack.writeFilePath, candidateConfig, getLogger(logger));
 }
 
 export function saveConfigStack(
@@ -993,7 +998,7 @@ function* restoreWriteTarget(stack: ConfigStack, logger?: LoggerLike): ConfigIo<
     throw new Error(`[Config] Writable config file ${stack.writeTargetPath} is not in the stack`);
   }
   try {
-    yield* writeConfigText(stack.writeTargetPath, writeTarget.raw);
+    yield* writeConfigText(stack.writeFilePath, writeTarget.raw);
     getLogger(logger)?.info(`Restored ${stack.writeTargetPath}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
