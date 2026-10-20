@@ -79,6 +79,8 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Defs, Rect, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { SentComposerTokenText } from "@/composer/tokens/sent-text";
+import type { ComposerSigils } from "@/composer/tokens/sigils";
 import { capAssistantMessageForRender, getUtf8ByteLength } from "./assistant-message-render-limit";
 import { getTurnDurationLabel } from "./assistant-turn-footer-label";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
@@ -93,6 +95,7 @@ interface UserMessageProps {
   agentId?: string;
   messageId?: string;
   message: string;
+  sigils: ComposerSigils;
   images?: UserMessageImageAttachment[];
   attachments?: AgentAttachment[];
   timestamp: number;
@@ -391,6 +394,7 @@ export const UserMessage = memo(function UserMessage({
   agentId,
   messageId,
   message,
+  sigils,
   images = [],
   attachments = [],
   timestamp,
@@ -505,9 +509,12 @@ export const UserMessage = memo(function UserMessage({
             </View>
           ) : null}
           {hasText ? (
-            <Text selectable style={userMessageStylesheet.text} dataSet={MESSAGE_TEXT_DATASET}>
-              {message}
-            </Text>
+            <SentComposerTokenText
+              text={message}
+              sigils={sigils}
+              style={userMessageStylesheet.text}
+              dataSet={MESSAGE_TEXT_DATASET}
+            />
           ) : null}
         </View>
         {hasText ? (
