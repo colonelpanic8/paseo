@@ -15,6 +15,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import type { TFunction } from "i18next";
 import { UsageBalanceBar } from "./balance-bar";
+import { CodexBankedResetManagement } from "./banked-resets";
 import type { UsageDisplay } from "./display";
 import { formatAgo, formatProviderUsageLabel } from "./format";
 import { resolveUsageReport, type UsageRefresh } from "./model";
@@ -33,6 +34,10 @@ function statusText(report: UsageReport, t: TFunction): string | null {
 
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+
+function showFreshnessInline(isCompact: boolean, refreshable: boolean): boolean {
+  return isNative || isCompact || !refreshable;
+}
 
 export function UsageCard({
   serverId,
@@ -57,7 +62,7 @@ export function UsageCard({
   const isCompact = useIsCompactFormFactor();
   const { refresh, refreshState } = useReportRefresh(serverId, entry.id, agentId);
   // Where there is no hover the freshness is printed on the card; elsewhere the Refresh tooltip.
-  const showsFreshnessInline = isNative || isCompact || !refreshable;
+  const showsFreshnessInline = showFreshnessInline(isCompact, refreshable);
   const usage = entry.report;
   const status = statusText(usage, t);
   const footer = entry.account.label ?? null;
@@ -141,6 +146,15 @@ export function UsageCard({
             </View>
           ))}
         </View>
+      ) : null}
+
+      {entry.sourceId === "codex" && !compact ? (
+        <CodexBankedResetManagement
+          serverId={serverId}
+          reportId={entry.id}
+          resets={usage.status === "available" ? usage.bankedResets : undefined}
+          onSettled={refresh}
+        />
       ) : null}
 
       {footer || showsFreshnessInline ? (
