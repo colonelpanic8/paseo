@@ -333,6 +333,11 @@ export interface DaemonServerInfo {
   version: string | null;
   build?: BuildInfo;
   desktopManaged?: boolean;
+  /**
+   * Resolved base root for Paseo-managed worktrees. Absent or null when the daemon predates
+   * `server_info.worktreesRoot`; see @/utils/paseo-worktree-path.
+   */
+  worktreesRoot?: string | null;
   capabilities?: ServerCapabilities;
   features?: ServerInfoStatusPayload["features"];
 }
@@ -343,6 +348,7 @@ export function toDaemonServerInfo(serverInfo: ServerInfoStatusPayload): DaemonS
     hostname: serverInfo.hostname ?? null,
     version: serverInfo.version ?? null,
     ...(serverInfo.build ? { build: serverInfo.build } : {}),
+    worktreesRoot: serverInfo.worktreesRoot ?? null,
     ...(serverInfo.desktopManaged !== undefined
       ? { desktopManaged: serverInfo.desktopManaged }
       : {}),
@@ -764,6 +770,7 @@ function isSessionServerInfoUnchanged(input: {
   nextVersion: string | null;
   nextBuild: BuildInfo | undefined;
   nextDesktopManaged: boolean | undefined;
+  nextWorktreesRoot: string | null;
   nextCapabilities: ServerCapabilities | undefined;
   nextFeatures: ServerInfoStatusPayload["features"] | undefined;
   nextServerId: string;
@@ -774,17 +781,20 @@ function isSessionServerInfoUnchanged(input: {
     nextVersion,
     nextBuild,
     nextDesktopManaged,
+    nextWorktreesRoot,
     nextCapabilities,
     nextFeatures,
   } = input;
   const prevHostname = currentServerInfo?.hostname?.trim() || null;
   const prevVersion = currentServerInfo?.version?.trim() || null;
+  const prevWorktreesRoot = currentServerInfo?.worktreesRoot?.trim() || null;
   return (
     currentServerInfo?.serverId === input.nextServerId &&
     prevHostname === nextHostname &&
     prevVersion === nextVersion &&
     areServerInfoBuildsEqual(currentServerInfo?.build, nextBuild) &&
     currentServerInfo?.desktopManaged === nextDesktopManaged &&
+    prevWorktreesRoot === nextWorktreesRoot &&
     areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
     areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
   );
@@ -975,6 +985,7 @@ export const useSessionStore = create<SessionStore>()(
           const nextVersion = info.version?.trim() || null;
           const nextBuild = info.build;
           const nextDesktopManaged = info.desktopManaged;
+          const nextWorktreesRoot = info.worktreesRoot?.trim() || null;
           const nextCapabilities = info.capabilities;
           const nextFeatures = info.features;
 
@@ -985,6 +996,7 @@ export const useSessionStore = create<SessionStore>()(
               nextVersion,
               nextBuild,
               nextDesktopManaged,
+              nextWorktreesRoot,
               nextCapabilities,
               nextFeatures,
               nextServerId: info.serverId,
@@ -1004,6 +1016,7 @@ export const useSessionStore = create<SessionStore>()(
                   hostname: nextHostname,
                   version: nextVersion,
                   ...(nextBuild ? { build: nextBuild } : {}),
+                  worktreesRoot: nextWorktreesRoot,
                   ...(nextDesktopManaged !== undefined
                     ? { desktopManaged: nextDesktopManaged }
                     : {}),
