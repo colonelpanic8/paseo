@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import {
-  Pressable,
   StyleSheet as RNStyleSheet,
   Text,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -147,7 +147,7 @@ function StatusRowSwipeAction({
   children: ReactNode;
 }) {
   return (
-    <Pressable
+    <PressHighlight
       style={style}
       onPress={onPress}
       accessibilityRole="button"
@@ -158,7 +158,7 @@ function StatusRowSwipeAction({
       <Text style={labelStyle} numberOfLines={1}>
         {label}
       </Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 

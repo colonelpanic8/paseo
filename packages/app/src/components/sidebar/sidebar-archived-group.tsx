@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { View, Text, Pressable, type PressableStateCallbackType } from "react-native";
+import { View, Text, type PressableStateCallbackType } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -159,7 +160,7 @@ function ArchivedGroupHeader({ collapsed }: { collapsed: boolean }) {
 
   return (
     <View onPointerEnter={handleHoverIn} onPointerLeave={handleHoverOut}>
-      <Pressable
+      <PressHighlight
         accessibilityRole={platformIsWeb ? undefined : "button"}
         accessibilityLabel={`${label} group`}
         accessibilityState={accessibilityState}
@@ -175,7 +176,7 @@ function ArchivedGroupHeader({ collapsed }: { collapsed: boolean }) {
             {label}
           </Text>
         </View>
-      </Pressable>
+      </PressHighlight>
     </View>
   );
 }
@@ -304,7 +305,7 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
               </Animated.View>
             ) : (
               <Animated.View entering={UNARCHIVE_SLOT_SWAP_IN}>
-                <Pressable
+                <PressHighlight
                   accessibilityRole="button"
                   accessibilityLabel={t(
                     isUnarchiving
@@ -322,7 +323,7 @@ const ArchivedWorkspaceRow = memo(function ArchivedWorkspaceRow({
                   ) : (
                     <ThemedArchiveRestore size={14} uniProps={foregroundMutedColorMapping} />
                   )}
-                </Pressable>
+                </PressHighlight>
               </Animated.View>
             )}
           </View>
