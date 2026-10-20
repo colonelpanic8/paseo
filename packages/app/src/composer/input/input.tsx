@@ -1952,7 +1952,13 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         isCompact && !isFullscreen && styles.compactTextInput,
         tokenRendering.inputTextStyle,
       ],
-      [composerHeightStyle, mode.isMonospace, isFullscreen, isCompact, tokenRendering.inputTextStyle],
+      [
+        composerHeightStyle,
+        mode.isMonospace,
+        isFullscreen,
+        isCompact,
+        tokenRendering.inputTextStyle,
+      ],
     );
     // Static content has no textarea to mirror, so it grows with its own text
     // instead of the measured input height.
