@@ -21,6 +21,11 @@ function createNativeModule() {
       state.recording = enabled;
       return enabled;
     },
+    startDictation() {
+      if (!state.initialized) throw new Error("Native engine is not initialized");
+      state.recording = true;
+      return true;
+    },
     releaseAudioSession() {},
     async getMicrophonePermissionsAsync() {
       return { granted: true };
