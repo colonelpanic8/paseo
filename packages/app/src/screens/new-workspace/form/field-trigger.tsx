@@ -98,11 +98,12 @@ export interface FieldTriggerProps extends FieldTriggerContentProps {
   /** Desktop hover hint; badges only, since a field shows its label. */
   tooltip?: string;
   testID?: string;
+  shortcutActionId?: string;
 }
 
 /** A field trigger that anchors a Combobox. */
 export const FieldTrigger = forwardRef<View, FieldTriggerProps>(function FieldTrigger(
-  { accessibilityLabel, onPress, disabled = false, tooltip, testID, ...content },
+  { accessibilityLabel, onPress, disabled = false, tooltip, testID, shortcutActionId, ...content },
   ref,
 ): ReactElement {
   const style = useFieldTriggerStyle(content.variant, disabled);
@@ -112,6 +113,8 @@ export const FieldTrigger = forwardRef<View, FieldTriggerProps>(function FieldTr
       chevron={null}
       block={content.variant === "field"}
       testID={testID}
+      shortcutActionId={shortcutActionId}
+      showShortcutHint={!disabled}
       onPress={onPress}
       disabled={disabled}
       style={style}

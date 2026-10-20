@@ -212,6 +212,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
       onPress={project.open}
       disabled={isPending}
       testID="new-workspace-project-picker-trigger"
+      shortcutActionId="switch-project"
     />
   );
   const hostField = showHost ? (
@@ -240,6 +241,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
         onPress={host.open}
         disabled={isPending}
         testID="host-picker-trigger"
+        shortcutActionId="select-host"
       />
     </HostPicker>
   ) : null;
@@ -255,6 +257,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
       onPress={isolation.open}
       disabled={isPending}
       testID="workspace-create-isolation-trigger"
+      shortcutActionId="toggle-workspace-isolation"
     />
   ) : null;
   const baseField = base.showRefPicker ? (
@@ -269,6 +272,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
       onPress={base.open}
       disabled={isPending || !base.selectedSourceDirectory}
       testID="new-workspace-ref-picker-trigger"
+      shortcutActionId="select-starting-ref"
     />
   ) : null;
   const launchField = (
