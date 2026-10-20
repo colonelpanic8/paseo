@@ -3,7 +3,6 @@ package sh.paseo.androidintents
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Context
-import android.content.pm.PackageManager
 import android.content.pm.ProviderInfo
 import android.database.Cursor
 import android.database.MatrixCursor
@@ -13,26 +12,34 @@ import android.os.Binder
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import sh.paseo.androidintents.assistant.CreatedCatalogRows
+import sh.paseo.androidintents.assistant.parseIsoTimestamp
 
 private const val DEFAULT_LIMIT = 25
 private const val MAX_LIMIT = 100
 private const val MESSAGE_DEFAULT_LIMIT = 10
 private const val MESSAGE_MAX_LIMIT = 50
-private const val MESSAGE_TIMEOUT_MS = 7_000L
-private const val EVA_PACKAGE = "com.colonelpanic.eva"
-private const val EVA_DEBUG_PACKAGE = "com.colonelpanic.eva.debug"
-// Public signing certificate of the released EVA app, not a secret.
-private const val EVA_CERT_SHA256 = "688df17827dd9a002705baf0400c80f8f4650c6e87c3fc91d41f32be287f8b68"
+// Creations older than this are in any catalog published since; skip their journal files.
+private const val CREATED_ROWS_MAX_AGE_MS = 24 * 60 * 60 * 1000L
+// Leaves room for a cold React Native start and a host round trip.
+private const val MESSAGE_TIMEOUT_MS = 17_000L
 private const val UNAVAILABLE_NOTICE =
-  "Paseo could not read the conversation; open Paseo, leave it running, and ask again."
+  "Paseo could not read the conversation in time; ask again in a moment."
 
+private val PROJECT_COLUMNS = listOf("id", "serverId", "serverName", "name", "kind")
 private val WORKSPACE_COLUMNS =
-  listOf("id", "serverId", "name", "project", "repository", "branch", "status", "agentCount", "lastActivityAt")
+  listOf("id", "serverId", "serverName", "name", "project", "repository", "branch", "status", "agentCount", "lastActivityAt")
 private val AGENT_COLUMNS =
-  listOf("id", "serverId", "workspaceId", "name", "provider", "status", "lastActivityAt")
+  listOf("id", "serverId", "serverName", "workspaceId", "name", "provider", "status", "lastActivityAt")
 private val MESSAGE_COLUMNS =
-  listOf("id", "serverId", "workspaceId", "agentId", "agentName", "kind", "createdAt", "text")
-private val INT_COLUMNS = setOf("agentCount")
+  listOf("id", "serverId", "serverName", "workspaceId", "agentId", "agentName", "kind", "createdAt", "text")
+private val MODEL_COLUMNS =
+  listOf(
+    "serverId", "serverName", "provider", "providerLabel", "status", "model", "modelLabel", "isDefault",
+    "thinkingOptions", "defaultThinkingOption", "modes", "defaultMode", "note",
+  )
+private val INT_COLUMNS = setOf("agentCount", "isDefault")
+private const val MODEL_UNAVAILABLE_NOTICE = "Paseo could not read that host's models in time; ask again in a moment."
 
 /**
  * Read-only view of what the app knows, for on-device assistants that can
@@ -40,7 +47,9 @@ private val INT_COLUMNS = setOf("agentCount")
  * `content://<authority>/workspaces?q=&limit=` and `/agents?workspaceId=&q=&limit=`
  * are served from the file [AssistantCatalogStore] holds, so they answer
  * without starting React Native. `/messages?agentId=&workspaceId=&limit=` needs
- * live transcripts and goes through [AssistantQueryBridge] instead. The
+ * live transcripts, and `/models?serverId=&projectId=&provider=&q=&limit=` a live
+ * provider snapshot; both go through [AssistantQueryBridge], which starts the
+ * JavaScript runtime headless when the app is not running. The
  * authority is declared by the app's config plugin so a debug build can install
  * beside a release build. Only query parameters filter: a SQL selection is
  * refused rather than ignored.
@@ -57,9 +66,11 @@ class AssistantContentProvider : ContentProvider() {
 
   override fun getType(uri: Uri): String? =
     when (uri.pathSegments.singleOrNull()) {
+      "projects" -> "vnd.android.cursor.dir/vnd.$authority.project"
       "workspaces" -> "vnd.android.cursor.dir/vnd.$authority.workspace"
       "agents" -> "vnd.android.cursor.dir/vnd.$authority.agent"
       "messages" -> "vnd.android.cursor.dir/vnd.$authority.message"
+      "models" -> "vnd.android.cursor.dir/vnd.$authority.model"
       else -> null
     }
 
@@ -88,9 +99,11 @@ class AssistantContentProvider : ContentProvider() {
     }
     require(sortOrder.isNullOrEmpty()) { "Sorting is fixed to most recent activity" }
     return when (uri.pathSegments.singleOrNull()) {
+      "projects" -> queryCatalog("projects", PROJECT_COLUMNS, uri, projection)
       "workspaces" -> queryCatalog("workspaces", WORKSPACE_COLUMNS, uri, projection)
       "agents" -> queryCatalog("agents", AGENT_COLUMNS, uri, projection)
       "messages" -> queryMessages(uri, projection)
+      "models" -> queryModels(uri, projection)
       else -> throw IllegalArgumentException("Unknown table ${uri.path}")
     }
   }
@@ -98,14 +111,7 @@ class AssistantContentProvider : ContentProvider() {
   private fun isAuthorizedCaller(): Boolean {
     val appContext = context ?: return false
     val caller = callingPackage ?: return false
-    if (caller != EVA_PACKAGE && caller != EVA_DEBUG_PACKAGE) return false
-    val manager = appContext.packageManager
-    val callerUid = Binder.getCallingUid()
-    if (caller == EVA_DEBUG_PACKAGE) {
-      return manager.checkSignatures(appContext.applicationInfo.uid, callerUid) == PackageManager.SIGNATURE_MATCH
-    }
-    val certificate = EVA_CERT_SHA256.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-    return manager.hasSigningCertificate(callerUid, certificate, PackageManager.CERT_INPUT_SHA256)
+    return AssistantCallerPolicy.isAuthorized(appContext, Binder.getCallingUid(), caller)
   }
 
   private fun queryCatalog(
@@ -122,8 +128,9 @@ class AssistantContentProvider : ContentProvider() {
     require(table == "agents" || workspaceId == null) { "workspaceId only filters agents" }
 
     val catalog = readCatalog()
+    val published = catalog?.optJSONArray(table).toList()
     val rows =
-      catalog?.optJSONArray(table).toList().filter { row ->
+      (createdRows(table, catalog, published) + published).filter { row ->
         (workspaceId == null || row.optString("workspaceId") == workspaceId) &&
           (serverId == null || row.optString("serverId") == serverId) &&
           (query == null || columns.any { column -> row.optString(column).lowercase().contains(query) })
@@ -157,8 +164,11 @@ class AssistantContentProvider : ContentProvider() {
     val limit = parseLimit(uri.getQueryParameter("limit"), MESSAGE_DEFAULT_LIMIT, MESSAGE_MAX_LIMIT)
     val scopedWorkspaceId = if (agentId == null) workspaceId else null
 
+    val appContext = context ?: return noticeCursor(requested, agentId, scopedWorkspaceId, serverId, UNAVAILABLE_NOTICE)
     val answer =
       AssistantQueryBridge.request(
+        appContext,
+        "messages",
         mapOf("agentId" to agentId, "workspaceId" to scopedWorkspaceId, "serverId" to serverId, "limit" to limit),
         MESSAGE_TIMEOUT_MS,
       )
@@ -168,6 +178,36 @@ class AssistantContentProvider : ContentProvider() {
     val cursor = MatrixCursor(requested.toTypedArray(), minOf(rows.size, limit))
     for (row in rows.take(limit)) {
       cursor.addRow(requested.map { column -> if (row.isNull(column)) null else row.optString(column) })
+    }
+    return cursor
+  }
+
+  /** The host's live provider snapshot, one row per model; failures are a single notice row. */
+  private fun queryModels(uri: Uri, projection: Array<String>?): Cursor {
+    val requested = requestedColumns(projection, MODEL_COLUMNS)
+    val serverId = requireNotNull(uri.getQueryParameter("serverId")?.trim()?.ifEmpty { null }) { "Pass serverId" }
+    val limit = parseLimit(uri.getQueryParameter("limit"), DEFAULT_LIMIT, MAX_LIMIT)
+    val params =
+      mapOf(
+        "serverId" to serverId,
+        "projectId" to uri.getQueryParameter("projectId")?.trim()?.ifEmpty { null },
+        "provider" to uri.getQueryParameter("provider")?.trim()?.ifEmpty { null },
+        "q" to uri.getQueryParameter("q")?.trim()?.ifEmpty { null },
+        "limit" to limit,
+      )
+    val rows =
+      context?.let { AssistantQueryBridge.request(it, "models", params, MESSAGE_TIMEOUT_MS) }?.let(::parseMessageRows)
+        ?: listOf(JSONObject(mapOf("serverId" to serverId, "status" to "notice", "note" to MODEL_UNAVAILABLE_NOTICE)))
+    val cursor = MatrixCursor(requested.toTypedArray(), minOf(rows.size, limit))
+    for (row in rows.take(limit)) {
+      cursor.addRow(
+        requested.map { column ->
+          when (column) {
+            in INT_COLUMNS -> row.optInt(column)
+            else -> row.optString(column)
+          }
+        },
+      )
     }
     return cursor
   }
@@ -190,6 +230,7 @@ class AssistantContentProvider : ContentProvider() {
       mapOf(
         "id" to "notice",
         "serverId" to (serverId ?: ""),
+        "serverName" to "",
         "workspaceId" to workspaceId,
         "agentId" to (agentId ?: ""),
         "agentName" to "",
@@ -214,6 +255,20 @@ class AssistantContentProvider : ContentProvider() {
     val limit = raw.toIntOrNull()
     require(limit != null && limit in 1..max) { "limit must be 1..$max" }
     return limit
+  }
+
+  /**
+   * What assistant requests created since the catalog was captured and it
+   * does not list yet, ahead of the published rows because it is newer.
+   */
+  private fun createdRows(table: String, catalog: JSONObject?, published: List<JSONObject>): List<JSONObject> {
+    val context = context ?: return emptyList()
+    val capturedAtMs = catalog?.optString("capturedAt")?.let(::parseIsoTimestamp)
+    val since = maxOf(capturedAtMs ?: 0L, System.currentTimeMillis() - CREATED_ROWS_MAX_AGE_MS)
+    val entries = AssistantJobs.journal(context).creationsSince(since)
+    if (entries.isEmpty()) return emptyList()
+    val listed = published.mapTo(HashSet()) { it.optString("serverId") to it.optString("id") }
+    return CreatedCatalogRows.rows(table, entries, listed, capturedAtMs).map { JSONObject(it) }
   }
 
   private fun readCatalog(): JSONObject? {
