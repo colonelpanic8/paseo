@@ -1,5 +1,5 @@
 import { useStore } from "zustand";
-import { providerSnapshotIcons } from "@/data/provider-icons";
+import { providerSnapshotIconAliases, providerSnapshotIcons } from "@/data/provider-icons";
 import { Bot } from "lucide-react-native";
 import { createElement, useCallback, type ComponentType } from "react";
 import { SvgXml } from "react-native-svg";
@@ -84,8 +84,12 @@ function getSnapshotProviderIcon(provider: string, svg: string): ProviderIconCom
   return component;
 }
 
-function resolveProviderIcon(provider: string, svg?: string): ProviderIconComponent {
-  const name = resolveProviderIconName(provider, svg);
+function resolveProviderIcon(
+  provider: string,
+  svg?: string,
+  baseProviderId?: string,
+): ProviderIconComponent {
+  const name = resolveProviderIconName(provider, svg, baseProviderId);
   if (name.kind === "builtin") {
     return BUILTIN_PROVIDER_ICONS[name.id];
   }
@@ -102,7 +106,10 @@ export function useProviderIcon(provider: string, serverId?: string | null): Pro
   const svg = useStore(providerSnapshotIcons, (state) =>
     serverId ? state.get(serverId)?.get(provider) : undefined,
   );
-  return resolveProviderIcon(provider, svg);
+  const base = useStore(providerSnapshotIconAliases, (state) =>
+    serverId ? state.get(serverId)?.get(provider) : undefined,
+  );
+  return resolveProviderIcon(provider, svg, base);
 }
 
 /** Subscribe once for consumers that render a collection of providers. */
@@ -110,8 +117,12 @@ export function useProviderIcons(serverId?: string | null) {
   const icons = useStore(providerSnapshotIcons, (state) =>
     serverId ? state.get(serverId) : undefined,
   );
+  const aliases = useStore(providerSnapshotIconAliases, (state) =>
+    serverId ? state.get(serverId) : undefined,
+  );
   return useCallback(
-    (provider: string) => resolveProviderIcon(provider, icons?.get(provider)),
-    [icons],
+    (provider: string) =>
+      resolveProviderIcon(provider, icons?.get(provider), aliases?.get(provider)),
+    [icons, aliases],
   );
 }
