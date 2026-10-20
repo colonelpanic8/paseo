@@ -72,6 +72,7 @@ function makeProject(
 
 function projectionInput(options?: {
   groupMode?: "project" | "status";
+  statusHiddenHosts?: string[];
   pinnedCollapsed?: boolean;
 }) {
   const pinned = makeWorkspace("pinned", "running");
@@ -89,6 +90,7 @@ function projectionInput(options?: {
     ]),
     projectNamesByViewKey: new Map([["project", "Project"]]),
     groupMode: options?.groupMode ?? ("project" as const),
+    statusHiddenHosts: options?.statusHiddenHosts ?? [],
     pinnedCollapsed: options?.pinnedCollapsed ?? false,
     collapsedProjectKeys: new Set<string>(),
     collapsedWorkspaceGroupKeys: new Set<string>(),
@@ -170,6 +172,28 @@ describe("buildSidebarProjection", () => {
       { serverId: "srv", workspaceId: "pinned" },
       { serverId: "srv", workspaceId: "unpinned" },
     ]);
+  });
+
+  it("leaves hidden hosts out of status groups and their shortcuts, but not pinned chats", () => {
+    const projection = buildSidebarProjection(
+      projectionInput({ groupMode: "status", statusHiddenHosts: ["srv"] }),
+    );
+
+    expect(projection.workspaceGroups).toEqual([]);
+    expect(projection.pinnedGroups.pinnedChats.map((entry) => entry.workspaceId)).toEqual([
+      "pinned",
+    ]);
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "pinned" },
+    ]);
+  });
+
+  it("ignores hidden status hosts in project grouping", () => {
+    const projection = buildSidebarProjection(projectionInput({ statusHiddenHosts: ["srv"] }));
+
+    expect(
+      projection.pinnedGroups.unpinnedProjects[0]?.workspaces.map((entry) => entry.workspaceId),
+    ).toEqual(["unpinned"]);
   });
 
   it("does not number pinned chats while the pinned section is collapsed", () => {
