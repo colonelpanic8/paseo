@@ -14,7 +14,7 @@ import {
 } from "../lib/overlay-root";
 import { BottomSheetHandle, type BottomSheetBackgroundProps } from "@gorhom/bottom-sheet";
 import Animated from "react-native-reanimated";
-import { ArrowLeft, Search, X } from "lucide-react-native";
+import { ArrowLeft, Search, X, type LucideIcon } from "lucide-react-native";
 import {
   IsolatedBottomSheetModal,
   SheetVisibleFrame,
@@ -66,7 +66,7 @@ export interface SheetHeader {
 }
 
 const SCROLL_CONTENT_GROW = { flexGrow: 1 };
-const ABSOLUTE_FILL_STYLE = { ...StyleSheet.absoluteFillObject };
+const ABSOLUTE_FILL_STYLE = { ...StyleSheet.absoluteFill };
 const NATIVE_DIALOG_SNAP_POINTS = ["100%"];
 
 const styles = StyleSheet.create((theme) => ({
@@ -77,7 +77,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "transparent",
   },
   desktopOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "center",
     alignItems: "center",
@@ -287,6 +287,37 @@ function SheetContent({ style, children }: { style: StyleProp<ViewStyle>; childr
   return <View style={[styles.sheetContent, style]}>{children}</View>;
 }
 
+/**
+ * An icon action in a sheet header's trailing rail, drawn like the Close button so a header's
+ * actions line up with it at one size. Pass it through `SheetHeader.actions`.
+ */
+export function SheetHeaderIconButton({
+  icon: Icon,
+  accessibilityLabel,
+  onPress,
+  testID,
+}: {
+  icon: LucideIcon;
+  accessibilityLabel: string;
+  onPress: () => void;
+  testID?: string;
+}) {
+  const { theme } = useUnistyles();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={styles.closeButton}
+      onPress={onPress}
+      testID={testID}
+    >
+      {({ pressed }) => (
+        <Icon size={16} color={pressed ? theme.colors.foreground : theme.colors.foregroundMuted} />
+      )}
+    </Pressable>
+  );
+}
+
 export function SheetHeaderView({
   header,
   onClose,
@@ -343,19 +374,11 @@ export function SheetHeaderView({
         </View>
         {header.actions ? <View style={styles.headerActions}>{header.actions}</View> : null}
         {showCloseButton ? (
-          <Pressable
-            accessibilityRole="button"
+          <SheetHeaderIconButton
+            icon={X}
             accessibilityLabel={t("common.actions.close")}
-            style={styles.closeButton}
             onPress={onClose}
-          >
-            {({ pressed }) => (
-              <X
-                size={16}
-                color={pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
-              />
-            )}
-          </Pressable>
+          />
         ) : null}
       </View>
       {search ? (
