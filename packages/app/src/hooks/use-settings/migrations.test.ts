@@ -1,8 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { createInMemoryKeyValueStorage } from "./fakes";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { afterEach, describe, expect, it } from "vitest";
+import { createFakeDesktopBridge, createInMemoryKeyValueStorage } from "./fakes";
 import { APP_SETTINGS_KEY, SETTINGS_MIGRATIONS_KEY } from "./keys";
+import { clearAsyncStorageStub } from "../../../test-stubs/async-storage";
 import { migrateAppSettings } from "./migrations";
-import { DEFAULT_CLIENT_SETTINGS, type AppSettings, type SendBehavior } from "./storage";
+import {
+  DEFAULT_CLIENT_SETTINGS,
+  loadAppSettingsFromStorage,
+  type AppSettings,
+  type SendBehavior,
+} from "./storage";
 
 function settingsWith(sendBehavior: SendBehavior): AppSettings {
   return { ...DEFAULT_CLIENT_SETTINGS, sendBehavior };
@@ -45,7 +52,7 @@ describe("migrateAppSettings", () => {
 
     expect(result.sendBehavior).toBe("steer");
     expect(storedSendBehavior(storage)).toBe("steer");
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "provider-usage-display"]);
   });
 
   it("leaves interrupt alone once the migration has run", async () => {
@@ -64,7 +71,7 @@ describe("migrateAppSettings", () => {
 
     expect(result.sendBehavior).toBe("queue");
     expect(storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "provider-usage-display"]);
   });
 
   it("marks itself applied on a fresh install without rewriting settings", async () => {
@@ -73,7 +80,7 @@ describe("migrateAppSettings", () => {
     await migrateAppSettings(settingsWith("steer"), storage);
 
     expect(storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "provider-usage-display"]);
   });
 
   it("keeps unknown migration ids written by a newer client", async () => {
@@ -83,7 +90,11 @@ describe("migrateAppSettings", () => {
 
     await migrateAppSettings(settingsWith("interrupt"), storage);
 
-    expect(appliedIds(storage)).toEqual(["some-later-migration", "steer-default"]);
+    expect(appliedIds(storage)).toEqual([
+      "some-later-migration",
+      "steer-default",
+      "provider-usage-display",
+    ]);
   });
 
   it("migrates every mobile 15px content preference to 16px", async () => {
@@ -94,7 +105,11 @@ describe("migrateAppSettings", () => {
 
     expect(result.contentFontSize).toBe(16);
     expect(storedContentFontSize(storage)).toBe(16);
-    expect(appliedIds(storage)).toEqual(["steer-default", "mobile-content-16"]);
+    expect(appliedIds(storage)).toEqual([
+      "steer-default",
+      "mobile-content-16",
+      "provider-usage-display",
+    ]);
   });
 
   it("leaves a 15px web content preference unchanged", async () => {
@@ -105,7 +120,7 @@ describe("migrateAppSettings", () => {
 
     expect(result.contentFontSize).toBe(15);
     expect(storedContentFontSize(storage)).toBeUndefined();
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "provider-usage-display"]);
   });
 
   it("lets a mobile user choose 15px after the default migration ran", async () => {
@@ -144,6 +159,59 @@ describe("migrateAppSettings", () => {
     const result = await migrateAppSettings(settingsWith("steer"), recovered);
 
     expect(result.sendBehavior).toBe("steer");
-    expect(appliedIds(recovered)).toEqual(["steer-default"]);
+    expect(appliedIds(recovered)).toEqual(["steer-default", "provider-usage-display"]);
+  });
+});
+
+afterEach(() => clearAsyncStorageStub());
+describe("legacy usage display migration", () => {
+  it("loads the legacy choice before materializing defaults in the settings store", async () => {
+    await AsyncStorage.setItem(
+      "provider-usage-preferences",
+      JSON.stringify({ state: { percentageDisplay: "remaining" } }),
+    );
+    const storage = createInMemoryKeyValueStorage();
+    expect(
+      (
+        await loadAppSettingsFromStorage({
+          storage,
+          desktop: createFakeDesktopBridge({ isElectron: true }),
+        })
+      ).usage.displayAs,
+    ).toBe("remaining");
+    expect(JSON.parse(storage.entries.get(APP_SETTINGS_KEY)!).usage.displayAs).toBe("remaining");
+  });
+  it("migrates remaining from AsyncStorage once and keeps the old key", async () => {
+    await AsyncStorage.setItem(
+      "provider-usage-preferences",
+      JSON.stringify({ state: { percentageDisplay: "remaining" } }),
+    );
+    const storage = createInMemoryKeyValueStorage();
+    const migrated = await migrateAppSettings(settingsWith("steer"), storage);
+    expect(migrated.usage.displayAs).toBe("remaining");
+    expect(JSON.parse(storage.entries.get(APP_SETTINGS_KEY)!).usage.displayAs).toBe("remaining");
+    expect(await AsyncStorage.getItem("provider-usage-preferences")).not.toBeNull();
+    expect((await migrateAppSettings(settingsWith("steer"), storage)).usage.displayAs).toBe("used");
+  });
+  it.each(["used", null])("leaves settings alone for legacy %s", async (choice) => {
+    if (choice)
+      await AsyncStorage.setItem(
+        "provider-usage-preferences",
+        JSON.stringify({ state: { percentageDisplay: choice } }),
+      );
+    expect(
+      (await migrateAppSettings(settingsWith("steer"), createInMemoryKeyValueStorage())).usage
+        .displayAs,
+    ).toBe("used");
+  });
+  it("preserves an explicit used setting", async () => {
+    await AsyncStorage.setItem(
+      "provider-usage-preferences",
+      JSON.stringify({ state: { percentageDisplay: "remaining" } }),
+    );
+    const storage = createInMemoryKeyValueStorage({
+      [APP_SETTINGS_KEY]: JSON.stringify({ usage: { displayAs: "used" } }),
+    });
+    expect((await migrateAppSettings(settingsWith("steer"), storage)).usage.displayAs).toBe("used");
   });
 });
