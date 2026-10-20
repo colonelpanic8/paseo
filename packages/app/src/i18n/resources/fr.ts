@@ -1252,6 +1252,9 @@ export const fr: TranslationResources = {
         label: "Hôte",
         all: "Tous les hôtes",
       },
+      statusHosts: {
+        label: "Hôtes en vue statut",
+      },
       projectFilter: {
         label: "Projet",
         all: "Tous les projets",
