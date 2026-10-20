@@ -373,7 +373,11 @@ function isSplitNodeHidden(node: SplitNode): boolean {
   return node.group.children.every(isSplitNodeHidden);
 }
 
-function SplitNodeView({
+// Declared separately so the recursive `<SplitNodeView>` below resolves to the memoized binding. A
+// named function expression inside `memo()` would bind its own name and recurse unmemoized.
+const SplitNodeView = memo(SplitNodeViewContent);
+
+function SplitNodeViewContent({
   node,
   workspaceKey,
   uiTabs,
