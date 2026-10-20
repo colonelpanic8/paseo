@@ -5299,9 +5299,11 @@ test("workspace recovery stays accepted when git observer warming fails", async 
     accepted: true,
     error: null,
   });
-  expect(findByType(emitted, "workspace_update")?.payload).toMatchObject({
-    kind: "upsert",
-    workspace: { id: workspace.workspaceId },
+  await vi.waitFor(() => {
+    expect(findByType(emitted, "workspace_update")?.payload).toMatchObject({
+      kind: "upsert",
+      workspace: { id: workspace.workspaceId },
+    });
   });
 });
 
