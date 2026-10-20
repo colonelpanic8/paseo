@@ -129,6 +129,8 @@ export interface ProviderSnapshotEntry {
   status: ProviderStatus;
   enabled: boolean;
   source?: "builtin" | "custom";
+  /** Builtin provider this entry extends, when it is a custom provider account. */
+  baseProviderId?: string;
   error?: string;
   models?: AgentModelDefinition[];
   modes?: AgentMode[];

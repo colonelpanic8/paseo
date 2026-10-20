@@ -21,6 +21,7 @@ const CopilotUsageResponseSchema = z.object({
 });
 
 async function readToken(input: UsageInput): Promise<string | undefined> {
+  if (input.store === "token") return input.token;
   if (input.store === "env") return process.env[input.locator];
   try {
     const raw = await fs.readFile(input.locator, "utf8");

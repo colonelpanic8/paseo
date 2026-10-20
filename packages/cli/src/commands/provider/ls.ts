@@ -6,6 +6,7 @@ import { connectToDaemon } from "../../utils/client.js";
 export interface ProviderListItem {
   provider: ProviderSnapshotEntry["provider"];
   label: string;
+  source: "builtin" | "custom";
   status: string;
   enabled: "Enabled" | "Disabled";
   defaultMode: string;
@@ -18,6 +19,7 @@ export const providerLsSchema: OutputSchema<ProviderListItem> = {
   columns: [
     { header: "PROVIDER", field: "provider", width: 12 },
     { header: "LABEL", field: "label", width: 16 },
+    { header: "SOURCE", field: "source", width: 8 },
     {
       header: "STATUS",
       field: "status",
@@ -53,6 +55,7 @@ export async function runLsCommand(
       data: snapshot.entries.map((entry) => ({
         provider: entry.provider,
         label: entry.label ?? entry.provider,
+        source: entry.source ?? "builtin",
         status: entry.status === "ready" ? "available" : entry.status,
         enabled: !entry.enabled ? "Disabled" : "Enabled",
         defaultMode: entry.defaultModeId ?? "default",
