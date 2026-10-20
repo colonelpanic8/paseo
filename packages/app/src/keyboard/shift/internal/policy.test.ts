@@ -5,7 +5,6 @@ import {
   resolveKeyboardShift,
   reserveKeyboardLayoutShift,
   shouldPublishSettledKeyboardShift,
-  shouldUseCompactExplorerKeyboardPadding,
 } from "./policy";
 
 describe("keyboard layout reservation", () => {
@@ -107,21 +106,6 @@ describe("shouldReconcileHiddenKeyboardEnd", () => {
     ).toBe(false);
   });
 });
-
-describe("shouldUseCompactExplorerKeyboardPadding", () => {
-  it("keeps the changes viewport stable while preserving padding for other tabs", () => {
-    expect(shouldUseCompactExplorerKeyboardPadding({ isGit: true, explorerTab: "changes" })).toBe(
-      false,
-    );
-    expect(shouldUseCompactExplorerKeyboardPadding({ isGit: true, explorerTab: "files" })).toBe(
-      true,
-    );
-    expect(shouldUseCompactExplorerKeyboardPadding({ isGit: false, explorerTab: "changes" })).toBe(
-      true,
-    );
-  });
-});
-
 describe("shouldPublishSettledKeyboardShift", () => {
   it("publishes once when a keyboard animation stops, not on the frames in between", () => {
     const frames = Array.from({ length: 15 }, (_, index) => ({
