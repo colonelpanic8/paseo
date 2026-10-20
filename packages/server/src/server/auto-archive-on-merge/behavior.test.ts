@@ -112,6 +112,11 @@ async function createWorkspaceJourney() {
       },
       getSnapshot: async () => snapshot(),
     },
+    workspaceRegistry: {
+      get: async () => ({ workspaceId, cwd: worktree.worktreePath, archivedAt: null }),
+      update: async () => null,
+      subscribeToMutations: () => () => {},
+    },
     listActiveWorkspaces: async () =>
       active ? [{ workspaceId, cwd: worktree.worktreePath, kind: "worktree" as const }] : [],
   } as unknown as AutoArchiveOnMergeOptions;
