@@ -49,6 +49,12 @@ export const AgentTracks = memo(function AgentTracks({
   hasPluginComposerPills: boolean;
 }): ReactElement | null {
   const { tabId } = usePaneContext();
+  const cwd = useSessionStore(
+    (state) =>
+      state.sessions[serverId]?.agents.get(agentId)?.cwd ??
+      state.sessions[serverId]?.agentDetails.get(agentId)?.cwd ??
+      null,
+  );
   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
   const isCompact = useIsCompactFormFactor();
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
@@ -119,6 +125,7 @@ export const AgentTracks = memo(function AgentTracks({
       <SubagentsTrack
         serverId={serverId}
         rows={subagentRows}
+        cwd={cwd}
         onOpenSubagent={handleOpenSubagent}
         onOpenProviderSubagent={handleOpenProviderSubagent}
         opensInSheet={opensInSheet}
