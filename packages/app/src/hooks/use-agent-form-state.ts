@@ -186,6 +186,8 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
     refresh: refreshSnapshot,
     refetchIfStale: refetchSnapshotIfStale,
   } = useProvidersSnapshot(serverId, { cwd: workingDir });
+  // The snapshot query is disabled while the host is unreachable, so resolution
+  // stays pending with no data. That is not "loading"; it resumes on reconnect.
 
   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
 
