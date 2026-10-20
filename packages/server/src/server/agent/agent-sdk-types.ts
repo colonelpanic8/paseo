@@ -11,6 +11,7 @@ import type {
 import type { AgentMessage } from "@getpaseo/protocol/agent-message";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { PaseoToolCatalog } from "./tools/types.js";
+import type { ProcessEnvRecord } from "../paseo-env.js";
 
 export type {
   AgentFeature,
@@ -628,7 +629,8 @@ export interface AgentSessionConfig {
 
 export interface AgentLaunchContext {
   agentId?: string;
-  env?: Record<string, string>;
+  /** An `undefined` value unsets the variable for the launched process. */
+  env?: ProcessEnvRecord;
   /**
    * Runtime-only internal Paseo tools. This must never be persisted into
    * AgentSessionConfig; providers may adapt it to their native tool surface.
