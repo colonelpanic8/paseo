@@ -105,7 +105,7 @@ function resolveEventTargetNode(event: unknown): Node | null {
 // opening that combobox from a keyboard shortcut focuses the overlay and shows
 // the tooltip, and the overlay unmounts while focused so the balancing blur
 // never arrives and the tooltip is stranded on screen.
-function isEventOnTrigger(event: unknown, trigger: View | null): boolean {
+function isEventOnTrigger(event: unknown, trigger: TooltipTriggerElement | null): boolean {
   if (!isWeb || typeof Node === "undefined") return true;
   const triggerNode: unknown = trigger;
   if (!(triggerNode instanceof Node)) return true;
