@@ -6,7 +6,6 @@ import type {
   AgentProvider,
   ProviderSnapshotEntry,
 } from "@getpaseo/protocol/agent-types";
-import { useHostRuntimeConnectionStatus } from "@/runtime/host-runtime";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import {
   buildSelectableProviderSelectorProviders,
@@ -37,6 +36,7 @@ import {
   type FormState,
   type ProviderModelsByProvider,
 } from "@/provider-selection/resolve-agent-form";
+import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import type { MaterializedAgentProfile } from "@/agent-profiles";
 
 export type { FormInitialValues } from "@/provider-selection/resolve-agent-form";
@@ -186,10 +186,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
     refresh: refreshSnapshot,
     refetchIfStale: refetchSnapshotIfStale,
   } = useProvidersSnapshot(serverId, { cwd: workingDir });
-  const hostConnectionStatus = useHostRuntimeConnectionStatus(serverId ?? "");
   // The snapshot query is disabled while the host is unreachable, so resolution
   // stays pending with no data. That is not "loading"; it resumes on reconnect.
-  const isHostUnreachable = hostConnectionStatus === "offline" || hostConnectionStatus === "error";
+
+  const isConnected = useHostRuntimeIsConnected(serverId ?? "");
 
   const allProviderEntries = useMemo(() => snapshotEntries ?? [], [snapshotEntries]);
   const snapshotProviderDefinitions = useMemo(
@@ -225,8 +225,8 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
     [snapshotEntries],
   );
   const snapshotModelSelectorProviders = useMemo(
-    () => buildSelectableProviderSelectorProviders(snapshotEntries),
-    [snapshotEntries],
+    () => buildSelectableProviderSelectorProviders(snapshotEntries, isConnected),
+    [snapshotEntries, isConnected],
   );
   const snapshotSelectedEntry = useMemo(
     () =>
@@ -252,7 +252,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
   const availableModels = snapshotSelectedProviderModels;
   const modeOptions = snapshotSelectedProviderModes;
   const isModelSelectionLoading =
-    !isHostUnreachable &&
+    isConnected &&
     (resolution.status === "pending" || snapshotIsLoading || selectedProviderIsLoading);
   const isAllModelsLoading = isModelSelectionLoading;
 

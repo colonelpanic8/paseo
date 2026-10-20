@@ -17,12 +17,26 @@ function validate(overrides = {}) {
     composerState: baseComposerState,
     autoSubmitConfig: null,
     workspaceDirectory: "/tmp/project",
-    hasClient: true,
+    isConnected: true,
     ...overrides,
   });
 }
 
 describe("workspace draft agent model validation", () => {
+  test("reports an offline host before an absent catalog or pending model defaults", () => {
+    expect(
+      validate({
+        isConnected: false,
+        composerState: {
+          ...baseComposerState,
+          providerDefinitions: [],
+          selectedProvider: null,
+          isModelLoading: true,
+        },
+      }),
+    ).toBe("Host is not connected");
+  });
+
   test("allows a ready provider with no models to submit without a selected model", () => {
     expect(validate({})).toBeNull();
   });
@@ -30,7 +44,7 @@ describe("workspace draft agent model validation", () => {
   test("reports the disconnected host before the empty provider list", () => {
     expect(
       validate({
-        hasClient: false,
+        isConnected: false,
         composerState: {
           ...baseComposerState,
           providerDefinitions: [],
