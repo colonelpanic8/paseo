@@ -8,7 +8,6 @@
 import { useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Pressable,
   ScrollView,
   Text,
   View,
@@ -18,6 +17,8 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronDown, ChevronUp, Mic, MicOff, PhoneOff, Volume2 } from "lucide-react-native";
 import type { Theme } from "@/styles/theme";
+import { Button } from "@/components/ui/button";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
 import type { LiveVoicePhase, LiveVoiceTranscriptEntry } from "@/live-voice/live-voice-runtime";
 
@@ -86,56 +87,50 @@ export function LiveVoiceCallControls({
   return (
     <>
       {isAudioBlocked ? (
-        <Pressable
-          onPress={handleResumeAudio}
-          accessibilityRole="button"
-          accessibilityLabel={t("liveVoice.actions.enableAudio")}
-          style={styles.enableAudioButton}
-        >
-          <ThemedVolume2 size={ICON_SIZE} uniProps={iconForegroundMapping} />
-          <Text style={styles.enableAudioLabel}>{t("liveVoice.actions.enableAudio")}</Text>
-        </Pressable>
+        <Button variant="outline" size="xs" leftIcon={Volume2} onPress={handleResumeAudio}>
+          {t("liveVoice.actions.enableAudio")}
+        </Button>
       ) : null}
 
       {phase === "active" ? (
-        <Pressable
+        <ToolbarButton
+          compact
+          tooltipSide="top"
+          label={isMuted ? t("liveVoice.actions.unmute") : t("liveVoice.actions.mute")}
           onPress={handleToggleMute}
-          accessibilityRole="button"
-          accessibilityLabel={isMuted ? t("liveVoice.actions.unmute") : t("liveVoice.actions.mute")}
-          style={styles.iconButton}
         >
           {isMuted ? (
             <ThemedMicOff size={ICON_SIZE} uniProps={iconDangerMapping} />
           ) : (
             <ThemedMic size={ICON_SIZE} uniProps={iconForegroundMapping} />
           )}
-        </Pressable>
+        </ToolbarButton>
       ) : null}
 
-      <Pressable
-        onPress={onToggleExpanded}
-        accessibilityRole="button"
-        accessibilityLabel={
+      <ToolbarButton
+        compact
+        tooltipSide="top"
+        label={
           isExpanded ? t("liveVoice.actions.hideTranscript") : t("liveVoice.actions.showTranscript")
         }
-        style={styles.iconButton}
+        onPress={onToggleExpanded}
       >
         {isExpanded ? (
           <ThemedChevronDown size={ICON_SIZE} uniProps={iconForegroundMapping} />
         ) : (
           <ThemedChevronUp size={ICON_SIZE} uniProps={iconForegroundMapping} />
         )}
-      </Pressable>
+      </ToolbarButton>
 
-      <Pressable
-        onPress={handleStop}
+      <ToolbarButton
+        compact
+        tooltipSide="top"
+        label={t("liveVoice.actions.stop")}
         disabled={phase === "stopping"}
-        accessibilityRole="button"
-        accessibilityLabel={t("liveVoice.actions.stop")}
-        style={styles.iconButton}
+        onPress={handleStop}
       >
         <ThemedPhoneOff size={ICON_SIZE} uniProps={iconDangerMapping} />
-      </Pressable>
+      </ToolbarButton>
     </>
   );
 }
@@ -209,7 +204,6 @@ export function LiveVoiceStatusDot({ phase }: { phase: LiveVoicePhase }) {
 const ThemedMic = withUnistyles(Mic);
 const ThemedMicOff = withUnistyles(MicOff);
 const ThemedPhoneOff = withUnistyles(PhoneOff);
-const ThemedVolume2 = withUnistyles(Volume2);
 const ThemedChevronUp = withUnistyles(ChevronUp);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 
@@ -230,28 +224,6 @@ const styles = StyleSheet.create((theme) => ({
     height: 8,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.foregroundMuted,
-  },
-  iconButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: 24,
-    height: 24,
-    borderRadius: theme.borderRadius.md,
-  },
-  enableAudioButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: 2,
-  },
-  enableAudioLabel: {
-    fontFamily: theme.fontFamily.ui,
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foreground,
   },
   transcript: {
     gap: theme.spacing[1],

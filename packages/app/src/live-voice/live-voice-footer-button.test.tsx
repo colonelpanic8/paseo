@@ -129,6 +129,14 @@ vi.mock("react-native-unistyles", () => ({
   withUnistyles: <T,>(component: T) => component,
 }));
 
+vi.mock("@/components/ui/pane-content-toolbar", () => ({
+  ToolbarButton: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock("@/components/ui/button", () => ({
+  Button: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 vi.mock("lucide-react-native", () => {
   const Icon = () => null;
   return {
