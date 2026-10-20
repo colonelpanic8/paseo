@@ -10,8 +10,9 @@ import { dirname, join, relative } from "node:path";
 // the patch's node_modules/... paths relative to its working directory.
 const patchedPackages = [
   {
-    nodeModulesPath: "node_modules/react-native-markdown-display",
-    patchPrefix: "react-native-markdown-display+",
+    nodeModulesPath: "packages/app/node_modules/react-native-enriched-markdown",
+    patchPrefix: "react-native-enriched-markdown+",
+    cwd: "packages/app",
   },
   // Remove after react-native-unistyles ships
   // https://github.com/jpudysz/react-native-unistyles/pull/1203.
@@ -27,9 +28,18 @@ const patchedPackages = [
     nodeModulesPath: "node_modules/react-native-gesture-handler",
     patchPrefix: "react-native-gesture-handler+",
   },
+  // Exports BottomSheetModalInternalProvider so a subtree can host its own sheets on the shared
+  // modal stack (see packages/app/src/components/ui/isolated-bottom-sheet-modal/host-scope.tsx), and
+  // keeps a dismissing modal's status through its final onChange(-1), so a modal with
+  // enableDismissOnClose=false that unmounts while presented still leaves the portal.
   {
-    nodeModulesPath: "node_modules/react-native-svg",
+    nodeModulesPath: "node_modules/@gorhom/bottom-sheet",
+    patchPrefix: "@gorhom+bottom-sheet+",
+  },
+  {
+    nodeModulesPath: "packages/app/node_modules/react-native-svg",
     patchPrefix: "react-native-svg+",
+    cwd: "packages/app",
   },
   {
     nodeModulesPath: "node_modules/@mattermost/react-native-paste-input",
@@ -52,19 +62,15 @@ if (!existsSync("patches") || installedPackages.length === 0) {
 
 const patchFiles = readdirSync("patches").filter((file) => file.endsWith(".patch"));
 
-// Group patch files by the directory patch-package must run from.
-const patchFilesByCwd = new Map();
-for (const { patchPrefix, cwd = "." } of installedPackages) {
-  const files = patchFiles.filter((file) => file.startsWith(patchPrefix));
-  if (files.length === 0) {
-    continue;
-  }
-  const group = patchFilesByCwd.get(cwd) ?? [];
-  group.push(...files);
-  patchFilesByCwd.set(cwd, group);
-}
+const applicablePackages = installedPackages
+  .map(({ nodeModulesPath, patchPrefix, cwd }) => ({
+    nodeModulesPath,
+    cwd,
+    files: patchFiles.filter((file) => file.startsWith(patchPrefix)),
+  }))
+  .filter(({ files }) => files.length > 0);
 
-if (patchFilesByCwd.size === 0) {
+if (applicablePackages.length === 0) {
   process.exit(0);
 }
 
@@ -96,11 +102,30 @@ if (patchPackageEntry === undefined) {
   process.exit(1);
 }
 
-let groupIndex = 0;
-for (const [cwd, files] of patchFilesByCwd) {
-  groupIndex += 1;
-  const tempPatchDir = join(".tmp", `postinstall-patches-${process.pid}-${groupIndex}`);
+let failed = false;
+for (const [index, { nodeModulesPath, cwd = ".", files }] of applicablePackages.entries()) {
+  const outcome = applyPatches(cwd, files, index);
+  if (outcome === "applied") {
+    continue;
+  }
+  failed = true;
+  if (outcome === "unavailable") {
+    continue;
+  }
+  // patch-package cannot apply a patch that changed after an earlier version of it was
+  // applied. Without the package, the next install fetches it clean and applies the patch.
+  rmSync(nodeModulesPath, { recursive: true, force: true });
+  console.error(
+    `postinstall-patches: removed ${nodeModulesPath} because its patch did not apply. ` +
+      "Run npm install again to reinstall it with the current patch. " +
+      "If it fails again on the clean package, the patch is out of date and must be regenerated.",
+  );
+}
 
+process.exit(failed ? 1 : 0);
+
+function applyPatches(cwd, files, index) {
+  const tempPatchDir = join(".tmp", `postinstall-patches-${process.pid}-${index}`);
   mkdirSync(tempPatchDir, { recursive: true });
   for (const patchFile of files) {
     copyFileSync(join("patches", patchFile), join(tempPatchDir, patchFile));
@@ -110,7 +135,7 @@ for (const [cwd, files] of patchFilesByCwd) {
   try {
     result = spawnSync(
       process.execPath,
-      [patchPackageEntry, "--patch-dir", relative(cwd, tempPatchDir)],
+      [patchPackageEntry, "--patch-dir", relative(cwd, tempPatchDir), "--error-on-fail"],
       {
         cwd,
         stdio: "inherit",
@@ -123,10 +148,7 @@ for (const [cwd, files] of patchFilesByCwd) {
 
   if (result.error) {
     console.error("postinstall-patches: patch-package failed to spawn:", result.error.message);
+    return "unavailable";
   }
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
+  return result.status === 0 ? "applied" : "rejected";
 }
-
-process.exit(0);
