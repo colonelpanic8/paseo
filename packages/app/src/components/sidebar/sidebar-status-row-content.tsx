@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
-import { Pressable, Text, View, type GestureResponderEvent } from "react-native";
+import { Text, View, type GestureResponderEvent } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Archive } from "lucide-react-native";
 import { DiffStat } from "@/components/diff-stat";
@@ -449,7 +450,7 @@ export function SidebarStatusRowArchiveAction({
   );
 
   return (
-    <Pressable
+    <PressHighlight
       // The row itself is a <button> on web; a nested button is invalid HTML.
       accessibilityRole={isWeb ? undefined : "button"}
       accessibilityLabel={label}
@@ -466,7 +467,7 @@ export function SidebarStatusRowArchiveAction({
         uniProps={isHovered ? foregroundColorMapping : foregroundMutedColorMapping}
       />
       <Text style={textStyle}>{label}</Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 

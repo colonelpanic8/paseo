@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { StyleSheet } from "react-native-unistyles";
 import equal from "fast-deep-equal";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -337,7 +338,7 @@ function AgentTreeRowItem({
   }, [row, tree.serverId, tree.workspaceId]);
 
   return (
-    <Pressable
+    <PressHighlight
       accessibilityRole="button"
       style={rowStyle}
       onHoverIn={handleHoverIn}
@@ -357,7 +358,7 @@ function AgentTreeRowItem({
       <Text style={styles.title} numberOfLines={1}>
         {row.label}
       </Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 
