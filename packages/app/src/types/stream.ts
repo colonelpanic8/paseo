@@ -1008,13 +1008,14 @@ function applyAssistantAttribution(
   state: StreamItem[],
   messageId: string,
   attributionFields: AssistantMessageAttribution,
+  questionsPatch?: Pick<AssistantMessageItem, "questions">,
 ): StreamItem[] {
   for (let index = state.length - 1; index >= 0; index -= 1) {
     const entry = state[index];
     if (entry.kind !== "assistant_message" || entry.messageId !== messageId) {
       continue;
     }
-    const updated: AssistantMessageItem = { ...entry, ...attributionFields };
+    const updated: AssistantMessageItem = { ...entry, ...attributionFields, ...questionsPatch };
     return [...state.slice(0, index), updated, ...state.slice(index + 1)];
   }
   return state;
@@ -1053,7 +1054,17 @@ function appendAssistantMessage(
   }
 
   if (chunk === "" && messageId !== undefined) {
-    return applyAssistantAttribution(state, messageId, attributionFields, questionsPatch);
+    const attributed = applyAssistantAttribution(
+      state,
+      messageId,
+      attributionFields,
+      questionsPatch,
+    );
+    // An empty frame that only carries questions has no row to attribute yet, and the
+    // questions still have to appear.
+    if (attributed !== state || !hasQuestions) {
+      return attributed;
+    }
   }
 
   if (!hasAssistantDisplayContent(hasContent, hasQuestions)) {
