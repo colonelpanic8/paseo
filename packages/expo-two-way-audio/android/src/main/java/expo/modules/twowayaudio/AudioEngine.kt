@@ -175,6 +175,7 @@ class AudioEngine (context: Context) {
 
     @SuppressLint("NewApi")
     private fun releaseCommunicationRoute() {
+        if (!communicationRouteActive) return
         communicationRouteActive = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
@@ -197,6 +198,7 @@ class AudioEngine (context: Context) {
         if (isRecording || isPlaying) {
             return
         }
+        isRecordingBeforePause = false
         audioFocusRequest?.let { request ->
             audioManager.abandonAudioFocusRequest(request)
             audioFocusRequest = null
