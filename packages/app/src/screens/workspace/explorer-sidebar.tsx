@@ -21,6 +21,7 @@ interface ExplorerSidebarDockProps extends Pick<
   WorkspaceDesktopTabsRowProps,
   | "setHoveredCloseTabKey"
   | "onCopyResumeCommand"
+  | "onCopyConversation"
   | "onCopyAgentId"
   | "onCopyTerminalId"
   | "onCopyFilePath"
@@ -63,6 +64,7 @@ export function ExplorerSidebarDock({
   hoveredCloseTabKey,
   setHoveredCloseTabKey,
   onCopyResumeCommand,
+  onCopyConversation,
   onCopyAgentId,
   onCopyTerminalId,
   onCopyFilePath,
@@ -131,6 +133,7 @@ export function ExplorerSidebarDock({
                 ownsKeyboardShortcuts={false}
                 setHoveredCloseTabKey={setHoveredCloseTabKey}
                 onCopyResumeCommand={onCopyResumeCommand}
+                onCopyConversation={onCopyConversation}
                 onCopyAgentId={onCopyAgentId}
                 onCopyTerminalId={onCopyTerminalId}
                 onCopyFilePath={onCopyFilePath}
