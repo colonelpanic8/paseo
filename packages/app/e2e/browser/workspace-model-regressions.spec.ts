@@ -90,7 +90,7 @@ async function switchSidebarToStatusGrouping(page: import("@playwright/test").Pa
 }
 
 function statusGroupRows(page: import("@playwright/test").Page, bucket: string) {
-  return page.getByTestId(`sidebar-status-group-rows-${bucket}`);
+  return page.getByTestId(`sidebar-status-row-${bucket}`);
 }
 
 async function expectWorkspaceRowInStatusBucket(
