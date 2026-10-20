@@ -1995,6 +1995,11 @@ export const ptBR: TranslationResources = {
     archiveTooltip: "Arquivar subagente",
     archiveFinishedAction: "Arquivar subagentes concluídos",
     archiveFinishedRetry: "Tentar novamente ({{failed}}/{{total}})",
+    ownership: {
+      paseo: "Paseo",
+      native: "Nativo",
+    },
+    rowAccessibilityLabel: "{{label}}, subagente {{ownership}}",
   },
   panels: {
     draft: {
@@ -2104,6 +2109,8 @@ export const ptBR: TranslationResources = {
     used: "{{percentage}}% usado",
     tokens: "{{used}} / {{max}} tokens",
     sessionCost: "Custo da sessão {{cost}}",
+    model: "Modelo {{model}}",
+    thinking: "Raciocínio {{thinking}}",
     accessibility: "Janela de contexto {{percentage}}% usada",
   },
   review: {
