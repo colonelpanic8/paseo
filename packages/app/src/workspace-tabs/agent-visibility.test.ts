@@ -17,6 +17,7 @@ function makeAgent(input: {
   archivedAt?: Date | null;
   createdAt?: Date;
   lastActivityAt?: Date;
+  labels?: Record<string, string>;
 }): Agent {
   const createdAt = input.createdAt ?? new Date("2026-03-04T00:00:00.000Z");
   const lastActivityAt = input.lastActivityAt ?? createdAt;
@@ -52,7 +53,7 @@ function makeAgent(input: {
     model: null,
     thinkingOptionId: null,
     parentAgentId: input.parentAgentId ?? null,
-    labels: {},
+    labels: input.labels ?? {},
     requiresAttention: false,
     attentionReason: null,
     attentionTimestamp: null,

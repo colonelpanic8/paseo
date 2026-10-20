@@ -6,7 +6,7 @@ import { ProjectIconView } from "@/components/project-icon-view";
 import { getStatusBucketLabel } from "@/hooks/sidebar-status-view-model";
 import { densityIconBox, densityIconProps } from "@/styles/density";
 import type { Theme } from "@/styles/theme";
-import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { SidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-model";
 import {
   getProjectStatusBadgeContent,
   type ProjectStatusBadgeContent,
@@ -21,6 +21,9 @@ import {
 import { StatusRing } from "@/components/status-ring";
 import { getStatusRingOffset } from "@/components/status-ring/geometry";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
+import { ReadyToReviewBadge } from "@/components/sidebar/ready-to-review-badge";
+
+type SidebarStatusBucket = SidebarWorkspaceEntry["statusBucket"];
 
 // Every surfaced status shares one badge shell, so the badge never changes size or position
 // between states. Only the thing inside it changes.
@@ -61,6 +64,7 @@ export function ProjectLeadingVisual({
   displayName,
   iconDataUri,
   statusBucket,
+  readyToReview = false,
   projectViewKey,
   backdrop,
   chevron = null,
@@ -70,7 +74,8 @@ export function ProjectLeadingVisual({
   displayName: string;
   iconDataUri: string | null;
   /** Aggregate status of the project's workspaces; null when it shouldn't be surfaced. */
-  statusBucket: SidebarStateBucket | null;
+  statusBucket: SidebarStatusBucket | null;
+  readyToReview?: boolean;
   projectViewKey: string;
   /** The row's current background, so the status badge can knock out of it. */
   backdrop: SidebarSurfaceBackdrop;
@@ -100,6 +105,7 @@ export function ProjectLeadingVisual({
       displayName={displayName}
       projectViewKey={projectViewKey}
       statusBucket={statusBucket}
+      readyToReview={readyToReview}
       backdrop={backdrop}
     />
   );
@@ -115,6 +121,7 @@ export function ProjectStatusIndicator({
   displayName,
   projectViewKey,
   statusBucket,
+  readyToReview = false,
   backdrop,
   loading = false,
   testID,
@@ -122,7 +129,8 @@ export function ProjectStatusIndicator({
   iconDataUri: string | null;
   displayName: string;
   projectViewKey: string;
-  statusBucket: SidebarStateBucket | null;
+  statusBucket: SidebarStatusBucket | null;
+  readyToReview?: boolean;
   /** The row's current background, so the status badge can knock out of it. */
   backdrop: SidebarSurfaceBackdrop;
   loading?: boolean;
@@ -160,6 +168,11 @@ export function ProjectStatusIndicator({
             backdrop={backdrop}
           />
         )}
+        {readyToReview ? (
+          <View style={styles.readyToReviewBadge}>
+            <ReadyToReviewBadge />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -171,7 +184,7 @@ function ProjectStatusBadge({
   backdrop,
 }: {
   content: ProjectStatusBadgeContent;
-  statusBucket: SidebarStateBucket;
+  statusBucket: SidebarStatusBucket;
   backdrop: SidebarSurfaceBackdrop;
 }) {
   const { t } = useTranslation();
@@ -255,8 +268,7 @@ function ProjectInlineChevron({ chevron }: { chevron: "expand" | "collapse" | nu
 
 function getStatusDotColorStyle(bucket: ProjectStatusBadgeDotBucket): ViewStyle {
   if (bucket === "failed") return styles.statusDotFailed;
-  if (bucket === "running") return styles.statusDotRunning;
-  return styles.statusDotAttention;
+  return styles.statusDotRunning;
 }
 
 const styles = StyleSheet.create((theme) => {
@@ -318,8 +330,12 @@ const styles = StyleSheet.create((theme) => {
     statusBadgeOnSidebarHover: { backgroundColor: theme.colors.surfaceSidebarHover },
     statusBadgeOnSidebarSelected: { backgroundColor: theme.colors.surfaceSidebarSelected },
     statusBadgeOnSurface2: { backgroundColor: theme.colors.surface2 },
+    readyToReviewBadge: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+    },
     statusDotRunning: statusDot("running"),
     statusDotFailed: statusDot("failed"),
-    statusDotAttention: statusDot("attention"),
   };
 });
