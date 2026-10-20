@@ -12,6 +12,7 @@ import {
   type ArchiveFinishedStatus,
   useArchiveSubagent,
   useDetachSubagent,
+  useSubagentOpensInSheet,
   type SubagentRow,
 } from "@/subagents";
 import { SubagentsTrack } from "@/subagents/track";
@@ -32,7 +33,6 @@ export const AgentTracks = memo(function AgentTracks({
   serverId,
   workspaceId,
   agentId,
-  cwd,
   subagentRows,
   tasks,
   archiveFinishedStatus,
@@ -42,7 +42,6 @@ export const AgentTracks = memo(function AgentTracks({
   serverId: string;
   workspaceId: string;
   agentId: string;
-  cwd: string;
   subagentRows: SubagentRow[];
   tasks: TodoEntry[] | undefined;
   archiveFinishedStatus: ArchiveFinishedStatus;
@@ -90,6 +89,7 @@ export const AgentTracks = memo(function AgentTracks({
     },
     [openSubagentTarget],
   );
+  const opensInSheet = useSubagentOpensInSheet(workspaceKey);
   const handleOpenChanges = useCallback(() => {
     if (!workspaceKey) {
       return;
@@ -97,10 +97,9 @@ export const AgentTracks = memo(function AgentTracks({
     openComposerChanges({
       isCompact,
       workspaceKey,
-      checkout: { serverId, cwd, isGit: true },
       preferences: openInSidePane,
     });
-  }, [cwd, isCompact, openInSidePane, serverId, workspaceKey]);
+  }, [isCompact, openInSidePane, workspaceKey]);
 
   if (
     !hasWorkspaceDiffStat &&
@@ -122,6 +121,7 @@ export const AgentTracks = memo(function AgentTracks({
         rows={subagentRows}
         onOpenSubagent={handleOpenSubagent}
         onOpenProviderSubagent={handleOpenProviderSubagent}
+        opensInSheet={opensInSheet}
         onArchiveSubagent={archiveSubagent}
         onArchiveFinished={onArchiveFinished}
         archiveFinishedStatus={archiveFinishedStatus}
