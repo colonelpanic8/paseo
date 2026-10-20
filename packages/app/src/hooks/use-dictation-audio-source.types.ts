@@ -9,4 +9,5 @@ export interface DictationAudioSource {
   /** The caller awaits startup before stopping and owns unmount cleanup. */
   stop: () => Promise<void>;
   volume: number;
+  isPaused: boolean;
 }
