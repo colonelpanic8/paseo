@@ -126,6 +126,9 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
     messageId: z.string().optional(),
     text: z.string(),
     // Reject old caches containing display fragments; refetch the complete source text.
+    questions: z
+      .array(z.strictObject({ title: z.string(), options: z.array(z.string()).optional() }))
+      .optional(),
   }),
   z.strictObject({
     ...TimelineItemBaseShape,
@@ -458,6 +461,7 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         kind: item.kind,
         ...(item.messageId ? { messageId: item.messageId } : {}),
         text: item.text,
+        ...(item.questions ? { questions: item.questions } : {}),
       };
     case "thought":
       return { ...base, kind: item.kind, text: item.text, status: item.status };
@@ -548,6 +552,7 @@ function deserializeBuiltinTimelineItem(
         kind: item.kind,
         ...(item.messageId ? { messageId: item.messageId } : {}),
         text: item.text,
+        ...(item.questions ? { questions: item.questions } : {}),
       };
     case "thought":
       return { ...base, kind: item.kind, text: item.text, status: item.status };
