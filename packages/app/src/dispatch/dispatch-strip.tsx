@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
@@ -241,9 +241,9 @@ export function DispatchStrip() {
           </>
         ) : null}
         {phase.kind === "sent" || phase.kind === "failed" ? (
-          <Pressable onPress={handleDismiss} accessibilityRole="button" testID="dispatch-dismiss">
-            <Text style={styles.dismiss}>{t("dispatch.dismiss")}</Text>
-          </Pressable>
+          <Button variant="ghost" size="sm" onPress={handleDismiss} testID="dispatch-dismiss">
+            {t("dispatch.dismiss")}
+          </Button>
         ) : null}
       </View>
       {detail ? (
@@ -302,11 +302,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   spacer: {
     flex: 1,
-  },
-  dismiss: {
-    fontFamily: theme.fontFamily.ui,
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foreground,
   },
   detail: {
     fontFamily: theme.fontFamily.ui,
