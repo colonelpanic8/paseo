@@ -1,4 +1,4 @@
-import { type Router, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type {
   AgentForkContextOptions,
@@ -150,7 +150,7 @@ async function openNativeFork(input: {
 }
 
 function stageNativeForkInNewWorkspace(input: {
-  router: Router;
+  router: ReturnType<typeof useRouter>;
   serverId: string;
   agentId: string;
   agent: ForkAgentSource;
@@ -199,7 +199,7 @@ function buildForkDraftTabTarget(
  */
 async function openSummaryFork(input: {
   client: DaemonClient;
-  router: Router;
+  router: ReturnType<typeof useRouter>;
   serverId: string;
   agentId: string;
   agent: ForkAgentSource;
