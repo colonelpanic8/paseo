@@ -1,6 +1,12 @@
 import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
 import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import type { QueryClient } from "@tanstack/react-query";
+import {
+  DEFAULT_COMMAND_SIGIL,
+  DEFAULT_SKILL_SIGIL,
+  resolveComposerSigils,
+  type ComposerSigil,
+} from "@/composer/tokens/sigils";
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import type { AppLanguage } from "@/i18n/locales";
 import type { SidebarNavPreference } from "@/sidebar-nav/model";
@@ -105,6 +111,10 @@ export interface AppSettings {
   chatOutlineEnabled: boolean;
   modelPickerStartsWithAllModels: boolean;
   vimKeybindings: boolean;
+  /** Character that opens the full command menu at the start of a prompt. */
+  commandTriggerSigil: ComposerSigil;
+  /** Character that opens the skills-only menu anywhere in a message. */
+  skillTriggerSigil: ComposerSigil;
   filePanelAssociations: Record<string, string>;
   /** Desktop-only preferences for implicit opens into the ordinary side pane. */
   openInSidePane: OpenInSidePanePreferences;
@@ -163,6 +173,8 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   chatOutlineEnabled: true,
   modelPickerStartsWithAllModels: false,
   vimKeybindings: false,
+  commandTriggerSigil: DEFAULT_COMMAND_SIGIL,
+  skillTriggerSigil: DEFAULT_SKILL_SIGIL,
   filePanelAssociations: {},
   openInSidePane: DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES,
   pullRequestOpenLocation: "explorer",
@@ -266,6 +278,8 @@ const StoredAppSettingsSchema = z
     chatOutlineEnabled: z.boolean().catch(true),
     modelPickerStartsWithAllModels: z.boolean().catch(false),
     vimKeybindings: z.boolean().catch(false),
+    commandTriggerSigil: z.string().optional(),
+    skillTriggerSigil: z.string().optional(),
     filePanelAssociations: z.record(z.string(), z.string()).catch({}),
     openInSidePane: z
       .object({
@@ -298,6 +312,10 @@ const StoredAppSettingsSchema = z
   })
   .transform((stored) => {
     const { legacyPullRequestsInSidePane, ...openInSidePane } = stored.openInSidePane;
+    const composerSigils = resolveComposerSigils({
+      command: stored.commandTriggerSigil,
+      skill: stored.skillTriggerSigil,
+    });
     const needsWrite =
       (stored.uiBaseFontSize === undefined && stored.uiFontSize !== undefined) ||
       stored.contentFontSize === undefined;
@@ -315,6 +333,8 @@ const StoredAppSettingsSchema = z
       stored.toolCallDetailLevel ?? (stored.compactToolCalls ? "overview" : "detailed");
     return {
       ...stored,
+      commandTriggerSigil: composerSigils.command,
+      skillTriggerSigil: composerSigils.skill,
       openInSidePane,
       pullRequestOpenLocation:
         stored.pullRequestOpenLocation ?? (legacyPullRequestsInSidePane ? "side" : "explorer"),
@@ -366,7 +386,7 @@ export async function saveAppSettings(input: {
     (await loadAppSettingsFromStorage(input.deps));
   const current = normalizeAppSettings(storedCurrent);
   const updates = typeof input.updates === "function" ? input.updates(current) : input.updates;
-  const next = { ...current, ...updates };
+  const next = normalizeAppSettings({ ...current, ...updates });
   input.queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
   await writeAppSettings(
     input.deps.storage,
