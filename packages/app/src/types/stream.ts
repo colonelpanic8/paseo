@@ -711,9 +711,6 @@ export interface AssistantMessageItem {
   timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
-  /** Display-only fields, assigned after source-item plugin transforms. */
-  blockGroupId?: string;
-  blockIndex?: number;
   /**
    * What the provider actually ran for this message. Absent on turns recorded
    * before the daemon reported it, and on providers that never report it, so
