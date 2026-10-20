@@ -209,6 +209,19 @@ export const PASEO_TOOL_CATALOG = {
       outputFields: ["workspaceId", "archivedAgentIds", "removedDirectory"],
     },
   },
+  snooze_workspace: {
+    label: "Snooze workspace",
+    context: field("duration", "until", "workspaceId"),
+    detail: {
+      inputOrder: ["workspaceId", "duration", "until"],
+      outputFields: ["workspaceId", "snoozed", "snoozeStatus"],
+    },
+  },
+  wake_workspace: {
+    label: "Wake workspace",
+    context: field("workspaceId"),
+    detail: { inputOrder: ["workspaceId"], outputFields: ["workspaceId", "snoozed"] },
+  },
   list_workspace_scripts: { label: "List scripts", detail: { inputOrder: ["workspaceId"] } },
   start_workspace_script: {
     label: "Start script",
