@@ -225,7 +225,6 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
       anchorRef={host.anchorRef}
       includeAddHost={isCompact}
       onAddHost={host.onAddHost}
-      searchable={false}
       title={t("newWorkspace.fields.host")}
       desktopPlacement="bottom-start"
       desktopMinWidth={200}
