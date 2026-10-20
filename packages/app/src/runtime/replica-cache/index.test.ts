@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
 import {
   normalizeProjectDescriptor,
@@ -1204,6 +1204,47 @@ describe("ReplicaCache", () => {
     expect(read.checkpoint).toEqual({ agents: { generation: "g2", afterSeq: 1 } });
     expect(await cache.readTimeline(SERVER_ID, "agent-1")).toEqual(timeline());
     expect(storage.writes).toBe(2);
+  });
+
+  describe("persist retry", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("backs off exponentially while storage keeps failing", async () => {
+      vi.useFakeTimers();
+      const warn = vi.spyOn(console, "warn").mockImplementation(vi.fn());
+      const storage = new MemoryStorage();
+      const error = new Error("quota exceeded");
+      storage.persistentWriteFailure = error;
+      const cache = createCache(storage);
+      cache.commitTimeline(SERVER_ID, "agent-1", timeline());
+      const writeSeconds: number[] = [];
+      for (let second = 1; second <= 30; second += 1) {
+        await vi.advanceTimersByTimeAsync(1_000);
+        if (storage.writes > writeSeconds.length) writeSeconds.push(second);
+      }
+
+      expect(writeSeconds).toEqual([1, 2, 4, 8, 16]);
+      expect(warn).toHaveBeenCalledTimes(5);
+      for (const [index, retryDelayMs] of [1_000, 2_000, 4_000, 8_000, 16_000].entries()) {
+        expect(warn).toHaveBeenNthCalledWith(
+          index + 1,
+          "[ReplicaCache] Failed to persist replica rows",
+          {
+            failures: index + 1,
+            retryDelayMs,
+            error,
+          },
+        );
+      }
+      storage.persistentWriteFailure = null;
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(storage.writes).toBe(6);
+      expect(storage.rows.size).toBe(1);
+      expect(warn).toHaveBeenCalledTimes(5);
+    });
   });
 });
 
