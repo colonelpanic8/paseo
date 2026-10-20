@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { ComposerAttachment } from "@/attachments/types";
 import {
@@ -150,6 +150,10 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
   const setPendingCreateAttempt = useCreateFlowStore((state) => state.setPending);
   const updatePendingAgentId = useCreateFlowStore((state) => state.updateAgentId);
   const markPendingCreateLifecycle = useCreateFlowStore((state) => state.markLifecycle);
+  const storedAttempt = useCreateFlowStore((state) => state.pendingByDraftId[draftId] ?? null);
+  // The attempt this instance sent itself. A restored attempt (mounted while an
+  // earlier instance's request is still in flight) is never owned here.
+  const ownedClientMessageIdRef = useRef<string | null>(null);
   const formErrorMessage = machine.tag === "draft" ? machine.errorMessage : "";
   const isSubmitting = machine.tag === "creating";
 
@@ -185,6 +189,24 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
     ];
   }, [machine]);
 
+  // A restored attempt stays in the creating state only while the store still
+  // tracks it. When the owning instance abandons or clears it, fall back to draft
+  // so the composer unlocks; "sent" keeps the tab locked until it is retargeted.
+  useEffect(() => {
+    if (machine.tag !== "creating") {
+      return;
+    }
+    if (ownedClientMessageIdRef.current === machine.attempt.clientMessageId) {
+      return;
+    }
+    const stillTracked =
+      storedAttempt?.clientMessageId === machine.attempt.clientMessageId &&
+      storedAttempt.lifecycle !== "abandoned";
+    if (!stillTracked) {
+      dispatch({ type: "CREATE_FAILED", message: "" });
+    }
+  }, [machine, storedAttempt]);
+
   const draftAgent = machine.tag === "creating" ? machine.draftAgent : null;
   const startCreateAttempt = useCallback(
     (attempt: CreateAttempt) => {
@@ -207,6 +229,14 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
         throw error;
       }
 
+      ownedClientMessageIdRef.current = attempt.clientMessageId;
+      // The store entry is the source of truth for which attempt the draft tab is
+      // waiting on. A later submit for the same draft replaces it, and this
+      // (stale) instance must then leave the store and the tab alone.
+      const isCurrentAttempt = () =>
+        useCreateFlowStore.getState().pendingByDraftId[draftId]?.clientMessageId ===
+        attempt.clientMessageId;
+
       try {
         await onBeforeSubmit?.({
           attempt,
@@ -224,7 +254,6 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
         });
 
         if (createResult.agentId) {
-          updatePendingAgentId({ draftId, agentId: createResult.agentId });
           handoffCreatedAgentMessageSubmission(
             pendingServerId,
             createResult.agentId,
@@ -236,6 +265,12 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
               attachments: attempt.attachments,
             }),
           );
+        }
+        if (!isCurrentAttempt()) {
+          return;
+        }
+        if (createResult.agentId) {
+          updatePendingAgentId({ draftId, agentId: createResult.agentId });
           markPendingCreateLifecycle({ draftId, lifecycle: "sent" });
         }
 
@@ -244,11 +279,13 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
         const resolved =
           error instanceof Error ? error : new Error(t("composer.errors.failedToCreateAgent"));
         dispatch({ type: "CREATE_FAILED", message: resolved.message });
-        markPendingCreateLifecycle({
-          draftId,
-          lifecycle: "abandoned",
-          errorMessage: resolved.message,
-        });
+        if (isCurrentAttempt()) {
+          markPendingCreateLifecycle({
+            draftId,
+            lifecycle: "abandoned",
+            errorMessage: resolved.message,
+          });
+        }
         onCreateError?.(resolved);
         throw error;
       }
