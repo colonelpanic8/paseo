@@ -4,6 +4,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { hashDaemonPassword } from "./auth.js";
 import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
 import { hashDaemonPassword } from "./auth.js";
 import { DaemonAuthenticationError, DaemonClient } from "@getpaseo/client/internal/daemon-client";
@@ -455,6 +456,23 @@ describe("daemon bearer auth", () => {
       ws.send(JSON.stringify({ type: "ping" }));
       await expect(closed).resolves.toBe(4002);
       expect(frames).toEqual([]);
+    } finally {
+      await daemonHandle.close();
+    }
+  });
+
+  test("accepts an encoded WebSocket password containing non-token characters", async () => {
+    const password = "base64+/= 🔐";
+    const daemonHandle = await createTestPaseoDaemon({
+      auth: { password: hashDaemonPassword(password) },
+    });
+    try {
+      const { ws, protocol } = await connectWebSocket({
+        port: daemonHandle.port,
+        protocol: "paseo.bearer64.YmFzZTY0Ky89IPCflJA",
+      });
+      expect(protocol).toBe("paseo.bearer64.YmFzZTY0Ky89IPCflJA");
+      ws.close();
     } finally {
       await daemonHandle.close();
     }

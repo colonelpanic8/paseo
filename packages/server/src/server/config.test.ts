@@ -40,6 +40,58 @@ describe("server config", () => {
     expect(config.providerCatalogRefreshTimeoutMs).toBe(180_000);
   });
 
+  test("declares config profiles as read-only Live Voice profiles", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-voice-profiles-"));
+    roots.push(paseoHome);
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({
+        liveVoice: {
+          defaultContextProfile: "life",
+          contextProfiles: [
+            {
+              id: "life",
+              label: "Life",
+              files: ["~/org/AGENTS.md"],
+              instructions: "Route captures to the inbox.",
+            },
+            { id: "work", voice: "cedar" },
+          ],
+        },
+      }),
+    );
+
+    const config = loadConfig(paseoHome, { env: {} });
+
+    expect(config.liveVoiceProfiles?.defaultProfileId).toBe("cfg_life");
+    expect(config.liveVoiceProfiles?.profiles.map((profile) => profile.id)).toEqual([
+      "cfg_life",
+      "cfg_work",
+    ]);
+    expect(config.liveVoiceProfiles?.profiles[0]).toMatchObject({
+      name: "Life",
+      source: "config",
+      configuration: { files: ["~/org/AGENTS.md"], instructions: "Route captures to the inbox." },
+    });
+    expect(config.liveVoiceProfiles?.profiles[1]).toMatchObject({
+      name: "work",
+      configuration: { voice: "cedar", files: [] },
+    });
+  });
+
+  test("rejects a default that names no declared profile", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-voice-default-"));
+    roots.push(paseoHome);
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({
+        liveVoice: { defaultContextProfile: "missing", contextProfiles: [{ id: "life" }] },
+      }),
+    );
+
+    expect(() => loadConfig(paseoHome, { env: {} })).toThrow(/Unknown Live Voice profile/);
+  });
+
   test("resolves reload state from the supplied validated snapshot", async () => {
     const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-snapshot-"));
     roots.push(paseoHome);

@@ -328,6 +328,13 @@ export const PASEO_TOOL_CATALOG = {
     detail: { inputOrder: ["provider", "cwd", "settings"] },
   },
 
+  // Discovery
+  list_paseo_tools: {
+    label: "List tools",
+    context: field("toolName", "query"),
+    detail: { inputOrder: ["toolName", "query"] },
+  },
+
   // Browser
   browser_list_tabs: browser("List browser tabs"),
   browser_new_tab: browser("Open browser tab", field("url")),
