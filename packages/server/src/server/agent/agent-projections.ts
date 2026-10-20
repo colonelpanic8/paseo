@@ -255,6 +255,7 @@ export function buildStoredAgentPayload(
   const lastUserMessageAt = record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null;
 
   const runtimeInfo = buildStoredRuntimeInfo(record);
+  const configuredThinkingOptionId = record.config?.thinkingOptionId ?? null;
   const providerAvailable = isStoredAgentProviderAvailable(record, validProviders);
   const persistence = projectPersistenceHandleForWire(
     buildStoredPersistenceHandle(record, validProviders),
@@ -266,10 +267,10 @@ export function buildStoredAgentPayload(
     cwd: record.cwd,
     ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
     model: record.config?.model ?? null,
-    thinkingOptionId: record.config?.thinkingOptionId ?? null,
+    thinkingOptionId: configuredThinkingOptionId,
     effectiveThinkingOptionId: resolveEffectiveThinkingOptionId({
       runtimeInfo,
-      configuredThinkingOptionId: record.config?.thinkingOptionId ?? null,
+      configuredThinkingOptionId,
     }),
     ...(runtimeInfo ? { runtimeInfo } : {}),
     createdAt: createdAt.toISOString(),

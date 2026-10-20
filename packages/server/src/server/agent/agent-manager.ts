@@ -187,6 +187,15 @@ function formatProviderList(providers: readonly string[]): string {
   return providers.length > 0 ? providers.join(", ") : "none";
 }
 
+function restorePurposeSummary(record: StoredAgentRecord | null | undefined) {
+  return {
+    summary: record?.summary ?? null,
+    summaryUpdatedAt: record?.summaryUpdatedAt ? new Date(record.summaryUpdatedAt) : undefined,
+    summaryCursor: record?.summaryCursor,
+    summaryTurnsSinceUpdate: record?.summaryTurnsSinceUpdate,
+  };
+}
+
 function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
   const config: AgentSessionConfig = {
     provider: record.provider,
@@ -2020,10 +2029,7 @@ export class AgentManager {
         persistence: record.persistence ?? null,
         historyPrimed: true,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
-        summary: record.summary ?? null,
-        summaryUpdatedAt: record.summaryUpdatedAt ? new Date(record.summaryUpdatedAt) : undefined,
-        summaryCursor: record.summaryCursor,
-        summaryTurnsSinceUpdate: record.summaryTurnsSinceUpdate,
+        ...restorePurposeSummary(record),
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
         attention,
@@ -3654,12 +3660,7 @@ export class AgentManager {
         config,
         now,
         durableTimelineHasRows,
-        summary: existingRecord?.summary ?? null,
-        summaryUpdatedAt: existingRecord?.summaryUpdatedAt
-          ? new Date(existingRecord.summaryUpdatedAt)
-          : undefined,
-        summaryCursor: existingRecord?.summaryCursor,
-        summaryTurnsSinceUpdate: existingRecord?.summaryTurnsSinceUpdate,
+        ...restorePurposeSummary(existingRecord),
         options,
       });
 
