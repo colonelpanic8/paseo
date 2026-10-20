@@ -60,10 +60,17 @@ export function attachLiveVoiceCues(
   runtime: LiveVoiceRuntime,
   player: LiveVoiceCuePlayer = createLiveVoiceCuePlayer(),
 ): () => void {
-  let state = initialLiveVoiceCueState(runtime.getSnapshot().phase);
+  let phase = runtime.getSnapshot().phase;
+  let state = initialLiveVoiceCueState(phase);
 
   const unsubscribe = runtime.subscribe(() => {
-    const next = advanceLiveVoiceCueState(state, runtime.getSnapshot().phase);
+    const nextPhase = runtime.getSnapshot().phase;
+    if (nextPhase === "starting" && phase !== "starting") {
+      // start() publishes synchronously, before microphone access or negotiation.
+      player.prepare();
+    }
+    phase = nextPhase;
+    const next = advanceLiveVoiceCueState(state, nextPhase);
     state = next.state;
     if (next.cue) {
       player.play(next.cue);
