@@ -2495,6 +2495,10 @@ export const ptBR: TranslationResources = {
         queueMessage: "Enfileirar mensagem",
         muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
         switchProject: "Trocar projeto",
+        toggleWorkspaceIsolation: "Alternar isolamento do workspace",
+        selectHost: "Selecionar host",
+        toggleFastMode: "Alternar modo rápido",
+        togglePlanMode: "Alternar modo de planejamento",
       },
       helpNotes: {
         showKeyboardShortcuts:
