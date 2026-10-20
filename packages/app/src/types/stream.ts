@@ -725,10 +725,8 @@ export interface AssistantMessageItem {
   timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
-  /** Display-only fields, assigned after source-item plugin transforms. */
-  blockGroupId?: string;
-  blockIndex?: number;
   questions?: AssistantQuestion[];
+  /** Display-only fields, assigned after source-item plugin transforms. */
 }
 
 export interface TimelinePosition {
