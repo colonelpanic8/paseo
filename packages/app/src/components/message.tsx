@@ -554,6 +554,8 @@ interface AssistantTurnFooterProps {
   /** "Model · Thinking" this turn ran with; omitted when it was never recorded. */
   meta?: string | null;
   onFork?: (target: AssistantForkTarget) => Promise<void> | void;
+  /** The source agent can branch its provider session at this turn. */
+  canForkNatively?: boolean;
 }
 
 const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
@@ -596,6 +598,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   durationMs,
   meta,
   onFork,
+  canForkNatively,
 }: AssistantTurnFooterProps) {
   const { t } = useTranslation();
   const durationLabel = useMemo(
@@ -621,7 +624,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
         getContent={getContent}
         containerStyle={assistantTurnFooterStylesheet.copyButton}
       />
-      {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
+      {canFork ? <AssistantForkMenu canForkNatively={canForkNatively} onFork={handleFork} /> : null}
       {durationLabel || completionLabel ? (
         <Text style={assistantTurnFooterStylesheet.label} testID="assistant-turn-completion">
           {[durationLabel, completionLabel].filter(Boolean).join(" · ")}
