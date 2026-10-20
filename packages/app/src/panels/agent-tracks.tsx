@@ -52,6 +52,12 @@ export const AgentTracks = memo(function AgentTracks({
     rows: subagentRows,
   });
   const { tabId } = usePaneContext();
+  const cwd = useSessionStore(
+    (state) =>
+      state.sessions[serverId]?.agents.get(agentId)?.cwd ??
+      state.sessions[serverId]?.agentDetails.get(agentId)?.cwd ??
+      null,
+  );
   const backgroundWorkCount = useSessionStore((state) => {
     const session = state.sessions[serverId];
     const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
