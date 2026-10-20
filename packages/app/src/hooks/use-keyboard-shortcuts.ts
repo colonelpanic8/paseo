@@ -41,7 +41,7 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
-import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
+import { dispatchTopWebOverlayKeyDown, keyBelongsToDomPopover } from "@/lib/overlay-root";
 import {
   useCommandCenterContributions,
   useCommandCenterShortcutRunner,
@@ -339,6 +339,10 @@ export function useKeyboardShortcuts({
     }
 
     if (dispatchTopWebOverlayKeyDown(event)) {
+      return;
+    }
+
+    if (keyBelongsToDomPopover(event)) {
       return;
     }
 
