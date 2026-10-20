@@ -510,7 +510,7 @@ export function buildSidebarWorkspaceEntries(input: {
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   previousEntries?: ReadonlyMap<string, SidebarWorkspaceEntry>;
   nowMs?: number;
-}): Map<string, SidebarWorkspaceEntry> {
+}): ReadonlyMap<string, SidebarWorkspaceEntry> {
   if (input.placements.length === 0 || input.sessions.length === 0) {
     return new Map();
   }
@@ -518,6 +518,8 @@ export function buildSidebarWorkspaceEntries(input: {
   const sessionByServerId = new Map(input.sessions.map((session) => [session.serverId, session]));
   const entries = new Map<string, SidebarWorkspaceEntry>();
   const nowMs = input.nowMs ?? Date.now();
+  const previousKeys = input.previousEntries?.keys();
+  let unchanged = input.previousEntries !== undefined;
 
   for (const placement of input.placements) {
     const session = sessionByServerId.get(placement.serverId);
@@ -538,15 +540,22 @@ export function buildSidebarWorkspaceEntries(input: {
       nowMs,
     });
     const previousEntry = input.previousEntries?.get(placement.workspaceKey);
-    entries.set(
-      placement.workspaceKey,
+    const nextEntry =
       previousEntry && areSidebarWorkspaceEntriesEqual(previousEntry, entry)
         ? previousEntry
-        : entry,
-    );
+        : entry;
+    entries.set(placement.workspaceKey, nextEntry);
+    unchanged =
+      previousKeys?.next().value === placement.workspaceKey &&
+      previousEntry === nextEntry &&
+      unchanged;
   }
 
-  return entries;
+  // Resuming a retained sidebar must not invalidate its project/filter projections
+  // when the directory has not changed while it was hidden.
+  return unchanged && input.previousEntries?.size === entries.size
+    ? input.previousEntries
+    : entries;
 }
 
 function areSidebarWorkspaceEntriesEqual(

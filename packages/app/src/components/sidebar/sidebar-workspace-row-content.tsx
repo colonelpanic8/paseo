@@ -1,5 +1,6 @@
 import { memo, useMemo, useCallback, useState, type ReactNode } from "react";
-import { type GestureResponderEvent, Pressable, Text, View, type ViewStyle } from "react-native";
+import { type GestureResponderEvent, Text, View, type ViewStyle } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronRight, CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -246,7 +247,7 @@ export function SidebarWorkspaceAgentTreeToggle({
   const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
 
   return (
-    <Pressable
+    <PressHighlight
       // The row itself is a <button> on web; a nested button is invalid HTML.
       accessibilityRole={isWeb ? undefined : "button"}
       accessibilityLabel={
@@ -268,7 +269,7 @@ export function SidebarWorkspaceAgentTreeToggle({
       >
         <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />
       </View>
-    </Pressable>
+    </PressHighlight>
   );
 }
 
