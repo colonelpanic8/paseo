@@ -307,6 +307,8 @@ const StoredWorkspaceSchema = z.strictObject({
   worktreeSlug: z.string().optional(),
   projectKind: z.enum(["git", "non_git", "directory"]),
   workspaceKind: z.enum(["directory", "local_checkout", "checkout", "worktree"]),
+  // Require the flag so older rows that lost background visibility invalidate the workspace cursor.
+  background: z.boolean(),
   name: z.string(),
   title: z.string().nullable(),
   pinnedAt: z.string().nullable(),
@@ -699,6 +701,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     worktreeSlug: workspace.worktreeSlug,
     projectKind: workspace.projectKind,
     workspaceKind: workspace.workspaceKind,
+    background: workspace.background ?? false,
     name: workspace.name,
     title: workspace.title ?? null,
     pinnedAt: workspace.pinnedAt ?? null,
@@ -881,8 +884,24 @@ function directoryEntityForRow(row: ReplicaRow): keyof DirectoryCheckpoint | und
   return undefined;
 }
 
+interface ReplicaRead {
+  serverId: string;
+  kinds: readonly ReplicaRowKind[];
+  ids?: readonly string[];
+  invalidated: boolean;
+}
+
+function matchesReplicaRead(read: ReplicaRead, row: ReplicaRowKey): boolean {
+  return (
+    read.serverId === row.serverId &&
+    read.kinds.includes(row.kind) &&
+    (!read.ids || read.ids.includes(row.id))
+  );
+}
+
 export class ReplicaCache {
   private readonly activeServerIds = new Set<string>();
+  private readonly activeReads = new Set<ReplicaRead>();
   private readonly storedRows = new Map<string, Map<string, ReplicaRow>>();
   private readonly hostBytes = new Map<string, number>();
   private readonly hostWriteOrder = new Map<string, true>();
@@ -992,45 +1011,40 @@ export class ReplicaCache {
     }
   }
 
-  // Reads share the write queue and overlay unpersisted changes, so streaming commits never
-  // force a persist or make a read wait for the host to go quiet.
-  private readRows(
+  private async readRows(
     serverId: string,
     kinds: readonly ReplicaRowKind[],
     ids?: readonly string[],
   ): Promise<ReplicaRow[]> {
-    if (!this.activeServerIds.has(serverId)) return Promise.resolve([]);
-    return this.enqueue(async () => {
-      const stored = await this.rowStore.read(serverId, kinds, ids);
-      if (!this.activeServerIds.has(serverId)) return [];
-      return this.overlayPendingRows({ serverId, kinds, ids, stored });
-    }).catch(() => []);
-  }
-
-  private overlayPendingRows(input: {
-    serverId: string;
-    kinds: readonly ReplicaRowKind[];
-    ids?: readonly string[];
-    stored: ReplicaRow[];
-  }): ReplicaRow[] {
-    const { serverId, stored } = input;
-    const requestedKinds = new Set(input.kinds);
-    const requestedIds = input.ids ? new Set(input.ids) : null;
-    const baselinePending = this.pendingBaselines.has(serverId);
-    const rows = new Map<string, ReplicaRow>();
-    for (const row of stored) {
-      if (this.pendingDeletes.has(pendingRowKey(row))) continue;
-      if (baselinePending && row.kind !== "timeline") continue;
-      rows.set(rowKey(row), row);
+    if (!this.activeServerIds.has(serverId)) return [];
+    try {
+      await this.prepareStore();
+      while (this.activeServerIds.has(serverId)) {
+        // A read may only answer from rows the store already holds, so it waits for this host's
+        // accepted commits to land. A store that rejects them will keep rejecting them: fail closed
+        // rather than re-attempt the write on every pass. A write rejected for another host leaves
+        // this host's stored rows readable.
+        const read: ReplicaRead = { serverId, kinds, ids, invalidated: false };
+        this.activeReads.add(read);
+        try {
+          if (!(await this.syncPending()) && this.hasPendingHostChanges(serverId)) return [];
+          if (read.invalidated || this.hasPendingReadChanges(read)) continue;
+          const rows = await this.rowStore.read(serverId, kinds, ids);
+          if (
+            this.activeServerIds.has(serverId) &&
+            !read.invalidated &&
+            !this.hasPendingReadChanges(read)
+          ) {
+            return rows;
+          }
+        } finally {
+          this.activeReads.delete(read);
+        }
+      }
+      return [];
+    } catch {
+      return [];
     }
-    for (const upsert of this.pendingUpserts.values()) {
-      if (upsert.serverId !== serverId || !requestedKinds.has(upsert.kind)) continue;
-      if (requestedIds && !requestedIds.has(upsert.id)) continue;
-      const row = this.materializeUpsert(upsert);
-      if (row) rows.set(rowKey(row), row);
-      else rows.delete(rowKey(upsert));
-    }
-    return [...rows.values()];
   }
 
   private async deleteInvalidRow(row: ReplicaRow): Promise<void> {
@@ -1135,6 +1149,7 @@ export class ReplicaCache {
 
   replaceDirectoryBaseline(serverId: string, directory: CachedDirectory): void {
     if (!this.activeServerIds.has(serverId)) return;
+    this.invalidateHostReads(serverId, ["agent", "workspace", "project", "checkpoint"]);
     // Replacing the directory must not discard independently accepted timeline changes.
     for (const [key, row] of this.pendingUpserts) {
       if (row.serverId === serverId && row.kind !== "timeline") this.pendingUpserts.delete(key);
@@ -1173,6 +1188,8 @@ export class ReplicaCache {
   setHosts(serverIds: Iterable<string>): void {
     const next = new Set(serverIds);
     const removed = [...this.activeServerIds].filter((serverId) => !next.has(serverId));
+    const added = [...next].filter((serverId) => !this.activeServerIds.has(serverId));
+    for (const serverId of [...removed, ...added]) this.invalidateHostReads(serverId);
     this.activeServerIds.clear();
     for (const serverId of next) this.activeServerIds.add(serverId);
     for (const serverId of removed) {
@@ -1184,6 +1201,8 @@ export class ReplicaCache {
   }
 
   reconcileServerId(oldServerId: string, newServerId: string): void {
+    this.invalidateHostReads(oldServerId);
+    this.invalidateHostReads(newServerId);
     const rows = this.storedRows.get(oldServerId);
     if (rows) {
       const newRows = this.storedRows.get(newServerId) ?? new Map<string, ReplicaRow>();
@@ -1275,12 +1294,14 @@ export class ReplicaCache {
   }
 
   private queueUpsert(row: StructuredReplicaUpsert): void {
+    this.invalidateRowReads(row);
     const key = pendingRowKey(row);
     this.pendingDeletes.delete(key);
     this.pendingUpserts.set(key, row);
   }
 
   private queueDelete(key: ReplicaRowKey): void {
+    this.invalidateRowReads(key);
     const pendingKey = pendingRowKey(key);
     this.pendingUpserts.delete(pendingKey);
     this.pendingDeletes.set(pendingKey, key);
@@ -1290,6 +1311,47 @@ export class ReplicaCache {
     return (
       this.pendingUpserts.size > 0 || this.pendingDeletes.size > 0 || this.pendingBaselines.size > 0
     );
+  }
+
+  private hasPendingReadChanges(read: ReplicaRead): boolean {
+    if (
+      this.pendingBaselines.has(read.serverId) &&
+      read.kinds.some((kind) => kind !== "timeline")
+    ) {
+      return true;
+    }
+    return (
+      [...this.pendingUpserts.values()].some((row) => matchesReplicaRead(read, row)) ||
+      [...this.pendingDeletes.values()].some((row) => matchesReplicaRead(read, row))
+    );
+  }
+
+  private invalidateRowReads(row: ReplicaRowKey): void {
+    for (const read of this.activeReads) {
+      if (matchesReplicaRead(read, row)) read.invalidated = true;
+    }
+  }
+
+  private invalidateHostReads(serverId: string, kinds?: readonly ReplicaRowKind[]): void {
+    for (const read of this.activeReads) {
+      if (
+        read.serverId === serverId &&
+        (!kinds || kinds.some((kind) => read.kinds.includes(kind)))
+      ) {
+        read.invalidated = true;
+      }
+    }
+  }
+
+  private hasPendingHostChanges(serverId: string): boolean {
+    if (this.pendingBaselines.has(serverId)) return true;
+    for (const row of this.pendingUpserts.values()) {
+      if (row.serverId === serverId) return true;
+    }
+    for (const row of this.pendingDeletes.values()) {
+      if (row.serverId === serverId) return true;
+    }
+    return false;
   }
 
   private drainPendingChanges(): PendingReplicaChanges {
@@ -1533,22 +1595,16 @@ export class ReplicaCache {
     return this.storedIndexPromise;
   }
 
-  private enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {
-    const run = this.writeQueue
+  private queueOperation(operation: () => Promise<void>): Promise<void> {
+    this.writeQueue = this.writeQueue
       .catch(() => undefined)
       .then(async () => {
         await this.prepareStore();
-        return operation();
-      });
-    this.writeQueue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
-  }
-
-  private queueOperation(operation: () => Promise<void>): Promise<void> {
-    return this.enqueue(operation).catch(() => undefined);
+        await operation();
+        return undefined;
+      })
+      .catch(() => undefined);
+    return this.writeQueue;
   }
 
   private schedulePersist(delayMs = PERSIST_DELAY_MS): void {
