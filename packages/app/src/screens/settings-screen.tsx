@@ -9,7 +9,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router/react-navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -120,6 +120,7 @@ import { MetadataGenerationPage } from "@/screens/settings/metadata-generation-p
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { SETTINGS_DESKTOP_SIDEBAR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import { densityIconBox, densityIconSize } from "@/styles/density";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import {
   type EnableBuiltInDaemonOption,
@@ -274,15 +275,26 @@ function renderHostSettingsContent(
 // Trigger + sidebar style helpers
 // ---------------------------------------------------------------------------
 
-function sidebarItemStyle({ hovered }: PressableStateCallbackType & { hovered?: boolean }) {
-  return [sidebarStyles.item, Boolean(hovered) && sidebarStyles.itemHovered];
+function sidebarItemStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    sidebarStyles.item,
+    Boolean(hovered) && sidebarStyles.itemHovered,
+    pressed && sidebarStyles.itemPressed,
+  ];
 }
 
-function selectedSidebarItemStyle({ hovered }: PressableStateCallbackType & { hovered?: boolean }) {
+function selectedSidebarItemStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
   return [
     sidebarStyles.item,
     Boolean(hovered) && sidebarStyles.itemHovered,
     sidebarStyles.itemSelected,
+    pressed && sidebarStyles.itemPressed,
   ];
 }
 
@@ -779,7 +791,7 @@ function SidebarSectionButton({
   isSelected,
   onSelect,
 }: SidebarSectionButtonProps) {
-  const { theme } = useUnistyles();
+  const { theme, rt } = useUnistyles();
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
@@ -796,7 +808,7 @@ function SidebarSectionButton({
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
-        size={theme.iconSize.md}
+        size={densityIconSize(rt, "md")}
         color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
         strokeWidth={SIDEBAR_ICON_STROKE_WIDTH}
       />
@@ -822,7 +834,7 @@ function SidebarHostSectionButton({
   isSelected,
   onSelect,
 }: SidebarHostSectionButtonProps) {
-  const { theme } = useUnistyles();
+  const { theme, rt } = useUnistyles();
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
@@ -840,7 +852,7 @@ function SidebarHostSectionButton({
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
-        size={theme.iconSize.md}
+        size={densityIconSize(rt, "md")}
         color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
         strokeWidth={SIDEBAR_ICON_STROKE_WIDTH}
       />
@@ -885,9 +897,10 @@ function HostPicker({
     [],
   );
   const triggerStyle = useCallback(
-    ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       sidebarStyles.pickerTrigger,
       hovered && sidebarStyles.pickerTriggerHovered,
+      pressed && sidebarStyles.itemPressed,
     ],
     [],
   );
@@ -933,6 +946,16 @@ function HostPicker({
   );
 }
 
+/** A labelled group of sidebar rows. On compact layouts the rows sit together in one island. */
+function SidebarGroup({ label, children }: { label?: string; children: ReactNode }) {
+  return (
+    <View style={sidebarStyles.group}>
+      {label ? <Text style={sidebarStyles.groupLabel}>{label}</Text> : null}
+      <View style={sidebarStyles.island}>{children}</View>
+    </View>
+  );
+}
+
 interface SettingsSidebarProps {
   view: SettingsView;
   onSelectSection: (section: SettingsSectionSlug) => void;
@@ -954,7 +977,7 @@ function SettingsSidebar({
   activeHostServerId,
   layout,
 }: SettingsSidebarProps) {
-  const { theme } = useUnistyles();
+  const { theme, rt } = useUnistyles();
   const { t } = useTranslation();
   const hosts = useHosts();
   const localServerId = useLocalDaemonServerId();
@@ -981,8 +1004,7 @@ function SettingsSidebar({
 
   const sidebarBody = (
     <>
-      <View style={sidebarStyles.list}>
-        <Text style={sidebarStyles.groupLabel}>{t("settings.groups.app")}</Text>
+      <SidebarGroup label={t("settings.groups.app")}>
         {items.map((item) => (
           <SidebarSectionButton
             key={item.id}
@@ -993,10 +1015,9 @@ function SettingsSidebar({
             onSelect={onSelectSection}
           />
         ))}
-      </View>
+      </SidebarGroup>
       {hasHosts ? (
-        <View style={sidebarStyles.list}>
-          <Text style={sidebarStyles.groupLabel}>{t("settings.groups.host")}</Text>
+        <SidebarGroup label={t("settings.groups.host")}>
           <HostPicker
             activeServerId={activeHostServerId}
             sortedHosts={sortedHosts}
@@ -1014,9 +1035,9 @@ function SettingsSidebar({
               onSelect={onSelectHostSection}
             />
           ))}
-        </View>
+        </SidebarGroup>
       ) : (
-        <View style={sidebarStyles.list}>
+        <SidebarGroup>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("settings.addHost")}
@@ -1025,7 +1046,7 @@ function SettingsSidebar({
             style={sidebarItemStyle}
           >
             <Plus
-              size={theme.iconSize.md}
+              size={densityIconSize(rt, "md")}
               color={theme.colors.foregroundMuted}
               strokeWidth={SIDEBAR_ICON_STROKE_WIDTH}
             />
@@ -1042,7 +1063,7 @@ function SettingsSidebar({
               style={sidebarItemStyle}
             >
               <Server
-                size={theme.iconSize.md}
+                size={densityIconSize(rt, "md")}
                 color={theme.colors.foregroundMuted}
                 strokeWidth={SIDEBAR_ICON_STROKE_WIDTH}
               />
@@ -1051,7 +1072,7 @@ function SettingsSidebar({
               </Text>
             </Pressable>
           ) : null}
-        </View>
+        </SidebarGroup>
       )}
     </>
   );
@@ -1604,26 +1625,33 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
   },
-  list: {
+  // Compact values draw each group as an island of tiles; desktop keeps a plain list.
+  group: {
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
-    gap: theme.spacing[0.5],
+    gap: { xs: theme.spacing[1], md: theme.spacing[0.5] },
   },
   groupLabel: {
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundExtraMuted,
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: { xs: theme.spacing[4], md: theme.spacing[2] },
     paddingVertical: theme.spacing[1],
+  },
+  island: {
+    gap: { xs: 2, md: theme.spacing[0.5] },
+    borderRadius: { xs: theme.borderRadius["2xl"], md: 0 },
+    overflow: "hidden",
   },
   item: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    minHeight: 28,
+    gap: { xs: theme.spacing[3], md: theme.spacing[2] },
+    minHeight: { xs: 52, md: 28 },
     paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: { xs: theme.spacing[4], md: theme.spacing[2] },
+    borderRadius: { xs: 0, md: theme.borderRadius.lg },
+    backgroundColor: { xs: theme.colors.surface1, md: "transparent" },
   },
   itemHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1631,8 +1659,12 @@ const sidebarStyles = StyleSheet.create((theme) => ({
   itemSelected: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
+  // The workspace rows' pressed fill.
+  itemPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
   label: {
-    fontSize: theme.fontSize.base,
+    fontSize: { xs: theme.fontSize.lg, md: theme.fontSize.base },
     color: theme.colors.foregroundMuted,
     fontWeight: theme.fontWeight.normal,
     flex: 1,
@@ -1640,11 +1672,12 @@ const sidebarStyles = StyleSheet.create((theme) => ({
   pickerTrigger: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    minHeight: 28,
+    gap: { xs: theme.spacing[3], md: theme.spacing[2] },
+    minHeight: { xs: 52, md: 28 },
     paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: { xs: theme.spacing[4], md: theme.spacing[2] },
+    borderRadius: { xs: 0, md: theme.borderRadius.lg },
+    backgroundColor: { xs: theme.colors.surface1, md: "transparent" },
   },
   pickerTriggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1652,14 +1685,14 @@ const sidebarStyles = StyleSheet.create((theme) => ({
   pickerTriggerLabel: {
     flex: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.base,
+    fontSize: { xs: theme.fontSize.lg, md: theme.fontSize.base },
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
   // Match the setting items' icon footprint so the host label aligns with them.
   pickerTriggerDot: {
-    width: theme.iconSize.md,
-    height: theme.iconSize.md,
+    width: densityIconBox("md"),
+    height: densityIconBox("md"),
     alignItems: "center",
     justifyContent: "center",
   },
