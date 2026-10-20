@@ -1,4 +1,9 @@
-import type { AudioEngine, AudioEngineCallbacks, AudioPlaybackSource } from "./audio-engine-types";
+import type {
+  AudioEngine,
+  AudioEngineCallbacks,
+  AudioEngineOptions,
+  AudioPlaybackSource,
+} from "./audio-engine-types";
 
 import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { File, Paths } from "expo-file-system";
@@ -11,6 +16,7 @@ export type NativeAudioModule = Pick<
   | "initialize"
   | "tearDown"
   | "toggleRecording"
+  | "startDictation"
   | "releaseAudioSession"
   | "addExpoTwoWayAudioEventListener"
   | "resumePlayback"
@@ -29,9 +35,8 @@ const captureOwners = new WeakMap<NativeAudioModule, object>();
 const playbackOwners = new WeakMap<NativeAudioModule, object>();
 const nativeModuleUsers = new WeakMap<NativeAudioModule, number>();
 
-interface AudioEngineTraceOptions {
+interface AudioEngineTraceOptions extends AudioEngineOptions {
   nativeModule?: NativeAudioModule;
-  traceLabel?: string;
 }
 
 export function createAudioEngine(
@@ -76,6 +81,12 @@ export function createAudioEngine(
   const interruptionSubscription = native.addExpoTwoWayAudioEventListener(
     "onAudioInterruption",
     (event: { data: string }) => {
+      if (event.data === "capture_paused" || event.data === "capture_resumed") {
+        if (refs.captureActive) {
+          callbacks.onCaptureAvailabilityChange?.(event.data === "capture_resumed");
+        }
+        return;
+      }
       if (event.data !== "blocked") {
         return;
       }
@@ -242,7 +253,10 @@ export function createAudioEngine(
       try {
         await ensureMicrophonePermission();
         await ensureInitialized();
-        const isRecording = native.toggleRecording(true);
+        const isRecording =
+          options.captureMode === "dictation"
+            ? native.startDictation()
+            : native.toggleRecording(true);
         if (!isRecording) {
           throw new Error(
             "Microphone capture could not start because Android audio focus is unavailable.",
@@ -265,6 +279,7 @@ export function createAudioEngine(
       refs.captureActive = false;
       refs.muted = false;
       callbacks.onVolumeLevel(0);
+      callbacks.onCaptureAvailabilityChange?.(true);
       releaseSessionIfIdle();
     },
 

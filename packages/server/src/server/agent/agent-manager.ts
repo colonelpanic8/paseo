@@ -81,7 +81,7 @@ import {
   type PendingForegroundRun,
 } from "./agent-run-state.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
-import { projectAgentMessage } from "./agent-messages/index.js";
+import { parseAgentMessage, projectAgentMessage } from "./agent-messages/index.js";
 import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
 import {
   PASEO_MCP_SERVER_NAME,
@@ -2546,7 +2546,12 @@ export class AgentManager {
    */
   tryRunOutOfBand(agentId: string, prompt: AgentPromptInput, options?: AgentRunOptions): boolean {
     const agent = this.requireSessionAgent(agentId);
-    const handler = agent.session.tryHandleOutOfBand?.(prompt);
+    // Providers parse slash commands from the raw text, so a command another agent sent
+    // must reach them without its sender envelope.
+    const agentMessage = typeof prompt === "string" ? parseAgentMessage(prompt) : null;
+    const handler = agent.session.tryHandleOutOfBand?.(
+      agentMessage?.source ? agentMessage.text : prompt,
+    );
     if (!handler) {
       return false;
     }
@@ -3738,6 +3743,8 @@ export class AgentManager {
       this.assertAgentRegistrationActive(managed);
       this.emitState(managed, { persist: false });
       this.subscribeToSession(managed);
+      await this.drainSessionEvents(managed.id);
+      this.assertAgentRegistrationActive(managed);
       return { ...managed };
     } catch (error) {
       if (!registered) {

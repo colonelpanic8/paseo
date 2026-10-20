@@ -44,7 +44,7 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
-import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
+import { dispatchTopWebOverlayKeyDown, keyBelongsToDomPopover } from "@/lib/overlay-root";
 
 const HOLD_MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 
@@ -354,6 +354,10 @@ export function useKeyboardShortcuts({
     }
 
     if (dispatchTopWebOverlayKeyDown(event)) {
+      return;
+    }
+
+    if (keyBelongsToDomPopover(event)) {
       return;
     }
 
