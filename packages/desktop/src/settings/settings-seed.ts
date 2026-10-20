@@ -1,4 +1,6 @@
+import { lstatSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 /**
@@ -15,6 +17,7 @@ export interface SettingsSeedDocument {
 }
 
 export const SETTINGS_SEED_FILENAME = "settings-seed.json";
+export const SETTINGS_SEED_FILE_ENV = "PASEO_SETTINGS_SEED_FILE";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -24,8 +27,45 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error;
 }
 
-export function getSettingsSeedPath(userDataPath: string): string {
-  return path.resolve(userDataPath, SETTINGS_SEED_FILENAME);
+function pathEntryExists(filePath: string): boolean {
+  try {
+    lstatSync(filePath);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export function getSettingsSeedPath({
+  userDataPath,
+  env = process.env,
+  platform = process.platform,
+  homeDirectory = os.homedir(),
+}: {
+  userDataPath: string;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  homeDirectory?: string;
+}): string {
+  const configuredPath = env[SETTINGS_SEED_FILE_ENV]?.trim();
+  if (configuredPath) {
+    return path.resolve(configuredPath);
+  }
+
+  const legacyPath = path.resolve(userDataPath, SETTINGS_SEED_FILENAME);
+  if (platform !== "linux" || pathEntryExists(legacyPath)) {
+    return legacyPath;
+  }
+
+  const configuredRoot = env.XDG_CONFIG_HOME?.trim();
+  const configRoot =
+    configuredRoot && path.isAbsolute(configuredRoot)
+      ? configuredRoot
+      : path.join(homeDirectory, ".config");
+  return path.join(path.resolve(configRoot), "paseo", SETTINGS_SEED_FILENAME);
 }
 
 /**
@@ -34,10 +74,16 @@ export function getSettingsSeedPath(userDataPath: string): string {
  */
 export async function loadSettingsSeed({
   userDataPath,
+  env = process.env,
+  platform = process.platform,
+  homeDirectory = os.homedir(),
 }: {
   userDataPath: string;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  homeDirectory?: string;
 }): Promise<SettingsSeedDocument | null> {
-  const filePath = getSettingsSeedPath(userDataPath);
+  const filePath = getSettingsSeedPath({ userDataPath, env, platform, homeDirectory });
 
   let raw: string;
   try {
