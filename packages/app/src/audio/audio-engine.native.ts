@@ -11,11 +11,40 @@ import { createPlaybackQueue } from "./playback";
 import { playFile } from "./file-playback";
 import { playPcm16 } from "./pcm";
 
+export type NativeAudioModule = Pick<
+  typeof import("@getpaseo/expo-two-way-audio"),
+  | "initialize"
+  | "tearDown"
+  | "toggleRecording"
+  | "startDictation"
+  | "releaseAudioSession"
+  | "addExpoTwoWayAudioEventListener"
+  | "resumePlayback"
+  | "playPCMData"
+  | "stopPlayback"
+> & {
+  getMicrophonePermissionsAsync(): Promise<NativeMicrophonePermission>;
+  requestMicrophonePermissionsAsync(): Promise<NativeMicrophonePermission>;
+};
+
+interface NativeMicrophonePermission {
+  granted: boolean;
+}
+
+const captureOwners = new WeakMap<NativeAudioModule, object>();
+const playbackOwners = new WeakMap<NativeAudioModule, object>();
+const nativeModuleUsers = new WeakMap<NativeAudioModule, number>();
+
+interface AudioEngineTraceOptions extends AudioEngineOptions {
+  nativeModule?: NativeAudioModule;
+}
+
 export function createAudioEngine(
   callbacks: AudioEngineCallbacks,
-  options?: AudioEngineOptions,
+  options: AudioEngineTraceOptions = {},
 ): AudioEngine {
-  const native = require("@getpaseo/expo-two-way-audio");
+  const native: NativeAudioModule = options.nativeModule ?? require("@getpaseo/expo-two-way-audio");
+  nativeModuleUsers.set(native, (nativeModuleUsers.get(native) ?? 0) + 1);
 
   const refs: {
     initialized: boolean;
@@ -32,7 +61,7 @@ export function createAudioEngine(
   const microphoneSubscription = native.addExpoTwoWayAudioEventListener(
     "onMicrophoneData",
     (event: { data: Uint8Array }) => {
-      if (!refs.captureActive || refs.muted) {
+      if (captureOwners.get(native) !== refs || !refs.captureActive || refs.muted) {
         return;
       }
       const pcm = event.data;
@@ -42,7 +71,7 @@ export function createAudioEngine(
   const volumeSubscription = native.addExpoTwoWayAudioEventListener(
     "onInputVolumeLevelData",
     (event: { data: number }) => {
-      if (!refs.captureActive) {
+      if (captureOwners.get(native) !== refs || !refs.captureActive) {
         return;
       }
       const level = refs.muted ? 0 : event.data;
@@ -63,6 +92,7 @@ export function createAudioEngine(
       }
       const wasCaptureActive = refs.captureActive;
       refs.captureActive = false;
+      if (captureOwners.get(native) === refs) captureOwners.delete(native);
       refs.muted = false;
       callbacks.onVolumeLevel(0);
       if (wasCaptureActive) {
@@ -72,10 +102,14 @@ export function createAudioEngine(
   );
 
   async function ensureInitialized(): Promise<void> {
-    if (refs.initialized) {
-      return;
-    }
+    if (refs.destroyed) throw new Error("Audio engine was destroyed");
     const success = await native.initialize();
+    if (refs.destroyed) {
+      if (nativeModuleUsers.get(native) === 0) native.tearDown();
+      else if (!captureOwners.has(native) && !playbackOwners.has(native))
+        native.releaseAudioSession();
+      throw new Error("Audio engine was destroyed");
+    }
     if (!success) {
       throw new Error("expo-two-way-audio: native initialize() returned false");
     }
@@ -95,6 +129,11 @@ export function createAudioEngine(
     if (refs.captureActive || playback.isPlaying()) {
       return;
     }
+    if (playbackOwners.get(native) === refs) {
+      native.stopPlayback();
+      playbackOwners.delete(native);
+    }
+    if (captureOwners.has(native) || playbackOwners.has(native)) return;
     // The wrapper no-ops on binaries whose native module predates this function.
     native.releaseAudioSession();
   }
@@ -117,11 +156,27 @@ export function createAudioEngine(
     if (signal.aborted) throw new Error("Playback stopped");
     if (audio.type.startsWith("audio/pcm")) {
       await ensureInitialized();
-      return playPcm16(bytes, audio.type, signal, native);
+      if (signal.aborted || refs.destroyed) throw new Error("Playback stopped");
+      playbackOwners.set(native, refs);
+      return playPcm16(
+        bytes,
+        audio.type,
+        signal,
+        {
+          resumePlayback: () => native.resumePlayback(),
+          playPCMData: (pcm) => native.playPCMData(pcm),
+          stopPlayback: () => {
+            if (playbackOwners.get(native) !== refs) return;
+            native.stopPlayback();
+            playbackOwners.delete(native);
+          },
+        },
+        () => (!refs.captureActive && !playback.hasPending() ? 200 : 0),
+      );
     }
     // Capture owns its audio session while active. File playback alone must not
     // initialize the microphone or the native two-way engine.
-    if (!refs.captureActive) {
+    if (!captureOwners.has(native)) {
       await setAudioModeAsync({
         playsInSilentMode: true,
         allowsRecording: false,
@@ -168,16 +223,23 @@ export function createAudioEngine(
       }
       refs.destroyed = true;
       playback.destroy();
-      if (refs.captureActive) {
+      if (captureOwners.get(native) === refs) {
         native.toggleRecording(false);
+        captureOwners.delete(native);
         refs.captureActive = false;
       }
       refs.muted = false;
       callbacks.onVolumeLevel(0);
-      if (refs.initialized) {
-        native.tearDown();
-        refs.initialized = false;
+      const ownedPlayback = playbackOwners.get(native) === refs;
+      if (ownedPlayback) {
+        native.stopPlayback();
+        playbackOwners.delete(native);
       }
+      const remainingUsers = (nativeModuleUsers.get(native) ?? 1) - 1;
+      nativeModuleUsers.set(native, remainingUsers);
+      if (remainingUsers === 0) native.tearDown();
+      else if (ownedPlayback && !captureOwners.has(native)) native.releaseAudioSession();
+      refs.initialized = false;
       microphoneSubscription.remove();
       volumeSubscription.remove();
       interruptionSubscription.remove();
@@ -192,7 +254,7 @@ export function createAudioEngine(
         await ensureMicrophonePermission();
         await ensureInitialized();
         const isRecording =
-          options?.captureMode === "dictation"
+          options.captureMode === "dictation"
             ? native.startDictation()
             : native.toggleRecording(true);
         if (!isRecording) {
@@ -200,6 +262,7 @@ export function createAudioEngine(
             "Microphone capture could not start because Android audio focus is unavailable.",
           );
         }
+        captureOwners.set(native, refs);
         refs.captureActive = true;
       } catch (error) {
         const wrapped = error instanceof Error ? error : new Error(String(error));
@@ -209,8 +272,9 @@ export function createAudioEngine(
     },
 
     async stopCapture() {
-      if (refs.captureActive) {
+      if (captureOwners.get(native) === refs) {
         native.toggleRecording(false);
+        captureOwners.delete(native);
       }
       refs.captureActive = false;
       refs.muted = false;
