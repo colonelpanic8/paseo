@@ -1,4 +1,11 @@
 import type { Agent } from "@/stores/session-store";
+import type { MobilePanelView } from "@/stores/panel-store";
+
+interface ResolveAgentScreenFocusInput {
+  isCompact: boolean;
+  isPaneFocused: boolean;
+  mobilePanelTarget: MobilePanelView;
+}
 
 interface ShouldClearAgentAttentionInput {
   agentId: string | null | undefined;
@@ -20,6 +27,13 @@ const ATTENTION_REASON_PRIORITY = {
   error: 1,
   finished: 2,
 } as const;
+
+export function resolveAgentScreenFocus(input: ResolveAgentScreenFocusInput): boolean {
+  if (!input.isPaneFocused) {
+    return false;
+  }
+  return !input.isCompact || input.mobilePanelTarget === "agent";
+}
 
 function getAttentionPriority(reason: Agent["attentionReason"]): number | null {
   if (!reason) {
