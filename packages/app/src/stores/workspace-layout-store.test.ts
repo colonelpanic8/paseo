@@ -20,8 +20,6 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import { setPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import { createViewedTimelineSync } from "@/timeline/viewed-timeline-sync";
-import type { StateStorage } from "zustand/middleware";
-import type { PersistenceScheduler } from "@/storage/throttled-persist-storage";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTab } from "@/workspace-tabs/model";
 import { defaultChangesState, type ChangesState } from "@/panels/changes/state";
 import { defaultFileState, type FileState } from "@/panels/file/state";
@@ -46,7 +44,6 @@ import {
   stripEphemeralTabsFromLayout,
   type SplitNode,
   type SplitPane,
-  type WorkspaceLayout,
 } from "@/stores/workspace-layout-store";
 
 const SERVER_ID = "server-1";
@@ -80,10 +77,10 @@ function createDeterministicWorkspaceLayoutIds() {
 }
 
 const workspaceLayoutIds = createDeterministicWorkspaceLayoutIds();
-const workspaceLayoutStore = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
+const workspaceLayoutStore = createWorkspaceLayoutStore(workspaceLayoutIds);
 
 it("observes open chats across unmounted workspaces until their tabs close", () => {
-  const store = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
+  const store = createWorkspaceLayoutStore(workspaceLayoutIds);
   store.setState({ layoutByWorkspace: {} });
   const received: string[][] = [];
   const stop = observeOpenWorkspaceAgentIds("server-1", (ids) => received.push(ids), store);
@@ -116,7 +113,7 @@ it("observes open chats across unmounted workspaces until their tabs close", () 
 });
 
 it("feeds restored layout to timeline sync as a release signal, not a subscription source", async () => {
-  const store = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
+  const store = createWorkspaceLayoutStore(workspaceLayoutIds);
   store.setState({ layoutByWorkspace: {} });
   // Launch: layout rehydrates tabs the user opened in earlier sessions.
   const restored = store.getState().openTab({
@@ -208,51 +205,6 @@ function createPane(input: {
   };
 }
 
-function createLayoutPersistence() {
-  let nowMs = 0;
-  let writes = 0;
-  let scheduled: { callback: () => void; dueAt: number } | null = null;
-  const values = new Map<string, string>();
-  const storage: StateStorage = {
-    getItem: (name) => values.get(name) ?? null,
-    setItem: (name, value) => {
-      writes += 1;
-      values.set(name, value);
-    },
-    removeItem: (name) => {
-      values.delete(name);
-    },
-  };
-  const scheduler: PersistenceScheduler = {
-    now: () => nowMs,
-    schedule: (callback, delayMs) => (scheduled = { callback, dueAt: nowMs + delayMs }),
-    cancel: () => {
-      scheduled = null;
-    },
-  };
-  return {
-    storage,
-    scheduler,
-    writes: () => writes,
-    advance(ms: number) {
-      nowMs += ms;
-      if (scheduled && scheduled.dueAt <= nowMs) {
-        const { callback } = scheduled;
-        scheduled = null;
-        callback();
-      }
-    },
-    storedAgentTabCount(workspaceKey: string): number {
-      const raw = values.get("workspace-layout-state") ?? "{}";
-      const parsed = JSON.parse(raw) as {
-        state: { layoutByWorkspace: Record<string, WorkspaceLayout> };
-      };
-      const tabs = collectAllTabs(parsed.state.layoutByWorkspace[workspaceKey].root);
-      return tabs.filter((tab) => tab.target.kind === "agent").length;
-    },
-  };
-}
-
 function createWorkspaceKey(): string {
   const key = buildWorkspaceTabPersistenceKey({
     serverId: SERVER_ID,
@@ -313,7 +265,7 @@ describe("workspace-layout-store helpers", () => {
         version: 1,
       }),
     );
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
 
     const restoredTabs = collectAllTabs(restored.getState().layoutByWorkspace.workspace.root);
@@ -564,7 +516,7 @@ describe("workspace-layout-store version 2 migration", () => {
     "replaces Explorer once and preserves persisted side content when upgrading from %s",
     async (source) => {
       await persistVersionOneLayout(source);
-      const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+      const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
 
       await restored.persist.rehydrate();
 
@@ -580,7 +532,7 @@ describe("workspace-layout-store version 2 migration", () => {
 
   it("reuses an ordinary side pane already created by v0.6", async () => {
     await persistVersionOneLayout("v0.6", { withSidePane: true });
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
 
     await restored.persist.rehydrate();
 
@@ -592,7 +544,7 @@ describe("workspace-layout-store version 2 migration", () => {
 
   it("writes version 2 preserving the existing Explorer key", async () => {
     await persistVersionOneLayout("v0.6");
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
 
     await restored.persist.rehydrate();
 
@@ -616,7 +568,7 @@ describe("workspace-layout-store version 2 migration", () => {
 
   it("does not replace Explorer again when the migrated version 2 layout reloads", async () => {
     await persistVersionOneLayout("v0.6");
-    const migrated = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const migrated = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await migrated.persist.rehydrate();
     expectMigratedLayout(migrated);
     const explorerPaneId = migrated.getState().explorerSidebarPaneIdByWorkspace[workspaceKey];
@@ -632,7 +584,11 @@ describe("workspace-layout-store version 2 migration", () => {
     expect(addedTabId).toBeTruthy();
 
     await migrated.flushPersistence();
-    const reloaded = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    await vi.waitFor(async () => {
+      const persisted = JSON.parse((await AsyncStorage.getItem("workspace-layout-state")) ?? "{}");
+      expect(persisted.version).toBe(2);
+    });
+    const reloaded = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await reloaded.persist.rehydrate();
 
     const reloadedState = reloaded.getState();
@@ -1277,7 +1233,7 @@ describe("workspace-layout-store actions", () => {
           },
         }),
       );
-      const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+      const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
       await restored.persist.rehydrate();
       const state = restored.getState();
       const layout = state.layoutByWorkspace[workspaceKey];
@@ -1324,7 +1280,7 @@ describe("workspace-layout-store actions", () => {
         },
       }),
     );
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
     const layout = restored.getState().layoutByWorkspace[workspaceKey];
     expect(collectAllPanes(layout.root).map((pane) => pane.id)).toEqual(["pane_saved_ordinary"]);
@@ -1344,7 +1300,7 @@ describe("workspace-layout-store actions", () => {
         version: 1,
       }),
     );
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
 
     await restored.persist.rehydrate();
 
@@ -1377,7 +1333,7 @@ describe("workspace-layout-store actions", () => {
         version: 1,
       }),
     );
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
 
     await restored.persist.rehydrate();
 
@@ -1389,7 +1345,7 @@ describe("workspace-layout-store actions", () => {
   it("persists first-class pane targets, visibility, and focus", async () => {
     await AsyncStorage.removeItem("workspace-layout-state");
     const workspaceKey = createWorkspaceKey();
-    const source = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const source = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await source.persist.rehydrate();
 
     source.getState().openTab({
@@ -1415,9 +1371,12 @@ describe("workspace-layout-store actions", () => {
     });
     source.getState().hideExplorerSidebar(workspaceKey);
 
-    await source.flushPersistence();
+    await vi.waitFor(async () => {
+      expect(await AsyncStorage.getItem("workspace-layout-state")).not.toBeNull();
+    });
 
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    await source.flushPersistence();
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
     const state = restored.getState();
     const layout = state.layoutByWorkspace[workspaceKey];
@@ -1438,7 +1397,7 @@ describe("workspace-layout-store actions", () => {
   it("persists and rehydrates independent Changes state through validated storage", async () => {
     await AsyncStorage.removeItem("workspace-layout-state");
     const workspaceKey = createWorkspaceKey();
-    const source = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const source = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await source.persist.rehydrate();
     const first = source
       .getState()
@@ -1462,12 +1421,14 @@ describe("workspace-layout-store actions", () => {
     source.getState().setTabState(workspaceKey, first, firstState);
     source.getState().setTabState(workspaceKey, second, secondState);
 
-    await source.flushPersistence();
-    const persisted = await AsyncStorage.getItem("workspace-layout-state");
-    const root = JSON.parse(persisted ?? "{}").state.layoutByWorkspace[workspaceKey].root;
-    expect(collectTabIds(root)).toEqual([first, second, "files", "changes_tree"]);
+    await vi.waitFor(async () => {
+      const persisted = await AsyncStorage.getItem("workspace-layout-state");
+      expect(persisted).not.toBeNull();
+      const root = JSON.parse(persisted ?? "{}").state.layoutByWorkspace[workspaceKey].root;
+      expect(collectTabIds(root)).toEqual([first, second, "files", "changes_tree"]);
+    });
 
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
     const tabs = collectAllTabs(restored.getState().layoutByWorkspace[workspaceKey].root);
     expect(tabs.find((tab) => tab.tabId === first)?.state).toEqual(firstState);
@@ -1997,7 +1958,7 @@ describe("workspace-layout-store actions", () => {
         version: 1,
       }),
     );
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
 
     await restored.persist.rehydrate();
 
@@ -4016,7 +3977,7 @@ describe("workspace-layout-store actions", () => {
       pin: true,
     });
     await workspaceLayoutStore.flushPersistence();
-    const restored = createWorkspaceLayoutStore({ ids: createDeterministicWorkspaceLayoutIds() });
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
     restored.getState().reconcileTabs(workspaceKey, {
       agentsHydrated: true,
@@ -4461,83 +4422,18 @@ describe("workspace-layout-store actions", () => {
     expect(findPaneById(layout.root, "main")?.tabIds).toEqual([agentTabId]);
     expect(collectAllPanes(layout.root).map((pane) => pane.id)).toEqual(["main"]);
   });
-
-  it("does not write the layout when reconciliation is a no-op", async () => {
-    const persistence = createLayoutPersistence();
-    const workspaceKey = createWorkspaceKey();
-    const store = createWorkspaceLayoutStore({
-      ids: createDeterministicWorkspaceLayoutIds(),
-      storage: persistence.storage,
-      scheduler: persistence.scheduler,
-    });
-    await store.persist.rehydrate();
-    store.getState().openTab({
-      workspaceKey,
-      target: { kind: "agent", agentId: "agent-1" },
-      intent: "reveal",
-    });
-    await store.flushPersistence();
-    const writesBefore = persistence.writes();
-    const snapshot = {
-      agentsHydrated: true,
-      terminalsHydrated: true,
-      activeAgentIds: ["agent-1"],
-      autoOpenAgentIds: ["agent-1"],
-      knownTerminalIds: [],
-      standaloneTerminalIds: [],
-    };
-    const layoutBefore = store.getState().layoutByWorkspace[workspaceKey];
-
-    for (let index = 0; index < 50; index += 1) {
-      store.getState().reconcileTabs(workspaceKey, snapshot);
-    }
-    persistence.advance(1_000);
-    await store.flushPersistence();
-
-    expect(store.getState().layoutByWorkspace[workspaceKey]).toBe(layoutBefore);
-    expect(persistence.writes()).toBe(writesBefore);
-  });
-
-  it("coalesces a burst of layout changes into one write per interval", async () => {
-    const persistence = createLayoutPersistence();
-    const workspaceKey = createWorkspaceKey();
-    const store = createWorkspaceLayoutStore({
-      ids: createDeterministicWorkspaceLayoutIds(),
-      storage: persistence.storage,
-      scheduler: persistence.scheduler,
-    });
-    await store.persist.rehydrate();
-
-    for (let index = 0; index < 50; index += 1) {
-      store.getState().openTab({
-        workspaceKey,
-        target: { kind: "agent", agentId: `agent-${index}` },
-        intent: "reveal",
-      });
-    }
-    expect(persistence.writes()).toBe(1);
-    expect(persistence.storedAgentTabCount(workspaceKey)).toBe(1);
-
-    persistence.advance(199);
-    expect(persistence.writes()).toBe(1);
-    persistence.advance(1);
-    await store.flushPersistence();
-
-    expect(persistence.writes()).toBe(2);
-    expect(persistence.storedAgentTabCount(workspaceKey)).toBe(50);
-  });
 });
 
 it("persists the once-only PR add after closing, and clears it when purging the workspace", async () => {
   await AsyncStorage.removeItem("workspace-layout-state");
-  const source = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
+  const source = createWorkspaceLayoutStore(workspaceLayoutIds);
   await source.persist.rehydrate();
   const workspaceKey = "server-1:pr-once";
   const placement = () => ({ placement: { mode: "prefer" as const, paneId: "explorer" } });
   source.getState().autoOpenPullRequestTab(workspaceKey, placement);
   source.getState().closeTab(workspaceKey, "pull_request");
   await source.flushPersistence();
-  const restored = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
+  const restored = createWorkspaceLayoutStore(workspaceLayoutIds);
   await restored.persist.rehydrate();
   expect(restored.getState().pullRequestTabAutoOpenedByWorkspace[workspaceKey]).toBe(true);
   expect(restored.getState().autoOpenPullRequestTab(workspaceKey, placement)).toBeNull();
@@ -4556,7 +4452,7 @@ describe("compact workspace sheet", () => {
   const fileTarget = { kind: "file" as const, path: "src/index.ts" };
 
   function createCompactStore() {
-    const store = createWorkspaceLayoutStore({ ids: workspaceLayoutIds });
+    const store = createWorkspaceLayoutStore(workspaceLayoutIds);
     store.setState({ layoutByWorkspace: {}, sheetsByWorkspace: {} });
     store.getState().setLayoutMode("compact");
     store.getState().openTab({
@@ -4700,7 +4596,7 @@ describe("compact workspace sheet", () => {
     expect(tabKinds(store)).toEqual(["terminal"]);
   });
 
-  it("brings a stacked target back to the top by dropping the sheets above it", () => {
+  it("uncovers a covered sheet by dropping the sheets above it", () => {
     const store = createCompactStore();
     const fileTabId = store
       .getState()
@@ -4986,13 +4882,15 @@ describe("compact workspace sheet", () => {
       });
     });
 
-    it("brings a covered sheet back to the top and keeps a modified sheet above it beneath", () => {
+    it("keeps a covered sheet in place under a modified sheet instead of reordering", () => {
       const store = createCompactStore();
       const otherTarget = { kind: "file" as const, path: "src/other.ts" };
       const otherTabId = store
         .getState()
         .openTab({ workspaceKey, target: otherTarget, intent: "reveal" });
       const modifiedSheetTabId = openModifiedFileSheet(store);
+      const unmodifiedTopTarget = { kind: "file" as const, path: "src/third.ts" };
+      store.getState().openTab({ workspaceKey, target: unmodifiedTopTarget, intent: "reveal" });
       const focusedBefore = focusedTabId(store);
 
       const tabId = store
@@ -5000,10 +4898,10 @@ describe("compact workspace sheet", () => {
         .openTab({ workspaceKey, target: otherTarget, intent: "reveal" });
 
       expect(tabId).toBe(otherTabId);
-      expect(sheetTargets(store)).toEqual([fileTarget, otherTarget]);
-      expect(store.getState().sheetsByWorkspace[workspaceKey]?.[0]?.tab.tabId).toBe(
-        modifiedSheetTabId,
-      );
+      // Moving a sheet would remount its panel, so the stack keeps its order: the modified sheet
+      // stays on top of the one revealed, and only the unmodified sheet above them closes.
+      expect(sheetTargets(store)).toEqual([otherTarget, fileTarget]);
+      expect(sheetTabId(store)).toBe(modifiedSheetTabId);
       expect(stripTab(store, tabId ?? "")).toBeNull();
       expect(focusedTabId(store)).toBe(focusedBefore);
     });
@@ -5200,6 +5098,21 @@ describe("compact workspace sheet", () => {
     const layout = store.getState().layoutByWorkspace[workspaceKey];
     expect(findPaneById(layout.root, "main")?.focusedTabId).toBe(sheetTabId);
     expect(tabKinds(store)).toEqual(["terminal", "terminal"]);
+  });
+
+  it("honors an explicit Explorer pane destination on compact layouts", () => {
+    const store = createCompactStore();
+    const paneId = store.getState().showExplorerSidebar(workspaceKey)!;
+    const tabId = store.getState().openTab({
+      workspaceKey,
+      target: fileTarget,
+      intent: "new",
+      placement: { mode: "pane", paneId },
+    });
+    expect(topSheet(store)).toBeUndefined();
+    expect(
+      findPaneById(store.getState().layoutByWorkspace[workspaceKey].root, paneId)?.focusedTabId,
+    ).toBe(tabId);
   });
 
   it("keeps a chat shown in the sheet open for timeline sync until the sheet closes", () => {
