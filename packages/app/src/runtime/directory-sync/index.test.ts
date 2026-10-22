@@ -1075,6 +1075,7 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
+      worktreesRoot: null,
       features: { workspaceMultiplicity: true },
     });
     await refresh;
@@ -1093,6 +1094,7 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
+      worktreesRoot: null,
       features: { workspaceMultiplicity: true, projectList: true },
     });
 
@@ -1331,6 +1333,7 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
+      worktreesRoot: null,
       features: { workspaceMultiplicity: true },
     });
     const completeFetch = client.holdWorkspaceFetch();
@@ -1415,6 +1418,7 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
+      worktreesRoot: null,
       features: { workspaceMultiplicity: true },
     });
 
