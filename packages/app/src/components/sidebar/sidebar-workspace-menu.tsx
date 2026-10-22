@@ -242,9 +242,7 @@ function SidebarWorkspaceMenuItems({
           leading={markAsReadLeadingIcon}
           onSelect={onMarkAsRead}
         >
-          {statusBucket === "failed"
-            ? "Dismiss error"
-            : t("sidebar.workspace.actions.markAsRead")}
+          {statusBucket === "failed" ? "Dismiss error" : t("sidebar.workspace.actions.markAsRead")}
         </WorkspaceMenuItem>
       ) : null}
       {onMarkAsUnread ? (
