@@ -137,7 +137,7 @@ export function keyBelongsToDomPopover(event: Pick<KeyboardEvent, "key">): boole
   return event.key === "Escape" && hasOpenDomPopover();
 }
 
-function getFocusableElements(scope: HTMLElement): HTMLElement[] {
+export function getFocusableElements(scope: HTMLElement): HTMLElement[] {
   const selector = [
     "a[href]",
     "button:not([disabled])",
