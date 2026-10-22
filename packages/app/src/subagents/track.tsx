@@ -224,6 +224,15 @@ function SubagentsTrackRow({
           <Text style={styles.rowTitle} numberOfLines={1}>
             {displayLabel}
           </Text>
+          {row.kind === "paseo" && presentation.subtitle ? (
+            <Text
+              style={styles.managedRowSummary}
+              numberOfLines={1}
+              testID={`subagents-track-summary-${row.id}`}
+            >
+              {presentation.subtitle}
+            </Text>
+          ) : null}
           {row.kind === "paseo" ? (
             <PaseoSubagentFacts serverId={serverId} agentId={row.id} />
           ) : (
@@ -364,6 +373,10 @@ function SubagentActionButton({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  managedRowSummary: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+  },
   // `flexBasis: "auto"` rather than `flex: 1`: a zero-basis label contributes nothing to the row's
   // intrinsic width, so the panel measures itself at its floor and truncates every label at once.
   rowLabel: {
