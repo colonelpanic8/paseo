@@ -12,6 +12,7 @@ import {
 import type { GitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";
+import { generateWorkspaceTitleFromConversation } from "./workspace-title-regenerator.js";
 import {
   generateBranchNameFromFirstAgentContext,
   type GeneratedWorkspaceName,
@@ -19,6 +20,7 @@ import {
 } from "./worktree-branch-name-generator.js";
 
 type WorkspaceNameGenerator = typeof generateBranchNameFromFirstAgentContext;
+type WorkspaceTitleGenerator = typeof generateWorkspaceTitleFromConversation;
 
 type CurrentSelection = GenerateBranchNameFromFirstAgentContextOptions["currentSelection"] | null;
 
@@ -33,6 +35,7 @@ interface WorkspaceAutoNameOptions {
   emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   logger: pino.Logger;
   generateWorkspaceName?: WorkspaceNameGenerator;
+  generateWorkspaceTitle?: WorkspaceTitleGenerator;
 }
 
 interface ScheduleContext {
@@ -50,6 +53,7 @@ export class WorkspaceAutoName {
   private readonly emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   private readonly logger: pino.Logger;
   private readonly generateWorkspaceName: WorkspaceNameGenerator;
+  private readonly generateWorkspaceTitle: WorkspaceTitleGenerator;
 
   constructor(options: WorkspaceAutoNameOptions) {
     this.agentManager = options.agentManager;
@@ -63,6 +67,8 @@ export class WorkspaceAutoName {
     this.logger = options.logger;
     this.generateWorkspaceName =
       options.generateWorkspaceName ?? generateBranchNameFromFirstAgentContext;
+    this.generateWorkspaceTitle =
+      options.generateWorkspaceTitle ?? generateWorkspaceTitleFromConversation;
   }
 
   scheduleForWorktree(
@@ -101,6 +107,23 @@ export class WorkspaceAutoName {
         }),
       { cwd: input.cwd, message: "Failed to auto-name directory workspace title" },
     );
+  }
+
+  generateTitleFromConversation(input: {
+    cwd: string;
+    seed: string;
+    currentSelection?: CurrentSelection;
+  }): Promise<string | null> {
+    return this.generateWorkspaceTitle({
+      agentManager: this.agentManager,
+      cwd: input.cwd,
+      seed: input.seed,
+      workspaceGitService: this.workspaceGitService,
+      providerSnapshotManager: this.providerSnapshotManager,
+      daemonConfig: this.readDaemonConfig(),
+      currentSelection: input.currentSelection ?? undefined,
+      logger: this.logger,
+    });
   }
 
   private async maybeAutoNameWorkspaceBranchForFirstAgent(input: {
