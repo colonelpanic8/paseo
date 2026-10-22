@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { androidIntents } from "@/native/android-intents";
-import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { buildAssistantCatalog, type AssistantCatalogHost } from "./assistant-catalog";
 
@@ -15,6 +15,7 @@ function collectCatalogJson(): string {
   }));
   const sessions = useSessionStore.getState().sessions;
   const workspaceServerIds = new Map<object, string>();
+  const projects = [];
   const workspaces = [];
   const agents = [];
   for (const session of Object.values(sessions)) {
@@ -22,12 +23,16 @@ function collectCatalogJson(): string {
       workspaceServerIds.set(workspace, session.serverId);
       workspaces.push(workspace);
     }
+    projects.push(
+      ...[...session.projects.values()].map((project) => ({ serverId: session.serverId, project })),
+    );
     agents.push(...session.agents.values());
   }
   return JSON.stringify(
     buildAssistantCatalog({
       now: new Date(),
       hosts,
+      projects,
       workspaces,
       agents,
       serverIdOfWorkspace: (workspace) => workspaceServerIds.get(workspace) ?? "",
@@ -36,12 +41,20 @@ function collectCatalogJson(): string {
 }
 
 /**
- * Publishes the bounded host/workspace/agent catalog the assistant content
+ * Publishes the bounded host/project/workspace/agent catalog the assistant content
  * provider serves, so an assistant can list and pick targets without waking
  * React Native. Debounced: the session store changes on every stream
  * tick, the catalog only when names, statuses, or membership do.
  */
 export function AndroidAssistantCatalogSync() {
+  const hosts = useHosts();
+  useEffect(() => {
+    if (!androidIntents.isAvailable) return;
+    const runtime = getHostRuntimeStore();
+    const releases = hosts.map((host) => runtime.acquireDirectoryDemand(host.serverId));
+    return () => releases.forEach((release) => release());
+  }, [hosts]);
+
   useEffect(() => {
     if (!androidIntents.isAvailable) {
       return;
