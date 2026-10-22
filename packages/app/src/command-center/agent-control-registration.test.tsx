@@ -25,7 +25,7 @@ vi.mock("react-i18next", () => ({
 // The real package drags untransformed react-native flow sources into vitest.
 // Mock the one hook the registration uses; RouteFocusContext stands in for the
 // navigator's per-screen focus state.
-vi.mock("@react-navigation/native", async () => {
+vi.mock("expo-router/react-navigation", async () => {
   const { createContext, useContext } = await import("react");
   const RouteFocusContext = createContext(true);
   return {
@@ -35,7 +35,7 @@ vi.mock("@react-navigation/native", async () => {
 });
 
 async function getRouteFocusContext(): Promise<React.Context<boolean>> {
-  const module = (await import("@react-navigation/native")) as unknown as {
+  const module = (await import("expo-router/react-navigation")) as unknown as {
     RouteFocusContext: React.Context<boolean>;
   };
   return module.RouteFocusContext;
