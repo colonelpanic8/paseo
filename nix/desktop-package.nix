@@ -117,6 +117,8 @@ buildNpmPackage rec {
   buildPhase = ''
     runHook preBuild
 
+    npm run postinstall
+
     # Native deps (terminal emulation; libuv-linked on Linux)
     npm rebuild node-pty
 
