@@ -101,3 +101,10 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
     );
   },
 );
+
+export function hasFocusedTextInput(): boolean {
+  return (
+    document.activeElement instanceof HTMLInputElement ||
+    document.activeElement instanceof HTMLTextAreaElement
+  );
+}
