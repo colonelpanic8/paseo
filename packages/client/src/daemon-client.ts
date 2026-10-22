@@ -144,6 +144,7 @@ import type {
   MutableDaemonConfigPatch,
 } from "@getpaseo/protocol/messages";
 import { isRelayClientWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
+import { encodeWebSocketBearerProtocol } from "@getpaseo/protocol/websocket-auth";
 import {
   asUint8Array,
   decodeFileTransferFrame,
@@ -269,7 +270,9 @@ function chooseConnectionAuth(
   return {
     helloAuth,
     headers,
-    ...(compatibleBearer ? { protocols: [`paseo.bearer.${compatibleBearer}`] } : {}),
+    ...(!localCredential && password
+      ? { protocols: [encodeWebSocketBearerProtocol(password)] }
+      : {}),
   };
 }
 
