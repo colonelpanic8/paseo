@@ -13,7 +13,7 @@ import {
 import { UsageMeter } from "./meter";
 import { displayPercent, usageWindowRowLabel } from "./model";
 import type { UsageDisplayAs } from "./preferences";
-import { windowTone } from "./tone";
+import { windowBarTone } from "./tone";
 import type { UsageTone, UsageWindow } from "./types";
 import { useRelativeTimeTick } from "./use-relative-time-tick";
 
@@ -47,7 +47,7 @@ export function UsageWindowBar({
 }) {
   const { t, i18n } = useTranslation();
   const shownPct = displayPercent(window, displayAs);
-  const tone = windowTone(window);
+  const tone = windowBarTone(window, displayAs);
 
   const now = useRelativeTimeTick({ enabled: window.runsOutAt != null || window.resetsAt != null });
   const isAtRisk =
