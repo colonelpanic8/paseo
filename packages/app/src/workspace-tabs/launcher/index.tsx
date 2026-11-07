@@ -10,6 +10,7 @@ import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Globe, SquarePen, SquareTerminal } from "lucide-react-native";
 import invariant from "tiny-invariant";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { pluginIconComponent } from "@/plugins/icons";
 import { useInstalledPlugins } from "@/plugins/registry";
@@ -24,7 +25,6 @@ import {
   type PanelIconProps,
   type PanelPresentation,
 } from "@/panels/panel-registry";
-import { ensurePanelsRegistered } from "@/panels/register-panels";
 import {
   getTerminalProfileIcon,
   resolveTerminalProfiles,
@@ -107,7 +107,7 @@ export function useWorkspaceTabLaunchCatalog(input: {
   invariant(launcher, "NewTabLauncherProvider is required");
   const { config } = useDaemonConfig(serverId);
   const plugins = useInstalledPlugins();
-  ensurePanelsRegistered();
+  const isCompact = useIsCompactFormFactor();
 
   const launchSelection = useCallback(
     (selection: NewTabSelection) => (destination: WorkspaceTabLaunchDestination) => {
@@ -159,7 +159,8 @@ export function useWorkspaceTabLaunchCatalog(input: {
         shortcutActionId: "workspace-tab-target-changes",
         disabled: false,
         panelKind: "working_diff",
-        hidden: !launcher.showChanges,
+        // Compact Changes shows each file's diff inline, so a separate Diff panel is redundant.
+        hidden: !launcher.showChanges || isCompact,
         launch: launchSelection(BUILT_IN_SELECTIONS.diff),
       },
       files: {
@@ -209,7 +210,7 @@ export function useWorkspaceTabLaunchCatalog(input: {
         };
         pluginItems.push({
           id: `plugin:${plugin.id}:${panel.id}`,
-          label: panel.title,
+          label: plugin.i18n.resolve(panel.title, plugin.locale),
           Icon: pluginIconComponent(panel.icon),
           disabled: false,
           panelKind: "plugin",
@@ -252,6 +253,7 @@ export function useWorkspaceTabLaunchCatalog(input: {
   }, [
     config?.terminalProfiles,
     editTerminalProfiles,
+    isCompact,
     launchSelection,
     launcher,
     plugins,

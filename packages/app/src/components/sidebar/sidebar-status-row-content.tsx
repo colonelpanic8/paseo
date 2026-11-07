@@ -19,7 +19,7 @@ import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list"
 import { SPACING, type Theme } from "@/styles/theme";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { deriveRemoteSlug } from "@/utils/remote-slug";
-import { formatClockTime, formatCompactTimeAgo } from "@/utils/time";
+import { formatTimeOfDay, formatCompactTimeAgo } from "@/utils/time";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isNative, isWeb } from "@/constants/platform";
 import { SidebarWorkspaceInlineTitle } from "@/components/sidebar/sidebar-workspace-inline-title";
@@ -128,7 +128,7 @@ export const SidebarStatusRowContent = memo(function SidebarStatusRowContent({
   const repoSlug = deriveRemoteSlug(workspace.remoteUrl) ?? workspace.projectName;
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const activityLabel = workspace.activityAt
-    ? `${formatCompactTimeAgo(workspace.activityAt, activityNow)} · ${formatClockTime(workspace.activityAt)}`
+    ? `${formatCompactTimeAgo(workspace.activityAt, activityNow)} · ${formatTimeOfDay(workspace.activityAt)}`
     : null;
   const { showOverlayActions, showTrailingActions } = resolveStatusRowMetaLayout({
     showActions,

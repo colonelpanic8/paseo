@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   describeCompactTimeAgo,
   describeTimeAgo,
-  formatClockTime,
+  formatTimeOfDay,
   formatCompactTimeAgo,
   formatCompactTimeAgoAsProse,
   formatDuration,
@@ -92,10 +92,10 @@ describe("formatCompactTimeAgoAsProse", () => {
   });
 });
 
-describe("formatClockTime", () => {
+describe("formatTimeOfDay", () => {
   it("uses the runtime's 12-hour or 24-hour clock preference", () => {
     const date = new Date(2026, 6, 16, 15, 42);
-    expect(formatClockTime(date)).toMatch(/3:42 PM|15:42/);
+    expect(formatTimeOfDay(date)).toMatch(/3:42 PM|15:42/);
   });
 });
 
