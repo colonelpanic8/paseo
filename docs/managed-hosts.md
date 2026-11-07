@@ -15,12 +15,14 @@ different path.
     {
       "label": "Ryzen",
       "endpoint": "ryzen-shine:6767",
+      "color": "blue",
       "password": "direct-connection-password"
     },
     {
       "label": "Mac mini",
       "endpoint": "mac-demarco-mini:443",
       "useTls": true,
+      "color": "purple",
       "password": "another-password"
     }
   ]
@@ -33,6 +35,11 @@ authoritative server ID, and merges it through the normal host registry path. An
 retried until its first successful enrollment; normal host reconnection owns subsequent outages.
 The presence of at least one valid managed host suppresses the browser-style `localhost:6767`
 fallback. Desktop-managed local daemon bootstrap is unchanged.
+
+Set an entry's optional `color` to `blue`, `green`, `amber`, `orange`, `red`, or `purple` to
+declaratively tint that host throughout the client. On every desktop startup, a configured color is
+reconciled onto both new and already-enrolled hosts, so machine-managed configuration remains
+authoritative. Omitting `color` leaves the client's saved selection unchanged.
 
 Managed entries currently become ordinary saved host connections after the first successful probe.
 That means direct passwords are persisted in the app's AsyncStorage just like passwords entered in

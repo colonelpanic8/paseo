@@ -28,6 +28,7 @@ function workspaceDescriptor(input: {
   projectId?: string;
   projectDisplayName?: string;
   status?: WorkspaceDescriptor["status"];
+  statusEnteredAt?: Date | null;
   activityAt?: Date | null;
 }): WorkspaceDescriptor {
   return {
@@ -43,7 +44,7 @@ function workspaceDescriptor(input: {
     name: input.name ?? input.id,
     status: input.status ?? "done",
     archivingAt: null,
-    statusEnteredAt: null,
+    statusEnteredAt: input.statusEnteredAt ?? null,
     activityAt: input.activityAt ?? null,
     diffStat: null,
     scripts: [],
