@@ -1841,6 +1841,7 @@ export const fr: TranslationResources = {
     profiles: "Profils",
     providers: "Fournisseurs",
     model: "Modèle",
+    allModels: "Tous les modèles",
     editProfiles: "Modifier",
     editProfilesLabel: "Modifier les profils d’agent",
     createProfile: "Créer un profil",
@@ -2574,6 +2575,11 @@ export const fr: TranslationResources = {
       autoExpandReasoning: {
         label: "Toujours afficher le raisonnement",
         description: "Afficher par défaut le raisonnement de l’agent entièrement déplié",
+      },
+      modelPickerAllModels: {
+        label: "Ouvrir le sélecteur de modèle sur tous les modèles",
+        description:
+          "Démarrer le sélecteur de modèle sur une liste unique et consultable de tous les modèles de tous les fournisseurs, au lieu de la liste des fournisseurs",
       },
       chatDisplay: {
         label: "Affichage du chat",

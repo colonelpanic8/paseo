@@ -4,15 +4,13 @@ import {
   getAutocompleteNextIndex,
   type AutocompleteOptionsPosition,
 } from "@/components/ui/autocomplete-utils";
+import { resolveListSearchKeyAction, type ListSearchKeyEvent } from "@/keyboard/list-search-keys";
 
-interface AutocompleteKeyPressEvent {
-  key: string;
-  preventDefault: () => void;
-}
+export type AutocompleteKeyEvent = ListSearchKeyEvent & { preventDefault: () => void };
 
 interface UseAutocompleteInput<
   TOption,
-  TKeyPressEvent extends AutocompleteKeyPressEvent = AutocompleteKeyPressEvent,
+  TKeyPressEvent extends AutocompleteKeyEvent = AutocompleteKeyEvent,
 > {
   isVisible: boolean;
   options: readonly TOption[];
@@ -22,14 +20,14 @@ interface UseAutocompleteInput<
   optionsPosition?: AutocompleteOptionsPosition;
 }
 
-interface UseAutocompleteResult<TKeyPressEvent extends AutocompleteKeyPressEvent> {
+interface UseAutocompleteResult<TKeyPressEvent extends AutocompleteKeyEvent> {
   selectedIndex: number;
   onKeyPress: (event: TKeyPressEvent) => boolean;
 }
 
 export function useAutocomplete<
   TOption,
-  TKeyPressEvent extends AutocompleteKeyPressEvent = AutocompleteKeyPressEvent,
+  TKeyPressEvent extends AutocompleteKeyEvent = AutocompleteKeyEvent,
 >(input: UseAutocompleteInput<TOption, TKeyPressEvent>): UseAutocompleteResult<TKeyPressEvent> {
   // The user's choice, tied to the query it was made for. The shown index is resolved from it
   // during render, so a list never paints its first frame without a selection: the popover only
@@ -54,13 +52,15 @@ export function useAutocomplete<
         return false;
       }
 
-      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      // Ctrl+N/Ctrl+P move the selection like the arrow keys do.
+      const movement = resolveListSearchKeyAction(event);
+      if (movement === "next" || movement === "previous") {
         event.preventDefault();
         setChoice({
           index: getAutocompleteNextIndex({
             currentIndex: selectedIndex,
             itemCount: input.options.length,
-            key: event.key,
+            key: movement === "next" ? "ArrowDown" : "ArrowUp",
           }),
           query: input.query,
         });

@@ -1,4 +1,4 @@
-import { resolveKeyboardFocusScope } from "../../focus-scope";
+import { ownsListNavigationKeys, resolveKeyboardFocusScope } from "../../focus-scope";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { keyBelongsToDomPopover } from "../dom-popover";
 import type { KeyboardSourceHandlers } from "./contract";
@@ -22,6 +22,7 @@ export function attachDomKeyboardSource(handlers: KeyboardSourceHandlers): () =>
         target: event.target,
         commandCenterOpen: handlers.commandCenterOpen(),
       }),
+      ownsListNavigation: ownsListNavigationKeys(event.target),
       captureFocusRestore() {
         const target = event.target instanceof Element ? event.target : null;
         const editable = target?.closest("textarea, input, [contenteditable='true']");

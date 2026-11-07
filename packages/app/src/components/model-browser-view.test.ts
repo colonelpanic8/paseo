@@ -89,6 +89,30 @@ describe("model browser initial view", () => {
     ).toEqual({ kind: "all" });
   });
 
+  it("opens the combined catalog when the start preference is enabled", () => {
+    expect(
+      resolveInitialModelBrowserView({
+        providers: [codex, pi],
+        selectedProvider: "pi",
+        selectedModel: "pi-pro",
+        hasProfiles: true,
+        startWithAllModels: true,
+      }),
+    ).toEqual({ kind: "allModels" });
+  });
+
+  it("does not add a redundant combined catalog for one provider", () => {
+    expect(
+      resolveInitialModelBrowserView({
+        providers: [pi],
+        selectedProvider: "pi",
+        selectedModel: "pi-pro",
+        hasProfiles: false,
+        startWithAllModels: true,
+      }),
+    ).toEqual({ kind: "provider", providerId: "pi", providerLabel: "Pi" });
+  });
+
   it("opens a sole provider directly regardless of root content", () => {
     expect(
       resolveInitialModelBrowserView({

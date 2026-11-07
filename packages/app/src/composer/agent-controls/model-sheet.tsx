@@ -1,4 +1,12 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Keyboard,
@@ -38,6 +46,8 @@ const MODEL_ROW_STRIDE = 44;
 const MODEL_VIEWPORT_VISIBLE_ROWS = 4.5;
 const FIXED_MODEL_VIEWPORT_HEIGHT =
   MODEL_LIST_TOP_INSET + MODEL_ROW_STRIDE * MODEL_VIEWPORT_VISIBLE_ROWS;
+
+function noop() {}
 
 interface CompactModelSheetProps {
   providers: ProviderSelectorProvider[];
@@ -174,6 +184,16 @@ export function CompactModelSheet({
       providers.find((entry) => entry.id === selectedProvider) ?? providers[0] ?? null;
     return fixedProvider ? [fixedProvider] : [];
   }, [canSwitchProvider, providers, selectedProvider]);
+  // The browsers own list-navigation Enter, but the select handlers it should
+  // run are defined below them. Route through refs.
+  const rootSelectRef = useRef<(provider: string, modelId: string) => void>(noop);
+  const browserSelectRef = useRef<(provider: string, modelId: string) => void>(noop);
+  const handleRootKeyboardSelect = useCallback((provider: string, modelId: string) => {
+    rootSelectRef.current(provider, modelId);
+  }, []);
+  const handleBrowserKeyboardSelect = useCallback((provider: string, modelId: string) => {
+    browserSelectRef.current(provider, modelId);
+  }, []);
   const rootBrowser = useModelBrowser({
     providers: availableProviders,
     selectedProvider,
@@ -181,6 +201,7 @@ export function CompactModelSheet({
     isLoading,
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
+    onSelect: handleRootKeyboardSelect,
     serverId,
   });
   const modelBrowser = useModelBrowser({
@@ -190,6 +211,7 @@ export function CompactModelSheet({
     isLoading,
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
+    onSelect: handleBrowserKeyboardSelect,
     serverId,
   });
   const previousOpenRef = useRef(isOpen);
@@ -253,10 +275,10 @@ export function CompactModelSheet({
       providers: availableProviders,
       selectedProvider,
     });
-    if (destination.kind === "all") {
-      modelBrowser.showAll();
-    } else {
+    if (destination.kind === "provider") {
       modelBrowser.drillDown(destination.providerId, destination.providerLabel);
+    } else {
+      modelBrowser.showAll();
     }
     setIsModelBrowserOpen(true);
   }, [availableProviders, canSwitchProvider, modelBrowser, selectedProvider]);
@@ -281,6 +303,11 @@ export function CompactModelSheet({
     },
     [close, onSelect],
   );
+
+  useEffect(() => {
+    rootSelectRef.current = usesBottomSheet ? handleSearchSelect : handleDesktopSelect;
+    browserSelectRef.current = handleBrowserSelect;
+  }, [handleBrowserSelect, handleDesktopSelect, handleSearchSelect, usesBottomSheet]);
 
   const handleApplyProfile = useCallback(
     (profileId: string) => {
@@ -353,6 +380,7 @@ export function CompactModelSheet({
         scrollable={false}
         contentStyle={styles.sheetBody}
         testID="agent-controls-model-sheet"
+        onOverlayKeyDown={rootBrowser.handleOverlayKeyDown}
       >
         <View
           style={[

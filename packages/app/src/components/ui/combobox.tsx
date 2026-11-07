@@ -62,6 +62,7 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { FloatingSurface } from "@/components/ui/floating";
+import { LIST_SEARCH_DATASET, resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import { getOverlayRoot, OverlayLayerProvider, useOverlayLayer } from "@/lib/overlay-root";
 import { density, densityIconBox } from "@/styles/density";
@@ -132,6 +133,13 @@ export interface ComboboxProps {
   /** When true, selecting an option does not close the picker (multi-select mode). */
   keepOpenOnSelect?: boolean;
   anchorRef: React.RefObject<View | null>;
+  /**
+   * Web: first refusal on keys while the desktop popover is the topmost
+   * overlay, ahead of the combobox's own arrow/Enter/Escape handling. Return
+   * true to consume the event. Used by children-mode pickers that navigate
+   * their own list.
+   */
+  onOverlayKeyDown?: (event: KeyboardInputEvent) => boolean;
   children?: ReactNode;
 }
 
@@ -859,8 +867,22 @@ function buildFloatingMiddleware(input: FloatingMiddlewareInput) {
   ];
 }
 
-function isDesktopKey(key: string): key is DesktopKey {
-  return key === "ArrowDown" || key === "ArrowUp" || key === "Enter" || key === "Escape";
+/**
+ * Ctrl+N/Ctrl+P drive the option list exactly like the arrow keys, so every
+ * combobox (model, thinking, mode, provider, …) navigates the same way.
+ */
+function resolveDesktopKey(event: KeyboardInputEvent): DesktopKey | null {
+  if (event.key === "Escape") return "Escape";
+  switch (resolveListSearchKeyAction(event)) {
+    case "next":
+      return "ArrowDown";
+    case "previous":
+      return "ArrowUp";
+    case "submit":
+      return "Enter";
+    default:
+      return null;
+  }
 }
 
 function dispatchDesktopKey(
@@ -1215,6 +1237,9 @@ function DesktopComboboxBody(props: DesktopBodyProps): ReactElement | null {
         <Pressable style={styles.desktopBackdrop} onPress={props.handleClose} />
         <FloatingSurface
           testID="combobox-desktop-container"
+          // The whole popover owns the list-navigation keys: focus is trapped
+          // inside it and the handler below claims them wherever it sits.
+          dataSet={LIST_SEARCH_DATASET}
           entering={props.shouldUseDesktopFade ? FadeIn.duration(100) : undefined}
           exiting={props.shouldUseDesktopFade ? FadeOut.duration(100) : undefined}
           style={styles.desktopContainer}
@@ -1312,6 +1337,7 @@ export function Combobox({
   footer,
   keepOpenOnSelect = false,
   anchorRef,
+  onOverlayKeyDown,
   children,
 }: ComboboxProps): ReactElement | null {
   const { t } = useTranslation();
@@ -1574,7 +1600,11 @@ export function Combobox({
     active: isOpen,
     layer: floatingLayer,
     keys: ["Escape", "Enter", "ArrowUp", "ArrowDown"],
-    onKeyDown: (event) => (isDesktopKey(event.key) ? handleDesktopKey(event.key, event) : false),
+    onKeyDown: (event) => {
+      if (onOverlayKeyDown?.(event)) return true;
+      const key = resolveDesktopKey(event);
+      return key ? handleDesktopKey(key, event) : false;
+    },
   });
 
   const effectiveSearchPlaceholder = searchPlaceholder ?? resolvedPlaceholder;

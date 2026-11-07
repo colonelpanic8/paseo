@@ -80,6 +80,7 @@ import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-
 import { EditorSection } from "@/screens/settings/editor-section";
 import { FilesSection } from "@/screens/settings/files-section";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -330,6 +331,7 @@ function getActiveLocale(language: string | undefined): SupportedLocale {
 interface GeneralSectionProps {
   settings: AppSettings;
   handleLanguageChange: (language: AppLanguage) => void;
+  handleModelPickerStartChange: (enabled: boolean) => void;
 }
 
 interface LanguageMenuItemProps {
@@ -356,7 +358,11 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
   );
 }
 
-function GeneralSection({ settings, handleLanguageChange }: GeneralSectionProps) {
+function GeneralSection({
+  settings,
+  handleLanguageChange,
+  handleModelPickerStartChange,
+}: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
   const selectedLanguageOption = LANGUAGE_OPTIONS.find(
@@ -372,6 +378,21 @@ function GeneralSection({ settings, handleLanguageChange }: GeneralSectionProps)
   return (
     <SettingsSection title={t("settings.general.title")}>
       <View style={settingsStyles.card}>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.general.modelPickerAllModels.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.modelPickerAllModels.description")}
+            </Text>
+          </View>
+          <Switch
+            value={settings.modelPickerStartsWithAllModels}
+            onValueChange={handleModelPickerStartChange}
+            accessibilityLabel={t("settings.general.modelPickerAllModels.label")}
+          />
+        </View>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
@@ -1151,6 +1172,13 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     [updateSettings],
   );
 
+  const handleModelPickerStartChange = useCallback(
+    (modelPickerStartsWithAllModels: boolean) => {
+      void updateSettings({ modelPickerStartsWithAllModels });
+    },
+    [updateSettings],
+  );
+
   const handlePlaybackTest = useCallback(async () => {
     if (!voiceAudioEngine || isPlaybackTestRunning) {
       return;
@@ -1316,7 +1344,11 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
         case "general":
           return (
             <>
-              <GeneralSection settings={settings} handleLanguageChange={handleLanguageChange} />
+              <GeneralSection
+                settings={settings}
+                handleLanguageChange={handleLanguageChange}
+                handleModelPickerStartChange={handleModelPickerStartChange}
+              />
               <SendingSection />
               {isDesktopApp ? <OpenLocationSection /> : null}
             </>
