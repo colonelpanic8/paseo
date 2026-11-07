@@ -139,6 +139,7 @@ import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useComposerSigils } from "@/composer/tokens/use-composer-sigils";
 import type { ComposerTokenCatalog } from "@/composer/tokens/tokens";
+import { ComposerStash } from "@/composer/stash";
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
@@ -302,6 +303,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
+      provider: agent?.provider ?? null,
     };
   };
 }
@@ -2420,6 +2422,13 @@ function ComposerContentImpl({
     ],
   );
 
+  // Stash queues are scoped per provider: the live agent's provider when one
+  // exists, otherwise the draft flow's selected provider.
+  const stashProvider =
+    resolveAgentControlsMode(agentControls) === "draft" && agentControls
+      ? agentControls.selectedProvider
+      : agentState.provider;
+
   const isSubmitLoadingVisible =
     isProcessing || isSubmitLoading || isUploadingFile || pendingNativeImagePastes > 0;
   const isSubmitDisabled =
@@ -2489,6 +2498,15 @@ function ComposerContentImpl({
               configuration={autocompleteConfiguration}
               onTokenCatalog={setTokenCatalog}
             >
+              <ComposerStash
+                provider={stashProvider}
+                textSource={textSource}
+                setUserInput={replaceUserInput}
+                attachments={attachments}
+                setAttachments={setSelectedAttachments}
+                disabled={isComposerLocked || isSubmitDisabled}
+                focusInput={focusInput}
+              />
               <ComposerForgeBinding
                 text={textSource}
                 configuration={forgeConfiguration}
