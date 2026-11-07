@@ -72,6 +72,45 @@ interface CombinedModelSelectorProps {
   onOpenChange?: (open: boolean) => void;
 }
 
+/** Open state a parent may control. Opening prepares the browser before it paints. */
+function useSelectorOpenState(input: {
+  controlledOpen: boolean | undefined;
+  onOpenChange: ((open: boolean) => void) | undefined;
+  onOpen: (() => void) | undefined;
+  onClose: (() => void) | undefined;
+  prepareToOpen: () => void;
+  reset: () => void;
+}) {
+  const { controlledOpen, onOpenChange, onOpen, onClose, prepareToOpen, reset } = input;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = controlledOpen ?? uncontrolledOpen;
+  const previousOpenRef = useRef(isOpen);
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setUncontrolledOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange],
+  );
+
+  // Layout effect so a controlled open prepares the browser before the first
+  // paint — a plain effect would flash the previous browser view for a frame.
+  useLayoutEffect(() => {
+    if (previousOpenRef.current === isOpen) return;
+    previousOpenRef.current = isOpen;
+    if (isOpen) {
+      prepareToOpen();
+      onOpen?.();
+      return;
+    }
+    reset();
+    onClose?.();
+  }, [isOpen, onClose, onOpen, prepareToOpen, reset]);
+
+  return { isOpen, handleOpenChange };
+}
+
 export function CombinedModelSelector({
   providers,
   selectedProvider,
@@ -101,8 +140,6 @@ export function CombinedModelSelector({
   const isCompact = useIsCompactFormFactor();
   const modelBrowserScrolling = resolveModelBrowserScrolling({ isNative, isCompact });
   const anchorRef = useRef<View>(null);
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const isOpen = controlledOpen ?? uncontrolledOpen;
   const [isContentReady, setIsContentReady] = useState(isWeb);
   const browser = useModelBrowser({
     providers,
@@ -112,30 +149,14 @@ export function CombinedModelSelector({
     profiles,
     serverId,
   });
-  const { prepareToOpen, reset } = browser;
-  const previousOpenRef = useRef(isOpen);
-
-  const handleOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      setUncontrolledOpen(nextOpen);
-      onOpenChange?.(nextOpen);
-    },
-    [onOpenChange],
-  );
-
-  // Layout effect so a controlled open prepares the browser before the first
-  // paint — a plain effect would flash the previous browser view for a frame.
-  useLayoutEffect(() => {
-    if (previousOpenRef.current === isOpen) return;
-    previousOpenRef.current = isOpen;
-    if (isOpen) {
-      prepareToOpen();
-      onOpen?.();
-      return;
-    }
-    reset();
-    onClose?.();
-  }, [isOpen, onClose, onOpen, prepareToOpen, reset]);
+  const { isOpen, handleOpenChange } = useSelectorOpenState({
+    controlledOpen,
+    onOpenChange,
+    onOpen,
+    onClose,
+    prepareToOpen: browser.prepareToOpen,
+    reset: browser.reset,
+  });
 
   const handleSelect = useCallback(
     (provider: string, modelId: string) => {
