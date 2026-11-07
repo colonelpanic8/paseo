@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { Text, View, type PressableStateCallbackType } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -98,7 +99,7 @@ function StashMenuItem({
   );
   const trailingSlot = useMemo(
     () => (
-      <Pressable
+      <PressHighlight
         accessibilityRole="button"
         accessibilityLabel={deleteLabel}
         onPress={handleDelete}
@@ -106,7 +107,7 @@ function StashMenuItem({
         testID={`composer-stash-delete-${option.id}`}
       >
         <ThemedX size={ICON_SIZE.sm} uniProps={iconMutedMapping} />
-      </Pressable>
+      </PressHighlight>
     ),
     [deleteButtonStyle, deleteLabel, handleDelete, option.id],
   );
@@ -146,14 +147,14 @@ function StashUndoToast({
   return (
     <View style={styles.toastRow}>
       <Text style={styles.toastText}>{message}</Text>
-      <Pressable
+      <PressHighlight
         accessibilityRole="button"
         onPress={handleUndo}
         testID="composer-stash-undo"
         hitSlop={8}
       >
         <Text style={styles.toastUndo}>{undoLabel}</Text>
-      </Pressable>
+      </PressHighlight>
     </View>
   );
 }
@@ -375,7 +376,7 @@ export function ComposerStash({
     <>
       <View ref={anchorRef} style={styles.anchor} pointerEvents="none" collapsable={false} />
       {entries.length > 0 ? (
-        <Pressable
+        <PressHighlight
           accessibilityRole="button"
           accessibilityLabel={t("composer.stash.badgeAccessibilityLabel", {
             count: entries.length,
@@ -389,7 +390,7 @@ export function ComposerStash({
           <Animated.View key={entries.length} entering={FadeIn.duration(180)}>
             <Text style={styles.badgeCount}>{entries.length}</Text>
           </Animated.View>
-        </Pressable>
+        </PressHighlight>
       ) : null}
       <Combobox
         options={options}
