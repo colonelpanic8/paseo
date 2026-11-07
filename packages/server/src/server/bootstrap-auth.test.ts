@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { hashDaemonPassword } from "./auth.js";
 import { DaemonAuthenticationError, DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { readLocalCredentialForTarget } from "./local-credential.js";
 
@@ -134,6 +135,37 @@ describe("daemon bearer auth", () => {
 
       const status = await fetch(`http://127.0.0.1:${daemonHandle.port}/api/status`);
       expect(status.status).toBe(401);
+    } finally {
+      await daemonHandle.close();
+    }
+  });
+
+  test("accepts an encoded WebSocket password containing non-token characters", async () => {
+    const daemonHandle = await createTestPaseoDaemon({
+      auth: { password: hashDaemonPassword("base64+/=") },
+    });
+    try {
+      const { ws, protocol } = await connectWebSocket({
+        port: daemonHandle.port,
+        protocol: "paseo.bearer64.YmFzZTY0Ky89",
+      });
+      expect(protocol).toBe("paseo.bearer64.YmFzZTY0Ky89");
+      const serverInfo = new Promise<unknown>((resolve) => {
+        ws.once("message", (data) => resolve(JSON.parse(data.toString())));
+      });
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          clientId: "encoded",
+          clientType: "cli",
+          protocolVersion: 1,
+        }),
+      );
+      await expect(serverInfo).resolves.toMatchObject({
+        type: "session",
+        message: { payload: { status: "server_info" } },
+      });
+      ws.close();
     } finally {
       await daemonHandle.close();
     }
