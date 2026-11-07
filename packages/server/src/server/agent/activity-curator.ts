@@ -6,6 +6,7 @@ import { isLikelyExternalToolName } from "@getpaseo/protocol/tool-name-normaliza
 import { buildAgentMessageDisplay } from "@getpaseo/protocol/paseo-tool-presentation/index";
 import { buildToolCallDisplayModel } from "@getpaseo/protocol/tool-call-display";
 import { projectTimelineRows, selectItemsByProjectedLimit } from "./timeline-projection.js";
+import { redactModelFacingValue } from "./model-facing-redaction.js";
 
 const DEFAULT_MAX_ITEMS = 0;
 const MAX_TOOL_INPUT_CHARS = 400;
@@ -54,7 +55,7 @@ function formatToolInputJson(input: unknown): string | null {
     return null;
   }
   try {
-    const encoded = JSON.stringify(input);
+    const encoded = JSON.stringify(redactModelFacingValue(input));
     if (!encoded) {
       return null;
     }
