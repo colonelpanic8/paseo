@@ -2,18 +2,27 @@ import { useCallback, useMemo, useState } from "react";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import type { ArchivedWorkspaceEntry } from "@/hooks/use-archived-workspaces";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
-import { INITIAL_VISIBLE_ITEMS } from "@/components/sidebar/use-limited-sidebar-group";
+import { selectSidebarGroupVisibility } from "@/components/sidebar/sidebar-group-visibility";
+import type { ActiveWorkspaceSelection } from "@/stores/last-workspace-selection";
 
 /** One status group as the list is about to render it, limit already applied. */
 export interface LimitedStatusGroup {
   group: StatusGroup;
   collapsed: boolean;
+  /** The open workspace when the collapsed limit would hide it; rendered before `visibleRows`. */
+  leadingRow: SidebarWorkspaceEntry | null;
   visibleRows: SidebarWorkspaceEntry[];
   expanded: boolean;
   canToggle: boolean;
 }
 
 const NO_EXPANDED_BUCKETS: ReadonlySet<string> = new Set();
+
+const STATUS_GROUP_VISIBILITY = {
+  kind: "workspaces" as const,
+  getStatusBucket: (workspace: SidebarWorkspaceEntry) => workspace.statusBucket,
+  isReadyToReview: (workspace: SidebarWorkspaceEntry) => workspace.readyToReview,
+};
 
 /**
  * Show-more state for every status group at once. It lives above the groups so
@@ -24,6 +33,7 @@ const NO_EXPANDED_BUCKETS: ReadonlySet<string> = new Set();
 export function useLimitedStatusGroups(
   groups: StatusGroup[],
   collapsedStatusGroupKeys: ReadonlySet<string>,
+  selection: ActiveWorkspaceSelection | null,
 ) {
   const [expandedBuckets, setExpandedBuckets] = useState(NO_EXPANDED_BUCKETS);
   const toggleGroupExpanded = useCallback((bucket: string) => {
@@ -37,15 +47,22 @@ export function useLimitedStatusGroups(
     () =>
       groups.map((group) => {
         const expanded = expandedBuckets.has(group.bucket);
+        const visibility = selectSidebarGroupVisibility({
+          items: group.rows,
+          expanded,
+          policy: STATUS_GROUP_VISIBILITY,
+          selection,
+        });
         return {
           group,
           collapsed: collapsedStatusGroupKeys.has(group.bucket),
-          visibleRows: expanded ? group.rows.slice() : group.rows.slice(0, INITIAL_VISIBLE_ITEMS),
+          leadingRow: visibility.leadingItem,
+          visibleRows: visibility.visibleItems,
           expanded,
-          canToggle: group.rows.length > INITIAL_VISIBLE_ITEMS,
+          canToggle: visibility.canToggle,
         };
       }),
-    [collapsedStatusGroupKeys, expandedBuckets, groups],
+    [collapsedStatusGroupKeys, expandedBuckets, groups, selection],
   );
   return { limitedGroups, toggleGroupExpanded };
 }
@@ -60,6 +77,7 @@ export function useLimitedStatusGroups(
 export function buildStatusLayoutSignature({
   hasListHeader,
   pinnedCollapsed,
+  leadingPinnedWorkspace,
   visiblePinnedWorkspaces,
   canTogglePinnedWorkspaces,
   limitedGroups,
@@ -67,6 +85,7 @@ export function buildStatusLayoutSignature({
 }: {
   hasListHeader: boolean;
   pinnedCollapsed: boolean;
+  leadingPinnedWorkspace: SidebarWorkspaceEntry | null;
   visiblePinnedWorkspaces: SidebarWorkspaceEntry[];
   canTogglePinnedWorkspaces: boolean;
   limitedGroups: LimitedStatusGroup[];
@@ -77,11 +96,13 @@ export function buildStatusLayoutSignature({
     `pinned:${pinnedCollapsed ? 1 : 0}:${canTogglePinnedWorkspaces ? 1 : 0}`,
   ];
   if (!pinnedCollapsed) {
+    if (leadingPinnedWorkspace) parts.push(`leading:${leadingPinnedWorkspace.workspaceKey}`);
     for (const workspace of visiblePinnedWorkspaces) parts.push(workspace.workspaceKey);
   }
   for (const limited of limitedGroups) {
     parts.push(`group:${limited.group.bucket}:${limited.collapsed ? 1 : 0}`);
     if (limited.collapsed) continue;
+    if (limited.leadingRow) parts.push(`leading:${limited.leadingRow.workspaceKey}`);
     for (const workspace of limited.visibleRows) parts.push(workspace.workspaceKey);
     if (limited.canToggle) parts.push("more");
   }
