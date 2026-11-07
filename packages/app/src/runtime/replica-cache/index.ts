@@ -1,3 +1,4 @@
+import { findMountedWindowStart } from "@/agent-stream/history-window";
 import { z } from "zod";
 import {
   AgentStatusSchema,
@@ -231,6 +232,7 @@ const StoredAgentSnapshotSchema = z.strictObject({
   updatedAt: IsoDateSchema,
   lastUserMessageAt: IsoDateSchema.nullable(),
   status: AgentStatusSchema,
+  backgroundWork: z.object({ count: z.number().int().nonnegative() }).optional(),
   activeTurn: z
     .strictObject({
       turnId: z.string(),
@@ -246,6 +248,8 @@ const StoredAgentSnapshotSchema = z.strictObject({
   lastError: z.string().optional(),
   title: z.string().nullable(),
   labels: z.record(z.string(), z.string()),
+  // Optional: clients without background_agents never received a background agent to cache.
+  background: z.boolean().optional(),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
   attentionTimestamp: IsoDateSchema.nullable().optional(),
@@ -296,6 +300,10 @@ const WorkspaceGitRuntimeSchema = z
   .optional();
 
 const StoredWorkspaceSchema = z.strictObject({
+  parentWorkspaceId: z.string().optional(),
+  // Require both keys: a cursor without these values would preserve the wrong sort on reconnect.
+  createdAt: IsoDateSchema.nullable(),
+  lastUserMessageAt: IsoDateSchema.nullable(),
   id: z.string(),
   projectId: z.string(),
   projectDisplayName: z.string(),
@@ -497,6 +505,9 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         version: item.version,
         data: item.data,
       };
+    // A folded turn's summary row is presentation, not timeline.
+    case "turn_summary":
+      return null;
   }
 }
 
@@ -608,6 +619,31 @@ function serializeAgentTurn(agent: Agent): NonNullable<StoredAgent["turn"]> {
   };
 }
 
+function serializeAgentCapabilities(
+  capabilities: Agent["capabilities"],
+): StoredAgent["snapshot"]["capabilities"] {
+  return {
+    supportsStreaming: capabilities.supportsStreaming,
+    supportsSessionPersistence: capabilities.supportsSessionPersistence,
+    ...(capabilities.supportsSessionListing !== undefined
+      ? { supportsSessionListing: capabilities.supportsSessionListing }
+      : {}),
+    supportsDynamicModes: capabilities.supportsDynamicModes,
+    supportsMcpServers: capabilities.supportsMcpServers,
+    supportsReasoningStream: capabilities.supportsReasoningStream,
+    supportsToolInvocations: capabilities.supportsToolInvocations,
+    ...(capabilities.supportsRewindConversation !== undefined
+      ? { supportsRewindConversation: capabilities.supportsRewindConversation }
+      : {}),
+    ...(capabilities.supportsRewindFiles !== undefined
+      ? { supportsRewindFiles: capabilities.supportsRewindFiles }
+      : {}),
+    ...(capabilities.supportsRewindBoth !== undefined
+      ? { supportsRewindBoth: capabilities.supportsRewindBoth }
+      : {}),
+  };
+}
+
 function serializeAgent(agent: Agent): StoredAgent {
   const snapshot = {
     id: agent.id,
@@ -628,26 +664,7 @@ function serializeAgent(agent: Agent): StoredAgent {
           },
         }
       : {}),
-    capabilities: {
-      supportsStreaming: agent.capabilities.supportsStreaming,
-      supportsSessionPersistence: agent.capabilities.supportsSessionPersistence,
-      ...(agent.capabilities.supportsSessionListing !== undefined
-        ? { supportsSessionListing: agent.capabilities.supportsSessionListing }
-        : {}),
-      supportsDynamicModes: agent.capabilities.supportsDynamicModes,
-      supportsMcpServers: agent.capabilities.supportsMcpServers,
-      supportsReasoningStream: agent.capabilities.supportsReasoningStream,
-      supportsToolInvocations: agent.capabilities.supportsToolInvocations,
-      ...(agent.capabilities.supportsRewindConversation !== undefined
-        ? { supportsRewindConversation: agent.capabilities.supportsRewindConversation }
-        : {}),
-      ...(agent.capabilities.supportsRewindFiles !== undefined
-        ? { supportsRewindFiles: agent.capabilities.supportsRewindFiles }
-        : {}),
-      ...(agent.capabilities.supportsRewindBoth !== undefined
-        ? { supportsRewindBoth: agent.capabilities.supportsRewindBoth }
-        : {}),
-    },
+    capabilities: serializeAgentCapabilities(agent.capabilities),
     currentModeId: agent.currentModeId,
     availableModes: [],
     pendingPermissions: [],
@@ -655,7 +672,9 @@ function serializeAgent(agent: Agent): StoredAgent {
     ...(agent.lastError ? { lastError: agent.lastError } : {}),
     title: agent.title,
     labels: agent.labels,
+    ...(agent.background ? { background: true } : {}),
     requiresAttention: agent.requiresAttention ?? false,
+    backgroundWork: agent.backgroundWork,
     attentionReason: agent.attentionReason ?? null,
     attentionTimestamp: agent.attentionTimestamp?.toISOString() ?? null,
     archivedAt: agent.archivedAt?.toISOString() ?? null,
@@ -688,8 +707,15 @@ function deserializeAgent(serverId: string, stored: StoredAgent): Agent {
   };
 }
 
+function restoreWorkspace(stored: StoredWorkspace): WorkspaceDescriptor {
+  return normalizeWorkspaceDescriptor({ ...stored, createdAt: stored.createdAt ?? undefined });
+}
+
 function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
   return {
+    parentWorkspaceId: workspace.parentWorkspaceId,
+    createdAt: workspace.createdAt?.toISOString() ?? null,
+    lastUserMessageAt: workspace.lastUserMessageAt?.toISOString() ?? null,
     id: workspace.id,
     projectId: workspace.projectId,
     projectDisplayName: workspace.projectDisplayName,
@@ -757,7 +783,14 @@ function serializeTimeline(timeline: CachedTimeline): StoredTimeline | null {
   const canonicalItems = timeline.items.filter(
     (item) => item.kind !== "user_message" || !isUnreconciledLocalUserMessage(item),
   );
-  const items = canonicalItems.map(serializeTimelineItem).filter((item) => item !== null);
+  const start = findMountedWindowStart({
+    items: canonicalItems,
+    minMountedCount: MAX_TIMELINE_ITEMS,
+  });
+  const items = canonicalItems
+    .slice(start)
+    .map(serializeTimelineItem)
+    .filter((item) => item !== null);
   const range = timeline.range;
   const canPersistCoverage =
     range !== null &&
@@ -774,7 +807,7 @@ function serializeTimeline(timeline: CachedTimeline): StoredTimeline | null {
     canonicalItems.some((item) => item.timelineCursor?.seq === range.endSeq);
   return {
     agentId: timeline.agentId,
-    items: items.slice(-MAX_TIMELINE_ITEMS),
+    items,
     range: canPersistCoverage
       ? { epoch: range.epoch, startSeq: range.startSeq, endSeq: range.endSeq }
       : null,
@@ -856,7 +889,7 @@ function applyDirectoryRow(
     case "workspace": {
       const stored = parseStoredPayload(StoredWorkspaceSchema, row.payload);
       if (stored.id !== row.id) throw new Error("Replica workspace row id mismatch");
-      result.workspaces.set(row.id, normalizeWorkspaceDescriptor(stored));
+      result.workspaces.set(row.id, restoreWorkspace(stored));
       return;
     }
     case "project": {
@@ -946,7 +979,7 @@ export class ReplicaCache {
     try {
       const stored = parseStoredPayload(StoredWorkspaceSchema, workspaceRow.payload);
       if (stored.id !== workspaceRow.id) throw new Error("Replica workspace row id mismatch");
-      workspace = normalizeWorkspaceDescriptor(stored);
+      workspace = restoreWorkspace(stored);
     } catch {
       await this.deleteInvalidRow(workspaceRow);
       return undefined;
