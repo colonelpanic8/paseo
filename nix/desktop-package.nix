@@ -16,7 +16,26 @@
   # (`paseo-desktop-<v>-npm-deps`) and refetches the entire registry. Override
   # the upstream hash via `paseo.override { npmDepsHash = "..."; }`.
   paseo,
+  # Build provenance. Unlike the daemon, the client bundle cannot read this at
+  # runtime — `expo export` inlines EXPO_PUBLIC_* into the bundle, so it has to
+  # be known here at build time. See nix/build-info.nix.
+  buildCommit ? null,
+  buildCommitDate ? null,
+  buildCommitMessage ? null,
+  buildRepoUrl ? null,
 }:
+
+let
+  buildInfo = import ./build-info.nix { inherit lib; } {
+    inherit
+      buildCommit
+      buildCommitDate
+      buildCommitMessage
+      buildRepoUrl
+      ;
+  };
+in
+
 buildNpmPackage {
   pname = "paseo-desktop";
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
@@ -92,7 +111,9 @@ buildNpmPackage {
     # macOS runners, and 4 GB above that. 4096 MB is that 4 GB ceiling, so this
     # only raises the limit on smaller builders, like desktop-release.yml does.
     NODE_OPTIONS = "--max-old-space-size=4096";
-  };
+  }
+  # Inlined into the renderer bundle by `expo export` below.
+  // buildInfo.expoPublicEnv;
 
   buildPhase = ''
     runHook preBuild
@@ -206,7 +227,7 @@ buildNpmPackage {
         --add-flags "--no-sandbox" \
         --add-flags "--class=paseo-desktop" \
         --set EXPO_DEV_URL "paseo://app/" \
-        --set CHROME_DESKTOP "paseo-desktop.desktop"
+        --set CHROME_DESKTOP "paseo-desktop.desktop" ${lib.escapeShellArgs buildInfo.wrapperArgs}
 
       copyDesktopItems
     ''}
