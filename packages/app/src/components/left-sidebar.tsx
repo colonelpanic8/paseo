@@ -62,6 +62,7 @@ import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout"
 import { isNative as platformIsNative } from "@/constants/platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useImportSession } from "@/hooks/use-import-session";
+import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import {
   type SidebarProjectEntry,
@@ -81,6 +82,9 @@ import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { usePanelStore } from "@/stores/panel-store";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
+import { LiveVoiceFooterButton } from "@/live-voice/live-voice-footer-button";
+import { SidebarLiveVoiceSlot } from "@/live-voice/live-voice-sidebar-card";
+import { useLiveVoiceOptional } from "@/contexts/live-voice-context";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { useLeftPanelWidth } from "@/mobile-panels/provider";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
@@ -155,6 +159,9 @@ export const LeftSidebar = memo(function LeftSidebar({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  // The compact panel stops at the content row's bottom edge, so whatever is
+  // docked below it — the Live Voice strip — pays the home-indicator inset.
+  const compactBottomInset = useScreenBottomInset();
   const isCompactLayout = useIsCompactFormFactor();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
 
@@ -262,7 +269,7 @@ export const LeftSidebar = memo(function LeftSidebar({
             {...handlers}
             active={active}
             insetsTop={insets.top}
-            insetsBottom={insets.bottom}
+            insetsBottom={compactBottomInset}
             closeSidebar={showMobileAgent}
           />
         ) : (
@@ -432,16 +439,18 @@ function SidebarFooter({
   const handleRowLayout = useCallback((event: LayoutChangeEvent) => {
     setRowWidth(event.nativeEvent.layout.width);
   }, []);
-  const { inline, overflow } = useMemo(
-    () =>
-      resolveSidebarFooterLayout({
-        rowWidth,
-        controlSize: TOOLBAR_CONTROL_SIZES[controlSizingForLayout(isCompactLayout)],
-        rowPadding: FOOTER_ROW_PADDING,
-        actions: SIDEBAR_FOOTER_ACTIONS,
-      }),
-    [rowWidth, isCompactLayout],
-  );
+  const hasLiveVoiceButton = useLiveVoiceOptional() !== null;
+  const { inline, overflow } = useMemo(() => {
+    const controlSize = TOOLBAR_CONTROL_SIZES[controlSizingForLayout(isCompactLayout)];
+    // The Live Voice button always stays in the row, so it takes a slot from the other actions.
+    const liveVoiceWidth = hasLiveVoiceButton && rowWidth > 0 ? controlSize : 0;
+    return resolveSidebarFooterLayout({
+      rowWidth: rowWidth - liveVoiceWidth,
+      controlSize,
+      rowPadding: FOOTER_ROW_PADDING,
+      actions: SIDEBAR_FOOTER_ACTIONS,
+    });
+  }, [rowWidth, isCompactLayout, hasLiveVoiceButton]);
   const isInline = (action: SidebarFooterAction) => inline.includes(action);
 
   // One line of icons: Add project, Usage, Hosts, then Help and Settings at the end. Actions that
@@ -472,6 +481,7 @@ function SidebarFooter({
               onOpenHostSettings={handleOpenHostSettings}
             />
           ) : null}
+          <LiveVoiceFooterButton />
           <View style={styles.footerSpacer} />
           {isInline("help") ? <SidebarHelpMenu /> : null}
           {overflow.length > 0 ? (
@@ -870,6 +880,8 @@ function DesktopSidebar({
           </SidebarViewSlot>
 
           <SidebarCalloutSlot />
+
+          <SidebarLiveVoiceSlot active={active} />
 
           <SidebarFooter
             handleOpenProject={handleOpenProject}

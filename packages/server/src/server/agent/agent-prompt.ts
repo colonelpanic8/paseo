@@ -1,8 +1,12 @@
 import { prepareAgentMessage, type AgentPromptSource } from "./agent-messages/index.js";
 import type { Logger } from "pino";
 
-import type { AgentPromptInput, AgentRunOptions } from "./agent-sdk-types.js";
-import type { AgentManager, ManagedAgent } from "./agent-manager.js";
+import type {
+  AgentPermissionRequest,
+  AgentPromptInput,
+  AgentRunOptions,
+} from "./agent-sdk-types.js";
+import type { AgentManager, AgentManagerEvent, ManagedAgent } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
 import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
@@ -400,4 +404,154 @@ export async function startCreatedAgentInitialPrompt(
     throw new Error(`Agent ${params.agentId} not found`);
   }
   return refreshedSnapshot;
+}
+
+export type AgentFinishReason =
+  | "finished"
+  | "errored"
+  | "needs permission"
+  | "was closed"
+  | "was canceled";
+
+export interface AgentFinishDetails {
+  terminal: boolean;
+  turnId?: string;
+  permissionRequest?: AgentPermissionRequest;
+}
+
+export interface WatchAgentFinishParams {
+  agentManager: Pick<AgentManager, "subscribe" | "getAgent">;
+  agentId: string;
+  /** Keep watching after permission requests so a later terminal outcome is reported. */
+  continueAfterPermission?: boolean;
+  /** A replacement must observe its new start, not the displaced running snapshot. */
+  waitForTurnStart?: boolean;
+  /** Report an agent that is already errored when the watch begins. */
+  reportPriorError?: boolean;
+  onFinish: (reason: AgentFinishReason, details: AgentFinishDetails) => void;
+}
+
+export function watchAgentFinish(params: WatchAgentFinishParams): () => void {
+  const { agentManager, agentId, onFinish, waitForTurnStart = false } = params;
+  let hasSeenRunning = false;
+  let hasSeenTurn = false;
+  let stopped = false;
+  let unsubscribe: (() => void) | null = null;
+  const reportedPermissionIds = new Set<string>();
+
+  function stop(): void {
+    if (stopped) return;
+    stopped = true;
+    unsubscribe?.();
+  }
+
+  function fire(reason: AgentFinishReason, details: AgentFinishDetails): void {
+    if (stopped) return;
+    if (details.terminal || !params.continueAfterPermission) {
+      stop();
+    }
+    onFinish(reason, details);
+  }
+
+  function handleAgentState(event: Extract<AgentManagerEvent, { type: "agent_state" }>): void {
+    for (const requestId of reportedPermissionIds) {
+      if (!event.agent.pendingPermissions?.has(requestId)) {
+        reportedPermissionIds.delete(requestId);
+      }
+    }
+    if (event.agent.lifecycle === "running") {
+      if (waitForTurnStart && !hasSeenTurn) return;
+      hasSeenTurn = true;
+      if ((event.agent.pendingPermissions?.size ?? 0) === 0) {
+        hasSeenRunning = true;
+      }
+      return;
+    }
+    // Prior terminal state is not this task's outcome. A failure before turn start
+    // is reported by the dispatch acknowledgement instead of a finish callback.
+    if (event.agent.lifecycle === "error" && hasSeenTurn) {
+      fire("errored", { terminal: true });
+      return;
+    }
+    // Idle is published before the terminal stream event for both completion
+    // and cancellation. Let that event identify the outcome instead.
+    if (event.agent.lifecycle === "closed") {
+      fire("was closed", { terminal: true });
+    }
+  }
+
+  function handleAgentStream(event: Extract<AgentManagerEvent, { type: "agent_stream" }>): void {
+    if (event.event.type === "turn_started") {
+      hasSeenTurn = true;
+      hasSeenRunning = true;
+      return;
+    }
+
+    if (event.event.type === "turn_completed" || event.event.type === "turn_canceled") {
+      // Replacing a turn keeps the agent running through the displaced turn's
+      // cancellation. The task settles only when the agent becomes idle.
+      if (agentManager.getAgent(agentId)?.lifecycle !== "idle") return;
+      if (event.event.type === "turn_completed" && hasSeenRunning) {
+        fire("finished", { terminal: true });
+      } else if (event.event.type === "turn_canceled" && hasSeenTurn) {
+        fire("was canceled", { terminal: true });
+      }
+      return;
+    }
+
+    if (event.event.type === "permission_requested") {
+      // A permission pause is an intermediate checkpoint. Forget the run
+      // observed before it so an idle state during follow-up startup cannot
+      // masquerade as the final completion.
+      hasSeenRunning = false;
+      if (reportedPermissionIds.has(event.event.request.id)) return;
+      reportedPermissionIds.add(event.event.request.id);
+      fire("needs permission", {
+        terminal: false,
+        ...(event.event.turnId ? { turnId: event.event.turnId } : {}),
+        permissionRequest: event.event.request,
+      });
+      return;
+    }
+
+    if (event.event.type === "permission_resolved") {
+      reportedPermissionIds.delete(event.event.requestId);
+      const agent = agentManager.getAgent(agentId);
+      if (agent && (agent.pendingPermissions?.size ?? 0) === 0) {
+        hasSeenRunning = agent.lifecycle === "running";
+      }
+    }
+  }
+
+  unsubscribe = agentManager.subscribe(
+    (event) => {
+      if (stopped) return;
+
+      if (event.type === "agent_state") {
+        handleAgentState(event);
+        return;
+      }
+      if (event.type === "agent_stream") {
+        handleAgentStream(event);
+      }
+    },
+    { agentId, replayState: false },
+  );
+
+  // Check if the agent is already running (catches the case where
+  // the lifecycle flipped before our subscribe call was processed).
+  // Do NOT treat an immediate "idle" as "finished" — the agent may
+  // not have started yet (streamAgent sets a pending run before
+  // transitioning to "running").
+  const snapshot = agentManager.getAgent(agentId);
+  if (!snapshot || snapshot.lifecycle === "closed") {
+    stop();
+  } else if (snapshot.lifecycle === "running" && !waitForTurnStart) {
+    hasSeenTurn = true;
+    hasSeenRunning = true;
+  } else if (snapshot.lifecycle === "error" && params.reportPriorError) {
+    fire("errored", { terminal: true });
+  }
+
+  return stop;
 }
