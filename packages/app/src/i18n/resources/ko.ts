@@ -2519,6 +2519,14 @@ export const ko: TranslationResources = {
           "mod-enter": "{{modifier}}+Enter",
         },
       },
+      commandTrigger: {
+        label: "명령 트리거",
+        description: "메시지 시작에서 전체 명령 목록을 엽니다.",
+      },
+      skillTrigger: {
+        label: "스킬 트리거",
+        description: "메시지 어디에서나 스킬 목록을 엽니다.",
+      },
       serviceUrls: {
         options: {
           ask: "물어보기",

@@ -2560,6 +2560,14 @@ export const fr: TranslationResources = {
           "mod-enter": "{{modifier}}+Enter",
         },
       },
+      commandTrigger: {
+        label: "Déclencheur de commandes",
+        description: "Ouvre la liste complète des commandes en début de message.",
+      },
+      skillTrigger: {
+        label: "Déclencheur de compétences",
+        description: "Ouvre la liste des compétences n'importe où dans un message.",
+      },
       serviceUrls: {
         options: {
           ask: "Demander",

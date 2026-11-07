@@ -2528,6 +2528,14 @@ export const ja: TranslationResources = {
           "mod-enter": "{{modifier}}+Enter",
         },
       },
+      commandTrigger: {
+        label: "コマンドのトリガー",
+        description: "メッセージの先頭でコマンド一覧を開きます。",
+      },
+      skillTrigger: {
+        label: "スキルのトリガー",
+        description: "メッセージ内のどこでもスキル一覧を開きます。",
+      },
       serviceUrls: {
         options: {
           ask: "確認する",

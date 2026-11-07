@@ -56,10 +56,45 @@ describe("MockLoadTestAgentClient", () => {
 
     const commands = (await session.listCommands?.()) ?? [];
 
-    expect(commands.map((command) => `/${command.name} ${command.argumentHint}`)).toEqual([
+    const handled = commands.filter((command) => command.kind === "command");
+    expect(handled.map((command) => `/${command.name} ${command.argumentHint}`)).toEqual([
       MOCK_LOAD_TEST_HANDLED_COMMAND,
     ]);
     expect(session.tryHandleOutOfBand?.(MOCK_LOAD_TEST_HANDLED_COMMAND)).not.toBeNull();
+  });
+
+  test("lists mock skills for draft and live sessions", async () => {
+    const client = new MockLoadTestAgentClient();
+    const config = {
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    } as const;
+    const expectedCommands = [
+      {
+        name: "mock",
+        description: "Reply without starting a turn",
+        argumentHint: "handled-command",
+        kind: "command",
+      },
+      {
+        name: "HOME",
+        description: "Exercise shell-variable collisions in development.",
+        argumentHint: "",
+        kind: "skill",
+      },
+      {
+        name: "release-beta",
+        description: "Simulate a provider skill in development.",
+        argumentHint: "",
+        kind: "skill",
+      },
+    ];
+
+    await expect(client.listCommands(config)).resolves.toEqual(expectedCommands);
+
+    const session = await client.createSession(config);
+    await expect(session.listCommands?.()).resolves.toEqual(expectedCommands);
   });
 
   test("rejects the configured number of prompts before starting a retry", async () => {

@@ -2541,6 +2541,14 @@ export const ar: TranslationResources = {
           "mod-enter": "{{modifier}}+Enter",
         },
       },
+      commandTrigger: {
+        label: "مُشغِّل الأوامر",
+        description: "يفتح قائمة الأوامر الكاملة في بداية الرسالة.",
+      },
+      skillTrigger: {
+        label: "مُشغِّل المهارات",
+        description: "يفتح قائمة المهارات في أي موضع من الرسالة.",
+      },
       serviceUrls: {
         options: {
           ask: "بسأل",
