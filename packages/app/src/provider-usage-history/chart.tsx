@@ -1,13 +1,7 @@
 import { useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-  type LayoutChangeEvent,
-} from "react-native";
+import { ScrollView, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import Svg, { Line, Path } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
@@ -371,7 +365,7 @@ interface ChartDayTargetProps {
 }
 
 /**
- * One day's hit target over the plot. Hover lives on this `Pressable` rather
+ * One day's hit target over the plot. Hover lives on this `PressHighlight` rather
  * than a wrapping view because the strip holds no other pressable to fight it
  * for hover state; press is what selects a day everywhere hover does not exist.
  */
@@ -397,7 +391,7 @@ function ChartDayTarget({
   );
 
   return (
-    <Pressable
+    <PressHighlight
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={selectedState(isSelected)}

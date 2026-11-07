@@ -304,21 +304,21 @@ export function ProviderUsageHistorySection() {
           />
         ) : null}
         <SegmentedControl
-          size="xs"
+          size="sm"
           options={metricOptions}
           value={metric}
           onValueChange={setMetric}
           testID="usage-history-metric"
         />
         <SegmentedControl
-          size="xs"
+          size="sm"
           options={windowOptions}
           value={String(windowDays)}
           onValueChange={handleWindowChange}
           testID="usage-history-window"
         />
         <SegmentedControl
-          size="xs"
+          size="sm"
           options={timeGroupingOptions}
           value={timeGrouping}
           onValueChange={setTimeGrouping}
@@ -326,7 +326,7 @@ export function ProviderUsageHistorySection() {
         />
         <Button
           variant="ghost"
-          size="xs"
+          size="sm"
           leftIcon={RefreshCw}
           loading={busy}
           onPress={handleRefresh}
@@ -427,7 +427,7 @@ function DimensionButton({
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
   return (
     <Button
-      size="xs"
+      size="sm"
       variant={selected ? "secondary" : "ghost"}
       accessibilityState={accessibilityState}
       testID={`usage-history-${scope}-group-${dimension}`}
@@ -863,7 +863,7 @@ function Breakdown({
             value,
             label: t(`settings.usageHistory.metric.${value}`),
           }))}
-          size="xs"
+          size="sm"
           testID="usage-history-table-metric"
         />
       </View>
@@ -879,7 +879,7 @@ function Breakdown({
       ))}
       {criteria.length < sortOptions.length ? (
         <View style={styles.breakdownControls}>
-          <Button size="xs" variant="outline" onPress={handleAdd}>
+          <Button size="sm" variant="outline" onPress={handleAdd}>
             {t("settings.usageHistory.sort.add")}
           </Button>
         </View>
@@ -947,7 +947,7 @@ function SortCriterionRow({
           : t("settings.usageHistory.sort.thenBy")}
       </Text>
       <SegmentedControl
-        size="xs"
+        size="sm"
         options={options.map((option) => ({
           ...option,
           disabled:
@@ -959,17 +959,17 @@ function SortCriterionRow({
         testID={`usage-history-sort-${index}`}
       />
       <Button
-        size="xs"
+        size="sm"
         variant="outline"
         testID={`usage-history-sort-direction-${index}`}
         onPress={handleDirection}
       >
         {t(`settings.usageHistory.sort.${criterion.direction}`)}
       </Button>
-      <Button size="xs" variant="ghost" disabled={index === 0} onPress={handleMoveUp}>
+      <Button size="sm" variant="ghost" disabled={index === 0} onPress={handleMoveUp}>
         {t("settings.usageHistory.sort.moveUp")}
       </Button>
-      <Button size="xs" variant="ghost" disabled={criteria.length === 1} onPress={handleRemove}>
+      <Button size="sm" variant="ghost" disabled={criteria.length === 1} onPress={handleRemove}>
         {t("settings.usageHistory.sort.remove")}
       </Button>
     </View>
