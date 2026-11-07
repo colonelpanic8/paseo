@@ -26,17 +26,23 @@ export interface SidebarGroupVisibility<T> {
 
 export type SidebarGroupVisibilityPolicy<T> =
   | { kind: "pinned" }
-  | { kind: "workspaces"; getStatusBucket: (item: T) => SidebarStateBucket };
+  | { kind: "limit"; limit: number }
+  | {
+      kind: "workspaces";
+      getStatusBucket: (item: T) => SidebarStateBucket;
+      isReadyToReview: (item: T) => boolean;
+    };
 
 // A placement can outrun its entry: a retained sidebar that is inactive (compact layout with the
 // sidebar closed) or still waiting for sessions keeps an empty entry map. A missing entry renders
 // no row, so it counts as Done and claims no slot past the limit.
 export function createWorkspaceVisibilityPolicy<T extends { workspaceKey: string }>(
-  entriesByKey: ReadonlyMap<string, { statusBucket: SidebarStateBucket }>,
+  entriesByKey: ReadonlyMap<string, { statusBucket: SidebarStateBucket; readyToReview: boolean }>,
 ): SidebarGroupVisibilityPolicy<T> {
   return {
     kind: "workspaces",
     getStatusBucket: (item) => entriesByKey.get(item.workspaceKey)?.statusBucket ?? "done",
+    isReadyToReview: (item) => entriesByKey.get(item.workspaceKey)?.readyToReview === true,
   };
 }
 
@@ -51,18 +57,26 @@ function isOpenWorkspace(
   );
 }
 
+function collapsedLimit<T>(policy: SidebarGroupVisibilityPolicy<T>): number {
+  if (policy.kind === "pinned") return 20;
+  if (policy.kind === "limit") return policy.limit;
+  return 7;
+}
+
 export function selectSidebarGroupVisibility<T extends SidebarGroupItem>(
   input: SidebarGroupVisibilityInput<T>,
 ): SidebarGroupVisibility<T> {
   const { items, expanded, policy, selection } = input;
-  const limit = policy.kind === "pinned" ? 20 : 7;
+  const limit = collapsedLimit(policy);
   const baseline: T[] = [];
   let leadingItem: T | null = null;
   let canToggle = false;
 
   items.forEach((item, index) => {
     const inBaseline =
-      index < limit || (policy.kind === "workspaces" && policy.getStatusBucket(item) !== "done");
+      index < limit ||
+      (policy.kind === "workspaces" &&
+        (policy.getStatusBucket(item) !== "done" || policy.isReadyToReview(item)));
     if (inBaseline) {
       baseline.push(item);
     } else if (leadingItem === null && isOpenWorkspace(item, selection)) {

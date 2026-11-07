@@ -97,6 +97,7 @@ function workspace(input: {
     name: input.name,
     status: input.status ?? "done",
     statusEnteredAt: null,
+    activityAt: null,
     archivingAt: null,
     diffStat: null,
     scripts: input.scripts ?? [],
@@ -456,6 +457,7 @@ describe("sidebar group visibility", () => {
   const policy = {
     kind: "workspaces" as const,
     getStatusBucket: (entry: ReturnType<typeof createSidebarWorkspaceEntry>) => entry.statusBucket,
+    isReadyToReview: (entry: ReturnType<typeof createSidebarWorkspaceEntry>) => entry.readyToReview,
   };
   const names = (items: readonly ReturnType<typeof createSidebarWorkspaceEntry>[]) =>
     items.map((item) => item.workspaceId);
@@ -628,13 +630,25 @@ describe("sidebar group visibility", () => {
         serverId: SERVER_ID,
         workspace: descriptor,
         workspaceAgentActivity: new Map([
-          [descriptor.id, { agentId: "agent", status, enteredAt: null }],
+          [
+            descriptor.id,
+            {
+              agentId: "agent",
+              status,
+              enteredAt: null,
+              lastUserMessageAt: null,
+              providers: [],
+              readyToReview: false,
+            },
+          ],
         ]),
       });
-      expect(last.statusBucket).toBe(status);
+      // Ready to review is an annotation on Done, not its own bucket.
+      const bucket = status === "attention" ? "done" : status;
+      expect(last.statusBucket).toBe(bucket);
       rerender({ last });
       expect(names(result.current.visibleItems)).toEqual(
-        status === "done" ? names(items.slice(0, 7)) : [...names(items.slice(0, 7)), "row-12"],
+        bucket === "done" ? names(items.slice(0, 7)) : [...names(items.slice(0, 7)), "row-12"],
       );
     }
   });

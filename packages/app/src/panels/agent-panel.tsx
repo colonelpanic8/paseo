@@ -90,6 +90,7 @@ import {
   type Agent,
   useSessionStore,
 } from "@/stores/session-store";
+import { usePanelStore } from "@/stores/panel-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
@@ -99,6 +100,7 @@ import type { PendingPermission } from "@/types/shared";
 import type { StreamItem } from "@/types/stream";
 import type { ViewedTimelineStatus, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
+import { resolveAgentScreenFocus } from "@/utils/agent-attention";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
@@ -750,6 +752,13 @@ function ChatAgentContent({
 
   const hasHydratedHistoryBefore =
     hasAppliedAuthoritativeHistory || replicaTimelineStatus === "painted";
+  const isCompact = useIsCompactFormFactor();
+  const mobilePanelTarget = usePanelStore((state) => state.mobilePanel.target);
+  const isAgentScreenFocused = resolveAgentScreenFocus({
+    isCompact,
+    isPaneFocused,
+    mobilePanelTarget,
+  });
 
   const focusRequest = useWorkspaceLayoutStore((state) => {
     const request = state.focusRequest;
@@ -770,7 +779,7 @@ function ChatAgentContent({
     isAgentDataReady: agentHistorySyncGeneration === historySyncGeneration,
     requiresAttention: agentState.requiresAttention,
     attentionReason: agentState.attentionReason,
-    isScreenFocused: isPaneFocused,
+    isScreenFocused: isAgentScreenFocused,
     focusRequest,
     onError: reportAttentionError,
   });

@@ -6,6 +6,7 @@ import { withProjectOwnership } from "./project-ownership";
 import { createTempDirectory, createTempGitRepo } from "./workspace";
 
 export interface SeedWorkspaceDescriptor {
+  snoozeStatus?: { snoozedAt: string; snoozedUntil: string } | null;
   id: string;
   name: string;
   projectId: string;
@@ -50,6 +51,10 @@ export interface SeedDaemonClient {
   }>;
   setWorkspaceTitle(workspaceId: string, title: string | null): Promise<{ title: string | null }>;
   setWorkspacePinned(workspaceId: string, pinned: boolean): Promise<{ pinnedAt: string | null }>;
+  setWorkspaceSnooze(
+    workspaceId: string,
+    snoozedUntil: string | null,
+  ): Promise<{ snoozeStatus: { snoozedAt: string; snoozedUntil: string } | null }>;
   clearWorkspaceAttention(workspaceId: string): Promise<void>;
   setWorkspaceLabel(input: {
     workspaceId: string;

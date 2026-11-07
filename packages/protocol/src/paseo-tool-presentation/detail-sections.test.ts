@@ -94,6 +94,45 @@ describe("Paseo tool-call detail presentation", () => {
     });
   });
 
+  it("shows a snooze's wake time without the success flag", () => {
+    expect(
+      buildPaseoToolDetailSections(
+        "mcp__paseo__snooze_workspace",
+        { duration: "2h", workspaceId: "ws_1" },
+        {
+          success: true,
+          workspaceId: "ws_1",
+          snoozed: true,
+          snoozeStatus: {
+            snoozedAt: "2026-10-20T07:00:00.000Z",
+            snoozedUntil: "2026-10-20T09:00:00.000Z",
+          },
+        },
+      ),
+    ).toEqual([
+      {
+        kind: "fields",
+        title: "Details",
+        fields: [
+          { label: "Workspace", value: "ws_1" },
+          { label: "Duration", value: "2h" },
+        ],
+      },
+      {
+        kind: "fields",
+        title: "Result",
+        fields: [
+          { label: "Workspace", value: "ws_1" },
+          { label: "Snoozed", value: "Yes" },
+          {
+            label: "Snooze status",
+            value: "Snoozed at: 2026-10-20T07:00:00.000Z\nSnoozed until: 2026-10-20T09:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+  });
+
   it("unwraps MCP result envelopes instead of exposing JSON-encoded text", () => {
     expect(
       buildPaseoToolDetailSections(

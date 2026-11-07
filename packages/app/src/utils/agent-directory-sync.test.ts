@@ -265,6 +265,7 @@ describe("replaceFetchedAgentDirectory", () => {
             createdAt: null,
             lastUserMessageAt: null,
             statusEnteredAt: null,
+            activityAt: null,
             archivingAt: null,
             diffStat: null,
             scripts: [],

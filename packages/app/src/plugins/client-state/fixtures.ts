@@ -14,6 +14,7 @@ export const workspace: WorkspaceDescriptor = {
   pinnedAt: null,
   status: "running",
   statusEnteredAt: new Date("2026-08-16T10:00:00.000Z"),
+  activityAt: new Date("2026-08-16T10:00:00.000Z"),
   archivingAt: null,
   diffStat: { additions: 12, deletions: 3 },
   scripts: [],

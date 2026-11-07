@@ -7,6 +7,7 @@ import {
 } from "./sidebar-group-visibility";
 import type { ActiveWorkspaceSelection } from "@/stores/last-workspace-selection";
 
+export const INITIAL_VISIBLE_ITEMS = 20;
 const PINNED_POLICY = { kind: "pinned" } as const;
 
 interface LimitedSidebarGroupInput<T> {

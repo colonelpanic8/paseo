@@ -4,6 +4,7 @@ import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
+  WorkspaceSnoozeStatusSchema,
 } from "@getpaseo/protocol/messages";
 import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
 import type { PluginTimelineData } from "@getpaseo/plugin";
@@ -300,6 +301,8 @@ const WorkspaceGitRuntimeSchema = z
   .optional();
 
 const StoredWorkspaceSchema = z.strictObject({
+  // Older rows discarded activityAt even when their sync cursor was current.
+  version: z.literal(1),
   parentWorkspaceId: z.string().optional(),
   // Require both keys: a cursor without these values would preserve the wrong sort on reconnect.
   createdAt: IsoDateSchema.nullable(),
@@ -323,9 +326,10 @@ const StoredWorkspaceSchema = z.strictObject({
   // dropped them painted its row without its chips and stayed that way: the directory cursor is
   // current on reconnect, so the daemon has nothing newer to send back.
   labels: z.array(z.string()).optional(),
+  snoozeStatus: WorkspaceSnoozeStatusSchema.nullable(),
   status: z.enum(["needs_input", "failed", "running", "attention", "done"]),
   statusEnteredAt: IsoDateSchema.nullable(),
-  activityAt: z.null(),
+  activityAt: IsoDateSchema.nullable(),
   archivingAt: z.string().nullable(),
   diffStat: z.strictObject({ additions: z.number(), deletions: z.number() }).nullable(),
   scripts: z.array(WorkspaceScriptSchema),
@@ -713,6 +717,7 @@ function restoreWorkspace(stored: StoredWorkspace): WorkspaceDescriptor {
 
 function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
   return {
+    version: 1,
     parentWorkspaceId: workspace.parentWorkspaceId,
     createdAt: workspace.createdAt?.toISOString() ?? null,
     lastUserMessageAt: workspace.lastUserMessageAt?.toISOString() ?? null,
@@ -730,10 +735,11 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     name: workspace.name,
     title: workspace.title ?? null,
     pinnedAt: workspace.pinnedAt ?? null,
+    snoozeStatus: workspace.snoozeStatus ?? null,
     labels: workspace.labels,
     status: workspace.status,
     statusEnteredAt: workspace.statusEnteredAt?.toISOString() ?? null,
-    activityAt: null,
+    activityAt: workspace.activityAt?.toISOString() ?? null,
     archivingAt: workspace.archivingAt,
     diffStat: workspace.diffStat,
     scripts: workspace.scripts.map((script) => ({

@@ -1,3 +1,18 @@
+import type { MobilePanelView } from "@/stores/panel-store";
+
+interface ResolveAgentScreenFocusInput {
+  isCompact: boolean;
+  isPaneFocused: boolean;
+  mobilePanelTarget: MobilePanelView;
+}
+
+export function resolveAgentScreenFocus(input: ResolveAgentScreenFocusInput): boolean {
+  if (!input.isPaneFocused) {
+    return false;
+  }
+  return !input.isCompact || input.mobilePanelTarget === "agent";
+}
+
 interface AttentionState {
   focused: boolean;
   ready: boolean;

@@ -1,5 +1,12 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  archivedWorkspacesQueryKey,
+  beginArchivedWorkspaceTransition,
+  settleArchivedWorkspaceTransition,
+} from "@/hooks/use-archived-workspaces";
+import { ARCHIVE_COLLAPSE_MS } from "@/components/sidebar/sidebar-motion";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -25,6 +32,7 @@ export interface ArchiveWorkspaceInput {
   workspaceId: string;
   workspaceKind: WorkspaceDescriptor["workspaceKind"];
   name: string;
+  projectName: string;
   isDirty?: boolean | null;
   aheadOfOrigin?: number | null;
   diffStat?: { additions: number; deletions: number } | null;
@@ -43,6 +51,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     workspaceId,
     workspaceKind,
     name,
+    projectName,
     isDirty,
     aheadOfOrigin,
     diffStat,
@@ -52,6 +61,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
   } = input;
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const archiveWorkspaceRecord = useCallback(async () => {
     const client = getHostRuntimeStore().getClient(serverId);
@@ -61,6 +71,25 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     }
     const workspace = { serverId, workspaceId };
     onSetHiding?.(true);
+    // Let the row collapse itself out of the list while it still owns its slot
+    // (see sidebar-motion.ts) before anything is removed or inserted. The
+    // collapse closes the gap on its own, so by the time this resolves the row
+    // is a zero-height sliver and the removal has nothing left to animate; the
+    // tail arrival is a separate animation that starts after this.
+    await new Promise((resolve) => setTimeout(resolve, ARCHIVE_COLLAPSE_MS));
+    const workspaceKey = `${serverId}:${workspaceId}`;
+    await beginArchivedWorkspaceTransition({
+      queryClient,
+      entry: {
+        workspaceKey,
+        serverId,
+        workspaceId,
+        projectName,
+        name,
+        archivedAt: new Date(),
+        phase: "archiving",
+      },
+    });
     try {
       onArchiveStarted();
       if (supportsWorkspaceArchiveUndo(serverId)) {
@@ -75,14 +104,37 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
         await archiveWorkspaceOptimistically({ client, workspace });
         purgeArchivedWorkspaceState(workspace);
       }
+      settleArchivedWorkspaceTransition({
+        queryClient,
+        serverId,
+        workspaceKey,
+        outcome: "archived",
+      });
+      void queryClient.invalidateQueries({ queryKey: archivedWorkspacesQueryKey(serverId) });
     } catch (error) {
+      settleArchivedWorkspaceTransition({
+        queryClient,
+        serverId,
+        workspaceKey,
+        outcome: "failed",
+      });
       toast.error(
         error instanceof Error ? error.message : t("sidebar.workspace.toasts.archiveFailed"),
       );
     } finally {
       onSetHiding?.(false);
     }
-  }, [onArchiveStarted, onSetHiding, serverId, t, toast, workspaceId]);
+  }, [
+    name,
+    onArchiveStarted,
+    onSetHiding,
+    projectName,
+    queryClient,
+    serverId,
+    t,
+    toast,
+    workspaceId,
+  ]);
 
   const archive = useCallback(() => {
     void (async () => {

@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { test as base, expect } from "../support/fixtures";
+import { gotoAppShell } from "../support/helpers/app";
 import {
   openAgentRoute,
   seedMockAgentWorkspace,
@@ -9,7 +10,11 @@ import { expectOpenTabCount } from "../support/helpers/sheet";
 import { installDaemonWebSocketGate } from "../support/helpers/daemon-websocket-gate";
 import { expectReconnectingToastGone } from "../support/helpers/workspace-ui";
 import { getServerId } from "../support/helpers/server-id";
-import { closeMobileAgentSidebar, openMobileAgentSidebar } from "../support/helpers/sidebar";
+import {
+  closeMobileAgentSidebar,
+  openMobileAgentSidebar,
+  selectSidebarStatusGrouping,
+} from "../support/helpers/sidebar";
 
 interface FinishedWorkspaces {
   subject: MockAgentWorkspace;
@@ -211,6 +216,17 @@ test("manual unread survives departure and clears on reopening and ordinary comp
   await leaveMarkedWorkspaceAndReopen(page, workspaces);
   await completeTurnAndLeave(page, workspaces);
   await markBackgroundWorkspaceAndRead(page, workspaces.subject.workspaceId);
+});
+
+test("status-grouped workspace row can mark a finished workspace unread", async ({
+  page,
+  workspaces,
+}) => {
+  await gotoAppShell(page);
+  await selectSidebarStatusGrouping(page);
+  await expectStatus(page, workspaces.subject.workspaceId, "done");
+  await markAsUnread(page, workspaces.subject.workspaceId);
+  await markAsRead(page, workspaces.subject.workspaceId);
 });
 
 test("clicking a multi-agent workspace preserves its selected agent and leaves the other unread", async ({

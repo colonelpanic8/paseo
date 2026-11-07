@@ -38,7 +38,7 @@ export type SendShortcut = "enter" | "mod-enter";
 export type SendBehavior = ActiveTurnBehavior | "queue";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
-export type WorkspaceTitleSource = "title" | "branch";
+export type WorkspaceTitleSource = "title" | "branch" | "worktree";
 export type PullRequestOpenLocation = "main" | "side" | "explorer";
 /** What a sidebar workspace row shows in the space to the right of its title. */
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
@@ -246,7 +246,7 @@ const StoredAppSettingsSchema = z
       .or(clampedNumber(MIN_CONTENT_MAX_WIDTH, MAX_CONTENT_MAX_WIDTH))
       .catch(null),
     syntaxTheme: z.string().refine(isSyntaxThemeId).catch("one"),
-    workspaceTitleSource: z.enum(["title", "branch"]).catch("title"),
+    workspaceTitleSource: z.enum(["title", "branch", "worktree"]).catch("title"),
     sidebarWorkspaceTrailing: z.enum(["diff", "timestamp", "none"]).catch("timestamp"),
     sidebarRowItems: SidebarRowItemsSchema,
     sidebarChecksDisplay: z

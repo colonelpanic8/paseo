@@ -3,6 +3,7 @@ import type {
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
+import { isStatusGroupCollapsed } from "@/stores/sidebar-collapsed-sections-store/state";
 
 export interface SidebarShortcutWorkspaceTarget {
   serverId: string;
@@ -50,7 +51,7 @@ export function buildStatusSidebarShortcutModel(input: {
   return buildSidebarShortcutSections({
     sections: input.groups.map((group) => ({
       workspaces: group.rows,
-      collapsed: input.collapsedStatusGroupKeys?.has(group.bucket),
+      collapsed: isStatusGroupCollapsed(input.collapsedStatusGroupKeys ?? new Set(), group.bucket),
     })),
     shortcutLimit: input.shortcutLimit,
   });

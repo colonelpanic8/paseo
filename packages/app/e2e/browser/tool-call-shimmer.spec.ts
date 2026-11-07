@@ -1,7 +1,6 @@
 import type { Locator } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
 import { gateSecondToolCall } from "../support/helpers/tool-call-gate";
-import { expectComposerVisible } from "../support/helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 interface ShimmerEvidence {
@@ -53,11 +52,10 @@ test("measures an overview heading that becomes loading after its idle mount", a
       workspaceId: agent.workspaceId,
       agentId: agent.agentId,
     });
-    await expectComposerVisible(page);
     await agent.client.sendAgentMessage(agent.agentId, "Prove the overview shimmer lifecycle.");
 
     await gate.waitForFirstCompleted();
-    const group = page.getByTestId("tool-call-group").first();
+    const group = page.getByTestId("tool-call-group");
     await expect(group).toBeVisible();
     const idleGroupHandle = await group.elementHandle();
     if (!idleGroupHandle) {

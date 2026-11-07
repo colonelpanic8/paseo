@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAgentAttentionController } from "./agent-attention";
+import { createAgentAttentionController, resolveAgentScreenFocus } from "./agent-attention";
 
 describe("agent attention acknowledgement", () => {
   function setup() {
@@ -113,5 +113,47 @@ describe("agent attention acknowledgement", () => {
     expect(errors).toEqual([error]);
     controller.focus();
     expect(calls).toBe(2);
+  });
+});
+
+describe("resolveAgentScreenFocus", () => {
+  it("treats the compact sidebar as covering the selected agent", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: true,
+        isPaneFocused: true,
+        mobilePanelTarget: "agent-list",
+      }),
+    ).toBe(false);
+  });
+
+  it("focuses the selected agent when the compact sidebar closes", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: true,
+        isPaneFocused: true,
+        mobilePanelTarget: "agent",
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores compact panel state in the wide layout", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: false,
+        isPaneFocused: true,
+        mobilePanelTarget: "agent-list",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps inactive tabs unfocused", () => {
+    expect(
+      resolveAgentScreenFocus({
+        isCompact: true,
+        isPaneFocused: false,
+        mobilePanelTarget: "agent",
+      }),
+    ).toBe(false);
   });
 });

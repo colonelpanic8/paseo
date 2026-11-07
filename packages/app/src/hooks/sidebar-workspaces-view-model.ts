@@ -1,4 +1,4 @@
-import { deriveEffectiveWorkspaceStatus } from "@/workspace-status";
+import { deriveEffectiveWorkspaceStatus as deriveWorkspaceIndicatorStatus } from "@/workspace-status";
 import equal from "fast-deep-equal";
 import type { PrHint } from "@/git/pr-hint";
 import { selectPrHintFromStatus } from "@/git/pr-hint";
@@ -12,12 +12,18 @@ import type {
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 import { aggregateSidebarStateBuckets } from "@/utils/sidebar-agent-state";
 import { shortenPath } from "@/utils/shorten-path";
-import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
+import {
+  EMPTY_WORKSPACE_PROVIDERS,
+  type WorkspaceAgentActivity,
+} from "@/utils/workspace-agent-activity";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
 
-export type SidebarStateBucket = WorkspaceDescriptor["status"];
+// "snoozed" is a client-side-only bucket: it never appears on the wire
+// (WorkspaceStateBucket in the protocol is unchanged) and is derived from the
+// workspace's snoozeStatus metadata plus the clock.
+export type SidebarStateBucket = Exclude<WorkspaceDescriptor["status"], "attention"> | "snoozed";
 
 export interface SidebarWorkspacePlacement {
   workspaceKey: string;
@@ -36,6 +42,9 @@ export interface SidebarWorkspacePlacement {
 export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlacement {
   statusBucket: SidebarStateBucket;
   statusEnteredAt: Date | null;
+  lastUserMessageAt: Date | null;
+  activityAt: Date | null;
+  readyToReview: boolean;
 }
 
 export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
@@ -48,6 +57,10 @@ export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
   labels?: string[];
   // Checkout branch (null when not a git checkout or detached HEAD).
   currentBranch: string | null;
+  // Git remote of the workspace's checkout (null when there is none).
+  remoteUrl: string | null;
+  // Distinct providers with a live root agent, most recently active first.
+  providers: readonly string[];
   archivingAt: string | null;
   diffStat: { additions: number; deletions: number } | null;
   prHint: PrHint | null;
@@ -55,6 +68,9 @@ export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
   archiveUnpushedCommitCount: number | null;
   scripts: WorkspaceDescriptor["scripts"];
   hasRunningScripts: boolean;
+  // When the workspace sits in the snoozed bucket, the time it wakes back up
+  // (the workspace's snoozedUntil). Null when not snoozed.
+  snoozeWakeAt: Date | null;
 }
 
 export interface SidebarProjectEntry {
@@ -81,6 +97,28 @@ export interface SidebarWorkspaceSession {
 interface SidebarWorkspaceSessionSource {
   workspaces: Map<string, WorkspaceDescriptor>;
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+}
+
+/**
+ * The hosts the sidebar is currently showing. Every sidebar surface must agree on
+ * this set, or a filtered-out host leaks rows into one section but not another.
+ * Once the registry has settled and no pinned host still exists, fall back to
+ * every host rather than rendering an empty sidebar.
+ */
+export function resolveSidebarServerIds(input: {
+  allServerIds: readonly string[];
+  hostFilters: readonly string[];
+  hostRegistryLoaded: boolean;
+}): string[] {
+  if (input.hostFilters.length === 0) {
+    return [...input.allServerIds];
+  }
+  const selected = new Set(input.hostFilters);
+  const matched = input.allServerIds.filter((id) => selected.has(id));
+  if (input.hostRegistryLoaded && matched.length === 0) {
+    return [...input.allServerIds];
+  }
+  return matched;
 }
 
 export function selectSidebarWorkspaceSessions(
@@ -125,6 +163,19 @@ export function areSidebarWorkspaceSessionsEqual(
   return true;
 }
 
+interface EffectiveWorkspaceStatus {
+  status: SidebarStateBucket;
+  enteredAt: Date | null;
+  snoozeWakeAt: Date | null;
+  readyToReview: boolean;
+}
+
+function toSidebarStatusBucket(
+  status: WorkspaceDescriptor["status"] | "snoozed",
+): SidebarStateBucket {
+  return status === "attention" ? "done" : status;
+}
+
 function projectNameForWorkspace(workspace: WorkspaceDescriptor): string {
   return (
     workspace.projectCustomName ??
@@ -141,15 +192,24 @@ function normalizeCurrentBranch(currentBranch: string | null | undefined): strin
   return trimmed.length === 0 || trimmed === "HEAD" ? null : trimmed;
 }
 
+function workspaceRemoteUrl(workspace: WorkspaceDescriptor): string | null {
+  return workspace.gitRuntime?.remoteUrl ?? workspace.project?.checkout.remoteUrl ?? null;
+}
+
 export function createSidebarWorkspaceEntry(input: {
   serverId: string;
   workspace: WorkspaceDescriptor;
   projectViewKey?: string;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
+  nowMs?: number;
 }): SidebarWorkspaceEntry {
   const projectViewKey = input.projectViewKey ?? input.workspace.projectId;
-  const effectiveStatus = deriveEffectiveWorkspaceStatus(input);
+  const agentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
+  const effectiveStatus = deriveEffectiveWorkspaceStatus({
+    ...input,
+    nowMs: input.nowMs ?? Date.now(),
+  });
   return {
     workspaceKey: `${input.serverId}:${input.workspace.id}`,
     serverId: input.serverId,
@@ -168,8 +228,14 @@ export function createSidebarWorkspaceEntry(input: {
     pinnedAt: input.workspace.pinnedAt,
     labels: input.workspace.labels ?? EMPTY_WORKSPACE_LABELS,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
+    remoteUrl: workspaceRemoteUrl(input.workspace),
+    providers: agentActivity?.providers ?? EMPTY_WORKSPACE_PROVIDERS,
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
+    snoozeWakeAt: effectiveStatus.snoozeWakeAt,
+    lastUserMessageAt: agentActivity?.lastUserMessageAt ?? null,
+    activityAt: input.workspace.activityAt,
+    readyToReview: effectiveStatus.readyToReview,
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
     prHint: selectPrHintFromStatus(
@@ -185,9 +251,80 @@ export function createSidebarWorkspaceEntry(input: {
 
 const EMPTY_WORKSPACE_LABELS: string[] = [];
 
+function deriveEffectiveWorkspaceStatus(input: {
+  serverId: string;
+  workspace: WorkspaceDescriptor;
+  pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
+  workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
+  nowMs: number;
+}): EffectiveWorkspaceStatus {
+  const base = deriveBaseWorkspaceStatus(input);
+  const snoozeStatus = input.workspace.snoozeStatus ?? null;
+  if (!snoozeStatus) {
+    return { ...base, snoozeWakeAt: null };
+  }
+  const snoozedAtMs = Date.parse(snoozeStatus.snoozedAt);
+  const snoozedUntilMs = Date.parse(snoozeStatus.snoozedUntil);
+  if (!Number.isFinite(snoozedUntilMs) || snoozedUntilMs <= input.nowMs) {
+    return { ...base, snoozeWakeAt: null };
+  }
+  // Snooze suppresses whatever was true when the user snoozed — including an
+  // existing ready-to-review state — but NEW attention-ish activity that
+  // arrives after snoozedAt breaks the workspace back out. running/done are
+  // always suppressed while the snooze is active.
+  //
+  // Both timestamps must be newer than snoozedAt. enteredAt alone is not
+  // enough: the daemon's status history is in-memory, so a restart re-anchors
+  // it from agent updatedAt values that the restart itself bumps, and every
+  // pre-restart snooze would break out with nothing new having happened.
+  // activityAt comes from persisted message timestamps, which restarts leave
+  // alone, so it distinguishes real activity from a restamped anchor.
+  const isAttentionish =
+    base.status === "needs_input" || base.status === "failed" || base.readyToReview;
+  const activityAtMs = input.workspace.activityAt?.getTime() ?? null;
+  const breaksThrough =
+    isAttentionish &&
+    base.enteredAt !== null &&
+    Number.isFinite(snoozedAtMs) &&
+    base.enteredAt.getTime() > snoozedAtMs &&
+    activityAtMs !== null &&
+    activityAtMs > snoozedAtMs;
+  if (breaksThrough) {
+    return { ...base, snoozeWakeAt: null };
+  }
+  return {
+    status: "snoozed",
+    enteredAt: Number.isFinite(snoozedAtMs) ? new Date(snoozedAtMs) : null,
+    snoozeWakeAt: new Date(snoozedUntilMs),
+    readyToReview: false,
+  };
+}
+
+function deriveBaseWorkspaceStatus(input: {
+  serverId: string;
+  workspace: WorkspaceDescriptor;
+  pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
+  workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
+}): { status: SidebarStateBucket; enteredAt: Date | null; readyToReview: boolean } {
+  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
+  const readyToReview =
+    input.workspace.status === "attention" || rootAgentActivity?.readyToReview === true;
+  const indicator = deriveWorkspaceIndicatorStatus(input);
+  return {
+    status: toSidebarStatusBucket(indicator.status),
+    enteredAt: indicator.enteredAt,
+    readyToReview,
+  };
+}
+
 export interface ProjectStatusSession {
   workspaces: Map<string, WorkspaceDescriptor>;
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+}
+
+export interface SidebarProjectStatus {
+  statusBucket: SidebarStateBucket;
+  readyToReview: boolean;
 }
 
 /**
@@ -199,11 +336,11 @@ export interface ProjectStatusSession {
  * activity-index + effective-status pipeline as per-workspace rows (one pass over the
  * session's agents per server, not per workspace) rather than re-deriving it.
  */
-export function deriveProjectStatusBucket(input: {
+export function deriveProjectStatus(input: {
   workspaces: readonly SidebarWorkspacePlacement[];
   sessions: Record<string, ProjectStatusSession | undefined>;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
-}): SidebarStateBucket {
+}): SidebarProjectStatus {
   const workspaceIdsByServer = new Map<string, string[]>();
   for (const placement of input.workspaces) {
     const existing = workspaceIdsByServer.get(placement.serverId);
@@ -215,6 +352,7 @@ export function deriveProjectStatusBucket(input: {
   }
 
   const buckets: SidebarStateBucket[] = [];
+  let readyToReview = false;
   for (const [serverId, workspaceIds] of workspaceIdsByServer) {
     const session = input.sessions[serverId];
     if (!session) continue;
@@ -225,18 +363,28 @@ export function deriveProjectStatusBucket(input: {
       });
       const workspace = workspaceKey ? session.workspaces.get(workspaceKey) : undefined;
       if (!workspace) continue;
-      buckets.push(
-        deriveEffectiveWorkspaceStatus({
-          serverId,
-          workspace,
-          pendingCreateAttempts: input.pendingCreateAttempts,
-          workspaceAgentActivity: session.workspaceAgentActivity,
-        }).status,
-      );
+      const status = deriveEffectiveWorkspaceStatus({
+        serverId,
+        workspace,
+        pendingCreateAttempts: input.pendingCreateAttempts,
+        workspaceAgentActivity: session.workspaceAgentActivity,
+        nowMs: Date.now(),
+      });
+      buckets.push(status.status);
+      readyToReview ||= status.readyToReview;
     }
   }
 
-  return aggregateSidebarStateBuckets(buckets);
+  return {
+    statusBucket: toSidebarStatusBucket(aggregateSidebarStateBuckets(buckets)),
+    readyToReview,
+  };
+}
+
+export function deriveProjectStatusBucket(
+  input: Parameters<typeof deriveProjectStatus>[0],
+): SidebarStateBucket {
+  return deriveProjectStatus(input).statusBucket;
 }
 
 /** One bounded projection per sidebar; unchanged placements survive project reordering. */
@@ -349,6 +497,7 @@ export function buildSidebarWorkspaceEntries(input: {
   sessions: SidebarWorkspaceSession[];
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   previousEntries?: ReadonlyMap<string, SidebarWorkspaceEntry>;
+  nowMs?: number;
 }): ReadonlyMap<string, SidebarWorkspaceEntry> {
   if (input.placements.length === 0 || input.sessions.length === 0) {
     return new Map();
@@ -356,6 +505,7 @@ export function buildSidebarWorkspaceEntries(input: {
 
   const sessionByServerId = new Map(input.sessions.map((session) => [session.serverId, session]));
   const entries = new Map<string, SidebarWorkspaceEntry>();
+  const nowMs = input.nowMs ?? Date.now();
   const previousKeys = input.previousEntries?.keys();
   let unchanged = input.previousEntries !== undefined;
 
@@ -375,6 +525,7 @@ export function buildSidebarWorkspaceEntries(input: {
       projectViewKey: placement.projectViewKey,
       pendingCreateAttempts: input.pendingCreateAttempts,
       workspaceAgentActivity: session.workspaceAgentActivity,
+      nowMs,
     });
     const previousEntry = input.previousEntries?.get(placement.workspaceKey);
     const nextEntry =

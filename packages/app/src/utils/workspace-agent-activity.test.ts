@@ -8,18 +8,20 @@ function agent(input: {
   status?: Agent["status"];
   turn?: Agent["turn"];
   updatedAt: string;
+  lastUserMessageAt?: string | null;
   attentionTimestamp?: string | null;
   requiresAttention?: boolean;
   attentionReason?: Agent["attentionReason"];
   pendingPermissionCount?: number;
   archivedAt?: string | null;
   parentAgentId?: string | null;
+  provider?: Agent["provider"];
   background?: boolean;
 }): Agent {
   return {
     serverId: "host-a",
     id: input.id,
-    provider: "codex",
+    provider: input.provider ?? "codex",
     status: input.status ?? "idle",
     turn:
       input.turn ??
@@ -33,7 +35,7 @@ function agent(input: {
         : { phase: "idle", cancellationRequestId: null }),
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date(input.updatedAt),
-    lastUserMessageAt: null,
+    lastUserMessageAt: input.lastUserMessageAt ? new Date(input.lastUserMessageAt) : null,
     lastActivityAt: new Date(input.updatedAt),
     capabilities: {
       supportsStreaming: true,
@@ -148,6 +150,9 @@ describe("workspace agent activity index", () => {
             agentId: "permission",
             status: "needs_input",
             enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+            lastUserMessageAt: null,
+            providers: ["codex"],
+            readyToReview: false,
           },
         ],
         [
@@ -156,9 +161,42 @@ describe("workspace agent activity index", () => {
             agentId: "attention",
             status: "attention",
             enteredAt: new Date("2026-06-01T10:02:00.000Z"),
+            lastUserMessageAt: null,
+            providers: ["codex"],
+            readyToReview: true,
           },
         ],
       ]),
+    );
+  });
+
+  it("tracks the latest user message across live root agents", () => {
+    const index = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "latest-status",
+          agent({
+            id: "latest-status",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:05:00.000Z",
+            lastUserMessageAt: "2026-06-01T10:01:00.000Z",
+          }),
+        ],
+        [
+          "latest-prompt",
+          agent({
+            id: "latest-prompt",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:04:00.000Z",
+            lastUserMessageAt: "2026-06-01T10:03:00.000Z",
+          }),
+        ],
+      ]),
+    );
+
+    expect(index.get("workspace-a")?.lastUserMessageAt).toEqual(
+      new Date("2026-06-01T10:03:00.000Z"),
     );
   });
 
@@ -186,6 +224,9 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "done",
       enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+      lastUserMessageAt: null,
+      providers: ["codex"],
+      readyToReview: false,
     });
   });
 
@@ -229,6 +270,9 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "running",
       enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+      lastUserMessageAt: null,
+      providers: ["codex"],
+      readyToReview: false,
     });
   });
 
@@ -264,6 +308,9 @@ describe("workspace agent activity index", () => {
             agentId: "parent",
             status: "done",
             enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+            lastUserMessageAt: null,
+            providers: ["codex"],
+            readyToReview: false,
           },
         ],
         [
@@ -272,6 +319,9 @@ describe("workspace agent activity index", () => {
             agentId: "child",
             status: "running",
             enteredAt: new Date("2026-06-01T10:03:00.000Z"),
+            lastUserMessageAt: null,
+            providers: ["codex"],
+            readyToReview: false,
           },
         ],
       ]),
@@ -348,6 +398,184 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "needs_input",
       enteredAt: new Date("2026-06-01T10:05:00.000Z"),
+      lastUserMessageAt: null,
+      providers: ["codex"],
+      readyToReview: false,
     });
+  });
+
+  it("keeps finished attention alongside newer running activity", () => {
+    const index = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "finished",
+          agent({
+            id: "finished",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            requiresAttention: true,
+            attentionReason: "finished",
+          }),
+        ],
+        [
+          "running",
+          agent({
+            id: "running",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:01:00.000Z",
+          }),
+        ],
+      ]),
+    );
+
+    expect(index.get("workspace-a")).toEqual({
+      agentId: "running",
+      status: "running",
+      enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+      lastUserMessageAt: null,
+      providers: ["codex"],
+      readyToReview: true,
+    });
+  });
+
+  it("refreshes the entry when the root agent's provider changes", () => {
+    const previous = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            provider: "codex",
+          }),
+        ],
+      ]),
+    );
+
+    const next = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:05:00.000Z",
+            provider: "claude",
+          }),
+        ],
+      ]),
+      previous,
+    );
+
+    expect(next).not.toBe(previous);
+    expect(next.get("workspace-a")?.providers).toEqual(["claude"]);
+  });
+
+  it("lists every live provider in the workspace, most recently active first", () => {
+    const index = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "codex-old",
+          agent({
+            id: "codex-old",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            provider: "codex",
+          }),
+        ],
+        [
+          "claude",
+          agent({
+            id: "claude",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:02:00.000Z",
+            provider: "claude",
+          }),
+        ],
+        [
+          "codex-new",
+          agent({
+            id: "codex-new",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:04:00.000Z",
+            provider: "codex",
+          }),
+        ],
+        [
+          "archived",
+          agent({
+            id: "archived",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:05:00.000Z",
+            provider: "opencode",
+            archivedAt: "2026-06-01T10:05:00.000Z",
+          }),
+        ],
+        [
+          "closed",
+          agent({
+            id: "closed",
+            workspaceId: "workspace-a",
+            status: "closed",
+            updatedAt: "2026-06-01T10:06:00.000Z",
+            provider: "pi",
+          }),
+        ],
+        [
+          "error",
+          agent({
+            id: "error",
+            workspaceId: "workspace-a",
+            status: "error",
+            updatedAt: "2026-06-01T10:07:00.000Z",
+            provider: "opencode",
+          }),
+        ],
+      ]),
+    );
+
+    const activity = index.get("workspace-a");
+    expect(activity?.agentId).toBe("error");
+    expect(activity?.providers).toEqual(["codex", "claude"]);
+  });
+
+  it("reuses the previous provider list when its contents are unchanged", () => {
+    const previous = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "running",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+          }),
+        ],
+      ]),
+    );
+
+    const next = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            status: "idle",
+            updatedAt: "2026-06-01T10:05:00.000Z",
+            pendingPermissionCount: 1,
+          }),
+        ],
+      ]),
+      previous,
+    );
+
+    expect(next).not.toBe(previous);
+    expect(next.get("workspace-a")?.providers).toBe(previous.get("workspace-a")?.providers);
   });
 });

@@ -26,6 +26,7 @@ function rows(statuses: readonly SidebarStateBucket[], rowServerId = serverId): 
 const workspacePolicy: SidebarGroupVisibilityPolicy<Item> = {
   kind: "workspaces",
   getStatusBucket: (item) => item.statusBucket,
+  isReadyToReview: () => false,
 };
 
 function selectionFor(item: SidebarGroupItem): ActiveWorkspaceSelection {

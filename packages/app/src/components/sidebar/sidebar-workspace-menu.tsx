@@ -1,4 +1,10 @@
-import { useMemo, type ComponentProps, type PropsWithChildren, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  type ComponentProps,
+  type PropsWithChildren,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import type { PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -7,17 +13,24 @@ import {
   Circle,
   CircleCheck,
   Copy,
+  ListTree,
+  Moon,
   MoreVertical,
   Pencil,
   Pin,
   PinOff,
+  Sparkles,
   Tag,
+  Sun,
 } from "lucide-react-native";
 import { PressHighlight } from "@/components/ui/press-highlight";
 import { isWeb } from "@/constants/platform";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useToast } from "@/contexts/toast-context";
+import { useHostFeature } from "@/runtime/host-features";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { densityIconProps } from "@/styles/density";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
@@ -25,6 +38,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -42,6 +56,8 @@ import {
   workspaceServiceLabelKey,
   type WorkspaceServiceSummary,
 } from "@/components/sidebar/workspace-meta-row";
+import type { SidebarWorkspaceRowDisclosure } from "@/components/sidebar/sidebar-workspace-row-content";
+import type { SidebarWorkspaceSnoozeActions } from "@/workspace-snooze/use-workspace-snooze-menu";
 import {
   useWorkspaceLabelMenuPages,
   WORKSPACE_LABEL_PAGE_ID,
@@ -58,13 +74,18 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedCircle = withUnistyles(Circle);
 const ThemedPencil = withUnistyles(Pencil);
+const ThemedSparkles = withUnistyles(Sparkles);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
 const ThemedTag = withUnistyles(Tag);
+const ThemedMoon = withUnistyles(Moon);
+const ThemedSun = withUnistyles(Sun);
+const ThemedListTree = withUnistyles(ListTree);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
+const retitleLeadingIcon = <ThemedSparkles size={14} uniProps={foregroundMutedColorMapping} />;
 const markAsReadLeadingIcon = (
   <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
 );
@@ -72,6 +93,9 @@ const markAsUnreadLeadingIcon = <ThemedCircle size={14} uniProps={foregroundMute
 const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
 const pinLeadingIcon = <ThemedPin size={14} uniProps={foregroundMutedColorMapping} />;
 const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={foregroundMutedColorMapping} />;
+const snoozeLeadingIcon = <ThemedMoon size={14} uniProps={foregroundMutedColorMapping} />;
+const wakeLeadingIcon = <ThemedSun size={14} uniProps={foregroundMutedColorMapping} />;
+const agentTreeLeadingIcon = <ThemedListTree size={14} uniProps={foregroundMutedColorMapping} />;
 
 /** Pointer-only, so it is always the kebab's pointer size. */
 export const ARCHIVE_BUTTON_SIZE = 18;
@@ -127,6 +151,15 @@ export interface SidebarWorkspaceMenuProps {
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
+  // Present only when the host supports workspaceSnooze; the capability gate
+  // lives in the caller (like pin's onTogglePin).
+  snooze?: SidebarWorkspaceSnoozeActions;
+  /**
+   * Expand/collapse the row's agent tree. Omitted when the workspace has no
+   * agents. This is the only way to reach the tree on native project rows,
+   * where nothing is hover-revealed.
+   */
+  agentTree?: SidebarWorkspaceRowDisclosure;
   openInFileManagerPath?: string | null;
   /**
    * Lifted so the row that reveals the kebab can keep it mounted while its menu is up. See
@@ -175,6 +208,8 @@ function SidebarWorkspaceMenuItems({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  snooze,
+  agentTree,
   openInFileManagerPath,
 }: SidebarWorkspaceMenuItemsProps & { surface: MenuSurface }): ReactNode {
   const { t } = useTranslation();
@@ -219,6 +254,14 @@ function SidebarWorkspaceMenuItems({
           {t("sidebar.workspace.actions.rename")}
         </WorkspaceMenuItem>
       ) : null}
+      {serverId && workspaceId ? (
+        <WorkspaceRetitleMenuItem
+          surface={surface}
+          workspaceKey={workspaceKey}
+          serverId={serverId}
+          workspaceId={workspaceId}
+        />
+      ) : null}
       {onMarkAsRead ? (
         <WorkspaceMenuItem
           surface={surface}
@@ -226,7 +269,7 @@ function SidebarWorkspaceMenuItems({
           leading={markAsReadLeadingIcon}
           onSelect={onMarkAsRead}
         >
-          Mark as read
+          {t("sidebar.workspace.actions.markAsRead")}
         </WorkspaceMenuItem>
       ) : null}
       {onMarkAsUnread ? (
@@ -249,7 +292,7 @@ function SidebarWorkspaceMenuItems({
           {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
         </WorkspaceMenuItem>
       ) : null}
-      {serverId && workspaceId ? (
+      {surface === "dropdown" && serverId && workspaceId ? (
         <DropdownMenuSubTrigger
           id={WORKSPACE_LABEL_PAGE_ID}
           leading={labelLeading}
@@ -257,6 +300,25 @@ function SidebarWorkspaceMenuItems({
         >
           {t("workspaceLabels.title")}
         </DropdownMenuSubTrigger>
+      ) : null}
+      {agentTree ? (
+        <WorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-agent-tree-${workspaceKey}`}
+          leading={agentTreeLeadingIcon}
+          onSelect={agentTree.onToggle}
+        >
+          {agentTree.expanded
+            ? t("sidebar.workspace.agentTree.hide")
+            : t("sidebar.workspace.agentTree.show")}
+        </WorkspaceMenuItem>
+      ) : null}
+      {snooze ? (
+        <SidebarWorkspaceSnoozeItems
+          surface={surface}
+          workspaceKey={workspaceKey}
+          snooze={snooze}
+        />
       ) : null}
       <OpenInFileManagerMenuItem
         surface={surface}
@@ -297,6 +359,8 @@ export function SidebarWorkspaceMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  snooze,
+  agentTree,
   openInFileManagerPath,
   open,
   onOpenChange,
@@ -330,7 +394,6 @@ export function SidebarWorkspaceMenu({
           workspaceKey={workspaceKey}
           serverId={serverId}
           workspaceId={workspaceId}
-          workspaceLabels={workspaceLabels}
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
@@ -343,10 +406,136 @@ export function SidebarWorkspaceMenu({
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
+          snooze={snooze}
+          agentTree={agentTree}
           openInFileManagerPath={openInFileManagerPath}
         />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function WorkspaceRetitleMenuItem({
+  surface,
+  workspaceKey,
+  serverId,
+  workspaceId,
+}: {
+  surface: MenuSurface;
+  workspaceKey: string;
+  serverId: string;
+  workspaceId: string;
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const supported = useHostFeature(serverId, "workspaceTitleRegenerate");
+  const handleSelect = useCallback(async () => {
+    const client = getHostRuntimeStore().getClient(serverId);
+    if (!client) {
+      toast.error(t("sidebar.workspace.toasts.hostDisconnected"));
+      return;
+    }
+    toast.show(t("sidebar.workspace.toasts.retitlingWorkspace"), { durationMs: null });
+    try {
+      await client.regenerateWorkspaceTitle(workspaceId);
+      toast.show(t("sidebar.workspace.toasts.retitledWorkspace"), { variant: "success" });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("sidebar.workspace.toasts.failedToRetitleWorkspace"),
+      );
+    }
+  }, [serverId, t, toast, workspaceId]);
+  if (!supported) {
+    return null;
+  }
+  return (
+    <WorkspaceMenuItem
+      surface={surface}
+      testID={`sidebar-workspace-menu-retitle-${workspaceKey}`}
+      leading={retitleLeadingIcon}
+      onSelect={handleSelect}
+    >
+      {t("sidebar.workspace.actions.retitle")}
+    </WorkspaceMenuItem>
+  );
+}
+
+function SidebarWorkspaceSnoozeItems({
+  surface,
+  workspaceKey,
+  snooze,
+}: {
+  surface: MenuSurface;
+  workspaceKey: string;
+  snooze: SidebarWorkspaceSnoozeActions;
+}) {
+  if (snooze.isSnoozed) {
+    return (
+      <>
+        {surface === "dropdown" && snooze.snoozedUntilLabel ? (
+          <DropdownMenuLabel testID={`sidebar-workspace-menu-snoozed-until-${workspaceKey}`}>
+            {snooze.snoozedUntilLabel}
+          </DropdownMenuLabel>
+        ) : null}
+        <WorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-wake-${workspaceKey}`}
+          leading={wakeLeadingIcon}
+          onSelect={snooze.onWake}
+        >
+          {snooze.wakeLabel}
+        </WorkspaceMenuItem>
+      </>
+    );
+  }
+  return (
+    <>
+      {snooze.presets.map((preset) => (
+        <SidebarWorkspaceSnoozePresetItem
+          key={preset.id}
+          surface={surface}
+          workspaceKey={workspaceKey}
+          preset={preset}
+          onSnooze={snooze.onSnooze}
+        />
+      ))}
+      <WorkspaceMenuItem
+        surface={surface}
+        testID={`sidebar-workspace-menu-snooze-custom-${workspaceKey}`}
+        leading={snoozeLeadingIcon}
+        onSelect={snooze.onCustom}
+      >
+        {snooze.customLabel}
+      </WorkspaceMenuItem>
+    </>
+  );
+}
+
+function SidebarWorkspaceSnoozePresetItem({
+  surface,
+  workspaceKey,
+  preset,
+  onSnooze,
+}: {
+  surface: MenuSurface;
+  workspaceKey: string;
+  preset: SidebarWorkspaceSnoozeActions["presets"][number];
+  onSnooze: SidebarWorkspaceSnoozeActions["onSnooze"];
+}) {
+  const handleSelect = useCallback(() => {
+    void onSnooze(preset);
+  }, [onSnooze, preset]);
+  return (
+    <WorkspaceMenuItem
+      surface={surface}
+      testID={`sidebar-workspace-menu-snooze-${preset.id}-${workspaceKey}`}
+      leading={snoozeLeadingIcon}
+      onSelect={handleSelect}
+    >
+      {preset.label}
+    </WorkspaceMenuItem>
   );
 }
 
@@ -376,6 +565,8 @@ export function SidebarWorkspaceContextMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  snooze,
+  agentTree,
   openInFileManagerPath,
   accessibilityLabel,
   highlightStyle,
@@ -413,15 +604,6 @@ export function SidebarWorkspaceContextMenu({
       : null,
     t,
   });
-  const workspaceTarget = useMemo<WorkspaceLabelTarget>(
-    () => ({
-      serverId: workspace.serverId,
-      workspaceId: workspace.workspaceId,
-      labels: workspace.labels ?? [],
-    }),
-    [workspace],
-  );
-  const pages = useWorkspaceLabelMenuPages(workspaceTarget);
 
   return (
     <ContextMenu open={contextMenuOpen} onOpenChange={onContextMenuOpenChange}>
@@ -437,14 +619,12 @@ export function SidebarWorkspaceContextMenu({
         align="start"
         width={260}
         testID={`sidebar-workspace-context-menu-${workspaceKey}`}
-        pages={pages}
       >
         <SidebarWorkspaceMenuItems
           surface="context"
           workspaceKey={workspaceKey}
-          serverId={workspaceTarget.serverId}
-          workspaceId={workspaceTarget.workspaceId}
-          workspaceLabels={workspaceTarget.labels}
+          serverId={workspace.serverId}
+          workspaceId={workspace.workspaceId}
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
@@ -457,6 +637,8 @@ export function SidebarWorkspaceContextMenu({
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
+          snooze={snooze}
+          agentTree={agentTree}
           openInFileManagerPath={openInFileManagerPath}
         />
       </ContextMenuContent>
