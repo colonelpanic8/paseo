@@ -65,6 +65,10 @@ import {
 } from "@/workspace-tabs/identity";
 import { isSheetTabModified, resolveCompactSheetPolicy } from "@/workspace-tabs/compact-sheet";
 import { panelResourceKey, type CompactSheetPolicy } from "@/panels/panel-manifest";
+import {
+  createThrottledPersistStorage,
+  type PersistenceScheduler,
+} from "@/storage/throttled-persist-storage";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import { panelTargetSupportsHostForWorkspaceKey } from "@/plugins/workspace-panels/locations";
 
@@ -236,6 +240,7 @@ const MAX_TREE_DEPTH = 5;
 
 const LEGACY_EXPLORER_SIDEBAR_REFERENCE_WIDTH = 1440;
 const WORKSPACE_LAYOUT_PERSIST_VERSION = 2;
+const WORKSPACE_LAYOUT_PERSIST_INTERVAL_MS = 200;
 type WorkspaceLayoutPersistedState = z.infer<typeof WorkspaceLayoutPersistedStateSchema>;
 
 function convertLegacyExplorerSidebarRatios(
@@ -1040,8 +1045,15 @@ function advancePanelRevision(
 export function createWorkspaceLayoutStore(
   ids: WorkspaceLayoutIdSource = defaultWorkspaceLayoutIds,
   storage: StateStorage = AsyncStorage,
+  scheduler?: PersistenceScheduler,
 ) {
-  return create<WorkspaceLayoutStore>()(
+  const persistStorage = createThrottledPersistStorage(
+    createValidatedPersistStorage(storage, WorkspaceLayoutPersistedStateSchema, {
+      skipUnchanged: true,
+    }),
+    { intervalMs: WORKSPACE_LAYOUT_PERSIST_INTERVAL_MS, scheduler },
+  );
+  const store = create<WorkspaceLayoutStore>()(
     persist(
       (set, get) => ({
         autoOpenPullRequestTab: (workspaceKey, resolvePlacement) => {
@@ -2307,9 +2319,7 @@ export function createWorkspaceLayoutStore(
       {
         name: "workspace-layout-state",
         version: WORKSPACE_LAYOUT_PERSIST_VERSION,
-        storage: createValidatedPersistStorage(storage, WorkspaceLayoutPersistedStateSchema, {
-          skipUnchanged: true,
-        }),
+        storage: persistStorage,
         migrate: (persistedState, version) =>
           migrateWorkspaceLayoutPersistedState(persistedState, version, ids),
         partialize: createPersistedStateProjection(),
@@ -2370,6 +2380,7 @@ export function createWorkspaceLayoutStore(
       },
     ),
   );
+  return Object.assign(store, { flushPersistence: () => persistStorage.flush() });
 }
 
 export const useWorkspaceLayoutStore = createWorkspaceLayoutStore();
@@ -2420,6 +2431,10 @@ export function observeOpenWorkspaceAgentIds(
   });
   publish(store.getState());
   return unsubscribe;
+}
+
+export function flushWorkspaceLayoutStore(): Promise<void> {
+  return useWorkspaceLayoutStore.flushPersistence();
 }
 
 export function useWorkspaceLayoutStoreHydrated(): boolean {

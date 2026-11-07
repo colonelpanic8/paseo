@@ -88,6 +88,7 @@ describe("workspace agent visibility", () => {
         pin: true,
       });
     }
+    await original.flushPersistence();
     const restored = createWorkspaceLayoutStore(undefined, storage);
     await restored.persist.rehydrate();
     const sessionAgents = new Map([[agent.id, agent]]);
