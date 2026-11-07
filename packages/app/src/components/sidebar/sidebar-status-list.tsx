@@ -172,6 +172,7 @@ export function SidebarStatusWorkspaceList({
   // One clock invalidates every visible status row together. Rows receive the
   // minute explicitly so memoization cannot retain a stale relative label.
   const activityNow = useMinuteNow();
+  const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const collapsedStatusGroupKeys = useSidebarCollapsedSectionsStore(
     (state) => state.collapsedStatusGroupKeys,
   );
@@ -180,21 +181,24 @@ export function SidebarStatusWorkspaceList({
     (state) => state.togglePinnedCollapsed,
   );
   const {
+    leadingItem: leadingPinnedWorkspace,
     visibleItems: visiblePinnedWorkspaces,
     expanded: pinnedWorkspacesExpanded,
     canToggle: canTogglePinnedWorkspaces,
     toggleExpanded: togglePinnedWorkspacesExpanded,
-  } = useLimitedSidebarGroup(pinnedWorkspaces);
+  } = useLimitedSidebarGroup({ items: pinnedWorkspaces, selection: activeWorkspaceSelection });
   // Owned here rather than per group so the signature below can describe every
   // row the list is about to render.
   const { limitedGroups, toggleGroupExpanded } = useLimitedStatusGroups(
     groups,
     collapsedStatusGroupKeys,
+    activeWorkspaceSelection,
   );
   const listSettle = useSidebarListSettleValue(
     buildStatusLayoutSignature({
       hasListHeader: listHeaderComponent != null,
       pinnedCollapsed,
+      leadingPinnedWorkspace,
       visiblePinnedWorkspaces,
       canTogglePinnedWorkspaces,
       limitedGroups,
@@ -214,14 +218,17 @@ export function SidebarStatusWorkspaceList({
   const statusShortcutIndex = showShortcutBadges
     ? shortcutIndexByWorkspaceKey
     : EMPTY_SHORTCUT_INDEX;
-  const renderPinnedWorkspace = useCallback(
-    ({
-      item: workspace,
-      drag,
-      isActive,
-      dragHandleProps,
-    }: DraggableRenderItemInfo<SidebarWorkspaceEntry>) => (
+  const renderPinnedWorkspaceRow = useCallback(
+    (
+      workspace: SidebarWorkspaceEntry,
+      input?: {
+        drag?: () => void;
+        isDragging?: boolean;
+        dragHandleProps?: DraggableListDragHandleProps;
+      },
+    ) => (
       <StatusWorkspaceRow
+        key={workspace.workspaceKey}
         activityNow={activityNow}
         workspace={workspace}
         iconDataUri={projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null}
@@ -232,9 +239,9 @@ export function SidebarStatusWorkspaceList({
         onToggleWorkspacePin={onToggleWorkspacePin}
         onWorkspacePress={onWorkspacePress}
         parentGestureRef={parentGestureRef}
-        drag={drag}
-        isDragging={isActive}
-        dragHandleProps={dragHandleProps}
+        drag={input?.drag}
+        isDragging={input?.isDragging}
+        dragHandleProps={input?.dragHandleProps}
       />
     ),
     [
@@ -248,6 +255,20 @@ export function SidebarStatusWorkspaceList({
       statusShortcutIndex,
       supportsPinningByServerId,
     ],
+  );
+  const renderPinnedWorkspace = useCallback(
+    ({
+      item: workspace,
+      drag,
+      isActive,
+      dragHandleProps,
+    }: DraggableRenderItemInfo<SidebarWorkspaceEntry>) =>
+      renderPinnedWorkspaceRow(workspace, {
+        drag,
+        isDragging: isActive,
+        dragHandleProps,
+      }),
+    [renderPinnedWorkspaceRow],
   );
   // skipEntering silences row entrances for everything mounting with the list
   // itself (startup, grouping-mode switch); only rows added later animate in.
@@ -264,6 +285,7 @@ export function SidebarStatusWorkspaceList({
             />
             {pinnedCollapsed ? null : (
               <>
+                {leadingPinnedWorkspace ? renderPinnedWorkspaceRow(leadingPinnedWorkspace) : null}
                 <DraggableList
                   testID="sidebar-pinned-list"
                   data={visiblePinnedWorkspaces}
@@ -419,7 +441,7 @@ function StatusGroupRows({
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }) {
-  const { group, collapsed, visibleRows, expanded, canToggle } = limited;
+  const { group, collapsed, leadingRow, visibleRows, expanded, canToggle } = limited;
   const listSettle = useSidebarListSettle();
   const handleToggleExpanded = useCallback(() => {
     onToggleGroupExpanded(group.bucket);
@@ -436,7 +458,7 @@ function StatusGroupRows({
         <StatusGroupHeader group={group} collapsed={collapsed} />
       </Animated.View>
       {!collapsed
-        ? visibleRows.map((workspace) => (
+        ? (leadingRow ? [leadingRow, ...visibleRows] : visibleRows).map((workspace) => (
             <StatusWorkspaceRow
               key={workspace.workspaceKey}
               activityNow={activityNow}
@@ -560,7 +582,6 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   showShortcutBadge,
   canPin,
   onToggleWorkspacePin,
-  onWorkspacePress,
   parentGestureRef,
   containerTestID,
   drag,
@@ -590,9 +611,8 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 
   const handlePress = useCallback(() => {
     if (!workspace.serverId) return;
-    onWorkspacePress?.();
     navigateToWorkspace({ serverId: workspace.serverId, workspaceId: workspace.workspaceId });
-  }, [onWorkspacePress, workspace.serverId, workspace.workspaceId]);
+  }, [workspace.serverId, workspace.workspaceId]);
 
   return (
     <StatusWorkspaceRowWithMenu
