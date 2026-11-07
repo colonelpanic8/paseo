@@ -4253,21 +4253,22 @@ export class AgentManager {
         }
       | undefined;
   }): ActiveManagedAgent {
-    const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
+    const { resolvedAgentId, session, config, now, durableTimelineHasRows } = params;
+    const options: NonNullable<typeof params.options> = params.options ?? {};
     return {
       id: resolvedAgentId,
       provider: config.provider,
       cwd: config.cwd,
-      workspaceId: options?.workspaceId,
-      owner: options?.owner,
-      launchEnv: options?.launchEnv,
+      workspaceId: options.workspaceId,
+      owner: options.owner,
+      launchEnv: options.launchEnv,
       session,
       capabilities: session.capabilities,
       config,
       runtimeInfo: undefined,
       lifecycle: "initializing",
-      createdAt: options?.createdAt ?? now,
-      updatedAt: options?.updatedAt ?? now,
+      createdAt: options.createdAt ?? now,
+      updatedAt: options.updatedAt ?? now,
       availableModes: [],
       currentModeId: null,
       pendingPermissions: new Map<string, AgentPermissionRequest>(),
@@ -4281,18 +4282,18 @@ export class AgentManager {
       finalizedForegroundTurnIds: new Set<string>(),
       unsubscribeSession: null,
       persistence: normalizePersistenceForConfig(
-        options?.persistence ?? session.describePersistence(),
+        options.persistence ?? session.describePersistence(),
         config,
       ),
-      historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
-      lastUserMessageAt: options?.lastUserMessageAt ?? null,
-      lastUsage: options?.lastUsage,
-      lastError: options?.lastError,
-      lastFailure: options?.lastFailure,
-      attention: resolveInitialAttention(options?.attention),
+      historyPrimed: options.historyPrimed ?? durableTimelineHasRows,
+      lastUserMessageAt: options.lastUserMessageAt ?? null,
+      lastUsage: options.lastUsage,
+      lastError: options.lastError,
+      lastFailure: options.lastFailure,
+      attention: resolveInitialAttention(options.attention),
       internal: config.internal ?? false,
       background: params.background,
-      labels: options?.labels ?? {},
+      labels: options.labels ?? {},
     } as ActiveManagedAgent;
   }
 

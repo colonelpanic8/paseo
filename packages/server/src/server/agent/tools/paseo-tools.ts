@@ -303,7 +303,9 @@ async function assertExistingWorkspaceDirectory(cwd: string): Promise<void> {
     );
   }
   if (!stats.isDirectory()) {
-    throw new PaseoToolInputError(`Not a directory: ${cwd}. Local workspace creation requires a directory path.`);
+    throw new PaseoToolInputError(
+      `Not a directory: ${cwd}. Local workspace creation requires a directory path.`,
+    );
   }
 }
 function resolveWorkspaceWorktreeTarget(input: WorkspaceWorktreeOptions): WorkspaceWorktreeTarget {
@@ -1544,7 +1546,7 @@ function createToolCatalog(
       let workspace: PersistedWorkspaceRecord;
       if (isolation === "local") {
         if (!path?.trim()) {
-          throw new Error("path is required for local workspace creation");
+          throw new PaseoToolInputError("path is required for local workspace creation");
         }
         const cwd = resolveScopedCwd(path, { required: true });
         await assertExistingWorkspaceDirectory(cwd);
@@ -2285,7 +2287,7 @@ function createToolCatalog(
           ),
       });
       const workspaceNames = new Map<string, string>();
-      for (const workspace of await options.workspaceRegistry.list()) {
+      for (const workspace of await options.workspaceRegistry.listActive()) {
         workspaceNames.set(workspace.workspaceId, resolveWorkspaceDisplayName(workspace));
       }
       const agents = selectAgentListItems(

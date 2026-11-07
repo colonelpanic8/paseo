@@ -377,6 +377,7 @@ export const PASEO_TOOL_CATALOG = {
   // Discovery
   list_paseo_tools: {
     label: "List tools",
+    completedLabel: "Listed tools",
     context: field("toolName", "query"),
     detail: { inputOrder: ["toolName", "query"] },
   },

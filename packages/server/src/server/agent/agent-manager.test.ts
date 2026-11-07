@@ -3344,7 +3344,7 @@ test.each([
         env: { ...expectedEnv, PASEO_AGENT_ID: agent.id, PASEO_AGENT_CWD: workdir },
       });
       expect(toAgentPayload(resumed)).not.toHaveProperty("launchEnv");
-      expect(toAgentPayload(resumed).persistence?.metadata).not.toHaveProperty("launchEnv");
+      expect(toAgentPayload(resumed).persistence).not.toHaveProperty("metadata.launchEnv");
       await manager.closeAgent(agent.id);
       await manager.flush();
     }

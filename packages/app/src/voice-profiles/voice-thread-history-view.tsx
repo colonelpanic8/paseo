@@ -5,9 +5,8 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { VoiceThread, VoiceThreadHistoryEntry } from "@getpaseo/protocol/voice-profiles";
 import { Button } from "@/components/ui/button";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
+import type { ControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput } from "@/components/ui/form-field";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { useVoiceThreadHistory } from "./voice-profile-queries";
 
@@ -89,7 +88,7 @@ export function VoiceThreadHistoryView({
   onCompact: (input: { thread: VoiceThread; summary: string; throughSeq: number }) => Promise<void>;
 }): ReactElement {
   const { t } = useTranslation();
-  const size: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
+  const size: ControlSize = "md";
   const history = useVoiceThreadHistory(serverId, threadId);
   const thread = history.thread;
   const [summaryDraft, setSummaryDraft] = useState<{ text: string; base: VoiceThread } | null>(

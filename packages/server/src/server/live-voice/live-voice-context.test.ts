@@ -484,7 +484,7 @@ describe("daemon context provider", () => {
         ],
       },
       workspaces: {
-        list: async () => [
+        listActive: async () => [
           {
             workspaceId: "ws-1",
             cwd: "/work/paseo",
@@ -520,7 +520,7 @@ describe("daemon context provider", () => {
   it("reflects a daemon that does not inject Paseo tools into sessions", async () => {
     const provider = new LiveVoiceDaemonContextProvider({
       agents: { hasPaseoMcpInjection: () => false, listAgents: () => [] },
-      workspaces: { list: async () => [] },
+      workspaces: { listActive: async () => [] },
       logger,
     });
 
@@ -533,7 +533,7 @@ describe("daemon context provider", () => {
     const provider = new LiveVoiceDaemonContextProvider({
       agents: { hasPaseoMcpInjection: () => true, listAgents: () => [] },
       workspaces: {
-        list: async () => [
+        listActive: async () => [
           {
             workspaceId: "ws-1",
             cwd: "/work/paseo",

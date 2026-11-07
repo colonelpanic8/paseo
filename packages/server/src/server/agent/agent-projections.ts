@@ -376,7 +376,9 @@ export function selectAgentListItems(
   return agents
     .map((agent) =>
       toAgentListItemPayload(agent, {
-        workspaceName: agent.workspaceId ? options.workspaceNames?.get(agent.workspaceId) : undefined,
+        workspaceName: agent.workspaceId
+          ? options.workspaceNames?.get(agent.workspaceId)
+          : undefined,
       }),
     )
     .filter((agent) => !options.cwd || isSameOrDescendantPath(options.cwd, agent.cwd))

@@ -3,10 +3,9 @@ import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
+import type { ControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   VOICE_PROFILE_CONTEXT_MAX_LENGTH,
   VOICE_PROFILE_FILES_MAX,
@@ -57,7 +56,7 @@ export function VoiceProfileFormView({
 }): ReactElement {
   const { t } = useTranslation();
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
-  const size: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
+  const size: ControlSize = "md";
 
   const voiceOptions = useMemo<SelectFieldOption<string>[]>(() => {
     const voices = [...state.voiceOptions];

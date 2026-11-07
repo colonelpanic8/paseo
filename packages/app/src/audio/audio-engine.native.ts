@@ -16,6 +16,7 @@ export type NativeAudioModule = Pick<
   | "initialize"
   | "tearDown"
   | "toggleRecording"
+  | "startDictation"
   | "releaseAudioSession"
   | "addExpoTwoWayAudioEventListener"
   | "resumePlayback"
@@ -36,7 +37,6 @@ const nativeModuleUsers = new WeakMap<NativeAudioModule, number>();
 
 interface AudioEngineTraceOptions extends AudioEngineOptions {
   nativeModule?: NativeAudioModule;
-  traceLabel?: string;
 }
 
 export function createAudioEngine(
@@ -254,7 +254,7 @@ export function createAudioEngine(
         await ensureMicrophonePermission();
         await ensureInitialized();
         const isRecording =
-          options?.captureMode === "dictation"
+          options.captureMode === "dictation"
             ? native.startDictation()
             : native.toggleRecording(true);
         if (!isRecording) {

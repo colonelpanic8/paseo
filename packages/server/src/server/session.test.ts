@@ -416,7 +416,6 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     onMessage: (message) => messages.push(message),
     onMessageToSource,
     onBinaryMessage: createBinaryMessageHandler(options.binaryMessages),
-    clientCapabilities: options.clientCapabilities,
     logger,
     downloadTokenStore: options.downloadTokenStore ?? asDownloadTokenStore(),
     pushNotifications: options.pushNotifications ?? asPushNotifications(),

@@ -6351,11 +6351,10 @@ describe("Live Voice cross-host MCP tools", () => {
       logger,
     });
 
-    expect(lookupTool(ordinary, "list_hosts")).toBeUndefined();
+    // `list_hosts` is an ordinary tool; only the routing wrappers stay out.
     expect(lookupTool(ordinary, "run_paseo_tool_on_host")).toBeUndefined();
     expect(lookupTool(ordinary, "find_workspace")).toBeUndefined();
     expect(lookupTool(ordinary, "list_agents")).toBeDefined();
-    expect(lookupTool(topLevel, "list_hosts")).toBeUndefined();
     expect(lookupTool(topLevel, "run_paseo_tool_on_host")).toBeUndefined();
     expect(lookupTool(topLevel, "find_workspace")).toBeUndefined();
     expect(lookupTool(topLevel, "list_agents")).toBeDefined();
@@ -6897,7 +6896,7 @@ describe("agent snapshot MCP serialization", () => {
       providerSnapshotManager: createClaudeOnlyManager(),
       workspaceRegistry: {
         get: async () => workspace,
-        list: async () => [workspace],
+        listActive: async () => [workspace],
         upsert: async () => undefined,
       },
     });

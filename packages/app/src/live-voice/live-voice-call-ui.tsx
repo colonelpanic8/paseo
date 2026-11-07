@@ -87,7 +87,7 @@ export function LiveVoiceCallControls({
   return (
     <>
       {isAudioBlocked ? (
-        <Button variant="outline" size="xs" leftIcon={Volume2} onPress={handleResumeAudio}>
+        <Button variant="outline" size="sm" leftIcon={Volume2} onPress={handleResumeAudio}>
           {t("liveVoice.actions.enableAudio")}
         </Button>
       ) : null}

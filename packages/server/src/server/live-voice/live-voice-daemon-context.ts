@@ -37,7 +37,7 @@ export interface LiveVoiceContextAgentSource {
 }
 
 export interface LiveVoiceContextWorkspaceSource {
-  list(): Promise<
+  listActive(): Promise<
     Array<{
       workspaceId: string;
       cwd: string;
@@ -211,7 +211,7 @@ export class LiveVoiceDaemonContextProvider implements LiveVoiceContextProvider 
         lifecycle: agent.lifecycle,
       }));
 
-    const workspaces: LiveVoiceContextWorkspace[] = (await this.workspaces.list())
+    const workspaces: LiveVoiceContextWorkspace[] = (await this.workspaces.listActive())
       .filter((workspace) => workspace.archivedAt === null)
       .map((workspace) => ({
         workspaceId: workspace.workspaceId,

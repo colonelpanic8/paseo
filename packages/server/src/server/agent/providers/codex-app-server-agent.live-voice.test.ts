@@ -15,7 +15,7 @@ interface CodexLiveVoiceTestSession extends AgentSession {
   currentThreadId: string | null;
   activeForegroundTurnId: string | null;
   client: { request: (method: string, params?: unknown) => Promise<unknown> } | null;
-  handleNotification(method: string, params: unknown): void;
+  handleNotification(method: string, params: unknown): Promise<void>;
   realtimeStart(params: { sdp: string; voice?: string; realtimeSessionId: string }): Promise<void>;
   realtimeStop(): Promise<void>;
   subscribeRealtimeEvents(callback: (event: AgentRealtimeVoiceEvent) => void): () => void;
@@ -36,10 +36,10 @@ function createClientWithFakeAppServer(
   const client = new CodexAppServerAgentClient(createTestLogger());
   const internals = client as unknown as {
     liveVoiceEnabledPromise: Promise<boolean> | null;
-    spawnAppServer: () => Promise<ChildProcessWithoutNullStreams>;
+    prepareAppServerSpawn: () => Promise<() => ChildProcessWithoutNullStreams>;
   };
   internals.liveVoiceEnabledPromise = Promise.resolve(true);
-  internals.spawnAppServer = async () => appServer.child;
+  internals.prepareAppServerSpawn = async () => () => appServer.child;
   return client;
 }
 
@@ -187,29 +187,35 @@ describe("codex live voice", () => {
     ]);
   });
 
-  test("routes realtime notifications to the dedicated subscription, not the timeline", () => {
+  test("routes realtime notifications to the dedicated subscription, not the timeline", async () => {
     const { session } = createSession(true);
     const realtimeEvents: AgentRealtimeVoiceEvent[] = [];
     const streamEvents: unknown[] = [];
     session.subscribeRealtimeEvents((event) => realtimeEvents.push(event));
     session.subscribe((event) => streamEvents.push(event));
 
-    session.handleNotification("thread/realtime/started", {
+    await session.handleNotification("thread/realtime/started", {
       threadId: THREAD_ID,
       realtimeSessionId: "live-1",
       version: "v3",
     });
-    session.handleNotification("thread/realtime/sdp", { threadId: THREAD_ID, sdp: "answer-sdp" });
-    session.handleNotification("thread/realtime/transcript/done", {
+    await session.handleNotification("thread/realtime/sdp", {
+      threadId: THREAD_ID,
+      sdp: "answer-sdp",
+    });
+    await session.handleNotification("thread/realtime/transcript/done", {
       threadId: THREAD_ID,
       role: "user",
       text: "hello",
     });
-    session.handleNotification("thread/realtime/error", {
+    await session.handleNotification("thread/realtime/error", {
       threadId: THREAD_ID,
       message: "invalid_offer",
     });
-    session.handleNotification("thread/realtime/closed", { threadId: THREAD_ID, reason: "done" });
+    await session.handleNotification("thread/realtime/closed", {
+      threadId: THREAD_ID,
+      reason: "done",
+    });
 
     expect(realtimeEvents).toEqual([
       { kind: "started", realtimeSessionId: "live-1", version: "v3" },
@@ -221,16 +227,16 @@ describe("codex live voice", () => {
     expect(streamEvents).toEqual([]);
   });
 
-  test("ignores realtime notifications for a different thread", () => {
+  test("ignores realtime notifications for a different thread", async () => {
     const { session } = createSession(true);
     const realtimeEvents: AgentRealtimeVoiceEvent[] = [];
     session.subscribeRealtimeEvents((event) => realtimeEvents.push(event));
 
-    session.handleNotification("thread/realtime/sdp", {
+    await session.handleNotification("thread/realtime/sdp", {
       threadId: "another-thread",
       sdp: "wrong-answer-sdp",
     });
-    session.handleNotification("thread/realtime/transcript/done", {
+    await session.handleNotification("thread/realtime/transcript/done", {
       threadId: "another-thread",
       role: "assistant",
       text: "wrong call",
@@ -239,16 +245,16 @@ describe("codex live voice", () => {
     expect(realtimeEvents).toEqual([]);
   });
 
-  test("drops realtime deltas and item additions in phase 1", () => {
+  test("drops realtime deltas and item additions in phase 1", async () => {
     const { session } = createSession(true);
     const realtimeEvents: AgentRealtimeVoiceEvent[] = [];
     session.subscribeRealtimeEvents((event) => realtimeEvents.push(event));
 
-    session.handleNotification("thread/realtime/transcript/delta", {
+    await session.handleNotification("thread/realtime/transcript/delta", {
       threadId: THREAD_ID,
       delta: "he",
     });
-    session.handleNotification("thread/realtime/itemAdded", {
+    await session.handleNotification("thread/realtime/itemAdded", {
       threadId: THREAD_ID,
       item: { id: "item-1" },
     });
@@ -256,12 +262,12 @@ describe("codex live voice", () => {
     expect(realtimeEvents).toEqual([]);
   });
 
-  test("a codex transport disconnect names the codex build and the pin that fixes it", () => {
+  test("a codex transport disconnect names the codex build and the pin that fixes it", async () => {
     const { session } = createSession(true, "codex-cli 0.146.0");
     const realtimeEvents: AgentRealtimeVoiceEvent[] = [];
     session.subscribeRealtimeEvents((event) => realtimeEvents.push(event));
 
-    session.handleNotification("thread/realtime/error", {
+    await session.handleNotification("thread/realtime/error", {
       threadId: THREAD_ID,
       message: "stream disconnected before completion: Connection reset without closing handshake",
     });
@@ -277,12 +283,12 @@ describe("codex live voice", () => {
     ]);
   });
 
-  test("a transport disconnect stays legible when the codex version is unknown", () => {
+  test("a transport disconnect stays legible when the codex version is unknown", async () => {
     const { session } = createSession(true);
     const realtimeEvents: AgentRealtimeVoiceEvent[] = [];
     session.subscribeRealtimeEvents((event) => realtimeEvents.push(event));
 
-    session.handleNotification("thread/realtime/error", {
+    await session.handleNotification("thread/realtime/error", {
       threadId: THREAD_ID,
       message: "failed to connect realtime websocket: HTTP error: 404 Not Found",
     });
@@ -298,12 +304,12 @@ describe("codex live voice", () => {
     ]);
   });
 
-  test("a malformed closed notification still closes the call", () => {
+  test("a malformed closed notification still closes the call", async () => {
     const { session } = createSession(true);
     const realtimeEvents: AgentRealtimeVoiceEvent[] = [];
     session.subscribeRealtimeEvents((event) => realtimeEvents.push(event));
 
-    session.handleNotification("thread/realtime/closed", "not-an-object");
+    await session.handleNotification("thread/realtime/closed", "not-an-object");
 
     expect(realtimeEvents).toEqual([{ kind: "closed", reason: null }]);
   });

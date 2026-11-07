@@ -1026,10 +1026,16 @@ describe("live voice hold-to-invert mute binding", () => {
 
   it("is rebindable from the shortcuts settings list", () => {
     expect(
-      getBindingIdForAction("live-voice-mute-hold-invert", { isMac: false, isDesktop: true }),
+      getBindingIdForAction("live-voice-mute-hold-invert", {
+        isMac: false,
+        usesDesktopBindings: true,
+      }),
     ).toBe("live-voice-mute-hold-invert-ctrl-shift-space-non-mac");
     expect(
-      getBindingIdForAction("live-voice-mute-hold-invert", { isMac: true, isDesktop: true }),
+      getBindingIdForAction("live-voice-mute-hold-invert", {
+        isMac: true,
+        usesDesktopBindings: true,
+      }),
     ).toBe("live-voice-mute-hold-invert-cmd-shift-space-mac");
   });
 });

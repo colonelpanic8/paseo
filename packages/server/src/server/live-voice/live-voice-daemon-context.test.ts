@@ -13,7 +13,7 @@ const logger = pino({ level: "silent" });
 function createProvider(paseoHome: string): LiveVoiceDaemonContextProvider {
   return new LiveVoiceDaemonContextProvider({
     agents: { listAgents: () => [], hasPaseoMcpInjection: () => true },
-    workspaces: { list: async () => [] },
+    workspaces: { listActive: async () => [] },
     logger,
     paseoHome,
   });
