@@ -447,7 +447,7 @@ describe("convertClaudeHistoryEntry", () => {
     expect(mapBlocks).toHaveBeenCalledWith(entry.message.content);
   });
 
-  test("backfills the normalized model from persisted assistant entries", () => {
+  test("backfills the normalized model from persisted assistant entries", async () => {
     const entry = {
       type: "assistant",
       uuid: "assistant-history-model",
@@ -459,7 +459,7 @@ describe("convertClaudeHistoryEntry", () => {
     };
 
     expect(
-      convertClaudeHistoryEntry(entry, () => [
+      await convertClaudeHistoryEntry(entry, () => [
         { type: "assistant_message", text: "Historical answer." },
       ]),
     ).toEqual([
@@ -1734,7 +1734,7 @@ describe("ClaudeAgentSession features", () => {
 
     await session.startTurn("hello");
 
-    observed.translateMessageToEvents({
+    await observed.translateMessageToEvents({
       type: "assistant",
       effort: "low",
       message: {
@@ -1763,7 +1763,7 @@ describe("ClaudeAgentSession features", () => {
     });
 
     // A frame that lands after the selection still describes the old turn.
-    observed.translateMessageToEvents({
+    await observed.translateMessageToEvents({
       type: "assistant",
       effort: "medium",
       message: {
@@ -1806,7 +1806,7 @@ describe("ClaudeAgentSession features", () => {
 
     await session.startTurn("hello");
 
-    observed.translateMessageToEvents({
+    await observed.translateMessageToEvents({
       type: "assistant",
       effort: "low",
       message: {
@@ -1849,7 +1849,7 @@ describe("ClaudeAgentSession features", () => {
     });
     const observed = session as unknown as TestClaudeSession;
 
-    observed.translateMessageToEvents({
+    await observed.translateMessageToEvents({
       type: "assistant",
       effort: "low",
       message: {
@@ -3136,7 +3136,7 @@ describe("ClaudeAgentSession context window usage", () => {
   test("captures the runtime model from assistant messages", async () => {
     const session = await createSessionForTest();
 
-    const events = session.translateMessageToEvents({
+    const events = await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-runtime-model",
@@ -3175,7 +3175,7 @@ describe("ClaudeAgentSession context window usage", () => {
   test("stamps the effort the assistant frame actually ran at", async () => {
     const session = await createSessionForTest();
 
-    const events = session.translateMessageToEvents({
+    const events = await session.translateMessageToEvents({
       type: "assistant",
       effort: "low",
       message: {
@@ -3204,20 +3204,22 @@ describe("ClaudeAgentSession context window usage", () => {
   test("stamps no thinking level when the frame reports no usable effort", async () => {
     const session = await createSessionForTest();
 
-    const [absent, numeric] = [undefined, 3].map((effort, index) =>
-      session.translateMessageToEvents({
-        type: "assistant",
-        ...(effort === undefined ? {} : { effort }),
-        message: {
-          id: `assistant-effort-${index}`,
-          role: "assistant",
-          model: "claude-sonnet-5",
-          content: [{ type: "text", text: "No effort reported." }],
-          usage: { input_tokens: 0, output_tokens: 0 },
-        },
-        uuid: `assistant-effort-${index}-event`,
-        session_id: "session-1",
-      } as unknown as SDKMessage),
+    const [absent, numeric] = await Promise.all(
+      [undefined, 3].map((effort, index) =>
+        session.translateMessageToEvents({
+          type: "assistant",
+          ...(effort === undefined ? {} : { effort }),
+          message: {
+            id: `assistant-effort-${index}`,
+            role: "assistant",
+            model: "claude-sonnet-5",
+            content: [{ type: "text", text: "No effort reported." }],
+            usage: { input_tokens: 0, output_tokens: 0 },
+          },
+          uuid: `assistant-effort-${index}-event`,
+          session_id: "session-1",
+        } as unknown as SDKMessage),
+      ),
     );
 
     for (const events of [absent, numeric]) {
@@ -3234,7 +3236,7 @@ describe("ClaudeAgentSession context window usage", () => {
     // Absent until a frame reports one, so the configured level stays in charge.
     await expect(session.getRuntimeInfo()).resolves.not.toHaveProperty("thinkingOptionId");
 
-    session.translateMessageToEvents({
+    await session.translateMessageToEvents({
       type: "assistant",
       effort: "low",
       message: {
@@ -3254,7 +3256,7 @@ describe("ClaudeAgentSession context window usage", () => {
     });
 
     // A later frame that reports no effort says nothing; the observation holds.
-    session.translateMessageToEvents({
+    await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-runtime-effort-silent",
@@ -3273,7 +3275,7 @@ describe("ClaudeAgentSession context window usage", () => {
   test("drops the observed effort when the user picks a thinking option", async () => {
     const session = await createSessionForTest();
 
-    session.translateMessageToEvents({
+    await session.translateMessageToEvents({
       type: "assistant",
       effort: "low",
       message: {
@@ -3302,7 +3304,7 @@ describe("ClaudeAgentSession context window usage", () => {
       if (event.type === "model_changed") observed.push(event);
     });
 
-    session.translateMessageToEvents({
+    await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-model-changed",
@@ -3323,7 +3325,7 @@ describe("ClaudeAgentSession context window usage", () => {
     });
 
     // A repeat of the same model is not a change and must not re-dispatch.
-    session.translateMessageToEvents({
+    await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-model-repeat",
@@ -3341,7 +3343,7 @@ describe("ClaudeAgentSession context window usage", () => {
   test("ignores the <synthetic> placeholder instead of reporting it as a model", async () => {
     const session = await createSessionForTest();
 
-    session.translateMessageToEvents({
+    await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-real-model",
@@ -3354,7 +3356,7 @@ describe("ClaudeAgentSession context window usage", () => {
       session_id: "session-1",
     } as SDKMessage);
 
-    const syntheticEvents = session.translateMessageToEvents({
+    const syntheticEvents = await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-synthetic",
@@ -3381,16 +3383,16 @@ describe("ClaudeAgentSession context window usage", () => {
     const session = await createSessionForTest();
     const ingest = session as unknown as {
       ingestPersistedHistory(
-        content: string,
+        entries: Iterable<Record<string, unknown>>,
         replay: {
           restoredIds: ReadonlySet<string>;
           toolOwners: ReadonlyMap<string, string>;
           subagentToolCalls: ReadonlyMap<string, unknown>;
         },
-      ): void;
+      ): Promise<void>;
     };
 
-    const transcript = [
+    const entries = [
       JSON.stringify({
         type: "assistant",
         uuid: "hist-1",
@@ -3418,8 +3420,8 @@ describe("ClaudeAgentSession context window usage", () => {
           content: [{ type: "text", text: "Synthetic tail." }],
         },
       }),
-    ].join("\n");
-    ingest.ingestPersistedHistory(transcript, {
+    ].map((line) => JSON.parse(line) as Record<string, unknown>);
+    await ingest.ingestPersistedHistory(entries, {
       restoredIds: new Set(),
       toolOwners: new Map(),
       subagentToolCalls: new Map(),
@@ -3435,7 +3437,7 @@ describe("ClaudeAgentSession context window usage", () => {
   test("omits model attribution without an observed assistant model", async () => {
     const session = await createSessionForTest();
 
-    const events = session.translateMessageToEvents({
+    const events = await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "assistant-without-runtime-model",
@@ -3466,7 +3468,7 @@ describe("ClaudeAgentSession context window usage", () => {
 
   test("does not stamp a sidechain assistant message with the parent runtime model", async () => {
     const session = await createSessionForTest();
-    session.translateMessageToEvents({
+    await session.translateMessageToEvents({
       type: "assistant",
       message: {
         id: "parent-runtime-model",
@@ -3479,7 +3481,7 @@ describe("ClaudeAgentSession context window usage", () => {
       session_id: "session-1",
     } as SDKMessage);
 
-    const events = session.translateMessageToEvents({
+    const events = await session.translateMessageToEvents({
       type: "assistant",
       parent_tool_use_id: "task-child",
       message: {

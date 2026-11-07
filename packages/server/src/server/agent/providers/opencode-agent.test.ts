@@ -542,6 +542,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
         sessionId: "session-1",
         model: TEST_MODEL,
         modeId: null,
+        thinkingOptionId: null,
       });
 
       const turn = await collectTurnEvents(streamSession(session, "Observe the runtime model"));
@@ -560,6 +561,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
         sessionId: "session-1",
         model: "runtime-provider/runtime-model",
         modeId: null,
+        thinkingOptionId: null,
       });
     } finally {
       await session.close();
@@ -5781,7 +5783,13 @@ describe("OpenCode provider subagent contract", () => {
 
     releaseChildEvent.resolve();
     await childConsumed.promise;
-    await vi.waitFor(() => expect(events.length).toBeGreaterThan(1));
+    await vi.waitFor(() =>
+      expect(
+        events.some(
+          (event) => event.type === "provider_subagent" && event.event.type === "timeline",
+        ),
+      ).toBe(true),
+    );
     await session.close();
 
     expect(events).toContainEqual({

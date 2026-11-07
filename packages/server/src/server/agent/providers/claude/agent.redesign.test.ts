@@ -1940,12 +1940,14 @@ test("assembles assistant timeline when message_delta arrives before message_sta
 test("keeps assistant effort when the pumped timeline already emitted the text", async () => {
   const session = await createSession();
   const internal = asInternals<{
+    activeForegroundTurnId: string | null;
     buildPumpedMessageEvents: (
       message: Record<string, unknown>,
       messageIdHint: string | null,
       turnId: string | null,
     ) => Promise<AgentStreamEvent[]>;
   }>(session);
+  internal.activeForegroundTurnId = "foreground-turn-1";
 
   try {
     await internal.buildPumpedMessageEvents(

@@ -1595,7 +1595,7 @@ describe("Codex app-server provider", () => {
 
     await expect(session.getRuntimeInfo()).resolves.toEqual({
       provider: "codex",
-      sessionId: "test-thread",
+      sessionId: null,
       model: "gpt-configured",
       thinkingOptionId: "medium",
       modeId: "auto",
@@ -1629,7 +1629,7 @@ describe("Codex app-server provider", () => {
 
     await expect(session.getRuntimeInfo()).resolves.toEqual({
       provider: "codex",
-      sessionId: "observed-thread",
+      sessionId: null,
       model: "gpt-observed",
       thinkingOptionId: "xhigh",
       modeId: "auto",
@@ -1660,7 +1660,7 @@ describe("Codex app-server provider", () => {
 
     await expect(session.getRuntimeInfo()).resolves.toEqual({
       provider: "codex",
-      sessionId: "test-thread",
+      sessionId: null,
       model: "gpt-resumed",
       thinkingOptionId: "high",
       modeId: "auto",
@@ -1671,7 +1671,7 @@ describe("Codex app-server provider", () => {
   test("retains absent notification effort and clears explicitly null effort", async () => {
     const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
 
-    asInternals(session).handleNotification("thread/started", {
+    await asInternals(session).handleNotification("thread/started", {
       thread: {
         id: "test-thread",
         model: "gpt-thread",
@@ -1683,7 +1683,7 @@ describe("Codex app-server provider", () => {
       thinkingOptionId: "high",
     });
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: { id: "turn-without-effort", model: "gpt-turn" },
     });
@@ -1692,7 +1692,7 @@ describe("Codex app-server provider", () => {
       thinkingOptionId: "high",
     });
 
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "test-thread",
       turn: { status: "completed", reasoningEffort: null },
     });
@@ -1706,7 +1706,7 @@ describe("Codex app-server provider", () => {
     const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
     session.activeForegroundTurnId = null;
 
-    asInternals(session).handleNotification("thread/started", {
+    await asInternals(session).handleNotification("thread/started", {
       thread: {
         id: "test-thread",
         model: "gpt-observed",
@@ -1734,7 +1734,7 @@ describe("Codex app-server provider", () => {
   test("keeps the running turn's observations until the turn ends", async () => {
     const session = createSession({ model: "gpt-configured", thinkingOptionId: "medium" });
 
-    asInternals(session).handleNotification("thread/started", {
+    await asInternals(session).handleNotification("thread/started", {
       thread: {
         id: "test-thread",
         model: "gpt-observed",
@@ -1756,7 +1756,7 @@ describe("Codex app-server provider", () => {
     });
 
     // An observation that lands after the selection still describes the old turn.
-    asInternals(session).handleNotification("thread/started", {
+    await asInternals(session).handleNotification("thread/started", {
       thread: {
         id: "test-thread",
         model: "gpt-late-observation",
@@ -1768,7 +1768,7 @@ describe("Codex app-server provider", () => {
       thinkingOptionId: "xhigh",
     });
 
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "test-thread",
       turn: { status: "completed" },
     });
@@ -1784,7 +1784,7 @@ describe("Codex app-server provider", () => {
 
     await expect(session.getRuntimeInfo()).resolves.toEqual({
       provider: "codex",
-      sessionId: "test-thread",
+      sessionId: null,
       modeId: "auto",
       extra: undefined,
     });
@@ -4225,12 +4225,12 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("reports the model and reasoning effort observed on a Codex child thread", () => {
+  test("reports the model and reasoning effort observed on a Codex child thread", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -4244,7 +4244,7 @@ describe("Codex app-server provider", () => {
         },
       },
     });
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "runtime-child-thread",
       turn: {
         id: "runtime-child-turn",
@@ -4265,12 +4265,12 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("retains omitted Codex child runtime fields and clears explicit nulls", () => {
+  test("retains omitted Codex child runtime fields and clears explicit nulls", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -4284,11 +4284,11 @@ describe("Codex app-server provider", () => {
         },
       },
     });
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "sticky-runtime-child-thread",
       turn: { id: "child-turn-1", model: "gpt-5.6-luna", reasoningEffort: "medium" },
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "sticky-runtime-child-thread",
       turn: { status: "completed" },
     });
@@ -4298,7 +4298,7 @@ describe("Codex app-server provider", () => {
     );
     expect(beforeClear.at(-1)?.subtitle).toBe("Sub-agent · GPT-5.6-Luna · Medium");
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "sticky-runtime-child-thread",
       turn: { id: "child-turn-2", model: null, reasoningEffort: null },
     });
@@ -7478,12 +7478,12 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("stamps Codex assistant messages with the active turn's observed runtime", () => {
+  test("stamps Codex assistant messages with the active turn's observed runtime", async () => {
     const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: {
         id: "observed-turn",
@@ -7491,7 +7491,7 @@ describe("Codex app-server provider", () => {
         reasoningEffort: " xhigh ",
       },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "test-thread",
       itemId: "observed-assistant-message",
       delta: "Observed output.",
@@ -7511,16 +7511,16 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("does not fall back to configured Codex runtime values for turn attribution", () => {
+  test("does not fall back to configured Codex runtime values for turn attribution", async () => {
     const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: { id: "unobserved-turn" },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "test-thread",
       itemId: "unobserved-assistant-message",
       delta: "No observed runtime.",
@@ -7536,7 +7536,7 @@ describe("Codex app-server provider", () => {
     expect(item).not.toHaveProperty("thinkingOptionId");
   });
 
-  test("attributes turns from the thread observation when turn notifications omit it", () => {
+  test("attributes turns from the thread observation when turn notifications omit it", async () => {
     // The real app-server reports model/effort on the thread response and often
     // sends turn/started without them; the thread observation is still something
     // Codex reported, so the turn is attributable.
@@ -7544,14 +7544,14 @@ describe("Codex app-server provider", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("thread/started", {
+    await asInternals(session).handleNotification("thread/started", {
       thread: { id: "test-thread", model: "gpt-thread-observed", reasoningEffort: "high" },
     });
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: { id: "turn-without-runtime" },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "test-thread",
       itemId: "thread-observed-message",
       delta: "Thread-observed output.",
@@ -7565,19 +7565,19 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("prefers the turn's own observation over the thread observation", () => {
+  test("prefers the turn's own observation over the thread observation", async () => {
     const session = createSession({ model: "configured-model", thinkingOptionId: "medium" });
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("thread/started", {
+    await asInternals(session).handleNotification("thread/started", {
       thread: { id: "test-thread", model: "gpt-thread-observed", reasoningEffort: "high" },
     });
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: { id: "turn-with-runtime", model: "gpt-turn-observed", reasoningEffort: "low" },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "test-thread",
       itemId: "turn-observed-message",
       delta: "Turn-observed output.",
@@ -7591,12 +7591,12 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("does not stamp Codex child messages with the parent turn runtime", () => {
+  test("does not stamp Codex child messages with the parent turn runtime", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: {
         id: "parent-turn",
@@ -7604,7 +7604,7 @@ describe("Codex app-server provider", () => {
         reasoningEffort: "high",
       },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -7614,7 +7614,7 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/attribution-child",
       },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "attribution-child-thread",
       itemId: "child-attribution-message",
       delta: "Child output.",
