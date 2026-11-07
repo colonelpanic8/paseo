@@ -11,7 +11,7 @@ import {
   type DraftCommandTarget,
 } from "@/agent-commands";
 import { orderAutocompleteOptions } from "@/components/ui/autocomplete-utils";
-import { useAutocomplete } from "./use-autocomplete";
+import { useAutocomplete, type AutocompleteKeyPressEvent } from "./use-autocomplete";
 import { useSessionStore } from "@/stores/session-store";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
@@ -46,9 +46,7 @@ interface UseAgentAutocompleteInput {
   pluginClientSlashCommands?: readonly PluginClientSlashCommand[];
 }
 
-interface AgentAutocompleteKeyPressEvent {
-  key: string;
-  preventDefault: () => void;
+interface AgentAutocompleteKeyPressEvent extends AutocompleteKeyPressEvent {
   input: AgentAutocompleteInputSnapshot;
 }
 

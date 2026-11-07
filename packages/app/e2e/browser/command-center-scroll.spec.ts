@@ -23,6 +23,10 @@ import {
   observeCommandCenterScroll,
   openCommandCenterWithKeyboard,
 } from "../support/helpers/command-center-scroll";
+import {
+  captureActiveListHighlight,
+  navigateToHighlightedListItem,
+} from "../support/helpers/list-navigation";
 import { seedWorkspace } from "../support/helpers/seed-client";
 
 test.use({
@@ -115,4 +119,18 @@ test("live search updates render only the changed row and keep agents virtualize
   } finally {
     await seeded.cleanup();
   }
+});
+
+test("Ctrl+N and Ctrl+P move the command center highlight", async ({ page }) => {
+  await gotoAppShell(page);
+  const panel = await openCommandCenterWithKeyboard(page);
+  const newWorkspace = panel.getByRole("button").filter({ hasText: "New workspace" });
+  const history = panel.getByRole("button").filter({ hasText: "History" });
+  const activeBackground = await captureActiveListHighlight(newWorkspace, history);
+
+  await navigateToHighlightedListItem(page, "next", history, activeBackground);
+  await expect(panel).toBeVisible();
+
+  await navigateToHighlightedListItem(page, "previous", newWorkspace, activeBackground);
+  await expect(panel).toBeVisible();
 });

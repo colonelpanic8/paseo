@@ -62,6 +62,11 @@ import {
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import {
+  listNavigationDataSet,
+  resolveListSearchKeyAction,
+  type ListSearchKeyEvent,
+} from "@/keyboard/list-search-keys";
+import {
   clearCommandCenterFocusRestoreElement,
   takeCommandCenterFocusRestoreElement,
 } from "@/utils/command-center-focus-restore";
@@ -275,7 +280,7 @@ interface CommandCenterState {
   fileSearchError: string | null;
   close(): void;
   select(result: CommandCenterResult): void;
-  key(key: string): boolean;
+  key(event: ListSearchKeyEvent): boolean;
 }
 
 function useCommandCenterState(
@@ -351,9 +356,10 @@ function useCommandCenterState(
     [setOpen],
   );
   const key = useCallback(
-    (pressed: string): boolean => {
+    (event: ListSearchKeyEvent): boolean => {
       if (!open) return false;
       const results = projection.selectableResults;
+      const pressed = event.key;
       if (pressed === "Escape") {
         close();
         return true;
@@ -362,14 +368,15 @@ function useCommandCenterState(
         setScope(null);
         return true;
       }
-      if (pressed === "Enter") {
+      const action = resolveListSearchKeyAction(event);
+      if (action === "submit") {
         const selected = results.find((result) => result.id === activeId);
         if (!selected) return false;
         select(selected);
         return true;
       }
-      if (pressed !== "ArrowDown" && pressed !== "ArrowUp") return false;
-      return interaction.move(pressed === "ArrowDown" ? "next" : "previous");
+      if (action !== "next" && action !== "previous") return false;
+      return interaction.move(action);
     },
     [
       close,
@@ -875,10 +882,10 @@ export function CommandCenter() {
       : {}),
     scrollEventThrottle: 16,
   };
-  const submit = useCallback(() => state.key("Enter"), [state]);
+  const submit = useCallback(() => state.key({ key: "Enter" }), [state]);
   const handleOverlayKeyDown = useCallback(
     (event: KeyboardInputEvent) => {
-      if (!state.key(event.key)) return false;
+      if (!state.key(event)) return false;
       event.preventDefault();
       return true;
     },
@@ -948,7 +955,12 @@ export function CommandCenter() {
       <Modal visible transparent animationType="fade" onRequestClose={state.close}>
         <View style={styles.overlay}>
           <Pressable style={styles.backdrop} onPress={state.close} />
-          <View ref={setOverlayScope} testID="command-center-panel" style={styles.panel}>
+          <View
+            ref={setOverlayScope}
+            dataSet={listNavigationDataSet(state.open)}
+            testID="command-center-panel"
+            style={styles.panel}
+          >
             <View style={[styles.header, styles.searchRow]} testID="command-center-header">
               {state.scope === "files" ? (
                 <ScopeChip label={t("shell.commandCenter.files")} onRemove={state.clearScope} />

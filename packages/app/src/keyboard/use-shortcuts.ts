@@ -17,6 +17,7 @@ import {
 } from "@/keyboard/keyboard-shortcuts";
 import { shouldPublishBrowserShortcutPolicy } from "@/keyboard/internal/sources/electron-browser";
 import type { KeyboardShortcutPayload } from "@/keyboard/actions";
+import { resolveListSearchKeyAction } from "@/keyboard/list-search-keys";
 import {
   routeKeyboardShortcut,
   type ShortcutAction,
@@ -220,6 +221,7 @@ export function useKeyboardShortcuts({
   );
   const beforeResolve = useStableEvent((input: KeyboardSourceInput) => {
     const event = input.event;
+    if (input.ownsListNavigation && resolveListSearchKeyAction(event) !== null) return false;
     const key = event.key ?? "";
     if (key === "Escape" && pathname.startsWith("/settings") && !isMobile && hasActiveOverlay()) {
       return false;
