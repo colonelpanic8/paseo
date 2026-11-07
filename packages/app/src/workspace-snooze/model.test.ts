@@ -25,6 +25,8 @@ function snoozedWorkspace(id: string, until: string): WorkspaceDescriptor {
     status: "done",
     statusEnteredAt: null,
     activityAt: null,
+    createdAt: null,
+    lastUserMessageAt: null,
     archivingAt: null,
     diffStat: null,
     scripts: [],

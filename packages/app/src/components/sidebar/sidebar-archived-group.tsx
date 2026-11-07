@@ -37,7 +37,7 @@ const BUSY_ACCESSIBILITY_STATE = { busy: true } as const;
 // Deliberately shorter than the shared sidebar group limit. This is a tail you
 // glance at right after a mis-archive, not a list you browse; show-more covers
 // the rest.
-const INITIAL_VISIBLE_ARCHIVED_ROWS = 5;
+const ARCHIVED_GROUP_POLICY = { kind: "limit", limit: 5 } as const;
 
 const ThemedArchive = withUnistyles(Archive);
 const ThemedArchiveRestore = withUnistyles(ArchiveRestore);
@@ -66,7 +66,11 @@ export function SidebarArchivedGroup({
     expanded,
     canToggle,
     toggleExpanded,
-  } = useLimitedSidebarGroup(entries, INITIAL_VISIBLE_ARCHIVED_ROWS);
+  } = useLimitedSidebarGroup({
+    items: entries,
+    selection: null,
+    policy: ARCHIVED_GROUP_POLICY,
+  });
   const listSettle = useSidebarListSettle();
   const isReceivingArchive = entries.some((entry) => entry.phase === "archiving");
 

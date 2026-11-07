@@ -125,7 +125,8 @@ function getTimeFormatter(): Intl.DateTimeFormat {
   return cachedTimeFormatter;
 }
 
-export function formatClockTime(date: Date): string {
+/** A clock time in the device's 12h/24h preference: "3:00 PM" or "15:00". */
+export function formatTimeOfDay(date: Date): string {
   return getTimeFormatter().format(date);
 }
 
@@ -136,7 +137,7 @@ export function formatClockTime(date: Date): string {
  * - Older, including today's weekday last week: "14 May 2026, 10:11 PM"
  */
 export function formatMessageTimestamp(date: Date, now: Date = new Date()): string {
-  const time = formatClockTime(date);
+  const time = formatTimeOfDay(date);
   const daysAgo = localCalendarDaysBetween(date, now);
 
   if (daysAgo === 0) {
@@ -166,7 +167,7 @@ export function formatMessageTimestamp(date: Date, now: Date = new Date()): stri
  * week out — by then the same weekday name would have come around again.
  */
 export function formatFutureTimestamp(date: Date, now: Date = new Date()): string {
-  const time = formatClockTime(date);
+  const time = formatTimeOfDay(date);
   const daysAhead = localCalendarDaysBetween(now, date);
 
   if (daysAhead === 0) {

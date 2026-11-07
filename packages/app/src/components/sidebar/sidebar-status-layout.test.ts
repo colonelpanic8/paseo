@@ -43,6 +43,7 @@ function makeGroup(
   return {
     group: { bucket, label: bucket, rows: workspaces },
     collapsed,
+    leadingRow: null,
     visibleRows: workspaces,
     expanded: false,
     canToggle: false,
@@ -56,6 +57,7 @@ function signatureFor(
   return buildStatusLayoutSignature({
     hasListHeader: false,
     pinnedCollapsed: overrides?.pinnedCollapsed ?? false,
+    leadingPinnedWorkspace: null,
     visiblePinnedWorkspaces: [],
     canTogglePinnedWorkspaces: false,
     limitedGroups,
@@ -101,6 +103,7 @@ describe("buildStatusLayoutSignature", () => {
     const collapsed = buildStatusLayoutSignature({
       hasListHeader: false,
       pinnedCollapsed: true,
+      leadingPinnedWorkspace: null,
       visiblePinnedWorkspaces: [running],
       canTogglePinnedWorkspaces: false,
       limitedGroups: [],

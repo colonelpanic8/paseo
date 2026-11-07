@@ -1,3 +1,5 @@
+import type { WorkspaceRef, AgentRef, ProjectRef, TerminalRef } from "./refs.js";
+import type { PluginText } from "./text.js";
 import type { JsonValue } from "@getpaseo/protocol/agent-types";
 import type { PluginSerializableIcon } from "./icons.js";
 import type { PluginRpcContract } from "./rpc.js";
@@ -18,7 +20,22 @@ export interface PluginTheme {
   };
 }
 
+export type WorkspaceIndicator = "needs_input" | "failed" | "running" | "attention" | "done";
+
 export interface PluginWorkspaceSnapshot {
+  readonly ref: WorkspaceRef;
+  readonly hostId: string;
+  readonly project: ProjectRef;
+  readonly pinnedAt: string | null;
+  readonly labels: readonly string[];
+  readonly background: boolean;
+  readonly branch: string | null;
+  /** Null when an older host has not supplied the workspace creation time. */
+  readonly createdAt: string | null;
+  readonly lastPromptAt: string | null;
+  readonly parentAgent: AgentRef | null;
+  readonly indicator: WorkspaceIndicator;
+  readonly indicatorLabel: string | null;
   readonly id: string;
   readonly projectId: string;
   readonly projectDisplayName: string;
@@ -28,6 +45,7 @@ export interface PluginWorkspaceSnapshot {
   readonly kind: "directory" | "local_checkout" | "checkout" | "worktree";
   readonly name: string;
   readonly title: string | null;
+  /** Raw daemon status; prefer indicator for presentation. */
   readonly status: "needs_input" | "failed" | "running" | "attention" | "done";
   readonly statusEnteredAt: string | null;
   readonly archivingAt: string | null;
@@ -35,6 +53,10 @@ export interface PluginWorkspaceSnapshot {
 }
 
 export interface PluginAgentSnapshot {
+  readonly ref: AgentRef;
+  readonly hostId: string;
+  readonly workspace: WorkspaceRef;
+  readonly parentAgent: AgentRef | null;
   readonly id: string;
   readonly workspaceId: string;
   readonly provider: string;
@@ -64,19 +86,19 @@ export interface PluginThemeColors {
   ring: string;
 }
 
-export interface PluginThemeContribution {
+export interface PluginThemeContribution<Text extends PluginText = string> {
   id: string;
-  name: string;
+  name: Text;
   appearance: "light" | "dark";
   colors: PluginThemeColors;
 }
 
-export interface PluginAttachmentSourceContribution {
+export interface PluginAttachmentSourceContribution<Text extends PluginText = string> {
   id: string;
-  title: string;
+  title: Text;
   icon: PluginSerializableIcon;
-  pickerTitle: string;
-  searchPlaceholder: string;
+  pickerTitle: Text;
+  searchPlaceholder: Text;
   search: PluginRpcContract;
 }
 
@@ -95,3 +117,22 @@ export interface PluginTimelineTransformResult {
 }
 
 export type PluginCleanup = () => void | Promise<void>;
+
+export interface PluginProjectSnapshot {
+  readonly ref: ProjectRef;
+  readonly hostId: string;
+  readonly displayName: string;
+  readonly rootPath: string;
+  readonly kind: PluginWorkspaceSnapshot["projectKind"];
+  readonly iconRevision: string | null;
+}
+
+export interface PluginTerminalSnapshot {
+  readonly ref: TerminalRef;
+  readonly hostId: string;
+  readonly workspace: WorkspaceRef;
+  readonly title: string;
+  readonly isScript: boolean;
+  /** Null for terminals owned by workers started before timestamps were tracked. */
+  readonly createdAt: string | null;
+}
