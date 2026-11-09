@@ -2688,6 +2688,13 @@ export const ru: TranslationResources = {
       capturePrompt: "Нажмите сочетание клавиш...",
       captureIndexPrompt: "Завершите цифрой от 1 до 9.",
       unassigned: "Не задано",
+      modKey: {
+        title: "Клавиша-модификатор",
+        hint: "Клавиша, используемая как модификатор сочетаний",
+        auto: "Авто",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "Действия для {{name}}",
         done: "Готово",

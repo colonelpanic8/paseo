@@ -2681,6 +2681,13 @@ export const ptBR: TranslationResources = {
       capturePrompt: "Pressione o atalho...",
       captureIndexPrompt: "Termine com um número de 1 a 9.",
       unassigned: "Não definido",
+      modKey: {
+        title: "Tecla modificadora",
+        hint: "Tecla usada como modificador dos atalhos",
+        auto: "Auto",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "Ações para {{name}}",
         done: "Concluído",

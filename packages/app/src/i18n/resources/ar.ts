@@ -2678,6 +2678,13 @@ export const ar: TranslationResources = {
       capturePrompt: "اضغط على الاختصار...",
       captureIndexPrompt: "اختم برقم من 1 إلى 9.",
       unassigned: "غير معين",
+      modKey: {
+        title: "مفتاح التعديل",
+        hint: "المفتاح المستخدم كمعدِّل للاختصارات",
+        auto: "تلقائي",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "إجراءات {{name}}",
         done: "منتهي",

@@ -2768,6 +2768,13 @@ export const en = {
       capturePrompt: "Press shortcut...",
       captureIndexPrompt: "End with a number from 1 to 9.",
       unassigned: "Not set",
+      modKey: {
+        title: "Modifier key",
+        hint: "Key used as the shortcut modifier",
+        auto: "Auto",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "Actions for {{name}}",
         done: "Done",

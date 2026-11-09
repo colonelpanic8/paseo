@@ -2701,6 +2701,13 @@ export const es: TranslationResources = {
       capturePrompt: "Presione el acceso directo...",
       captureIndexPrompt: "Termina con un número del 1 al 9.",
       unassigned: "Sin asignar",
+      modKey: {
+        title: "Tecla modificadora",
+        hint: "Tecla usada como modificador de atajos",
+        auto: "Auto",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "Acciones para {{name}}",
         done: "Hecho",

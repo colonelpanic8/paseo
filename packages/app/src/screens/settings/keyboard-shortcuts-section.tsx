@@ -13,6 +13,7 @@ import type { Theme } from "@/styles/theme";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,7 +38,8 @@ import {
 } from "@/keyboard/shortcut-string";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { getShortcutOs } from "@/utils/shortcut-platform";
+import { type ShortcutModPreference, useShortcutModStore } from "@/stores/shortcut-mod-store";
+import { useShortcutOs } from "@/utils/shortcut-platform";
 import { getDesktopHost } from "@/desktop/host";
 
 const EMPTY_CAPTURED_COMBOS: string[] = [];
@@ -333,6 +335,36 @@ function ShortcutRow({
   );
 }
 
+const MOD_PREFERENCES: readonly ShortcutModPreference[] = ["auto", "cmd", "ctrl"];
+
+function ModKeySection() {
+  const { t } = useTranslation();
+  const preference = useShortcutModStore((state) => state.preference);
+  const setPreference = useShortcutModStore((state) => state.setPreference);
+  const options = useMemo<SegmentedControlOption<ShortcutModPreference>[]>(
+    () =>
+      MOD_PREFERENCES.map((value) => ({
+        value,
+        label: t(`settings.shortcuts.modKey.${value}`),
+        testID: `shortcut-mod-key-${value}`,
+      })),
+    [t],
+  );
+  return (
+    <SettingsSection title={t("settings.shortcuts.modKey.title")}>
+      <View style={settingsStyles.card}>
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.shortcuts.modKey.title")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.shortcuts.modKey.hint")}</Text>
+          </View>
+          <SegmentedControl value={preference} onValueChange={setPreference} options={options} />
+        </View>
+      </View>
+    </SettingsSection>
+  );
+}
+
 export function KeyboardShortcutsSection() {
   const { t } = useTranslation();
   const hardwareKeyboardPresent = useHardwareKeyboardPresent();
@@ -345,7 +377,7 @@ export function KeyboardShortcutsSection() {
   const capturing = useKeyboardShortcutsStore((s) => s.capturingShortcut);
 
   const isFocused = useIsFocused();
-  const isMac = getShortcutOs() === "mac";
+  const isMac = useShortcutOs() === "mac";
   const sections = buildKeyboardShortcutHelpSections({ isMac, usesDesktopBindings });
 
   const cancelCapture = useCallback(() => {
@@ -443,6 +475,7 @@ export function KeyboardShortcutsSection() {
 
   return (
     <>
+      <ModKeySection />
       {sections.map(function (section, sectionIndex) {
         return (
           <SettingsSection

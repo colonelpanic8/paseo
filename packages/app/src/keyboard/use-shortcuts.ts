@@ -23,7 +23,7 @@ import {
   type ShortcutAction,
   type ShortcutCallbackName,
 } from "@/keyboard/route-shortcut";
-import { getShortcutOs } from "@/utils/shortcut-platform";
+import { useShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
@@ -57,7 +57,7 @@ export function useKeyboardShortcuts({
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
   const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
-  const isMac = getShortcutOs() === "mac";
+  const isMac = useShortcutOs() === "mac";
   const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);

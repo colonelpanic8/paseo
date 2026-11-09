@@ -2612,6 +2612,13 @@ export const zhCN: TranslationResources = {
       capturePrompt: "按下快捷键...",
       captureIndexPrompt: "请以 1 到 9 的数字结尾。",
       unassigned: "未设置",
+      modKey: {
+        title: "修饰键",
+        hint: "用作快捷键修饰键的按键",
+        auto: "自动",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "{{name}} 的操作",
         done: "完成",

@@ -2656,6 +2656,13 @@ export const ko: TranslationResources = {
       capturePrompt: "단축키를 누르세요...",
       captureIndexPrompt: "마지막에 1부터 9까지의 숫자를 입력하세요.",
       unassigned: "설정되지 않음",
+      modKey: {
+        title: "보조 키",
+        hint: "단축키 보조 키로 사용할 키",
+        auto: "자동",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "{{name}} 작업",
         done: "완료",
