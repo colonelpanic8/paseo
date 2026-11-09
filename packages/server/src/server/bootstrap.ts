@@ -200,6 +200,7 @@ import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProfile,
   AgentSkillSelection,
+  DaemonPushConfig,
   FirstAgentContext,
   IdentityColorName,
   PluginSource,
@@ -447,6 +448,7 @@ export interface PaseoDaemonConfig {
    */
   agentPurposeSummariesEnabled?: boolean;
   enableTerminalAgentHooks?: boolean;
+  push?: DaemonPushConfig;
   appendSystemPrompt?: string;
   hostColor?: IdentityColorName;
   terminalProfiles?: TerminalProfile[];
@@ -650,6 +652,7 @@ export function createInitialMutableDaemonConfig(
     skills: { selection: config.skillSelection },
     agentEnvironment: createInitialAgentEnvironment(config),
     ...resolveInitialHostAppearance(config),
+    push: config.push,
   };
 
   if (config.terminalProfiles !== undefined) {
