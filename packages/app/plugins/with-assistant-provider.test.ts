@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-const { addAssistantProvider, assistantProviderAuthority } = require("./with-assistant-provider");
+const {
+  addAssistantProvider,
+  addEvaExtensionService,
+  assistantProviderAuthority,
+  setDebugCallerOptIn,
+} = require("./with-assistant-provider");
 
 describe("withAssistantProvider", () => {
   it("uses one authority for release builds and a private one for debug", () => {
@@ -27,5 +32,41 @@ describe("withAssistantProvider", () => {
         },
       },
     ]);
+  });
+
+  it("advertises exactly one EVA extension service", () => {
+    const manifest = {
+      manifest: { application: [{ $: { "android:name": ".MainApplication" } }] },
+    };
+
+    const twice = addEvaExtensionService(addEvaExtensionService(manifest));
+
+    expect(twice.manifest.application[0].service).toEqual([
+      {
+        $: {
+          "android:name": "sh.paseo.androidintents.EvaExtensionService",
+          "android:exported": "true",
+        },
+        "intent-filter": [
+          { action: [{ $: { "android:name": "com.colonelpanic.eva.action.EXTENSION" } }] },
+        ],
+        "meta-data": [
+          { $: { "android:name": "com.colonelpanic.eva.extension.version", "android:value": "1" } },
+        ],
+      },
+    ]);
+  });
+
+  it("trusts debug EVA in a release build only when the build opts in", () => {
+    const manifest = () => ({
+      manifest: { application: [{ $: { "android:name": ".MainApplication" } }] },
+    });
+    const optedIn = setDebugCallerOptIn(manifest(), true);
+
+    expect(setDebugCallerOptIn(manifest(), false).manifest.application[0]["meta-data"]).toEqual([]);
+    expect(optedIn.manifest.application[0]["meta-data"]).toEqual([
+      { $: { "android:name": "sh.paseo.assistant.allowDebugCallers", "android:value": "true" } },
+    ]);
+    expect(setDebugCallerOptIn(optedIn, false).manifest.application[0]["meta-data"]).toEqual([]);
   });
 });

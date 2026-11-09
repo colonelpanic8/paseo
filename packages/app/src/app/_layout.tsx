@@ -156,7 +156,6 @@ import { ensureOsNotificationPermission } from "@/utils/os-notifications";
 import { AndroidIntentListener } from "@/intents/android-intent-listener";
 import { AndroidResumeShortcutSync } from "@/intents/android-resume-shortcut-sync";
 import { AndroidAssistantCatalogSync } from "@/intents/android-assistant-catalog-sync";
-import { AndroidAssistantQueryListener } from "@/intents/android-assistant-query-listener";
 
 polyfillCrypto();
 
@@ -690,7 +689,6 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
           {isNative ? <AndroidIntentListener /> : null}
           {isNative ? <AndroidResumeShortcutSync /> : null}
           {isNative ? <AndroidAssistantCatalogSync /> : null}
-          {isNative ? <AndroidAssistantQueryListener /> : null}
           <HostSessionManager />
           <FaviconStatusSync />
           {children}

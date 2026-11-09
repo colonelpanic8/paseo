@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Agent } from "@/stores/session-store";
-import { assistantAgentName } from "./assistant-catalog";
+import { assistantAgentName, assistantHostName } from "./assistant-catalog";
 import {
   ASSISTANT_MESSAGE_DEFAULT_LIMIT,
   ASSISTANT_MESSAGE_MAX_LIMIT,
@@ -39,6 +39,7 @@ export interface AssistantQueryHost {
 
 export interface AssistantQueryTarget {
   serverId: string;
+  serverName: string;
   agentId: string;
   agentName: string;
   workspaceId: string | null;
@@ -67,6 +68,7 @@ export function parseAssistantQueryRequest(raw: unknown): AssistantQueryRequest 
 function targetFor(host: AssistantQueryHost, agent: Agent): AssistantQueryTarget {
   return {
     serverId: host.serverId,
+    serverName: assistantHostName(host),
     agentId: agent.id,
     agentName: assistantAgentName(agent),
     workspaceId: agent.workspaceId ?? null,
@@ -152,10 +154,12 @@ export async function runAssistantQuery(input: {
   fetchEntries: AssistantQueryFetch;
 }): Promise<AssistantMessageRow[]> {
   const { request } = input;
+  const scopedHost = input.hosts.find((host) => host.serverId === request.serverId);
   const notice = (text: string) =>
     assistantNoticeRow({
       text,
       serverId: request.serverId,
+      serverName: scopedHost ? assistantHostName(scopedHost) : null,
       agentId: request.agentId,
       workspaceId: request.workspaceId,
     });
