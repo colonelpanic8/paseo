@@ -1,7 +1,31 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { z } from "zod";
 import { readValidatedJson } from "@/storage/validated-storage";
 import { APP_SETTINGS_KEY, SETTINGS_MIGRATIONS_KEY } from "./keys";
 import type { AppSettings, KeyValueStorage, PersistedAppSettings } from "./storage";
+
+const PROVIDER_USAGE_DISPLAY_MIGRATION = "provider-usage-display";
+const LegacyUsageSchema = z.looseObject({
+  state: z.looseObject({ percentageDisplay: z.enum(["used", "remaining"]) }),
+});
+const ExplicitUsageSchema = z.looseObject({
+  usage: z.looseObject({ displayAs: z.enum(["used", "remaining"]).optional() }).optional(),
+});
+
+async function readUsagePreference<Value>(
+  storage: KeyValueStorage,
+  key: string,
+  schema: z.ZodType<Value>,
+): Promise<Value | undefined> {
+  const raw = await storage.getItem(key);
+  if (raw === null) return undefined;
+  try {
+    const parsed = schema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const AppliedMigrationsSchema = z.strictObject({ applied: z.array(z.string()) });
 
@@ -47,6 +71,23 @@ export async function migrateAppSettings(
   if (options.native && !applied.has(MOBILE_CONTENT_16_MIGRATION)) {
     migrated = migrated.contentFontSize === 15 ? { ...migrated, contentFontSize: 16 } : migrated;
     applied.add(MOBILE_CONTENT_16_MIGRATION);
+    addedMigration = true;
+  }
+
+  if (!applied.has(PROVIDER_USAGE_DISPLAY_MIGRATION)) {
+    const explicit = await readUsagePreference(storage, APP_SETTINGS_KEY, ExplicitUsageSchema);
+    const legacy = await readUsagePreference(
+      AsyncStorage,
+      "provider-usage-preferences",
+      LegacyUsageSchema,
+    );
+    if (
+      explicit?.usage?.displayAs === undefined &&
+      legacy?.state.percentageDisplay === "remaining"
+    ) {
+      migrated = { ...migrated, usage: { ...migrated.usage, displayAs: "remaining" } };
+    }
+    applied.add(PROVIDER_USAGE_DISPLAY_MIGRATION);
     addedMigration = true;
   }
 
