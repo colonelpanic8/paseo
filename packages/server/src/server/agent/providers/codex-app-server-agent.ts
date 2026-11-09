@@ -4080,12 +4080,7 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
     this.codexHome = deps.codexHome ?? resolveCodexHomeDir(process.env);
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
     this.serviceTier = readCodexServiceTier(this.config.featureValues);
-    if (this.config.featureValues?.plan_mode) {
-      this.planModeEnabled = true;
-    }
-    if (this.config.featureValues?.context_notes) {
-      this.contextNotesEnabled = true;
-    }
+    this.applyInitialFeatureToggles();
 
     if (this.resumeHandle?.sessionId) {
       this.currentThreadId = this.resumeHandle.sessionId;
@@ -4098,6 +4093,15 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
 
   get id(): string | null {
     return this.currentThreadId;
+  }
+
+  private applyInitialFeatureToggles(): void {
+    if (this.config.featureValues?.plan_mode) {
+      this.planModeEnabled = true;
+    }
+    if (this.config.featureValues?.context_notes) {
+      this.contextNotesEnabled = true;
+    }
   }
 
   get features(): AgentFeature[] {
@@ -7130,14 +7134,14 @@ export class CodexAppServerAgentSession implements AgentSession, AgentRealtimeVo
         return;
       }
       const isFirstDeltaForItem = prev.length === 0;
-      const timelineItem: AgentTimelineItem = {
-        type: "assistant_message",
+      const timelineItem: AgentTimelineItem = assistantMessageWithQuestions({
         messageId: parsed.itemId,
         text:
           isFirstDeltaForItem && this.pendingAssistantMessageBoundary
             ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
             : parsed.delta,
-      };
+        questions,
+      });
       this.stampActiveTurnAttribution(timelineItem);
       this.emitEvent({
         type: "timeline",
