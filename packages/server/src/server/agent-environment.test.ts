@@ -276,8 +276,8 @@ test("picks up an entry list edited after the resolver was built", async () => {
   await expect(resolve("/project")).resolves.toEqual({ SECOND: "2" });
 });
 
-test("stops the marker walk at the filesystem root", () => {
-  expect(hasMarkerAtOrAbove("/a/b/c", [".envrc"], () => false)).toBe(false);
+test("stops the marker walk at the filesystem root", async () => {
+  await expect(hasMarkerAtOrAbove("/a/b/c", [".envrc"], () => false)).resolves.toBe(false);
 });
 
 const direnvPath = await findExecutable("direnv");

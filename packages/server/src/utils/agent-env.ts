@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { createExternalProcessEnv, type ProcessEnvRecord } from "../server/paseo-env.js";
@@ -27,13 +27,20 @@ export class AgentEnvCaptureError extends Error {
   }
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  return await access(path).then(
+    () => true,
+    () => false,
+  );
+}
+
 // Walk up from the agent cwd to the first directory that has a paseo.json,
 // stopping at the repository boundary (a .git directory or worktree .git file)
 // so an unrelated config above the checkout is never picked up.
 export async function resolveAgentEnvCommand(cwd: string): Promise<string | null> {
   let dir = cwd;
   for (;;) {
-    if (existsSync(resolvePaseoConfigPath(dir))) {
+    if (await pathExists(resolvePaseoConfigPath(dir))) {
       const result = await readPaseoConfig(dir);
       if (!result.ok) {
         throw paseoConfigParseError(result);
@@ -41,7 +48,7 @@ export async function resolveAgentEnvCommand(cwd: string): Promise<string | null
       const command = result.config?.agentEnv?.trim();
       return command ? command : null;
     }
-    if (existsSync(join(dir, ".git"))) {
+    if (await pathExists(join(dir, ".git"))) {
       return null;
     }
     const parent = dirname(dir);

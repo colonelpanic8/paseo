@@ -828,12 +828,7 @@ function mergeMutableAgentPatch(
   replaceProviders: readonly string[],
 ): PersistedConfig["agents"] {
   if (
-    patch.providers === undefined &&
-    patch.metadataGeneration === undefined &&
-    patch.skills === undefined &&
-    !hasRestartRecoveryPatch(patch) &&
-    patch.idleRuntimeCleanup === undefined &&
-    patch.agentEnvironment === undefined &&
+    !hasMutableAgentPatch(patch) &&
     removeProviders.length === 0 &&
     replaceProviders.length === 0
   ) {
@@ -925,6 +920,16 @@ function applyAppearancePatch(
   }
 }
 
+function hasMutableAgentPatch(patch: SupportedMutableConfigPatch): boolean {
+  return (
+    patch.providers !== undefined ||
+    patch.metadataGeneration !== undefined ||
+    patch.skills !== undefined ||
+    hasRestartRecoveryPatch(patch) ||
+    patch.idleRuntimeCleanup !== undefined ||
+    patch.agentEnvironment !== undefined
+  );
+}
 function hasRestartRecoveryPatch(patch: SupportedMutableConfigPatch) {
   return patch.resumeOnStartup !== undefined || patch.resumePrompt !== undefined;
 }

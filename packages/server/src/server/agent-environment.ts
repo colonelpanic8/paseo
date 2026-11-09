@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -45,7 +45,7 @@ export interface AgentEnvironmentResolverOptions {
   baseEnv?: ProcessEnvRecord;
   run?: AgentEnvironmentCommandRunner;
   resolveBinary?: (name: string) => Promise<string | null>;
-  fileExists?: (path: string) => boolean;
+  fileExists?: (path: string) => boolean | Promise<boolean>;
 }
 
 interface ResolvedStep {
@@ -62,15 +62,17 @@ const ANSI_SGR_PATTERN = new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"
  * Walks from `cwd` to the filesystem root looking for any of `markers`, matching
  * how the tools themselves find their config.
  */
-export function hasMarkerAtOrAbove(
+export async function hasMarkerAtOrAbove(
   cwd: string,
   markers: readonly string[],
-  exists: (path: string) => boolean,
-): boolean {
+  exists: (path: string) => boolean | Promise<boolean>,
+): Promise<boolean> {
   let directory = resolve(cwd);
   for (;;) {
-    if (markers.some((marker) => exists(join(directory, marker)))) {
-      return true;
+    for (const marker of markers) {
+      if (await exists(join(directory, marker))) {
+        return true;
+      }
     }
     const parent = dirname(directory);
     if (parent === directory) {
@@ -78,6 +80,13 @@ export function hasMarkerAtOrAbove(
     }
     directory = parent;
   }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  return await access(path).then(
+    () => true,
+    () => false,
+  );
 }
 
 async function runAgentEnvironmentCommand(
@@ -185,7 +194,7 @@ export function createAgentEnvironmentResolver(
   const baseEnv = options.baseEnv ?? process.env;
   const run = options.run ?? runAgentEnvironmentCommand;
   const resolveBinary = options.resolveBinary ?? ((name) => findExecutable(name));
-  const fileExists = options.fileExists ?? existsSync;
+  const fileExists = options.fileExists ?? pathExists;
 
   // PATH does not change under a running daemon, so a preset's binary is looked
   // up once. Marker files are checked per launch: a directory can gain an
@@ -211,7 +220,7 @@ export function createAgentEnvironmentResolver(
     if (!(await lookupBinary(preset.binary))) {
       return false;
     }
-    return hasMarkerAtOrAbove(cwd, preset.markers, fileExists);
+    return await hasMarkerAtOrAbove(cwd, preset.markers, fileExists);
   }
 
   async function resolveStep(

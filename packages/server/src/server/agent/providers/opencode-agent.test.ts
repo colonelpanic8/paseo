@@ -46,6 +46,10 @@ function countEvents(events: AgentStreamEvent[], type: AgentStreamEvent["type"])
   return events.filter((event) => event.type === type).length;
 }
 
+function isProviderSubagentTimelineEvent(event: AgentStreamEvent): boolean {
+  return event.type === "provider_subagent" && event.event.type === "timeline";
+}
+
 function countProviderSubagentUpserts(events: AgentStreamEvent[]): number {
   return events.filter(
     (event) => event.type === "provider_subagent" && event.event.type === "upsert",
@@ -5783,13 +5787,7 @@ describe("OpenCode provider subagent contract", () => {
 
     releaseChildEvent.resolve();
     await childConsumed.promise;
-    await vi.waitFor(() =>
-      expect(
-        events.some(
-          (event) => event.type === "provider_subagent" && event.event.type === "timeline",
-        ),
-      ).toBe(true),
-    );
+    await vi.waitFor(() => expect(events.some(isProviderSubagentTimelineEvent)).toBe(true));
     await session.close();
 
     expect(events).toContainEqual({

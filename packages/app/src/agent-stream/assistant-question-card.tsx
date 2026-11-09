@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { Text, View, type PressableStateCallbackType } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { AdaptiveTextInput } from "@/components/adaptive-text-input";
@@ -64,7 +65,7 @@ function OptionPill({
   const accessibilityState = selected ? CHECKED_ACCESSIBILITY_STATE : UNCHECKED_ACCESSIBILITY_STATE;
 
   return (
-    <Pressable
+    <PressHighlight
       style={pillStyle}
       onPress={handlePress}
       disabled={disabled}
@@ -74,7 +75,7 @@ function OptionPill({
       aria-checked={selected}
     >
       <Text style={selected ? styles.optionLabelSelected : styles.optionLabel}>{label}</Text>
-    </Pressable>
+    </PressHighlight>
   );
 }
 

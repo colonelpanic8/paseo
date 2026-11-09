@@ -804,18 +804,21 @@ function isSessionServerInfoUnchanged(input: {
     nextCapabilities,
     nextFeatures,
   } = input;
-  const prevHostname = currentServerInfo?.hostname?.trim() || null;
-  const prevVersion = currentServerInfo?.version?.trim() || null;
-  const prevWorktreesRoot = currentServerInfo?.worktreesRoot?.trim() || null;
+  if (!currentServerInfo) {
+    return false;
+  }
+  const prevHostname = currentServerInfo.hostname?.trim() || null;
+  const prevVersion = currentServerInfo.version?.trim() || null;
+  const prevWorktreesRoot = currentServerInfo.worktreesRoot?.trim() || null;
   return (
-    currentServerInfo?.serverId === input.nextServerId &&
+    currentServerInfo.serverId === input.nextServerId &&
     prevHostname === nextHostname &&
     prevVersion === nextVersion &&
-    areServerInfoBuildsEqual(currentServerInfo?.build, nextBuild) &&
-    currentServerInfo?.desktopManaged === nextDesktopManaged &&
+    areServerInfoBuildsEqual(currentServerInfo.build, nextBuild) &&
+    currentServerInfo.desktopManaged === nextDesktopManaged &&
     prevWorktreesRoot === nextWorktreesRoot &&
-    areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
-    areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
+    areServerCapabilitiesEqual(currentServerInfo.capabilities, nextCapabilities) &&
+    areServerInfoFeaturesEqual(currentServerInfo.features, nextFeatures)
   );
 }
 

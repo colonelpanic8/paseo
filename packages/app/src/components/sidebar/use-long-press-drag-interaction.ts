@@ -112,7 +112,7 @@ export function useLongPressDragInteraction(input: {
       void Haptics.selectionAsync().catch(() => {});
       openContextMenuAtStartPoint();
     }, CONTEXT_MENU_DELAY_MS);
-  }, [clearTimers, menuController, openContextMenuAtStartPoint]);
+  }, [clearTimers, drag, menuController, openContextMenuAtStartPoint]);
 
   const handleDragIntent = useCallback(
     (_details: { dx: number; dy: number; distance: number }) => {
@@ -123,7 +123,7 @@ export function useLongPressDragInteraction(input: {
       didLongPressRef.current = true;
       clearTimers();
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      drag();
+      drag?.();
     },
     [clearTimers, drag],
   );

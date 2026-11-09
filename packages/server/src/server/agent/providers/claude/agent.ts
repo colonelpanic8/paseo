@@ -6877,6 +6877,12 @@ function readSteeredPromptHistoryItem(entry: ClaudeHistoryEntry): AgentTimelineI
   return { type: "user_message", text, ...(messageId ? { messageId } : {}) };
 }
 
+function userHistoryMessageItems(content: unknown, messageId: string | null): AgentTimelineItem[] {
+  const text = extractUserMessageText(content);
+  if (!text) return [];
+  return [{ type: "user_message", text, ...(messageId ? { messageId } : {}) }];
+}
+
 export async function convertClaudeHistoryEntry(
   entry: ClaudeHistoryEntry,
   mapBlocks: (
@@ -6907,18 +6913,7 @@ export async function convertClaudeHistoryEntry(
     }
   }
 
-  const timeline: AgentTimelineItem[] = [];
-
-  if (entry.type === "user") {
-    const text = extractUserMessageText(content);
-    if (text) {
-      timeline.push({
-        type: "user_message",
-        text,
-        ...(userMessageId ? { messageId: userMessageId } : {}),
-      });
-    }
-  }
+  const timeline = entry.type === "user" ? userHistoryMessageItems(content, userMessageId) : [];
 
   if (hasToolBlock && normalizedBlocks) {
     if (entry.type === "assistant") {

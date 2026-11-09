@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useSyncExternalStore, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Plus, X } from "lucide-react-native";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
@@ -337,7 +338,7 @@ function EnvVarRow({
             editable={!disabled}
           />
         </View>
-        <Pressable
+        <PressHighlight
           style={styles.envRemoveButton}
           onPress={handleRemove}
           disabled={disabled}
@@ -347,7 +348,7 @@ function EnvVarRow({
           testID={`provider-account-env-remove-${index}`}
         >
           <ThemedX size={14} />
-        </Pressable>
+        </PressHighlight>
       </View>
       {error ? <Text style={styles.envRowError}>{error}</Text> : null}
     </View>

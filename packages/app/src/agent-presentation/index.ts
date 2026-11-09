@@ -8,7 +8,12 @@ import type { AgentModelDisplay } from "@/composer/agent-controls/utils";
 import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
 import { buildAgentPanelSubtitle } from "@/panels/agent-panel-subtitle";
 import type { PanelDescriptor } from "@/panels/panel-registry";
-import { useSessionStore, selectAgentTurnPresentation, type Agent } from "@/stores/session-store";
+import {
+  useSessionStore,
+  selectAgentTurnPresentation,
+  type Agent,
+  type SessionState,
+} from "@/stores/session-store";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 
 function formatProviderLabel(provider: Agent["provider"]): string {
@@ -36,6 +41,23 @@ export function resolveAgentLabel(title: string | null | undefined): string | nu
   return normalized;
 }
 
+function selectAgentSummary(agent: Agent | null, session: SessionState | undefined) {
+  return resolveAgentPurposeSummary({
+    summary: agent?.summary,
+    serverInfo: session?.serverInfo,
+  });
+}
+
+function selectAgentModelState(agent: Agent | null) {
+  return {
+    cwd: agent?.cwd ?? null,
+    model: agent?.model ?? null,
+    runtimeModelId: agent?.runtimeInfo?.model ?? null,
+    thinkingOptionId: agent?.thinkingOptionId ?? null,
+    effectiveThinkingOptionId: agent?.effectiveThinkingOptionId,
+  };
+}
+
 export function useAgentDescriptor(
   target: { kind: "agent"; agentId: string },
   context: { serverId: string },
@@ -49,21 +71,14 @@ export function useAgentDescriptor(
       return {
         provider: agent?.provider ?? "codex",
         title: agent?.title ?? null,
-        summary: resolveAgentPurposeSummary({
-          summary: agent?.summary,
-          serverInfo: session?.serverInfo,
-        }),
+        summary: selectAgentSummary(agent, session),
         status: agent?.status ?? null,
         backgroundWork: agent?.backgroundWork,
         pendingPermissionCount: agent?.pendingPermissions.length ?? 0,
         requiresAttention: agent?.requiresAttention ?? false,
         attentionReason: agent?.attentionReason ?? null,
         isTurnActive: selectAgentTurnPresentation(session, target.agentId).isActive,
-        cwd: agent?.cwd ?? null,
-        model: agent?.model ?? null,
-        runtimeModelId: agent?.runtimeInfo?.model ?? null,
-        thinkingOptionId: agent?.thinkingOptionId ?? null,
-        effectiveThinkingOptionId: agent?.effectiveThinkingOptionId,
+        ...selectAgentModelState(agent),
       };
     }),
   );
