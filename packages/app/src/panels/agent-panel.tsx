@@ -118,6 +118,7 @@ interface ChatAgentStateShape {
   currentModeId?: Agent["currentModeId"];
   model?: Agent["model"];
   thinkingOptionId?: Agent["thinkingOptionId"];
+  effectiveThinkingOptionId?: Agent["effectiveThinkingOptionId"];
   runtimeInfo?: Agent["runtimeInfo"];
   features?: Agent["features"];
   lastError?: Agent["lastError"] | null;
@@ -180,6 +181,7 @@ function selectChatAgentState(
     currentModeId: agent.currentModeId,
     model: agent.model,
     thinkingOptionId: agent.thinkingOptionId,
+    effectiveThinkingOptionId: agent.effectiveThinkingOptionId,
     runtimeInfo: agent.runtimeInfo,
     features: agent.features,
     lastError: agent.lastError ?? null,
@@ -208,6 +210,7 @@ function buildChatAgentFromState(
     currentModeId: state.currentModeId,
     model: state.model,
     thinkingOptionId: state.thinkingOptionId,
+    effectiveThinkingOptionId: state.effectiveThinkingOptionId,
     runtimeInfo: state.runtimeInfo,
     features: state.features,
     lastError: state.lastError ?? null,
@@ -630,6 +633,7 @@ function AgentPanelBody({
           currentModeId: agentState.currentModeId,
           model: agentState.model,
           thinkingOptionId: agentState.thinkingOptionId,
+          effectiveThinkingOptionId: agentState.effectiveThinkingOptionId,
           runtimeInfo: agentState.runtimeInfo,
           features: agentState.features,
           lastError: agentState.lastError ?? null,

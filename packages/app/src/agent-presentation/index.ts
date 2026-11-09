@@ -4,6 +4,9 @@ import { i18n } from "@/i18n/i18next";
 import { useProviderIcon } from "@/components/provider-icons";
 import { resolveAgentPurposeSummary } from "@/agents/purpose-summary";
 import { buildAgentPurposePresentation } from "@/panels/agent-purpose-presentation";
+import type { AgentModelDisplay } from "@/composer/agent-controls/utils";
+import { useAgentModelDisplay } from "@/hooks/use-agent-model-display";
+import { buildAgentPanelSubtitle } from "@/panels/agent-panel-subtitle";
 import type { PanelDescriptor } from "@/panels/panel-registry";
 import { useSessionStore, selectAgentTurnPresentation, type Agent } from "@/stores/session-store";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -56,11 +59,27 @@ export function useAgentDescriptor(
         requiresAttention: agent?.requiresAttention ?? false,
         attentionReason: agent?.attentionReason ?? null,
         isTurnActive: selectAgentTurnPresentation(session, target.agentId).isActive,
+        cwd: agent?.cwd ?? null,
+        model: agent?.model ?? null,
+        runtimeModelId: agent?.runtimeInfo?.model ?? null,
+        thinkingOptionId: agent?.thinkingOptionId ?? null,
+        effectiveThinkingOptionId: agent?.effectiveThinkingOptionId,
       };
     }),
   );
-  const icon = useProviderIcon(descriptorState.provider, context.serverId);
-  return buildAgentDescriptor({ ...descriptorState, icon });
+  const { cwd, model, runtimeModelId, thinkingOptionId, effectiveThinkingOptionId, ...agentState } =
+    descriptorState;
+  const icon = useProviderIcon(agentState.provider, context.serverId);
+  const modelDisplay = useAgentModelDisplay({
+    serverId: context.serverId,
+    cwd,
+    provider: agentState.provider,
+    model,
+    runtimeModelId,
+    thinkingOptionId,
+    effectiveThinkingOptionId,
+  });
+  return buildAgentDescriptor({ ...agentState, icon, modelDisplay });
 }
 
 export function buildAgentDescriptor(input: {
@@ -74,6 +93,7 @@ export function buildAgentDescriptor(input: {
   attentionReason: Agent["attentionReason"];
   isTurnActive: boolean;
   icon: PanelDescriptor["icon"];
+  modelDisplay?: AgentModelDisplay;
 }): PanelDescriptor {
   const provider = input.provider;
   const label = resolveAgentLabel(input.title);
@@ -87,10 +107,13 @@ export function buildAgentDescriptor(input: {
       })
     : null;
 
+  const providerSubtitle = input.modelDisplay
+    ? buildAgentPanelSubtitle(provider, input.modelDisplay)
+    : `${formatProviderLabel(provider)} agent`;
   const purpose = buildAgentPurposePresentation({
     label,
     summary: input.summary ?? null,
-    providerLabel: formatProviderLabel(provider),
+    fallback: providerSubtitle,
   });
 
   return {

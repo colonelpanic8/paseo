@@ -229,6 +229,7 @@ const StoredAgentSnapshotSchema = z.strictObject({
   workspaceId: z.string().optional(),
   model: z.string().nullable(),
   thinkingOptionId: z.string().nullable().optional(),
+  effectiveThinkingOptionId: z.string().nullable().optional(),
   createdAt: IsoDateSchema,
   updatedAt: IsoDateSchema,
   lastUserMessageAt: IsoDateSchema.nullable(),
@@ -649,6 +650,13 @@ function serializeAgentCapabilities(
   };
 }
 
+function serializeEffectiveThinkingOption(
+  agent: Agent,
+): Pick<StoredAgent["snapshot"], "effectiveThinkingOptionId"> {
+  if (agent.effectiveThinkingOptionId === undefined) return {};
+  return { effectiveThinkingOptionId: agent.effectiveThinkingOptionId };
+}
+
 function serializeAgent(agent: Agent): StoredAgent {
   const snapshot = {
     id: agent.id,
@@ -657,6 +665,7 @@ function serializeAgent(agent: Agent): StoredAgent {
     ...(agent.workspaceId ? { workspaceId: agent.workspaceId } : {}),
     model: agent.model,
     thinkingOptionId: agent.thinkingOptionId ?? null,
+    ...serializeEffectiveThinkingOption(agent),
     createdAt: agent.createdAt.toISOString(),
     updatedAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt?.toISOString() ?? null,
