@@ -439,7 +439,7 @@ describe("deriveAgentScreenViewState", () => {
     });
   });
 
-  it("renders an archived agent before provider history is initialized", () => {
+  it("keeps an archived agent usable while its provider history is restored", () => {
     const result = deriveAgentScreenViewState({
       input: {
         ...createBaseInput(),
@@ -452,7 +452,7 @@ describe("deriveAgentScreenViewState", () => {
 
     const ready = expectReadyState(result.state);
     expect(ready.agent.id).toBe("agent-1");
-    expect(ready.sync).toEqual({ status: "idle" });
+    expect(ready.sync).toEqual({ status: "catching_up", ui: "overlay" });
   });
 
   it("keeps optimistic create non-blocking while timeline and authoritative history catch up", () => {

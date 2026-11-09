@@ -216,6 +216,10 @@ interface TimeoutOptions {
   onLateError?: (error: unknown) => void;
 }
 
+export interface ArchiveSnapshotOptions {
+  nativeArchiveMode: "best-effort" | "required";
+}
+
 function formatProviderList(providers: readonly string[]): string {
   return providers.length > 0 ? providers.join(", ") : "none";
 }
@@ -2654,15 +2658,20 @@ export class AgentManager {
     this.dispatchStoredAgentState(nextRecord);
   }
 
-  async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
+  async archiveSnapshot(
+    agentId: string,
+    archivedAt: string,
+    options: ArchiveSnapshotOptions = { nativeArchiveMode: "best-effort" },
+  ): Promise<StoredAgentRecord> {
     return this.runLifecycleMutation(agentId, () =>
-      this.archiveSnapshotUnlocked(agentId, archivedAt),
+      this.archiveSnapshotUnlocked(agentId, archivedAt, options),
     );
   }
 
   private async archiveSnapshotUnlocked(
     agentId: string,
     archivedAt: string,
+    options: ArchiveSnapshotOptions = { nativeArchiveMode: "best-effort" },
   ): Promise<StoredAgentRecord> {
     const registry = this.requireRegistry();
     // A stored-only archive can have waited behind a persisted resume. Reuse the
@@ -2679,9 +2688,15 @@ export class AgentManager {
       throw new Error(`Agent not found: ${agentId}`);
     }
 
+    if (options.nativeArchiveMode === "required") {
+      await this.syncNativeArchiveState(record.provider, record.persistence, "archive-required");
+    }
+
     const nextRecord = await this.persistArchivedRecord(record, { archivedAt });
 
-    await this.syncNativeArchiveState(record.provider, record.persistence, "archive");
+    if (options.nativeArchiveMode === "best-effort") {
+      await this.syncNativeArchiveState(record.provider, record.persistence, "archive");
+    }
 
     this.discardRetainedAgentState(agentId);
     if (!nextRecord.internal) this.dispatchStoredAgentState(nextRecord);
@@ -2721,6 +2736,9 @@ export class AgentManager {
       ...(updates?.workspaceId ? { workspaceId: updates.workspaceId } : {}),
       ...(updates?.labels ? { labels: applyLabelPatch(record.labels, updates.labels) } : {}),
       archivedAt: null,
+      // Once an agent is back, it is no longer owed to any workspace-archive
+      // gesture — a later workspace restore must not touch it again.
+      archivedWithWorkspaceId: null,
       updatedAt: new Date().toISOString(),
     };
     await registry.upsert(nextRecord);
@@ -6078,14 +6096,14 @@ export class AgentManager {
   private async syncNativeArchiveState(
     provider: AgentProvider,
     persistence: AgentPersistenceHandle | null | undefined,
-    state: "archive" | "restore",
+    state: "archive" | "archive-required" | "restore",
   ): Promise<void> {
     if (!persistence) return;
     const client = this.clients.get(provider);
     const sync =
-      state === "archive" ? client?.archiveNativeSession : client?.unarchiveNativeSession;
+      state === "restore" ? client?.unarchiveNativeSession : client?.archiveNativeSession;
     if (!sync) return;
-    if (state === "restore") {
+    if (state !== "archive") {
       await sync.call(client, persistence);
       return;
     }
