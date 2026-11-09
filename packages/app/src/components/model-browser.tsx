@@ -80,6 +80,7 @@ import {
   groupProfilesByProviderModel,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
+  scopeModelBrowserScrolling,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
 import {
@@ -88,6 +89,7 @@ import {
   type ListSearchKeyAction,
   type ListSearchKeyEvent,
 } from "@/keyboard/list-search-keys";
+import { useIsInsideBottomSheet } from "@/components/ui/bottom-sheet-scope";
 
 const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
@@ -1972,6 +1974,7 @@ export function ModelBrowser({
     active: isNative && state.isSearchFocused,
     handle: state.handleListSearchAction,
   });
+  const insideBottomSheet = useIsInsideBottomSheet();
   return (
     <ModelBrowserContent
       serverId={state.serverId}
@@ -1993,7 +1996,7 @@ export function ModelBrowser({
       onShowAllModels={state.showAllModels}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
-      scrolling={scrolling}
+      scrolling={scopeModelBrowserScrolling(scrolling, insideBottomSheet)}
       searchAllOnFocus={searchAllOnFocus}
       rootBrowseContent={rootBrowseContent}
       showProfilesSection={showProfilesSection}

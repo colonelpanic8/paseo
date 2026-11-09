@@ -6,8 +6,9 @@ import type {
 import {
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
-  groupProfilesByProviderModel,
   resolveModelBrowserScrolling,
+  groupProfilesByProviderModel,
+  scopeModelBrowserScrolling,
 } from "./model-browser-view";
 
 function provider(
@@ -256,5 +257,19 @@ describe("model browser all view", () => {
         isSearchFocused: true,
       }),
     ).toEqual({ kind: "noSearchMatches" });
+  });
+});
+
+describe("scopeModelBrowserScrolling", () => {
+  it("keeps sheet scrolling inside a bottom sheet", () => {
+    expect(scopeModelBrowserScrolling("sheet", true)).toBe("sheet");
+  });
+
+  it("falls back to independent scrolling outside a bottom sheet", () => {
+    expect(scopeModelBrowserScrolling("sheet", false)).toBe("independent");
+  });
+
+  it("never promotes an independent list to a sheet scrollable", () => {
+    expect(scopeModelBrowserScrolling("independent", true)).toBe("independent");
   });
 });
