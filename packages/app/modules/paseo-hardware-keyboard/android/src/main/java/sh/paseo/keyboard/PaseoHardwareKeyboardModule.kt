@@ -19,6 +19,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 internal object HardwareKeyboard {
   var module: PaseoHardwareKeyboardModule? = null
   @Volatile var overlayKeys: Set<String> = emptySet()
+  @Volatile var submitEnabled = false
   private val windows = mutableMapOf<Window, KeyboardWindowCallback>()
   val dispatcher = WindowKeyDispatcher<KeyEvent>()
   private val consumedPresses = mutableSetOf<Int>()
@@ -64,8 +65,17 @@ internal object HardwareKeyboard {
     ))
     if (event.action == KeyEvent.ACTION_UP) return consumedPresses.remove(event.keyCode)
     val overlayOwnsKey = key != "Dead" && key in overlayKeys && !event.isCtrlPressed && !event.isMetaPressed && !event.isAltPressed && !composing
-    if (overlayOwnsKey) consumedPresses.add(event.keyCode)
-    return overlayOwnsKey
+    if (overlayOwnsKey) {
+      consumedPresses.add(event.keyCode)
+      return true
+    }
+    // Matches desktop: Enter sends and Cmd/Ctrl+Enter takes the alternate send while the composer
+    // asked for it. Shift+Enter stays with the text field as a newline.
+    val submits = code == "Enter" && submitEnabled && !composing && !event.isShiftPressed && !event.isAltPressed
+    if (!submits) return false
+    consumedPresses.add(event.keyCode)
+    if (event.repeatCount == 0) module?.emitSubmit(event.isCtrlPressed || event.isMetaPressed)
+    return true
   }
 
   private fun code(keyCode: Int): String = when (keyCode) {
@@ -131,7 +141,7 @@ class PaseoHardwareKeyboardModule : Module(), ExtraWindowEventListener, InputMan
   override fun onExtraWindowDestroy(window: Window) { HardwareKeyboard.release(window) }
   override fun definition() = ModuleDefinition {
     Name("PaseoHardwareKeyboard")
-    Events("onHardwareKeyboardShortcut", "onHardwareKeyboardPresenceChanged")
+    Events("onHardwareKeyboardShortcut", "onHardwareKeyboardPresenceChanged", "onHardwareKeyboardSubmit")
     OnCreate {
       HardwareKeyboard.module = this@PaseoHardwareKeyboardModule
       val context = appContext.reactContext
@@ -152,13 +162,18 @@ class PaseoHardwareKeyboardModule : Module(), ExtraWindowEventListener, InputMan
       if (HardwareKeyboard.module === this@PaseoHardwareKeyboardModule) {
         HardwareKeyboard.module = null
         HardwareKeyboard.overlayKeys = emptySet()
+        HardwareKeyboard.submitEnabled = false
         UiThreadUtil.runOnUiThread { if (HardwareKeyboard.module == null) HardwareKeyboard.releaseAll() }
       }
     }
     Function("getHardwareKeyboardPresent") { keyboardPresent() }
+    Function("setHardwareKeyboardSubmitEnabled") { enabled: Boolean ->
+      HardwareKeyboard.submitEnabled = enabled
+    }
     Function("setOverlayKeys") { keys: List<String> ->
       HardwareKeyboard.overlayKeys = keys.filter { it in setOf("Escape", "Enter", "ArrowUp", "ArrowDown") }.toSet()
     }
   }
   internal fun emit(event: Map<String, Any>) { sendEvent("onHardwareKeyboardShortcut", event) }
+  internal fun emitSubmit(alternate: Boolean) { sendEvent("onHardwareKeyboardSubmit", mapOf("alternate" to alternate)) }
 }

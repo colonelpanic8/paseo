@@ -14,9 +14,11 @@ Keyboard navigation needs the sidebar's filtered workspace model even when its v
 panel is hidden. Retain that model while keyboard navigation is active; gating it on
 panel visibility leaves number shortcuts with no targets after a compact startup.
 
-Composer send-key customization remains a separate capability. Native retains its
-existing Return submission path; advertising its web-only customization would expose
-settings the native composer does not implement.
+Composer send-key customization remains a separate capability. On native, a hardware
+Return follows the desktop default instead: the hardware keyboard module consumes Return
+and Cmd/Ctrl+Return while the composer enables submit, and leaves Shift+Return to the text
+field as a newline. Advertising the web-only customization would expose settings the
+native composer does not implement.
 
 ## Native sources
 

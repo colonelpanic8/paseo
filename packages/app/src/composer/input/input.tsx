@@ -76,7 +76,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { useIosHardwareKeyboardSubmit } from "@/hooks/use-ios-hardware-keyboard-submit";
+import { useHardwareKeyboardSubmit } from "@/hooks/use-hardware-keyboard-submit";
+import type { HardwareKeyboardSubmitEvent } from "@/hooks/hardware-keyboard-submit-controller";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
@@ -1905,9 +1906,21 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         defaultSendBehavior,
         isAgentRunning,
       });
-    useIosHardwareKeyboardSubmit({
+    // Hardware Return matches desktop: Enter sends, Cmd/Ctrl+Enter queues while the agent runs,
+    // and Shift+Enter never reaches here because native leaves it to the input as a newline.
+    const handleHardwareKeyboardSubmit = useCallback(
+      (event: HardwareKeyboardSubmitEvent) => {
+        if (event.alternate && isAgentRunning && onQueue) {
+          handleAlternateSendAction();
+          return;
+        }
+        handleDefaultSendAction();
+      },
+      [handleAlternateSendAction, handleDefaultSendAction, isAgentRunning, onQueue],
+    );
+    useHardwareKeyboardSubmit({
       isEnabled: isInputFocused && !isSendButtonDisabled,
-      onSubmit: handleDefaultSendAction,
+      onSubmit: handleHardwareKeyboardSubmit,
     });
     const submitAccessibilityLabel = resolveSubmitAccessibilityLabel({
       submitButtonAccessibilityLabel,
