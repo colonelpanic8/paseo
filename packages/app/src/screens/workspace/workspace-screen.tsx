@@ -87,6 +87,7 @@ import {
   openWorkspaceTargetBeside,
 } from "@/workspace-tabs/open-beside";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
+import { formatAgentConversation } from "@/conversation-copy/format";
 import { traceInstant } from "@/performance/native-trace";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
@@ -2185,6 +2186,44 @@ function WorkspaceScreenContent({
     [normalizedServerId, toast, t],
   );
 
+  const handleCopyConversation = useCallback(
+    async (agentId: string) => {
+      if (!client || !isConnected) {
+        toast.error(t("workspace.terminal.hostDisconnected"));
+        return;
+      }
+
+      toast.show(t("workspace.tabs.toasts.copyingConversation"), { durationMs: null });
+      let timeline;
+      try {
+        timeline = await client.fetchAgentTimeline(agentId, {
+          direction: "tail",
+          limit: 0,
+          projection: "projected",
+        });
+      } catch (error) {
+        console.warn("Failed to fetch conversation for copying", { agentId, error });
+        toast.error(t("workspace.tabs.toasts.copyFailed"));
+        return;
+      }
+
+      const conversation = formatAgentConversation(timeline.entries.map((entry) => entry.item));
+      if (!conversation) {
+        toast.error(t("workspace.tabs.toasts.conversationEmpty"));
+        return;
+      }
+
+      try {
+        await Clipboard.setStringAsync(conversation);
+        toast.copied(t("workspace.tabs.toasts.conversationCopiedLabel"));
+      } catch (error) {
+        console.warn("Failed to copy conversation to clipboard", { agentId, error });
+        toast.error(t("workspace.tabs.toasts.copyFailed"));
+      }
+    },
+    [client, isConnected, t, toast],
+  );
+
   const handleReloadAgent = useCallback(
     async (agentId: string) => {
       if (!client || !isConnected) {
@@ -3406,6 +3445,7 @@ function WorkspaceScreenContent({
           onCreateDraftTab={handleCreateDraftTab}
           onCreateTerminal={handleCreateTerminal}
           onCopyResumeCommand={handleCopyResumeCommand}
+          onCopyConversation={handleCopyConversation}
           onCopyAgentId={handleCopyAgentId}
           onCopyTerminalId={handleCopyTerminalId}
           onCopyFilePath={handleCopyFilePath}
@@ -3426,6 +3466,7 @@ function WorkspaceScreenContent({
       handleCreateDraftTab,
       handleCreateTerminal,
       handleCopyResumeCommand,
+      handleCopyConversation,
       handleCopyAgentId,
       handleCopyTerminalId,
       handleCopyFilePath,
@@ -3546,6 +3587,7 @@ function WorkspaceScreenContent({
         onNavigateTab={navigateToTabId}
         onCloseTab={handleCloseTabById}
         onCopyResumeCommand={handleCopyResumeCommand}
+        onCopyConversation={handleCopyConversation}
         onCopyAgentId={handleCopyAgentId}
         onCopyTerminalId={handleCopyTerminalId}
         onCopyFilePath={handleCopyFilePath}
@@ -3582,6 +3624,7 @@ function WorkspaceScreenContent({
     navigateToTabId,
     handleCloseTabById,
     handleCopyResumeCommand,
+    handleCopyConversation,
     handleCopyAgentId,
     handleCopyTerminalId,
     handleCopyFilePath,
@@ -3665,6 +3708,7 @@ function WorkspaceScreenContent({
                 onNavigateTab={navigateToTabId}
                 onCloseTab={handleCloseTabById}
                 onCopyResumeCommand={handleCopyResumeCommand}
+                onCopyConversation={handleCopyConversation}
                 onCopyAgentId={handleCopyAgentId}
                 onCopyTerminalId={handleCopyTerminalId}
                 onCopyFilePath={handleCopyFilePath}
@@ -3711,6 +3755,7 @@ function WorkspaceScreenContent({
         onCloseTab={handleCloseTabById}
         onCreateNewTab={handleCreateNewTab}
         onCopyResumeCommand={handleCopyResumeCommand}
+        onCopyConversation={handleCopyConversation}
         onCopyAgentId={handleCopyAgentId}
         onCopyTerminalId={handleCopyTerminalId}
         onCopyFilePath={handleCopyFilePath}
@@ -3752,6 +3797,7 @@ function WorkspaceScreenContent({
     handleCloseTabById,
     handleCreateNewTab,
     handleCopyResumeCommand,
+    handleCopyConversation,
     handleCopyAgentId,
     handleCopyTerminalId,
     handleCopyFilePath,

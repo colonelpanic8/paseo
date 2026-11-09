@@ -681,6 +681,7 @@ export const ar: TranslationResources = {
       },
       menu: {
         openFor: "فتح القائمة لـ{{label}}",
+        copyConversation: "نسخ المحادثة",
         copyResumeCommand: "نسخ أمر السيرة الذاتية",
         copyAgentId: "نسخ معرف الوكيل",
         copyTerminalId: "نسخ معرف المحطة",
@@ -726,6 +727,9 @@ export const ar: TranslationResources = {
       },
       toasts: {
         copyFailed: "فشل النسخ",
+        copyingConversation: "جارٍ نسخ المحادثة...",
+        conversationCopiedLabel: "المحادثة",
+        conversationEmpty: "لا توجد رسائل لنسخها في هذه المحادثة",
         agentIdCopiedLabel: "AgentID",
         terminalIdCopiedLabel: "معرف المحطة",
         resumeCommandCopiedLabel: "أمر الاستئناف",
