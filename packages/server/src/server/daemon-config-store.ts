@@ -13,7 +13,7 @@ import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
 } from "@getpaseo/protocol/messages";
-import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
+import type { AgentSkillSelection, IdentityColorName } from "@getpaseo/protocol/messages";
 import type { SpeechSettingsPatch } from "@getpaseo/protocol/speech/rpc-schemas";
 import { mergeSpeechSettingsPatch, type SpeechSettingsOwner } from "./speech/speech-settings.js";
 
@@ -46,6 +46,7 @@ interface SupportedMutableConfigPatch {
   plugins?: MutableDaemonConfig["plugins"];
   features?: SpeechSettingsPatch;
   agentEnvironment?: MutableDaemonConfigPatch["agentEnvironment"];
+  appearance?: { color?: IdentityColorName | null };
 }
 
 const SPEECH_PERSISTED_PATHS = ["features.dictation", "features.voiceMode"];
@@ -188,6 +189,7 @@ const RELOADABLE_PATHS = [
   "daemon.appendSystemPrompt",
   "daemon.terminalProfiles",
   "daemon.agentProfiles",
+  "daemon.appearance.color",
   "app.baseUrl",
   "agents.idleRuntimeCleanup",
   "agents.resumeOnStartup",
@@ -216,6 +218,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.appendSystemPrompt", "appendSystemPrompt"],
   ["daemon.terminalProfiles", "terminalProfiles"],
   ["daemon.agentProfiles", "agentProfiles"],
+  ["daemon.appearance.color", "appearance.color"],
   ["app.baseUrl", "app.baseUrl"],
   ["agents.idleRuntimeCleanup", "idleRuntimeCleanup"],
   ["agents.resumeOnStartup", "resumeOnStartup"],
@@ -319,6 +322,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
     ...(patch.features !== undefined ? { features: patch.features } : {}),
     ...pickAgentEnvironmentPatch(patch),
+    ...pickAppearancePatch(patch),
   };
 }
 
@@ -326,6 +330,14 @@ function pickAgentEnvironmentPatch(
   patch: MutableDaemonConfigPatch,
 ): Pick<SupportedMutableConfigPatch, "agentEnvironment"> {
   return patch.agentEnvironment !== undefined ? { agentEnvironment: patch.agentEnvironment } : {};
+}
+
+function pickAppearancePatch(
+  patch: MutableDaemonConfigPatch,
+): Pick<SupportedMutableConfigPatch, "appearance"> {
+  return patch.appearance?.color !== undefined
+    ? { appearance: { color: patch.appearance.color } }
+    : {};
 }
 
 export function applyMutableProviderConfigToOverrides(
@@ -508,6 +520,7 @@ export class DaemonConfigStore {
       merged.skills = { selection: parsedPatch.skills.selection };
     }
     if (parsedPatch.plugins !== undefined) merged.plugins = parsedPatch.plugins;
+    if (parsedPatch.appearance?.color === null) delete merged.appearance;
     const next = MutableDaemonConfigSchema.parse(
       omitMetadataGenerationProvidersFromConfig(
         omitProvidersFromConfig(merged, removedProviders),
@@ -890,6 +903,7 @@ function mergeMutableDaemonPatch(
   if (patch.appendSystemPrompt !== undefined) next.appendSystemPrompt = patch.appendSystemPrompt;
   if (patch.terminalProfiles !== undefined) next.terminalProfiles = patch.terminalProfiles;
   if (patch.agentProfiles !== undefined) next.agentProfiles = patch.agentProfiles;
+  applyAppearancePatch(next, patch.appearance);
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
@@ -898,6 +912,17 @@ function agentEnvironmentPatch(patch: SupportedMutableConfigPatch) {
   const { entries, timeoutMs } = patch.agentEnvironment;
   return { environment: { entries, ...(timeoutMs !== undefined ? { timeoutMs } : {}) } };
 }
+function applyAppearancePatch(
+  daemon: NonNullable<PersistedConfig["daemon"]>,
+  appearance: SupportedMutableConfigPatch["appearance"],
+): void {
+  if (appearance?.color === null) {
+    delete daemon.appearance;
+  } else if (appearance?.color !== undefined) {
+    daemon.appearance = { color: appearance.color };
+  }
+}
+
 function hasRestartRecoveryPatch(patch: SupportedMutableConfigPatch) {
   return patch.resumeOnStartup !== undefined || patch.resumePrompt !== undefined;
 }
