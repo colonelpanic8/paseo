@@ -133,6 +133,13 @@ function dayFormatter(timeZone: string): Intl.DateTimeFormat {
   });
 }
 
+/** How long until the local calendar day after `now` begins. */
+export function msUntilNextLocalDay(now: Date): number {
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  return next.getTime() - now.getTime();
+}
+
 /**
  * The window the page requests, expressed in the viewer's own time zone so days
  * line up with what they actually experienced.

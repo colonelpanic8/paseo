@@ -70,6 +70,22 @@ describe("listTranscriptFiles", () => {
     expect(files.map((file) => file.path)).toEqual([recent]);
   });
 
+  it("returns one list in path order however deeply the tree nests", async () => {
+    const deep = path.join(dir, "sessions", "2026", "08");
+    await fs.mkdir(deep, { recursive: true });
+    await fs.mkdir(path.join(dir, "projects"));
+    const paths = [
+      path.join(deep, "late.jsonl"),
+      path.join(deep, "early.jsonl"),
+      path.join(dir, "projects", "one.jsonl"),
+      path.join(dir, "root.jsonl"),
+    ];
+    for (const file of paths) await fs.writeFile(file, "{}\n");
+
+    const files = await listTranscriptFiles(dir, 0);
+    expect(files.map((file) => file.path)).toEqual([...paths].sort());
+  });
+
   it("rejects when the root cannot be walked", async () => {
     await expect(listTranscriptFiles(path.join(dir, "missing"), 0)).rejects.toThrow();
   });
