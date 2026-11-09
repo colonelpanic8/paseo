@@ -308,10 +308,10 @@ describe("agent MCP end-to-end (offline)", () => {
     await writeFile(filePath, "not a directory\n", "utf8");
     try {
       expect(await createLocalWorkspace(daemon.client, missingPath)).toEqual({
-        error: expect.stringContaining(`Directory not found: ${missingPath}`),
+        error: expect.stringContaining(`No such directory: ${missingPath}`),
       });
       expect(await createLocalWorkspace(daemon.client, filePath)).toEqual({
-        error: expect.stringContaining(`Directory not found: ${filePath}`),
+        error: expect.stringContaining(`Not a directory: ${filePath}`),
       });
       const created = await createLocalWorkspace(daemon.client, root);
       expect(await listWorkspaces(daemon.client)).toEqual([created]);
