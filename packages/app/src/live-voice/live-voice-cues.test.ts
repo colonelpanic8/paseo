@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import type { SessionOutboundMessage, VoiceLiveEvent } from "@getpaseo/protocol/messages";
 import { createAudioSessionLease } from "@/audio/audio-session-lease";
 import {
@@ -23,12 +23,20 @@ const LIVE_SESSION_ID = "live-1";
 interface Harness {
   runtime: LiveVoiceRuntime;
   cues: string[];
-  player: LiveVoiceCuePlayer & { dispose: ReturnType<typeof vi.fn> };
+  player: LiveVoiceCuePlayer & {
+    prepare: Mock<() => void>;
+    dispose: Mock<() => void>;
+  };
   detach: () => void;
   push(event: VoiceLiveEvent): void;
 }
 
-function createHarness(overrides: { isSessionSupported?: boolean } = {}): Harness {
+function createHarness(
+  overrides: {
+    isSessionSupported?: boolean;
+    startSession?: LiveVoiceRuntimeDeps["startSession"];
+  } = {},
+): Harness {
   const subscribers = new Set<(message: VoiceLiveUpdateMessage) => void>();
   let seq = 0;
 
@@ -58,18 +66,19 @@ function createHarness(overrides: { isSessionSupported?: boolean } = {}): Harnes
 
   const runtime = createLiveVoiceRuntime({
     getClient: () => client,
-    startSession,
+    startSession: overrides.startSession ?? startSession,
     isSessionSupported: overrides.isSessionSupported ?? true,
     lease: createAudioSessionLease(),
   });
 
   const cues: string[] = [];
   const player = {
+    prepare: vi.fn<() => void>(),
     play: (cue: string) => {
       cues.push(cue);
     },
-    dispose: vi.fn(),
-  } as unknown as Harness["player"];
+    dispose: vi.fn<() => void>(),
+  } satisfies Harness["player"];
 
   return {
     runtime,
@@ -89,6 +98,20 @@ function createHarness(overrides: { isSessionSupported?: boolean } = {}): Harnes
 }
 
 describe("live voice cue transitions", () => {
+  it("prepares audio synchronously during start, but waits for activation to chime", async () => {
+    const harness = createHarness();
+
+    const starting = harness.runtime.start(SERVER_ID);
+    expect(harness.runtime.getSnapshot().phase).toBe("starting");
+    expect(harness.player.prepare).toHaveBeenCalledTimes(1);
+    expect(harness.cues).toEqual([]);
+
+    await starting;
+    expect(harness.cues).toEqual(["connected"]);
+    expect(harness.player.prepare).toHaveBeenCalledTimes(1);
+    harness.detach();
+  });
+
   it("chimes once when the call goes active, whatever else the snapshot does", async () => {
     const harness = createHarness();
 
@@ -156,6 +179,35 @@ describe("live voice cue transitions", () => {
     expect(harness.cues).toEqual([]);
   });
 
+  it("stays silent when negotiation fails after audio is prepared", async () => {
+    const harness = createHarness({
+      startSession: async () => {
+        throw new Error("Negotiation failed");
+      },
+    });
+    await expect(harness.runtime.start(SERVER_ID)).rejects.toThrow();
+    expect(harness.player.prepare).toHaveBeenCalledTimes(1);
+    expect(harness.cues).toEqual([]);
+    harness.detach();
+  });
+
+  it("stays silent when a pending start completes after cancellation", async () => {
+    const pending = Promise.withResolvers<LiveVoiceSession>();
+    const harness = createHarness({ startSession: () => pending.promise });
+    const starting = harness.runtime.start(SERVER_ID);
+    await harness.runtime.stop();
+    pending.resolve({
+      liveSessionId: LIVE_SESSION_ID,
+      setMuted() {},
+      resumeAudio: async () => {},
+      close() {},
+    });
+    await starting;
+    expect(harness.player.prepare).toHaveBeenCalledTimes(1);
+    expect(harness.cues).toEqual([]);
+    harness.detach();
+  });
+
   it("chimes again for a second call", async () => {
     const harness = createHarness();
 
@@ -164,6 +216,7 @@ describe("live voice cue transitions", () => {
     await harness.runtime.start(SERVER_ID);
 
     expect(harness.cues).toEqual(["connected", "disconnected", "connected"]);
+    expect(harness.player.prepare).toHaveBeenCalledTimes(2);
   });
 
   it("detaching releases the player and silences later transitions", async () => {
@@ -184,6 +237,7 @@ describe("live voice cue transitions", () => {
 
     const cues: string[] = [];
     const detach = attachLiveVoiceCues(harness.runtime, {
+      prepare: () => {},
       play: (cue) => cues.push(cue),
       dispose: () => {},
     });
