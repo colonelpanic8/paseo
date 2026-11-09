@@ -274,6 +274,7 @@ import {
   type GitHubService,
 } from "../services/github-service.js";
 import type { ForgeService } from "../services/forge-service.js";
+import type { UsageHistoryService } from "../services/usage-history/service.js";
 import {
   resolveWorkspaceRootAgent,
   summarizeFetchWorkspacesEntries,
@@ -627,6 +628,7 @@ export interface SessionOptions {
   speechModels?: SpeechModelsSessionOptions["runtime"];
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
+  usageHistoryService: UsageHistoryService;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
   serviceProxy?: ServiceProxySubsystem;
@@ -983,6 +985,7 @@ export class Session {
       speechModels,
       terminalManager,
       providerSnapshotManager,
+      usageHistoryService,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupObservation,
@@ -1189,6 +1192,7 @@ export class Session {
       isEnabled: () => daemonConfigStore.get().usage?.enabled !== false,
       emit: (msg) => this.emit(msg),
       runtime: pluginRuntime,
+      historyService: usageHistoryService,
       logger: this.sessionLogger,
     });
     this.speechModelsSession = new SpeechModelsSession({
@@ -3828,6 +3832,8 @@ export class Session {
         return this.usageSession.handleLegacyList(msg);
       case "usage.list_reports.request":
         return this.usageSession.handleListReports(msg);
+      case "provider.usage_history.read.request":
+        return this.usageSession.handleProviderUsageHistoryReadRequest(msg);
       default:
         return undefined;
     }
