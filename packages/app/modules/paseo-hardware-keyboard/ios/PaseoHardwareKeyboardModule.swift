@@ -73,8 +73,8 @@ public class PaseoHardwareKeyboardModule: Module {
     }
   }
 
-  fileprivate func emitHardwareKeyboardSubmit() {
-    sendEvent(hardwareSubmitEventName, [:])
+  fileprivate func emitHardwareKeyboardSubmit(alternate: Bool) {
+    sendEvent(hardwareSubmitEventName, ["alternate": alternate])
   }
 
   fileprivate func emitHardwareKeyboardPress(_ press: UIPress, isRepeat: Bool) {
@@ -134,10 +134,12 @@ public final class PaseoHardwareKeyboardWindow: UIWindow {
   }
   public override var keyCommands: [UIKeyCommand]? {
     var commands = super.keyCommands ?? []
-    if isHardwareSubmitEnabled && !isPlainReturnClaimed && !isComposingText()
-      && UIDevice.current.userInterfaceIdiom == .pad
-    {
-      commands.append(makeSubmitCommand())
+    // Matches desktop on every idiom: Return sends and Cmd+Return takes the alternate send.
+    // Shift+Return stays unregistered, so the text view inserts a newline. Key commands only
+    // fire for hardware keyboards; the on-screen return key keeps inserting newlines.
+    if isHardwareSubmitEnabled && !isPlainReturnClaimed && !isComposingText() {
+      commands.append(makeSubmitCommand(modifierFlags: [], action: #selector(handleHardwareKeyboardSubmit(_:))))
+      commands.append(makeSubmitCommand(modifierFlags: [.command], action: #selector(handleHardwareKeyboardAlternateSubmit(_:))))
     }
     if !isComposingText() { commands.append(contentsOf: overlayKeys.compactMap(makeShortcutCommand)) }
     return commands
@@ -153,11 +155,11 @@ public final class PaseoHardwareKeyboardWindow: UIWindow {
     overlayKeys.contains("Enter")
   }
 
-  private func makeSubmitCommand() -> UIKeyCommand {
+  private func makeSubmitCommand(modifierFlags: UIKeyModifierFlags, action: Selector) -> UIKeyCommand {
     let command = UIKeyCommand(
       input: "\r",
-      modifierFlags: [],
-      action: #selector(handleHardwareKeyboardSubmit(_:))
+      modifierFlags: modifierFlags,
+      action: action
     )
     if #available(iOS 15.0, *) {
       command.wantsPriorityOverSystemBehavior = true
@@ -177,7 +179,15 @@ public final class PaseoHardwareKeyboardWindow: UIWindow {
     guard canSubmitCurrentTextInput() else {
       return
     }
-    activeModule?.emitHardwareKeyboardSubmit()
+    activeModule?.emitHardwareKeyboardSubmit(alternate: false)
+  }
+
+  @objc
+  private func handleHardwareKeyboardAlternateSubmit(_ sender: UIKeyCommand) {
+    guard canSubmitCurrentTextInput() else {
+      return
+    }
+    activeModule?.emitHardwareKeyboardSubmit(alternate: true)
   }
 
   @objc

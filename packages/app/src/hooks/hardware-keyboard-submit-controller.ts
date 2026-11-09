@@ -1,19 +1,26 @@
+export interface HardwareKeyboardSubmitEvent {
+  /** Cmd/Ctrl was held: take the alternate send (queue while the agent runs). */
+  alternate: boolean;
+}
+
 export interface HardwareKeyboardSubmitListenerPort {
-  addListener(handler: () => void): { remove: () => void };
+  addListener(handler: (event?: HardwareKeyboardSubmitEvent) => void): { remove: () => void };
   setEnabled(enabled: boolean): void;
 }
 
 export interface HardwareKeyboardSubmitController {
-  setOnSubmit(handler: () => void): void;
+  setOnSubmit(handler: (event: HardwareKeyboardSubmitEvent) => void): void;
   enable(): void;
   disable(): void;
 }
+
+const PLAIN_SUBMIT: HardwareKeyboardSubmitEvent = { alternate: false };
 
 export function createHardwareKeyboardSubmitController(
   port: HardwareKeyboardSubmitListenerPort,
 ): HardwareKeyboardSubmitController {
   let subscription: { remove: () => void } | null = null;
-  let onSubmit: () => void = () => {};
+  let onSubmit: (event: HardwareKeyboardSubmitEvent) => void = () => {};
 
   return {
     setOnSubmit(handler) {
@@ -21,7 +28,8 @@ export function createHardwareKeyboardSubmitController(
     },
     enable() {
       if (subscription) return;
-      subscription = port.addListener(() => onSubmit());
+      // A native build that predates the alternate flag sends no payload.
+      subscription = port.addListener((event) => onSubmit(event ?? PLAIN_SUBMIT));
       port.setEnabled(true);
     },
     disable() {

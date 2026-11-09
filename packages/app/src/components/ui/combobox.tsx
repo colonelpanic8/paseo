@@ -1,4 +1,9 @@
-import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
+import {
+  useHardwareKeyboardPresent,
+  useOverlayRegistration,
+  type KeyboardInputEvent,
+} from "@/keyboard";
+import { useInputFocus } from "@/hooks/use-input-focus";
 import { Modal } from "@/components/ui/modal";
 import {
   useCallback,
@@ -202,14 +207,10 @@ export function SearchInput({
   const { theme } = useUnistyles();
   const inputRef = useRef<EditingTextInputHandle>(null);
 
-  useEffect(() => {
-    if (autoFocus && IS_WEB && inputRef.current) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [autoFocus]);
+  // Native focuses only with a hardware keyboard attached; otherwise every picker open would
+  // raise the soft keyboard.
+  const hardwareKeyboardPresent = useHardwareKeyboardPresent();
+  useInputFocus(inputRef, autoFocus && (IS_WEB || hardwareKeyboardPresent));
 
   return (
     <View style={styles.searchInputContainer}>
@@ -913,6 +914,12 @@ function dispatchDesktopKey(
   return false;
 }
 
+/** Keyboard.dismiss would blur the search input a hardware keyboard just focused. */
+function useDismissSoftKeyboardOnOpen(isOpen: boolean, isMobile: boolean): void {
+  const hardwareKeyboardPresent = useHardwareKeyboardPresent();
+  useDismissKeyboardOnOpen(isOpen, isMobile && !hardwareKeyboardPresent);
+}
+
 function resolveInitialActiveIndex(
   orderedVisibleOptions: ComboboxOption[],
   effectiveOptionsPosition: "below-search" | "above-search",
@@ -1026,7 +1033,7 @@ function MobileComboboxSheet(props: MobileBodyProps): ReactElement {
                   placeholder={props.searchPlaceholder}
                   onChangeText={props.setSearchQueryWithCallback}
                   onSubmitEditing={props.handleSubmitSearch}
-                  autoFocus={false}
+                  autoFocus={props.isOpen}
                   useBottomSheetInput
                   resetKey={props.searchResetKey}
                 />
@@ -1562,7 +1569,7 @@ export function Combobox({
     [activeIndex, handleClose, handleSelect, isOpen, orderedVisibleOptions],
   );
 
-  useDismissKeyboardOnOpen(isOpen, isMobile);
+  useDismissSoftKeyboardOnOpen(isOpen, isMobile);
 
   const handleIndicatorStyle = useMemo(
     () => ({ backgroundColor: theme.colors.palette.zinc[600] }),

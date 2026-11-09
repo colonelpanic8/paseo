@@ -1,6 +1,8 @@
 import { requireNativeModule, type EventSubscription } from "expo-modules-core";
 
-type HardwareKeyboardSubmitHandler = () => void;
+import type { HardwareKeyboardSubmitEvent } from "@/hooks/hardware-keyboard-submit-controller";
+
+type HardwareKeyboardSubmitHandler = (event?: HardwareKeyboardSubmitEvent) => void;
 
 interface PaseoHardwareKeyboardModule {
   setHardwareKeyboardSubmitEnabled(enabled: boolean): void;

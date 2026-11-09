@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
@@ -43,7 +52,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
-import type { KeyboardInputEvent } from "@/keyboard";
+import { useHardwareKeyboardPresent, type KeyboardInputEvent } from "@/keyboard";
 import {
   buildProviderQualifiedDescription,
   buildSelectedTriggerLabel,
@@ -58,6 +67,7 @@ import {
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useCurrentOverlayLayer } from "@/lib/overlay-root";
+import { useListSearchHandler } from "@/keyboard/list-search-dispatcher";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { moveModelHighlight, resolveModelSubmitRow } from "@/components/model-browser-keyboard";
 import {
@@ -75,6 +85,7 @@ import {
 import {
   LIST_SEARCH_SELECTOR,
   resolveListSearchKeyAction,
+  type ListSearchKeyAction,
   type ListSearchKeyEvent,
 } from "@/keyboard/list-search-keys";
 
@@ -196,6 +207,7 @@ export interface ModelBrowserState {
   triggerLabel: string;
   desktopFixedHeight: number | undefined;
   isModelListView: boolean;
+  handleListSearchAction: (action: ListSearchKeyAction) => boolean;
   prepareToOpen: () => void;
   showAll: () => void;
   reset: () => void;
@@ -316,6 +328,8 @@ export function useModelBrowser({
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [searchResetKey, bumpSearchResetKey] = useReducer((key: number) => key + 1, 0);
   const hasProfiles = (profiles?.rows.length ?? 0) > 0;
+  // A hardware keyboard can type into the search without raising the soft keyboard.
+  const hardwareKeyboardPresent = useHardwareKeyboardPresent();
 
   const initialView = useMemo(
     () =>
@@ -384,10 +398,8 @@ export function useModelBrowser({
     return filterAndRankModelRows(getProviderModelRows(provider), normalizedQuery);
   }, [isSearchFocused, items, normalizedQuery, providers, view]);
 
-  const handleListSearchKey = useCallback(
-    (event: ListSearchKeyEvent): boolean => {
-      const action = resolveListSearchKeyAction(event);
-      if (!action) return false;
+  const handleListSearchAction = useCallback(
+    (action: ListSearchKeyAction): boolean => {
       if (action === "submit") {
         const row = resolveModelSubmitRow(keyboardRows, highlightedKey);
         if (!row) return false;
@@ -404,6 +416,14 @@ export function useModelBrowser({
       return true;
     },
     [highlightedKey, keyboardRows, onSelect],
+  );
+
+  const handleListSearchKey = useCallback(
+    (event: ListSearchKeyEvent): boolean => {
+      const action = resolveListSearchKeyAction(event);
+      return action ? handleListSearchAction(action) : false;
+    },
+    [handleListSearchAction],
   );
 
   const handleOverlayKeyDown = useCallback(
@@ -440,7 +460,7 @@ export function useModelBrowser({
           onBlur: () => setIsSearchFocused(false),
           resetKey: `all:${searchResetKey}`,
           placeholder: t("modelSelector.searchAllPlaceholder"),
-          autoFocus: autoFocusSearch,
+          autoFocus: autoFocusSearch || hardwareKeyboardPresent,
           testID: "model-search-all-input",
           onKeyPress: handleSearchKeyPress,
           onSubmit: handleSearchSubmit,
@@ -457,7 +477,7 @@ export function useModelBrowser({
           onChange: handleSearchQueryChange,
           resetKey: `all-models:${searchResetKey}`,
           placeholder: t("modelSelector.searchAllPlaceholder"),
-          autoFocus: isWeb,
+          autoFocus: isWeb || hardwareKeyboardPresent,
           testID: "model-search-input",
           onKeyPress: handleSearchKeyPress,
           onSubmit: handleSearchSubmit,
@@ -493,7 +513,7 @@ export function useModelBrowser({
         onBlur: () => setIsSearchFocused(false),
         resetKey: `${view.providerId}:${searchResetKey}`,
         placeholder: t("modelSelector.searchPlaceholder"),
-        autoFocus: autoFocusSearch,
+        autoFocus: autoFocusSearch || hardwareKeyboardPresent,
         testID: "model-search-input",
         onKeyPress: handleSearchKeyPress,
         onSubmit: handleSearchSubmit,
@@ -503,6 +523,7 @@ export function useModelBrowser({
   }, [
     autoFocusSearch,
     handleSearchKeyPress,
+    hardwareKeyboardPresent,
     handleSearchQueryChange,
     handleSearchSubmit,
     providers,
@@ -553,6 +574,7 @@ export function useModelBrowser({
     triggerLabel,
     desktopFixedHeight,
     isModelListView: view.kind !== "all" || normalizedQuery.length > 0,
+    handleListSearchAction,
     prepareToOpen,
     showAll,
     reset,
@@ -668,13 +690,25 @@ function ModelBrowserPressable({
 
 type ModelBrowserRowTone = "default" | "elevated" | "drillDown";
 
+function useScrollHighlightIntoView(highlighted: boolean | undefined) {
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    if (!isWeb || !highlighted) return;
+    const node = ref.current as unknown as {
+      scrollIntoView?: (options?: ScrollIntoViewOptions) => void;
+    } | null;
+    node?.scrollIntoView?.({ block: "nearest" });
+  }, [highlighted]);
+  return ref;
+}
+
 function ModelBrowserRow({
   label,
   description,
   leadingSlot,
   trailingSlot,
   selected = false,
-  highlighted = false,
+  highlighted,
   selectionIndicator = false,
   tone = "default",
   labelMuted = false,
@@ -696,6 +730,7 @@ function ModelBrowserRow({
   onPress: () => void;
   testID?: string;
 }) {
+  const highlightRef = useScrollHighlightIntoView(highlighted);
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.browserRow,
@@ -713,7 +748,7 @@ function ModelBrowserRow({
   );
   const hasTrailing = selected || trailingSlot;
 
-  return (
+  const row = (
     <ModelBrowserPressable
       onPress={onPress}
       style={pressableStyle}
@@ -751,6 +786,13 @@ function ModelBrowserRow({
         ) : null}
       </View>
     </ModelBrowserPressable>
+  );
+  return highlighted === undefined ? (
+    row
+  ) : (
+    <View ref={highlightRef} collapsable={false}>
+      {row}
+    </View>
   );
 }
 
@@ -804,7 +846,7 @@ function ModelRow({
   row,
   serverId,
   isSelected,
-  isHighlighted = false,
+  isHighlighted,
   showProviderLabel = false,
   onPress,
   profiledRows,
@@ -838,6 +880,7 @@ function ModelRow({
 
   const description = showProviderLabel ? buildProviderQualifiedDescription(row) : row.description;
   const primary = profiledRows[profiledRows.length - 1];
+  const highlightRef = useScrollHighlightIntoView(isHighlighted);
 
   const handleCreateProfile = useCallback(() => {
     onCreateProfile?.({
@@ -932,6 +975,8 @@ function ModelRow({
 
   return (
     <View
+      ref={highlightRef}
+      collapsable={false}
       style={[styles.modelRowHoverBoundary, styles.browserModelRow]}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -1923,6 +1968,10 @@ export function ModelBrowser({
   rootBrowseContent,
   showProfilesSection,
 }: ModelBrowserProps) {
+  useListSearchHandler({
+    active: isNative && state.isSearchFocused,
+    handle: state.handleListSearchAction,
+  });
   return (
     <ModelBrowserContent
       serverId={state.serverId}

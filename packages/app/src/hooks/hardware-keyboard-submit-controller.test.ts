@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   createHardwareKeyboardSubmitController,
+  type HardwareKeyboardSubmitEvent,
   type HardwareKeyboardSubmitListenerPort,
 } from "./hardware-keyboard-submit-controller";
 
 interface FakeKeyboard extends HardwareKeyboardSubmitListenerPort {
-  emit(): void;
+  emit(event?: HardwareKeyboardSubmitEvent): void;
   readonly isEnabled: boolean;
   readonly listenerCount: number;
 }
 
 function createFakeKeyboard(): FakeKeyboard {
-  const handlers = new Set<() => void>();
+  const handlers = new Set<(event?: HardwareKeyboardSubmitEvent) => void>();
   let enabled = false;
   return {
     addListener(handler) {
@@ -21,8 +22,8 @@ function createFakeKeyboard(): FakeKeyboard {
     setEnabled(value) {
       enabled = value;
     },
-    emit() {
-      handlers.forEach((handler) => handler());
+    emit(event) {
+      handlers.forEach((handler) => handler(event));
     },
     get isEnabled() {
       return enabled;
@@ -129,5 +130,18 @@ describe("hardware-keyboard-submit-controller", () => {
     controller.disable();
 
     expect(keyboard.isEnabled).toBe(false);
+  });
+
+  it("passes Cmd/Ctrl+Enter through as the alternate send", () => {
+    const keyboard = createFakeKeyboard();
+    const controller = createHardwareKeyboardSubmitController(keyboard);
+    const received: HardwareKeyboardSubmitEvent[] = [];
+    controller.setOnSubmit((event) => received.push(event));
+
+    controller.enable();
+    keyboard.emit({ alternate: true });
+    keyboard.emit();
+
+    expect(received).toEqual([{ alternate: true }, { alternate: false }]);
   });
 });

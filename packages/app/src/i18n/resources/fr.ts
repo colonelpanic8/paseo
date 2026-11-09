@@ -3060,6 +3060,13 @@ export const fr: TranslationResources = {
       capturePrompt: "Appuyez sur le raccourci…",
       captureIndexPrompt: "Terminez par un chiffre de 1 à 9.",
       unassigned: "Non attribué",
+      modKey: {
+        title: "Touche de modification",
+        hint: "Touche utilisée comme modificateur des raccourcis",
+        auto: "Auto",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "Actions pour {{name}}",
         done: "Terminé",

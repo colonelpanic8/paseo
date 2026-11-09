@@ -33,7 +33,7 @@ import {
   buildSessionsRoute,
   buildSettingsRoute,
 } from "@/utils/host-routes";
-import { getShortcutOs } from "@/utils/shortcut-platform";
+import { useShortcutOs } from "@/utils/shortcut-platform";
 import type { CommandCenterContribution, CommandCenterIconProps } from "./contributions";
 import { useCommandCenterActions } from "./provider";
 import { buildGroupingContribution } from "./root-contributions";
@@ -128,10 +128,8 @@ export function CommandCenterRootActions() {
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
   const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
   const toggleAgentList = isCompact ? toggleMobileAgentList : toggleDesktopAgentList;
-  const shortcutPlatform = useMemo(
-    () => ({ isMac: getShortcutOs() === "mac", usesDesktopBindings }),
-    [],
-  );
+  const isMac = useShortcutOs() === "mac";
+  const shortcutPlatform = useMemo(() => ({ isMac, usesDesktopBindings }), [isMac]);
   const actions = useMemo<CommandCenterContribution[]>(() => {
     const availableActions: CommandCenterContribution[] = [
       {

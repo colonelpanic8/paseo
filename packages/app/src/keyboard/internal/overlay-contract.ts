@@ -5,6 +5,8 @@ export interface OverlayRegistration {
   layer: number;
   keys: readonly string[];
   onKeyDown(event: KeyboardInputEvent): boolean;
+  /** Pass refused keys to the overlay beneath instead of swallowing them. */
+  transparent?: boolean;
   restoreFocusRef?: RefObject<unknown>;
   manageFocus?: boolean;
 }

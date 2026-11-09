@@ -2,18 +2,19 @@ import { useEffect, useRef } from "react";
 import {
   addHardwareKeyboardSubmitListener,
   setHardwareKeyboardSubmitEnabled,
-} from "@/native/ios-hardware-keyboard-submit";
+} from "@/native/hardware-keyboard-submit";
 import {
   createHardwareKeyboardSubmitController,
   type HardwareKeyboardSubmitController,
+  type HardwareKeyboardSubmitEvent,
 } from "./hardware-keyboard-submit-controller";
 
-interface UseIosHardwareKeyboardSubmitInput {
+interface UseHardwareKeyboardSubmitInput {
   isEnabled: boolean;
-  onSubmit: () => void;
+  onSubmit: (event: HardwareKeyboardSubmitEvent) => void;
 }
 
-export function useIosHardwareKeyboardSubmit(input: UseIosHardwareKeyboardSubmitInput) {
+export function useHardwareKeyboardSubmit(input: UseHardwareKeyboardSubmitInput) {
   const controllerRef = useRef<HardwareKeyboardSubmitController | null>(null);
   if (!controllerRef.current) {
     controllerRef.current = createHardwareKeyboardSubmitController({

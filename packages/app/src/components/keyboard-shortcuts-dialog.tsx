@@ -6,7 +6,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { getShortcutOs } from "@/utils/shortcut-platform";
+import { useShortcutOs } from "@/utils/shortcut-platform";
 import {
   buildEffectiveBindings,
   buildKeyboardShortcutHelpSections,
@@ -22,7 +22,7 @@ export function KeyboardShortcutsDialog() {
   const setOpen = useKeyboardShortcutsStore((s) => s.setShortcutsDialogOpen);
   const [query, setQuery] = useState("");
 
-  const shortcutOs = getShortcutOs();
+  const shortcutOs = useShortcutOs();
   const isMac = shortcutOs === "mac";
   const { overrides } = useKeyboardShortcutOverrides();
   // Effective bindings, so a shortcut the user unassigned lists no keys here

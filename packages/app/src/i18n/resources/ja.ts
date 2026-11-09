@@ -3018,6 +3018,13 @@ export const ja: TranslationResources = {
       capturePrompt: "ショートカットを押してください...",
       captureIndexPrompt: "最後に1〜9の数字を入力してください。",
       unassigned: "未設定",
+      modKey: {
+        title: "修飾キー",
+        hint: "ショートカットの修飾キーとして使うキー",
+        auto: "自動",
+        cmd: "Cmd / Super",
+        ctrl: "Ctrl",
+      },
       actions: {
         menu: "{{name}} のアクション",
         done: "完了",

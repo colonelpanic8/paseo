@@ -6,7 +6,7 @@ import { PanelLeft } from "lucide-react-native";
 import { HeaderToggleButton, headerIconSlotStyle } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { getShortcutOs } from "@/utils/shortcut-platform";
+import { useShortcutOs } from "@/utils/shortcut-platform";
 import { useHasWindowChromeObstruction, useOwnsWindowChromeCorner } from "@/utils/desktop-window";
 import {
   extraMutedIconColorMapping,
@@ -58,10 +58,8 @@ function SidebarMenuToggleButton({
   const { t } = useTranslation();
   const isOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact: isMobile }));
   const toggleAgentListForLayout = usePanelStore((state) => state.toggleAgentListForLayout);
-  const toggleShortcutKeys = useMemo(
-    () => (getShortcutOs() === "mac" ? ["mod", "B"] : ["mod", "."]),
-    [],
-  );
+  const isMac = useShortcutOs() === "mac";
+  const toggleShortcutKeys = useMemo(() => (isMac ? ["mod", "B"] : ["mod", "."]), [isMac]);
 
   const handlePress = useCallback(() => {
     toggleAgentListForLayout({ isCompact: isMobile });
