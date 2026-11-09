@@ -5850,7 +5850,7 @@ export class AgentManager {
   // command fails the launch: silently starting the agent without its env is
   // the exact failure mode this feature exists to fix.
   private async resolveAgentEnvOverlay(cwd: string): Promise<Record<string, string>> {
-    const command = resolveAgentEnvCommand(cwd);
+    const command = await resolveAgentEnvCommand(cwd);
     if (!command) {
       return {};
     }

@@ -102,38 +102,38 @@ describe("resolveAgentEnvCommand", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("returns the agentEnv command from paseo.json in the cwd", () => {
+  it("returns the agentEnv command from paseo.json in the cwd", async () => {
     writeFileSync(path.join(dir, "paseo.json"), JSON.stringify({ agentEnv: "direnv exec ." }));
 
-    expect(resolveAgentEnvCommand(dir)).toBe("direnv exec .");
+    await expect(resolveAgentEnvCommand(dir)).resolves.toBe("direnv exec .");
   });
 
-  it("walks up from a subdirectory to the project paseo.json", () => {
+  it("walks up from a subdirectory to the project paseo.json", async () => {
     writeFileSync(path.join(dir, "paseo.json"), JSON.stringify({ agentEnv: "direnv exec ." }));
     const nested = path.join(dir, "packages", "app");
     mkdirSync(nested, { recursive: true });
 
-    expect(resolveAgentEnvCommand(nested)).toBe("direnv exec .");
+    await expect(resolveAgentEnvCommand(nested)).resolves.toBe("direnv exec .");
   });
 
-  it("returns null when paseo.json has no agentEnv", () => {
+  it("returns null when paseo.json has no agentEnv", async () => {
     writeFileSync(path.join(dir, "paseo.json"), JSON.stringify({ worktree: {} }));
 
-    expect(resolveAgentEnvCommand(dir)).toBeNull();
+    await expect(resolveAgentEnvCommand(dir)).resolves.toBeNull();
   });
 
-  it("stops at the repository boundary without picking up configs above it", () => {
+  it("stops at the repository boundary without picking up configs above it", async () => {
     writeFileSync(path.join(dir, "paseo.json"), JSON.stringify({ agentEnv: "direnv exec ." }));
     const repo = path.join(dir, "repo");
     mkdirSync(repo, { recursive: true });
     execFileSync("git", ["init", "--quiet"], { cwd: repo });
 
-    expect(resolveAgentEnvCommand(repo)).toBeNull();
+    await expect(resolveAgentEnvCommand(repo)).resolves.toBeNull();
   });
 
-  it("throws on malformed paseo.json instead of silently skipping", () => {
+  it("throws on malformed paseo.json instead of silently skipping", async () => {
     writeFileSync(path.join(dir, "paseo.json"), "{ not json");
 
-    expect(() => resolveAgentEnvCommand(dir)).toThrow(/Failed to parse paseo\.json/);
+    await expect(resolveAgentEnvCommand(dir)).rejects.toThrow(/Failed to parse paseo\.json/);
   });
 });

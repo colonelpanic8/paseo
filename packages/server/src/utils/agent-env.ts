@@ -30,11 +30,11 @@ export class AgentEnvCaptureError extends Error {
 // Walk up from the agent cwd to the first directory that has a paseo.json,
 // stopping at the repository boundary (a .git directory or worktree .git file)
 // so an unrelated config above the checkout is never picked up.
-export function resolveAgentEnvCommand(cwd: string): string | null {
+export async function resolveAgentEnvCommand(cwd: string): Promise<string | null> {
   let dir = cwd;
   for (;;) {
     if (existsSync(resolvePaseoConfigPath(dir))) {
-      const result = readPaseoConfig(dir);
+      const result = await readPaseoConfig(dir);
       if (!result.ok) {
         throw paseoConfigParseError(result);
       }
