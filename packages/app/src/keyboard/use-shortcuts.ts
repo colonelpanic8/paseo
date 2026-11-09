@@ -26,6 +26,8 @@ import {
 import { useShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { isNative } from "@/constants/platform";
+import { requestComposerAutoFocus } from "@/keyboard/composer-auto-focus";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import {
@@ -33,6 +35,15 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
+
+function isComposerFocusAction(action: string, payload: KeyboardShortcutPayload): boolean {
+  return (
+    action === "message-input.action" &&
+    payload !== null &&
+    "kind" in payload &&
+    payload.kind === "focus"
+  );
+}
 
 export function useKeyboardShortcuts({
   enabled,
@@ -127,9 +138,12 @@ export function useKeyboardShortcuts({
           workspaceId: action.workspaceId,
         };
         navigateToWorkspace({ serverId: action.serverId, workspaceId: action.workspaceId });
+        // Typing continues in the new workspace's composer without touching the screen.
+        if (isNative) requestComposerAutoFocus();
         return true;
       case "navigate-last-workspace":
         if (navigateToLastWorkspace()) {
+          if (isNative) requestComposerAutoFocus();
           return true;
         }
         router.replace(buildOpenProjectRoute());
@@ -185,6 +199,11 @@ export function useKeyboardShortcuts({
     const handled = performShortcutAction(shortcutAction, input.captureFocusRestore);
     if (handled && isWorkspaceFocusModeEnabled && input.action.startsWith("sidebar.")) {
       exitFocusMode();
+    }
+    // No mounted composer took the focus shortcut; the next composer to become active does.
+    if (!handled && isNative && isComposerFocusAction(input.action, input.payload)) {
+      requestComposerAutoFocus();
+      return true;
     }
     return handled;
   };
