@@ -95,7 +95,11 @@ export function useAgentCommandsQuery({
       agentCommandCwd: draftConfig?.cwd ?? cwd,
     },
     ...(draftConfig
-      ? { immutableWhen: () => true as const }
+      ? {
+          // An empty list means the daemon could not service this config yet (no model
+          // resolved, snapshot still loading); refetch it instead of caching it forever.
+          immutableWhen: (commands: AgentSlashCommand[]) => commands.length > 0,
+        }
       : { ...sessionCommandQueryPolicy, staleTimeMs: sessionCommandQueryPolicy.staleTime }),
     subscribed: queryEnabled,
     // Each draft attempt spawns and tears down a provider session, so a broken
