@@ -1,5 +1,4 @@
 import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
-import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   DEFAULT_COMMAND_SIGIL,
@@ -41,7 +40,7 @@ export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
 
 export type SendShortcut = "enter" | "mod-enter";
 
-export type SendBehavior = ActiveTurnBehavior | "queue";
+export type SendBehavior = "interrupt" | "steer" | "queue";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch" | "worktree";
