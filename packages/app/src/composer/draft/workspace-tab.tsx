@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import { Keyboard, Platform, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useScreenBottomInset } from "@/hooks/use-screen-bottom-inset";
@@ -24,6 +24,7 @@ import { useAgentControlCommandCenterActions } from "@/command-center/agent-cont
 import { encodeImages } from "@/utils/encode-images";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 import {
+  completeWorkspaceDraftCreation,
   resolveDraftWorkingDirectory,
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
@@ -460,11 +461,17 @@ export function WorkspaceDraftComposer({
           selectModelMessage: t("workspaceSetup.errors.selectModel"),
         });
       },
-      onCreateSuccess: ({ result }) => {
-        clearDraftInput("sent");
-        clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
-        useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
-        onCreated(result);
+      onCreateSuccess: async ({ result }) => {
+        await completeWorkspaceDraftCreation({
+          platform: Platform.OS,
+          result,
+          clearDraftState: () => {
+            clearDraftInput("sent");
+            clearWorkspaceAttachments({ scopeKey: draftAttachmentScopeKey });
+            useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId });
+          },
+          onCreated,
+        });
       },
     });
   useAgentControlCommandCenterActions({
