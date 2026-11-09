@@ -71,6 +71,7 @@ export interface CachedTimeline {
 }
 
 const PERSIST_DELAY_MS = 1_000;
+const PERSIST_RETRY_MAX_DELAY_MS = 60_000;
 const MAX_TIMELINE_ITEMS = 50;
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
 const IsoDateSchema = z.iso.datetime();
@@ -971,6 +972,7 @@ export class ReplicaCache {
   private readonly maxBytes: number;
   private totalBytes = 0;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private persistFailures = 0;
   private writeQueue: Promise<void> = Promise.resolve();
   private preparePromise: Promise<void> | null = null;
   private storedIndexPromise: Promise<void> | null = null;
@@ -1301,7 +1303,10 @@ export class ReplicaCache {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
-    if (!this.hasPendingChanges()) return true;
+    if (!this.hasPendingChanges()) {
+      this.persistFailures = 0;
+      return true;
+    }
     const write = this.writeQueue
       .catch(() => undefined)
       .then(async () => {
@@ -1318,9 +1323,20 @@ export class ReplicaCache {
           for (const serverId of pending.baselines) {
             if (!evicted.has(serverId)) this.invalidatedHosts.delete(serverId);
           }
-        } catch {
+          this.persistFailures = 0;
+        } catch (error) {
           this.restorePendingChanges(pending);
-          if (this.hasPendingChanges()) this.schedulePersist();
+          this.persistFailures += 1;
+          const retryDelayMs = Math.min(
+            PERSIST_DELAY_MS * 2 ** (this.persistFailures - 1),
+            PERSIST_RETRY_MAX_DELAY_MS,
+          );
+          console.warn("[ReplicaCache] Failed to persist replica rows", {
+            failures: this.persistFailures,
+            retryDelayMs,
+            error,
+          });
+          if (this.hasPendingChanges()) this.schedulePersist(retryDelayMs);
           return false;
         }
         return true;
@@ -1651,11 +1667,11 @@ export class ReplicaCache {
     return this.writeQueue;
   }
 
-  private schedulePersist(): void {
+  private schedulePersist(delayMs = PERSIST_DELAY_MS): void {
     if (this.persistTimer) return;
     this.persistTimer = setTimeout(() => {
       this.persistTimer = null;
       void this.flushPending();
-    }, PERSIST_DELAY_MS);
+    }, delayMs);
   }
 }
