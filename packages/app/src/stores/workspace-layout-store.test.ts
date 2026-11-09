@@ -616,6 +616,7 @@ describe("workspace-layout-store version 2 migration", () => {
     });
     expect(addedTabId).toBeTruthy();
 
+    await migrated.flushPersistence();
     await vi.waitFor(async () => {
       const persisted = JSON.parse((await AsyncStorage.getItem("workspace-layout-state")) ?? "{}");
       expect(persisted.version).toBe(2);
@@ -1407,6 +1408,7 @@ describe("workspace-layout-store actions", () => {
       expect(await AsyncStorage.getItem("workspace-layout-state")).not.toBeNull();
     });
 
+    await source.flushPersistence();
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
     const state = restored.getState();
@@ -4007,6 +4009,7 @@ describe("workspace-layout-store actions", () => {
       intent: "reveal",
       pin: true,
     });
+    await workspaceLayoutStore.flushPersistence();
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
     restored.getState().reconcileTabs(workspaceKey, {
@@ -4462,6 +4465,7 @@ it("persists the once-only PR add after closing, and clears it when purging the 
   const placement = () => ({ placement: { mode: "prefer" as const, paneId: "explorer" } });
   source.getState().autoOpenPullRequestTab(workspaceKey, placement);
   source.getState().closeTab(workspaceKey, "pull_request");
+  await source.flushPersistence();
   const restored = createWorkspaceLayoutStore(workspaceLayoutIds);
   await restored.persist.rehydrate();
   expect(restored.getState().pullRequestTabAutoOpenedByWorkspace[workspaceKey]).toBe(true);
