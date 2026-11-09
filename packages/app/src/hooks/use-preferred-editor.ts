@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { layeredSettingsStorage } from "@/storage/settings-seed";
 import { readValidatedString, type ValidatedStorage } from "@/storage/validated-storage";
 
 type EditorTargetId = string;
@@ -78,7 +78,7 @@ export function usePreferredEditor(scope: ProjectEditorScope) {
       createPreferredEditorPreference({
         scope: { serverId, projectId },
         queryClient,
-        storage: AsyncStorage,
+        storage: layeredSettingsStorage,
       }),
     [queryClient, serverId, projectId],
   );
