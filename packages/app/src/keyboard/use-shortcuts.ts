@@ -16,6 +16,7 @@ import {
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import {
   type ChordState,
+  buildCommandShortcutBindings,
   buildEffectiveBindings,
   getWorkspaceIndexJumpModifierKey,
   isShortcutModifierDown,
@@ -38,6 +39,10 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
+import {
+  useCommandCenterContributions,
+  useCommandCenterShortcutRunner,
+} from "@/command-center/provider";
 
 const HOLD_MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 
@@ -63,7 +68,8 @@ export function useKeyboardShortcuts({
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
-  const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
+  const commandCenterSnapshot = useCommandCenterContributions();
+  const runCommandCenterShortcut = useCommandCenterShortcutRunner();
   const isMac = getShortcutOs() === "mac";
   // The press-and-hold chord currently down, if any: the release action to
   // dispatch and the keys whose key-up ends the hold. Held outside the source
@@ -80,6 +86,19 @@ export function useKeyboardShortcuts({
     heldShortcutRef.current = null;
     keyboardActionDispatcher.dispatch(held.release);
   }, [keyboardActionDispatcher]);
+  const bindings = useMemo(() => {
+    const commandShortcutIds = commandCenterSnapshot.contributions.flatMap((contribution) =>
+      contribution.shortcutId ? [contribution.shortcutId] : [],
+    );
+    const effectiveBindings = buildEffectiveBindings(overrides);
+    return [
+      ...effectiveBindings,
+      ...buildCommandShortcutBindings(commandShortcutIds, overrides, effectiveBindings, {
+        isMac,
+        usesDesktopBindings,
+      }),
+    ];
+  }, [commandCenterSnapshot.contributions, isMac, overrides]);
   const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);
@@ -227,6 +246,9 @@ export function useKeyboardShortcuts({
         return false;
       }
       releaseHeldShortcut();
+      if (match.commandShortcutId) {
+        return runCommandCenterShortcut(match.commandShortcutId);
+      }
       const { handled, performed } = routeAndPerformShortcut({
         action: match.action,
         payload: match.payload,
