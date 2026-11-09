@@ -2435,7 +2435,6 @@ function ComposerContentImpl({
     : t("composer.github.noResults");
   useListSearchHandler({
     active: isNative && autocompleteVisible,
-    priority: 80,
     handle: (_action, event) =>
       autocompleteRef.current?.onKeyPress({
         ...event,

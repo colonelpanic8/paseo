@@ -1,71 +1,35 @@
-import { useEffect, useRef } from "react";
+import { useOverlayRegistration } from "@/keyboard";
+import { isNative } from "@/constants/platform";
+import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import {
   resolveListSearchKeyAction,
   type ListSearchKeyAction,
   type ListSearchKeyEvent,
 } from "@/keyboard/list-search-keys";
 
-export interface ListSearchHandler {
-  handlerId: string;
-  enabled: boolean;
-  priority?: number;
-  handle(action: ListSearchKeyAction, event: ListSearchKeyEvent): boolean;
-}
+const LIST_SEARCH_KEYS = ["ArrowUp", "ArrowDown", "Enter"] as const;
 
-type RegisteredListSearchHandler = ListSearchHandler & { registeredAt: number };
-
-export function createListSearchDispatcher() {
-  let nextRegistrationOrder = 1;
-  const handlers = new Map<string, RegisteredListSearchHandler>();
-
-  return {
-    registerHandler(handler: ListSearchHandler) {
-      handlers.set(handler.handlerId, { ...handler, registeredAt: nextRegistrationOrder++ });
-      return () => {
-        handlers.delete(handler.handlerId);
-      };
-    },
-
-    dispatch(event: ListSearchKeyEvent): boolean {
-      const action = resolveListSearchKeyAction(event);
-      if (!action) return false;
-      const candidates = Array.from(handlers.values())
-        .filter((handler) => handler.enabled)
-        .sort(
-          (left, right) =>
-            (right.priority ?? 0) - (left.priority ?? 0) || right.registeredAt - left.registeredAt,
-        );
-      for (const handler of candidates) {
-        if (handler.handle(action, event)) return true;
-      }
-      return false;
-    },
-  };
-}
-
-export const listSearchDispatcher = createListSearchDispatcher();
-
-let nextHandlerId = 1;
-
+/**
+ * Routes a hardware keyboard's list keys (arrows, Enter, Ctrl+N/P) to a native list search.
+ * Declaring the keys lets the native source take them before the focused text field edits.
+ * The handler sits one layer above the surface that hosts it, so it outranks that surface's own
+ * overlay while anything opened over it still wins; keys it refuses, such as Escape, reach that
+ * surface. Web routes these keys through the DOM.
+ */
 export function useListSearchHandler(input: {
   active: boolean;
-  priority?: number;
   handle(action: ListSearchKeyAction, event: ListSearchKeyEvent): boolean;
 }): void {
-  const handlerIdRef = useRef<string | null>(null);
-  const inputRef = useRef(input);
-  inputRef.current = input;
-  if (handlerIdRef.current === null) {
-    handlerIdRef.current = `list-search-${nextHandlerId++}`;
-  }
-
-  useEffect(() => {
-    if (!input.active) return;
-    return listSearchDispatcher.registerHandler({
-      handlerId: handlerIdRef.current!,
-      enabled: true,
-      priority: input.priority,
-      handle: (action, event) => inputRef.current.handle(action, event),
-    });
-  }, [input.active, input.priority]);
+  const layer = useCurrentOverlayLayer() + 1;
+  useOverlayRegistration({
+    active: isNative && input.active,
+    layer,
+    keys: LIST_SEARCH_KEYS,
+    transparent: true,
+    manageFocus: false,
+    onKeyDown(event) {
+      const action = resolveListSearchKeyAction(event);
+      return action !== null && input.handle(action, event);
+    },
+  });
 }

@@ -9,6 +9,8 @@ export interface OverlayEntry {
   getLayer(): number;
   getKeys(): readonly string[];
   onKeyDown(event: KeyboardInputEvent): boolean;
+  /** A transparent overlay passes the keys it refuses to the overlay beneath it. */
+  isTransparent?(): boolean;
 }
 export function createOverlayRegistry() {
   const entries: OverlayEntry[] = [];
@@ -22,9 +24,18 @@ export function createOverlayRegistry() {
       undefined,
     );
   }
+  /** The top overlay and any transparent ones above the first opaque overlay, top first. */
+  function getOwners(): OverlayEntry[] {
+    const ordered = entries
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => b.entry.getLayer() - a.entry.getLayer() || b.index - a.index)
+      .map(({ entry }) => entry);
+    const end = ordered.findIndex((entry) => !entry.isTransparent?.());
+    return end < 0 ? ordered : ordered.slice(0, end + 1);
+  }
   return {
     getTop,
-    getKeys: () => getTop()?.getKeys() ?? [],
+    getKeys: () => [...new Set(getOwners().flatMap((entry) => entry.getKeys()))],
     hasActive: () => entries.length > 0,
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -44,7 +55,7 @@ export function createOverlayRegistry() {
     },
     dispatch(event: KeyboardInputEvent): boolean {
       if (event.isComposing || event.key === "Process") return false;
-      if (!getTop()?.onKeyDown(event)) return false;
+      if (!getOwners().some((entry) => entry.onKeyDown(event))) return false;
       event.stopPropagation();
       return true;
     },

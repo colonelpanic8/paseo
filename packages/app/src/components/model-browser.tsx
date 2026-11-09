@@ -1665,7 +1665,6 @@ export function ModelBrowser({
 }: ModelBrowserProps) {
   useListSearchHandler({
     active: isNative && state.isSearchFocused,
-    priority: 90,
     handle: state.handleListSearchAction,
   });
   return (

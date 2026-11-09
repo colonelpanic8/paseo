@@ -91,4 +91,46 @@ describe("overlay registration lifecycle", () => {
     unsubscribe();
     expect(observed).toEqual([["Enter"], []]);
   });
+
+  it("passes keys a transparent overlay refuses to the first opaque overlay beneath it", () => {
+    const registry = createOverlayRegistry();
+    const calls: string[] = [];
+    registry.register({
+      getLayer: () => 0,
+      getKeys: () => ["Escape"],
+      onKeyDown: () => {
+        calls.push("page");
+        return true;
+      },
+    });
+    registry.register({
+      getLayer: () => 10,
+      getKeys: () => ["Escape"],
+      onKeyDown: (event) => {
+        calls.push(`picker:${event.key}`);
+        return event.key === "Escape";
+      },
+    });
+    registry.register({
+      getLayer: () => 11,
+      getKeys: () => ["ArrowDown", "Enter"],
+      isTransparent: () => true,
+      onKeyDown: (event) => {
+        calls.push(`search:${event.key}`);
+        return event.key === "ArrowDown";
+      },
+    });
+
+    expect(registry.getKeys()).toEqual(["ArrowDown", "Enter", "Escape"]);
+    expect(registry.dispatch(keyEvent("ArrowDown"))).toBe(true);
+    expect(registry.dispatch(keyEvent("Escape"))).toBe(true);
+    expect(registry.dispatch(keyEvent("Tab"))).toBe(false);
+    expect(calls).toEqual([
+      "search:ArrowDown",
+      "search:Escape",
+      "picker:Escape",
+      "search:Tab",
+      "picker:Tab",
+    ]);
+  });
 });

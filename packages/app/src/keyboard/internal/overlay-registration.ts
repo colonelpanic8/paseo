@@ -12,6 +12,7 @@ export function useOverlayRegistration(input: OverlayRegistration) {
       getLayer: () => current.current.layer,
       getKeys: () => current.current.keys,
       onKeyDown: (event) => current.current.onKeyDown(event),
+      isTransparent: () => current.current.transparent === true,
     });
   }, [input.active]);
   return setScope;

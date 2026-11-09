@@ -142,7 +142,6 @@ export function MenuPage({ depth, children }: PropsWithChildren<{ depth: number 
   );
   useListSearchHandler({
     active: isNative && active,
-    priority: 60 + depth,
     handle: handleListAction,
   });
   useEffect(() => {
