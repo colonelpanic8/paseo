@@ -625,6 +625,10 @@ function serializeAgentTurn(agent: Agent): NonNullable<StoredAgent["turn"]> {
   };
 }
 
+function serializeAgentFailure(agent: Agent) {
+  return agent.lastFailure ? { lastFailure: agent.lastFailure } : {};
+}
+
 function serializeAgentCapabilities(
   capabilities: Agent["capabilities"],
 ): StoredAgent["snapshot"]["capabilities"] {
@@ -684,6 +688,7 @@ function serializeAgent(agent: Agent): StoredAgent {
     pendingPermissions: [],
     persistence: null,
     ...(agent.lastError ? { lastError: agent.lastError } : {}),
+    ...serializeAgentFailure(agent),
     title: agent.title,
     summary: agent.summary ?? null,
     labels: agent.labels,

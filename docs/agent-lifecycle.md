@@ -12,6 +12,10 @@ initializing → idle → running → idle (or error → closed)
 
 Each live agent in `AgentManager` carries a `lastStatus` of `initializing`, `idle`, `running`, or `error`. `closed` is the persisted, resumable state for an agent record that has no live provider runtime. State transitions persist to disk and stream to subscribed clients via WebSocket.
 
+`idle` means the foreground agent turn ended and the agent can accept another prompt. It does not
+mean that external work mentioned by the agent—CI, a deployment, or another service—has completed.
+Track that work with a heartbeat, schedule, monitoring agent, or a service-specific status check.
+
 ## Daemon restart recovery
 
 Restart recovery is off by default. Enable `agents.resumeOnStartup` in host config or
@@ -143,6 +147,9 @@ records and parentage. Unscoped creation and existing workspaces have no parent;
 never inferred from directories, projects, or Git branches.
 
 Runtime ownership is resolved from explicit workspace ID and caller context, never from `cwd`. Workspace creation is a separate operation with `local | worktree` isolation; agent creation reuses that workspace unless a new workspace is explicitly requested.
+
+Top-level callers must pass an existing `workspaceId`. Agent-scoped callers may omit it to inherit
+the caller's workspace.
 
 Setup belongs to the workspace, including combined workspace-plus-agent creation and the supported agent `worktree` request. Run setup through the workspace workflow before launching configured terminals or scripts. Setup output is read in the Setup panel from per-command snapshots; never produce setup chat timeline rows or concatenate command logs. Legacy agent `git`/`worktreeName` inputs and hidden MCP worktree placement are rejected with workspace-creation guidance. Existing wire schemas retain an empty combined-log string for parsing compatibility.
 

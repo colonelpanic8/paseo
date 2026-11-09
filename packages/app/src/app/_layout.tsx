@@ -78,6 +78,9 @@ import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
 import { WorkspaceCustomSnoozeSheetHost } from "@/workspace-snooze/custom-snooze-sheet";
 import { VoiceProvider } from "@/contexts/voice-context";
+import { LiveVoiceProvider } from "@/contexts/live-voice-context";
+import { LiveVoiceStrip } from "@/live-voice/live-voice-strip";
+import { LiveVoiceMuteShortcut } from "@/live-voice/live-voice-mute-shortcut";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -89,6 +92,7 @@ import {
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { useSettingsRouteEntry } from "@/navigation/settings-presentation";
 import { ThemedStack } from "@/navigation/themed-stack";
+import { WearBridgeListener } from "@/wear/wear-bridge-listener";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { AgentNavigationListener } from "@/desktop/agent-navigation";
 import { LegacyAgentSkillsMigration } from "@/agent-skills/legacy-migration";
@@ -521,6 +525,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
           <View style={flexStyle}>{children}</View>
         </WindowChromeRegion>
       </WorkspaceExplorerOpenGesture>
+      {/* Both compact panels overlay the content row, not the whole surface, so
+          anything docked below the row — the Live Voice strip — stays on screen
+          and reachable while a panel is open. */}
+      {isCompactLayout ? themedSidebarChrome : null}
     </WindowLayoutSurface>
   );
 
@@ -529,6 +537,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const surface = (
     <View style={layoutStyles.surfaceFill}>
       {workspaceChrome}
+      {/* In normal flow below the content row: a live call belongs to no screen,
+          so its surface docks at the app's edge instead of floating over one. */}
+      <LiveVoiceStrip />
+      <LiveVoiceMuteShortcut />
       <AddHostFlowHost />
       <AppearanceStyleBoundary>
         {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
@@ -546,7 +558,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <DesktopWindowControls />
         <FloatingPanelPortalHost />
       </AppearanceStyleBoundary>
-      {isCompactLayout ? themedSidebarChrome : null}
       <AppearanceStyleBoundary>
         <DownloadToast />
         <RosettaCalloutSource />
@@ -655,11 +666,13 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   return (
     <AppearanceProvider>
       <VoiceProvider>
-        <DesktopWindowControlsSync />
-        <OfferLinkListener />
-        <HostSessionManager />
-        <FaviconStatusSync />
-        {children}
+        <LiveVoiceProvider>
+          <DesktopWindowControlsSync />
+          <OfferLinkListener />
+          <HostSessionManager />
+          <FaviconStatusSync />
+          {children}
+        </LiveVoiceProvider>
       </VoiceProvider>
     </AppearanceProvider>
   );
@@ -910,6 +923,7 @@ function AppShell() {
       <HorizontalScrollProvider>
         <OpenProjectListener />
         <AgentNavigationListener />
+        <WearBridgeListener />
         <AppWithSidebar>
           <WorkspaceRouteNavigationBridge />
           <RootStack />

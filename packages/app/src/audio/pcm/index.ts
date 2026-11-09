@@ -97,6 +97,7 @@ export function playPcm16(
   mimeType: string,
   signal: AbortSignal,
   output: PcmOutput,
+  tailPaddingMs: () => number = () => 0,
 ): Promise<number> {
   if (signal.aborted) return Promise.reject(new Error("Playback stopped"));
   const pcm = resamplePcm16(bytes, parsePcmSampleRate(mimeType) ?? 24000, 16000);
@@ -113,8 +114,10 @@ export function playPcm16(
       output.resumePlayback();
       output.playPCMData(pcm);
       timeout = setTimeout(() => {
-        signal.removeEventListener("abort", abort);
-        resolve(duration);
+        timeout = setTimeout(() => {
+          signal.removeEventListener("abort", abort);
+          resolve(duration);
+        }, tailPaddingMs());
       }, duration * 1000);
     } catch (error) {
       signal.removeEventListener("abort", abort);

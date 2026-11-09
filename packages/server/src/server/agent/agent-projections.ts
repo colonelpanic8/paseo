@@ -25,6 +25,8 @@ import {
   resolveStoredAgentUpdatedAt,
   toAgentPersistenceHandle,
 } from "../persistence-hooks.js";
+import { stripInternalPaseoMcpServerFromPersistence } from "./runtime-mcp-config.js";
+import { redactModelFacingValue } from "./model-facing-redaction.js";
 export type { ManagedAgent };
 
 interface ProjectionOptions {
@@ -138,6 +140,7 @@ export function toStoredAgentRecord(
     features: normalizeFeatures(agent.features),
     persistence,
     lastError: agent.lastError ?? undefined,
+    lastFailure: agent.lastFailure,
     requiresAttention: agent.attention.requiresAttention,
     attentionReason: agent.attention.requiresAttention ? agent.attention.attentionReason : null,
     attentionTimestamp: agent.attention.requiresAttention
@@ -184,7 +187,7 @@ export function toAgentPayload(
     availableModes: cloneAvailableModes(agent.availableModes),
     features: normalizeFeatures(agent.features),
     pendingPermissions: sanitizePendingPermissions(agent.pendingPermissions),
-    persistence: projectPersistenceHandleForWire(agent.persistence),
+    persistence: toPublicPersistenceHandle(agent.persistence),
     title: options?.title ?? null,
     summary: agent.summary ?? null,
     labels: agent.labels,
@@ -199,6 +202,9 @@ export function toAgentPayload(
 
   if (agent.lastError !== undefined) {
     payload.lastError = agent.lastError;
+  }
+  if (agent.lastFailure !== undefined) {
+    payload.lastFailure = { ...agent.lastFailure };
   }
 
   // Handle attention state
@@ -243,7 +249,16 @@ function buildStoredPersistenceHandle(
   if (!isStoredAgentProviderAvailable(record, validProviders)) {
     return null;
   }
-  return toAgentPersistenceHandle(validProviders, record.persistence);
+  return toPublicPersistenceHandle(toAgentPersistenceHandle(validProviders, record.persistence));
+}
+
+function storedFailureFields(
+  record: StoredAgentRecord,
+): Pick<AgentSnapshotPayload, "lastError" | "lastFailure"> {
+  return {
+    ...(typeof record.lastError === "string" ? { lastError: record.lastError } : {}),
+    ...(record.lastFailure ? { lastFailure: { ...record.lastFailure } } : {}),
+  };
 }
 
 /** The wire carries `internal` and `background` only when set. */
@@ -313,17 +328,22 @@ export function buildStoredAgentPayload(
     archivedAt: record.archivedAt ?? null,
     ...visibilityFlags(record),
     labels: normalizeLabels(record.labels),
-    ...(typeof record.lastError === "string" ? { lastError: record.lastError } : {}),
+    ...storedFailureFields(record),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }
 
-export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListItemPayload {
+export function toAgentListItemPayload(
+  agent: AgentSnapshotPayload,
+  options?: { workspaceName?: string },
+): AgentListItemPayload {
   return {
     id: agent.id,
     shortId: agent.id.slice(0, 7),
     title: agent.title,
     summary: agent.summary ?? null,
+    ...(agent.workspaceId ? { workspaceId: agent.workspaceId } : {}),
+    ...(options?.workspaceName ? { workspaceName: options.workspaceName } : {}),
     provider: agent.provider,
     model: agent.runtimeInfo?.model ?? agent.model,
     thinkingOptionId: agent.thinkingOptionId,
@@ -390,12 +410,19 @@ export function selectAgentListItems(
     statuses?: AgentSnapshotPayload["status"][];
     sinceHours?: number;
     limit?: number;
+    workspaceNames?: ReadonlyMap<string, string>;
   } = {},
 ): AgentListItemPayload[] {
   const statusFilter = options.statuses?.length ? new Set(options.statuses) : null;
   const sinceMs = Date.now() - (options.sinceHours ?? 48) * 60 * 60 * 1000;
   return agents
-    .map(toAgentListItemPayload)
+    .map((agent) =>
+      toAgentListItemPayload(agent, {
+        workspaceName: agent.workspaceId
+          ? options.workspaceNames?.get(agent.workspaceId)
+          : undefined,
+      }),
+    )
     .filter((agent) => !options.cwd || isSameOrDescendantPath(options.cwd, agent.cwd))
     .filter((agent) => !statusFilter || statusFilter.has(agent.status))
     .filter((agent) => !agent.archivedAt || resolveAgentListActivityTime(agent) >= sinceMs)
@@ -461,10 +488,10 @@ function sanitizePendingPermissions(
 ): AgentPermissionRequest[] {
   return Array.from(pending.values()).map((request) =>
     Object.assign({}, request, {
-      input: sanitizeMetadata(request.input),
-      suggestions: sanitizeMetadataArray(request.suggestions),
+      input: redactModelFacingValue(sanitizeMetadata(request.input)),
+      suggestions: redactModelFacingValue(sanitizeMetadataArray(request.suggestions)),
       actions: request.actions?.map((action) => Object.assign({}, action)),
-      metadata: sanitizeMetadata(request.metadata),
+      metadata: redactModelFacingValue(sanitizeMetadata(request.metadata)),
     }),
   );
 }
@@ -472,17 +499,18 @@ function sanitizePendingPermissions(
 function sanitizePersistenceHandle(
   handle: AgentPersistenceHandle | null,
 ): AgentPersistenceHandle | null {
-  if (!handle) {
+  const stripped = stripInternalPaseoMcpServerFromPersistence(handle);
+  if (!stripped) {
     return null;
   }
   const sanitized: AgentPersistenceHandle = {
-    provider: handle.provider,
-    sessionId: handle.sessionId,
+    provider: stripped.provider,
+    sessionId: stripped.sessionId,
   };
-  if (handle.nativeHandle !== undefined) {
-    sanitized.nativeHandle = handle.nativeHandle;
+  if (stripped.nativeHandle !== undefined) {
+    sanitized.nativeHandle = stripped.nativeHandle;
   }
-  const metadata = sanitizeMetadata(handle.metadata);
+  const metadata = sanitizeMetadata(stripped.metadata);
   if (metadata !== undefined) {
     sanitized.metadata = metadata;
   }
@@ -503,6 +531,17 @@ function projectPersistenceHandleForWire(
   return projected;
 }
 
+function toPublicPersistenceHandle(
+  handle: AgentPersistenceHandle | null,
+): AgentPersistenceHandle | null {
+  if (!handle) {
+    return null;
+  }
+  return {
+    provider: handle.provider,
+    sessionId: handle.sessionId,
+  };
+}
 function cloneCapabilities(capabilities: AgentCapabilityFlags): AgentCapabilityFlags {
   return { ...capabilities };
 }
