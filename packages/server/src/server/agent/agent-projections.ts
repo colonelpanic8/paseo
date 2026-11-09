@@ -38,6 +38,10 @@ interface ProjectionOptions {
    * that it is active. Storage stays the single owner.
    */
   archivedAt?: string | null;
+  summary?: string | null;
+  summaryUpdatedAt?: string;
+  summaryCursor?: ManagedAgent["summaryCursor"];
+  summaryTurnsSinceUpdate?: number;
 }
 
 interface RecentProviderSessionProjectionOptions {
@@ -61,6 +65,37 @@ function normalizeLabels(labels: Record<string, unknown> | undefined): Record<st
   );
 }
 
+function resolveSummaryProjection(
+  agent: Pick<
+    ManagedAgent,
+    "summary" | "summaryCursor" | "summaryUpdatedAt" | "summaryTurnsSinceUpdate"
+  >,
+  options: ProjectionOptions | undefined,
+): Pick<
+  StoredAgentRecord,
+  "summary" | "summaryCursor" | "summaryUpdatedAt" | "summaryTurnsSinceUpdate"
+> {
+  return {
+    summary:
+      options !== undefined && Object.prototype.hasOwnProperty.call(options, "summary")
+        ? options.summary
+        : agent.summary,
+    summaryUpdatedAt:
+      options !== undefined && Object.prototype.hasOwnProperty.call(options, "summaryUpdatedAt")
+        ? options.summaryUpdatedAt
+        : agent.summaryUpdatedAt?.toISOString(),
+    summaryCursor:
+      options !== undefined && Object.prototype.hasOwnProperty.call(options, "summaryCursor")
+        ? options.summaryCursor
+        : agent.summaryCursor,
+    summaryTurnsSinceUpdate:
+      options !== undefined &&
+      Object.prototype.hasOwnProperty.call(options, "summaryTurnsSinceUpdate")
+        ? options.summaryTurnsSinceUpdate
+        : agent.summaryTurnsSinceUpdate,
+  };
+}
+
 export function resolveEffectiveThinkingOptionId(options: {
   runtimeInfo?: AgentRuntimeInfo | null;
   configuredThinkingOptionId?: string | null;
@@ -80,6 +115,7 @@ export function toStoredAgentRecord(
   const config = buildSerializableConfig(agent.config);
   const persistence = sanitizePersistenceHandle(agent.persistence);
   const runtimeInfo = sanitizeRuntimeInfo(agent.runtimeInfo);
+  const summaryProjection = resolveSummaryProjection(agent, options);
 
   return {
     id: agent.id,
@@ -92,6 +128,7 @@ export function toStoredAgentRecord(
     lastMessageAt: agent.lastMessageAt?.toISOString() ?? null,
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
+    ...summaryProjection,
     labels: agent.labels,
     lastStatus: agent.lifecycle,
     lastModeId: agent.currentModeId ?? config?.modeId ?? null,
@@ -149,6 +186,7 @@ export function toAgentPayload(
     pendingPermissions: sanitizePendingPermissions(agent.pendingPermissions),
     persistence: projectPersistenceHandleForWire(agent.persistence),
     title: options?.title ?? null,
+    summary: agent.summary ?? null,
     labels: agent.labels,
     archivedAt: options?.archivedAt ?? null,
     ...visibilityFlags(agent),
@@ -240,6 +278,7 @@ export function buildStoredAgentPayload(
   const lastUserMessageAt = record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null;
 
   const runtimeInfo = buildStoredRuntimeInfo(record);
+  const configuredThinkingOptionId = record.config?.thinkingOptionId ?? null;
   const providerAvailable = isStoredAgentProviderAvailable(record, validProviders);
   const persistence = projectPersistenceHandleForWire(
     buildStoredPersistenceHandle(record, validProviders),
@@ -251,10 +290,10 @@ export function buildStoredAgentPayload(
     cwd: record.cwd,
     ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
     model: record.config?.model ?? null,
-    thinkingOptionId: record.config?.thinkingOptionId ?? null,
+    thinkingOptionId: configuredThinkingOptionId,
     effectiveThinkingOptionId: resolveEffectiveThinkingOptionId({
       runtimeInfo,
-      configuredThinkingOptionId: record.config?.thinkingOptionId ?? null,
+      configuredThinkingOptionId,
     }),
     ...(runtimeInfo ? { runtimeInfo } : {}),
     createdAt: createdAt.toISOString(),
@@ -267,6 +306,7 @@ export function buildStoredAgentPayload(
     pendingPermissions: [],
     persistence,
     title: record.title ?? null,
+    summary: record.summary ?? null,
     requiresAttention: record.requiresAttention ?? false,
     attentionReason: record.attentionReason ?? null,
     attentionTimestamp: record.attentionTimestamp ?? null,
@@ -283,6 +323,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     id: agent.id,
     shortId: agent.id.slice(0, 7),
     title: agent.title,
+    summary: agent.summary ?? null,
     provider: agent.provider,
     model: agent.runtimeInfo?.model ?? agent.model,
     thinkingOptionId: agent.thinkingOptionId,

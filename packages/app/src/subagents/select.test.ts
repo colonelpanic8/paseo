@@ -39,6 +39,7 @@ const AGENT_DEFAULTS: Agent = {
   lastUsage: undefined,
   lastError: null,
   title: "Agent",
+  summary: null,
   cwd: "/tmp/project",
   model: null,
   features: undefined,
@@ -262,6 +263,39 @@ describe("selectSubagentsForParent", () => {
     expect(rows.map((row) => row.id)).toEqual(["child-a"]);
   });
 
+  it("includes summaries only when the daemon advertises purpose summaries", () => {
+    setAgents([
+      makeAgent({
+        id: "child-a",
+        parentAgentId: "parent-a",
+        summary: "Reviewing state projections",
+      }),
+    ]);
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: SERVER_ID, parentAgentId: "parent-a" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).find((row) => row.kind === "paseo")?.summary,
+    ).toBeNull();
+
+    useSessionStore.getState().updateSessionServerInfo(SERVER_ID, {
+      serverId: SERVER_ID,
+      hostname: "host",
+      version: "0.2.5",
+      features: { agentPurposeSummary: true },
+    });
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: SERVER_ID, parentAgentId: "parent-a" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).find((row) => row.kind === "paseo")?.summary,
+    ).toBe("Reviewing state projections");
+  });
+
   it("excludes siblings, unrelated agents, and grandchildren", () => {
     setAgents([
       makeAgent({ id: "parent-a" }),
@@ -353,6 +387,7 @@ describe("selectSubagentsForParent", () => {
         parentAgentId: "parent",
         provider: "claude",
         title: "Review child",
+        summary: null,
         status: "running",
         backgroundWork: { count: 1 },
         requiresAttention: true,
@@ -378,8 +413,7 @@ describe("selectSubagentsForParent", () => {
         id: "child",
         provider: "claude",
         title: "Review child",
-        description: null,
-        subtitle: null,
+        summary: null,
         status: "running",
         backgroundWork: { count: 1 },
         turn: { phase: "idle", cancellationRequestId: null },
@@ -391,13 +425,12 @@ describe("selectSubagentsForParent", () => {
       "address",
       "backgroundWork",
       "createdAt",
-      "description",
       "id",
       "kind",
       "provider",
       "requiresAttention",
       "status",
-      "subtitle",
+      "summary",
       "title",
       "turn",
     ]);
