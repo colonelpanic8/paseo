@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { DaemonConfigStore, applyMutableProviderConfigToOverrides } from "./daemon-config-store.js";
+import {
+  DaemonConfigStore,
+  applyMutableProviderConfigToOverrides,
+  type DaemonConfigChangeDetails,
+} from "./daemon-config-store.js";
 import { loadConfig } from "./config.js";
 import { loadPersistedConfig } from "./persisted-config.js";
 import { readSpeechSettings } from "./speech/speech-settings.js";
@@ -477,6 +481,179 @@ describe("DaemonConfigStore", () => {
       enabled: false,
       paseoTools: { enabled: true, disabledTools: ["create_agent"] },
     });
+  });
+
+  test("replaceProviders removes stale provider fields in memory and config.json", async () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+
+    writeFileSync(
+      path.join(paseoHome, "config.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          agents: {
+            providers: {
+              "claude-work": {
+                extends: "claude",
+                label: "Old label",
+                description: "Remove me",
+                env: { OLD_TOKEN: "secret", KEEP: "old" },
+                additionalModels: [{ id: "old-model", label: "Old model" }],
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const store = new DaemonConfigStore(paseoHome, {
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {
+        "claude-work": {
+          extends: "claude",
+          label: "Old label",
+          description: "Remove me",
+          env: { OLD_TOKEN: "secret", KEEP: "old" },
+          additionalModels: [{ id: "old-model", label: "Old model" }],
+        },
+      },
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    const next = await store.patch({
+      replaceProviders: {
+        "claude-work": {
+          extends: "claude",
+          label: "Work",
+          env: { KEEP: "new" },
+        },
+      },
+    });
+
+    const expected = {
+      extends: "claude",
+      label: "Work",
+      env: { KEEP: "new" },
+    };
+    expect(next.providers["claude-work"]).toEqual(expected);
+    expect(loadPersistedConfig(paseoHome).agents?.providers?.["claude-work"]).toEqual(expected);
+  });
+
+  test("renameProviders reports the rename and persists the move", async () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = new DaemonConfigStore(paseoHome, {
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {
+        "claude-work": { extends: "claude", label: "Work", env: { TOKEN: "secret" } },
+      },
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    const changes: DaemonConfigChangeDetails[] = [];
+    store.onChange((_config, details) => {
+      changes.push(details);
+    });
+
+    const next = await store.patch({
+      replaceProviders: {
+        "claude-job": { extends: "claude", label: "Job", env: { TOKEN: "secret" } },
+      },
+      removeProviders: ["claude-work"],
+      renameProviders: { "claude-work": "claude-job" },
+    });
+
+    expect(next.providers["claude-work"]).toBeUndefined();
+    expect(next.providers["claude-job"]).toEqual({
+      extends: "claude",
+      label: "Job",
+      env: { TOKEN: "secret" },
+    });
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.renamedProviders).toEqual([{ from: "claude-work", to: "claude-job" }]);
+    expect(changes[0]?.removedProviders).toEqual(["claude-work"]);
+
+    const persistedProviders = loadPersistedConfig(paseoHome).agents?.providers;
+    expect(persistedProviders?.["claude-work"]).toBeUndefined();
+    expect(persistedProviders?.["claude-job"]).toEqual({
+      extends: "claude",
+      label: "Job",
+      env: { TOKEN: "secret" },
+    });
+  });
+
+  test("rejects a rename that does not remove the old provider", async () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = new DaemonConfigStore(paseoHome, {
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {},
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    await expect(
+      store.patch({
+        replaceProviders: { "claude-job": { extends: "claude" } },
+        renameProviders: { "claude-work": "claude-job" },
+      }),
+    ).rejects.toThrow("must also remove claude-work");
+  });
+
+  test("rejects a rename whose target is never defined", async () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = new DaemonConfigStore(paseoHome, {
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {},
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    await expect(
+      store.patch({
+        removeProviders: ["claude-work"],
+        renameProviders: { "claude-work": "claude-job" },
+      }),
+    ).rejects.toThrow("must also define claude-job");
+  });
+
+  test("rejects removing and replacing the same provider", async () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = new DaemonConfigStore(paseoHome, {
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {},
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    await expect(
+      store.patch({
+        removeProviders: ["claude-work"],
+        replaceProviders: { "claude-work": { extends: "claude" } },
+      }),
+    ).rejects.toThrow("cannot be removed and replaced together");
   });
 
   test("patch removes provider entries from config.json", async () => {

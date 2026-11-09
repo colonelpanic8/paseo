@@ -11,7 +11,37 @@ import {
 } from "./agent/idle-runtime-cleanup/index.js";
 import { createTestLogger } from "../test-utils/test-logger.js";
 
-import { fanOutReconciledWorkspaceUpdates, connectIdleRuntimeCleanupConfig } from "./bootstrap.js";
+import {
+  connectIdleRuntimeCleanupConfig,
+  createInitialMutableDaemonConfig,
+  fanOutReconciledWorkspaceUpdates,
+  type PaseoDaemonConfig,
+} from "./bootstrap.js";
+
+test("initial mutable config includes complete custom provider definitions", () => {
+  const config = {
+    listen: "127.0.0.1:0",
+    paseoHome: "/tmp/paseo-test",
+    corsAllowedOrigins: [],
+    staticDir: "/tmp/static",
+    mcpDebug: false,
+    agentClients: {},
+    agentStoragePath: "/tmp/agents.json",
+    providerOverrides: {
+      "claude-work": {
+        extends: "claude",
+        label: "Claude (Work)",
+        description: "Company account",
+        env: { CLAUDE_CONFIG_DIR: "/work/claude" },
+        command: ["claude", "--work"],
+      },
+    },
+  } satisfies PaseoDaemonConfig;
+
+  expect(createInitialMutableDaemonConfig(config).providers["claude-work"]).toEqual(
+    config.providerOverrides["claude-work"],
+  );
+});
 
 test("reconciliation emits workspace updates when observer sync fails", async () => {
   const emittedWorkspaceIds: string[][] = [];

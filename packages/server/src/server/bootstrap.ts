@@ -586,7 +586,9 @@ function resolveReloadEnv(config: PaseoDaemonConfig): NodeJS.ProcessEnv {
   return config.configReload?.env ?? process.env;
 }
 
-function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): MutableDaemonConfig {
+export function createInitialMutableDaemonConfig(
+  config: ResolvedDaemonSettings,
+): MutableDaemonConfig {
   const providers = config.providerOverrides ?? {};
 
   const initialConfig: MutableDaemonConfig = {
