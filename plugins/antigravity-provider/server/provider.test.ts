@@ -78,7 +78,11 @@ async function harness(env: Record<string, string> = {}) {
             event.type === "catalog"),
       );
   }
-  async function open(restored?: ProviderPersistence, sessionId = "s") {
+  async function open(
+    restored?: ProviderPersistence,
+    sessionId = "s",
+    sessionEnv: Record<string, string | null> = { AGY_SESSION_VALUE: "session-overlay" },
+  ) {
     await request({
       type: "session.open",
       requestId: `open-${events.length}`,
@@ -87,7 +91,7 @@ async function harness(env: Record<string, string> = {}) {
       history: "replay",
       config: {
         cwd,
-        env: { AGY_SESSION_VALUE: "session-overlay" },
+        env: sessionEnv,
         settings: {},
         mcpServers: {},
         persist: true,
@@ -195,6 +199,14 @@ it("streams complete text snapshots, prefixes the system prompt only once and pr
   expect(
     records.filter((entry) => entry.input).map((entry) => entry.input.message.content),
   ).toEqual(["SYSTEM PREFIX\n\nHELLO", "HELLO AGAIN"]);
+});
+
+it("removes explicitly unset session variables from the launch environment", async () => {
+  const h = await harness({ AGY_SESSION_VALUE: "launch-value" });
+  await h.open(undefined, "s", { AGY_SESSION_VALUE: null });
+  await h.completed(await h.prompt("HELLO"));
+  const records = await h.records();
+  expect(records.find((entry) => entry.args?.includes("--input-format"))).not.toHaveProperty("env");
 });
 
 it("maps tools and emits one denial notice for a SUCCESS result", async () => {

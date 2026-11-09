@@ -45,6 +45,7 @@ interface SupportedMutableConfigPatch {
   pluginsEnabled?: boolean;
   plugins?: MutableDaemonConfig["plugins"];
   features?: SpeechSettingsPatch;
+  agentEnvironment?: MutableDaemonConfigPatch["agentEnvironment"];
 }
 
 const SPEECH_PERSISTED_PATHS = ["features.dictation", "features.voiceMode"];
@@ -317,7 +318,14 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
     ...(patch.features !== undefined ? { features: patch.features } : {}),
+    ...pickAgentEnvironmentPatch(patch),
   };
+}
+
+function pickAgentEnvironmentPatch(
+  patch: MutableDaemonConfigPatch,
+): Pick<SupportedMutableConfigPatch, "agentEnvironment"> {
+  return patch.agentEnvironment !== undefined ? { agentEnvironment: patch.agentEnvironment } : {};
 }
 
 export function applyMutableProviderConfigToOverrides(
@@ -810,6 +818,7 @@ function mergeMutableAgentPatch(
     patch.skills === undefined &&
     !hasRestartRecoveryPatch(patch) &&
     patch.idleRuntimeCleanup === undefined &&
+    patch.agentEnvironment === undefined &&
     removeProviders.length === 0 &&
     replaceProviders.length === 0
   ) {
@@ -848,6 +857,8 @@ function mergeMutableAgentPatch(
     next["idleRuntimeCleanup"] = patch.idleRuntimeCleanup;
   }
 
+  Object.assign(next, agentEnvironmentPatch(patch));
+
   return Object.keys(next).length > 0 ? (next as PersistedConfig["agents"]) : undefined;
 }
 
@@ -882,6 +893,11 @@ function mergeMutableDaemonPatch(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+function agentEnvironmentPatch(patch: SupportedMutableConfigPatch) {
+  if (!patch.agentEnvironment) return {};
+  const { entries, timeoutMs } = patch.agentEnvironment;
+  return { environment: { entries, ...(timeoutMs !== undefined ? { timeoutMs } : {}) } };
+}
 function hasRestartRecoveryPatch(patch: SupportedMutableConfigPatch) {
   return patch.resumeOnStartup !== undefined || patch.resumePrompt !== undefined;
 }
