@@ -711,7 +711,7 @@ function ScheduleTargetFields({
           placeholder="Select host"
           emptyText="No hosts found"
           disabled={state.mode === "edit"}
-          searchable={false}
+          searchPlaceholder="Search hosts"
           title="Host"
           size={controlSize}
           triggerTestID="schedule-host-trigger"
@@ -730,7 +730,6 @@ function ScheduleTargetFields({
           emptyText="No projects found"
           disabled={!state.selectedServerId}
           hint={!state.selectedServerId ? "Choose a host first." : undefined}
-          searchable
           searchPlaceholder="Search projects..."
           title="Select project"
           size={controlSize}
@@ -767,7 +766,6 @@ function ScheduleTargetFields({
           onChange={handleSelectThinking}
           placeholder="Select thinking"
           emptyText="No thinking options found"
-          searchable={thinkingOptions.length > 6}
           title="Select thinking"
           size={controlSize}
           triggerTestID="schedule-thinking-trigger"
@@ -786,7 +784,6 @@ function ScheduleTargetFields({
           emptyText="No modes found"
           disabled={modeOptions.length === 0}
           hint={modeOptions.length === 0 ? "No modes are available for this model." : undefined}
-          searchable={modeOptions.length > 6}
           title="Select mode"
           size={controlSize}
           triggerTestID="schedule-mode-trigger"
@@ -875,7 +872,6 @@ function ScheduleIsolationField({
       onChange={handleSelectIsolation}
       placeholder="Select isolation"
       emptyText="No isolation options found"
-      searchable={false}
       title="Isolation"
       size={size}
       testID="schedule-isolation"

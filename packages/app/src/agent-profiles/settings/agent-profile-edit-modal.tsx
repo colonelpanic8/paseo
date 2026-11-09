@@ -266,7 +266,6 @@ function OpenAgentProfileEditModal({
           emptyText={t("settings.host.agentProfiles.noProviders")}
           loading={state.catalogResolution !== "complete"}
           disabled={state.isSubmitting}
-          searchable={providerOptions.length > 6}
           title={t("settings.host.agentProfiles.providerLabel")}
           size={controlSize}
           testID="agent-profile-provider-field"
@@ -283,7 +282,6 @@ function OpenAgentProfileEditModal({
             placeholder={t("settings.host.agentProfiles.modelLabel")}
             emptyText={t("settings.host.agentProfiles.noModels")}
             disabled={state.isSubmitting}
-            searchable={modelOptions.length > 6}
             title={t("settings.host.agentProfiles.modelLabel")}
             size={controlSize}
             testID="agent-profile-model-field"
@@ -301,7 +299,6 @@ function OpenAgentProfileEditModal({
             placeholder={t("settings.host.agentProfiles.modeLabel")}
             emptyText={t("settings.host.agentProfiles.noModes")}
             disabled={state.isSubmitting}
-            searchable={modeOptions.length > 6}
             title={t("settings.host.agentProfiles.modeLabel")}
             size={controlSize}
             testID="agent-profile-mode-field"
@@ -319,7 +316,6 @@ function OpenAgentProfileEditModal({
             placeholder={t("settings.host.agentProfiles.thinkingLabel")}
             emptyText={t("settings.host.agentProfiles.noThinkingOptions")}
             disabled={state.isSubmitting}
-            searchable={thinkingOptions.length > 6}
             title={t("settings.host.agentProfiles.thinkingLabel")}
             size={controlSize}
             testID="agent-profile-thinking-field"
