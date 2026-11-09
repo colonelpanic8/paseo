@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { View, type PointerEvent as RNPointerEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { startResizeHandleDrag, type ResizeHandleDrag } from "@/components/resize-handle-drag";
 import { usePointerCapabilities } from "@/hooks/pointer-capabilities";
 import {
@@ -46,7 +46,6 @@ export function ResizeHandle({
   onPreviewResizeSplit,
   onResizeSplit,
 }: ResizeHandleProps) {
-  const { theme } = useUnistyles();
   const { finePointer } = usePointerCapabilities();
   const pointerStatesRef = useRef(new Map<number, PointerState>());
   const touchStateRef = useRef<PointerState | null>(null);
@@ -205,17 +204,15 @@ export function ResizeHandle({
     () => [
       styles.handle,
       direction === "horizontal" ? styles.handleHorizontal : styles.handleVertical,
-      { backgroundColor: theme.colors.border },
     ],
-    [direction, theme.colors.border],
+    [direction],
   );
   const highlightStyle = useMemo(
     () => [
       styles.highlight,
       direction === "horizontal" ? styles.highlightHorizontal : styles.highlightVertical,
-      { backgroundColor: theme.colors.accent },
     ],
-    [direction, theme.colors.accent],
+    [direction],
   );
   const hitAreaStyle = useMemo(
     () => [
@@ -249,9 +246,8 @@ export function ResizeHandle({
       styles.touchGrip,
       direction === "horizontal" ? styles.touchGripHorizontal : styles.touchGripVertical,
       highlighted ? styles.touchGripVisible : styles.touchGripHidden,
-      { backgroundColor: theme.colors.foreground },
     ],
-    [direction, highlighted, theme.colors.foreground],
+    [direction, highlighted],
   );
 
   return (
@@ -288,11 +284,12 @@ export function ResizeHandle({
   );
 }
 
-const styles = StyleSheet.create((_theme) => ({
+const styles = StyleSheet.create((theme) => ({
   handle: {
     position: "relative",
     flexShrink: 0,
     zIndex: 10,
+    backgroundColor: theme.colors.border,
   },
   handleHorizontal: {
     width: 1,
@@ -305,6 +302,7 @@ const styles = StyleSheet.create((_theme) => ({
   highlight: {
     position: "absolute",
     zIndex: 5,
+    backgroundColor: theme.colors.accent,
   },
   highlightHorizontal: {
     top: 0,
@@ -352,6 +350,7 @@ const styles = StyleSheet.create((_theme) => ({
   },
   touchGrip: {
     borderRadius: 2,
+    backgroundColor: theme.colors.foreground,
   },
   touchGripHorizontal: {
     width: 4,
