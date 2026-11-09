@@ -51,7 +51,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
-import type { KeyboardInputEvent } from "@/keyboard";
+import { useHardwareKeyboardPresent, type KeyboardInputEvent } from "@/keyboard";
 import {
   buildProviderQualifiedDescription,
   buildSelectedTriggerLabel,
@@ -306,6 +306,8 @@ export function useModelBrowser({
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [searchResetKey, bumpSearchResetKey] = useReducer((key: number) => key + 1, 0);
   const hasProfiles = (profiles?.rows.length ?? 0) > 0;
+  // A hardware keyboard can type into the search without raising the soft keyboard.
+  const hardwareKeyboardPresent = useHardwareKeyboardPresent();
 
   const initialView = useMemo(
     () =>
@@ -419,7 +421,7 @@ export function useModelBrowser({
           onBlur: () => setIsSearchFocused(false),
           resetKey: `all:${searchResetKey}`,
           placeholder: t("modelSelector.searchAllPlaceholder"),
-          autoFocus: autoFocusSearch,
+          autoFocus: autoFocusSearch || hardwareKeyboardPresent,
           testID: "model-search-all-input",
           onKeyPress: handleSearchKeyPress,
           onSubmit: handleSearchSubmit,
@@ -455,7 +457,7 @@ export function useModelBrowser({
         onBlur: () => setIsSearchFocused(false),
         resetKey: `${view.providerId}:${searchResetKey}`,
         placeholder: t("modelSelector.searchPlaceholder"),
-        autoFocus: autoFocusSearch,
+        autoFocus: autoFocusSearch || hardwareKeyboardPresent,
         testID: "model-search-input",
         onKeyPress: handleSearchKeyPress,
         onSubmit: handleSearchSubmit,
@@ -464,6 +466,7 @@ export function useModelBrowser({
     };
   }, [
     autoFocusSearch,
+    hardwareKeyboardPresent,
     handleSearchQueryChange,
     handleSearchKeyPress,
     handleSearchSubmit,
