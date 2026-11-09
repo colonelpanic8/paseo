@@ -1,7 +1,14 @@
 import { parseHostTarget } from "@getpaseo/protocol/host-target";
-import { resolvePaseoHome } from "@getpaseo/server/daemon-control";
+import { resolvePaseoPaths, type PaseoPaths } from "@getpaseo/server/paths";
 
-export type DaemonTarget = { kind: "instance"; home: string } | { kind: "endpoint"; host: string };
+export type DaemonTarget =
+  | { kind: "instance"; home: string; paths?: PaseoPaths }
+  | { kind: "endpoint"; host: string };
+
+function selectInstanceTarget(home: string | undefined, env: NodeJS.ProcessEnv): DaemonTarget {
+  const paths = resolvePaseoPaths(home === undefined ? env : { ...env, PASEO_HOME: home });
+  return { kind: "instance", home: paths.home, paths };
+}
 
 export function selectDaemonTarget(
   options: { home?: string; host?: string },
@@ -20,13 +27,9 @@ export function selectDaemonTarget(
         code: "LOCAL_OPERATION",
         message: "This is a local operation; use --home. --host is not supported.",
       };
-    return {
-      kind: "instance",
-      home: resolvePaseoHome({ PASEO_HOME: options.home ?? env.PASEO_HOME }),
-    };
+    return selectInstanceTarget(options.home, env);
   }
-  if (options.home !== undefined)
-    return { kind: "instance", home: resolvePaseoHome({ PASEO_HOME: options.home }) };
+  if (options.home !== undefined) return selectInstanceTarget(options.home, env);
   if (options.host !== undefined) return { kind: "endpoint", host: options.host };
   if (env.PASEO_HOME && env.PASEO_HOST)
     throw {
@@ -34,7 +37,7 @@ export function selectDaemonTarget(
       message: "PASEO_HOME and PASEO_HOST are both set. Choose --home or --host explicitly.",
     };
   if (env.PASEO_HOST) return { kind: "endpoint", host: env.PASEO_HOST };
-  return { kind: "instance", home: resolvePaseoHome({ PASEO_HOME: env.PASEO_HOME }) };
+  return selectInstanceTarget(undefined, env);
 }
 
 export function describeDaemonTarget(target: DaemonTarget): string {
@@ -62,4 +65,12 @@ export function describeDaemonTarget(target: DaemonTarget): string {
   } catch {
     return "<invalid endpoint>";
   }
+}
+
+export function localDaemonCommand(
+  action: "start" | "reload",
+  target: Extract<DaemonTarget, { kind: "instance" }>,
+): string {
+  const selector = target.paths?.layout === "xdg" ? "" : ` --home ${JSON.stringify(target.home)}`;
+  return `paseo daemon ${action}${selector}`;
 }
